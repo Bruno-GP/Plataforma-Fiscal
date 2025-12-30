@@ -1,0 +1,11 @@
+.venv
+
+__pycache__
+
+adapters/__pycache__
+api/__pycache__
+core/__pycache__
+models/__pycache__
+services/__pycache__
+
+core/config.py

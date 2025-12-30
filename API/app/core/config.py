@@ -1,9 +1,0 @@
-EMPRESAS = {
-  "001": {
-    "cnpj": "35317121000146",
-    "nome": "PARIZOTTO CASA e CONSTRUCAO"
-  }
-}
-
-GOOGLE_CREDENTIALS_PATH = "credentials.json"
-GOOGLE_SHEET_NAME = "NFE_BASE"

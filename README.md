@@ -1,5 +1,9 @@
 # Python-API-XML-NFE
 
+# Comandos para executar a API 
+python -m uvicorn app.main:app --reload (Local)
+ngrok http 8000 (Produção)
+
 # API de Relatórios Fiscais
 
 ## Objetivo
@@ -24,3 +28,25 @@ Resposta:
 - resumo
 - indicadores
 - alertas
+
+# Code API 
+
+# API/api/Routes 
+
+Aonde está todas as rotas para acessar o projeto 
+
+# API/core 
+
+Aonde está a configuração da empresa, com informações como CNPJ e razão social 
+
+# API/domain 
+
+Aonde fica localizado todo o funcionmanto do projeto 
+
+# API/models
+
+Aonde fica localizado todos os schemas referente ao XMLS 
+
+# API/services 
+
+Aonde fica todo o processamento para a execução da API 

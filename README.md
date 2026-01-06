@@ -15,7 +15,7 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe) e gerar indi
 
 - Ambiente local (hot-reload):
   ```bash
-  uvicorn app.main:app --reload --app-dir API/app
+  python -m uvicorn app.main:app --reload
   ```
 - Exposição externa (exemplo com ngrok):
   ```bash

@@ -41,9 +41,18 @@ class KPICalculator:
                 cliente = nome_bruto or "CLIENTE NÃO IDENTIFICADO"
 
             clientes[cliente] += nota.valor_total_nf
+            
+        def calcular_percentual(valor: Decimal) -> Decimal:
+            if total_vendas == 0:
+                return Decimal("0.00")
+            return (valor / total_vendas) * Decimal("100")
 
         top_clientes = [
-            {"cliente": k, "valor_total": v}
+            {
+                "cliente": k,
+                "valor_total": v,
+                "percentual": calcular_percentual(v),
+            }
             for k, v in sorted(
                 clientes.items(),
                 key=lambda item: item[1],
@@ -58,7 +67,11 @@ class KPICalculator:
                 produtos[item.descricao] += item.valor_total
 
         top_produtos = [
-            {"produto": k, "valor_total": v}
+            {
+                "produto": k,
+                "valor_total": v,
+                "percentual": calcular_percentual(v),
+            }
             for k, v in sorted(
                 produtos.items(),
                 key=lambda item: item[1],
@@ -72,7 +85,11 @@ class KPICalculator:
             cidades[n.destinatario_cidade] += n.valor_total_nf
 
         top_cidades = [
-            {"cidade": k, "valor_total": v}
+            {
+                "cidade": k,
+                "valor_total": v,
+                "percentual": calcular_percentual(v),
+            }
             for k, v in sorted(
                 cidades.items(),
                 key=lambda item: item[1],

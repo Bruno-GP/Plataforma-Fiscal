@@ -1,8 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from typing import List, Optional, Dict
 from datetime import date
 from decimal import Decimal
-
 
 # =========================
 # REQUEST
@@ -71,6 +70,14 @@ class NFeNota(BaseModel):
 # KPIs
 # =========================
 
+def _format_decimal_ptbr(value: Decimal) -> str:
+  quantized = value.quantize(Decimal("0.01"))
+  formatted = f"{quantized:,.2f}"
+  return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+
+def _format_moeda_ptbr(value: Decimal) -> str:
+  return f"R$ {_format_decimal_ptbr(value)}"
+
 class KPIsRelatorio(BaseModel):
   # Vendas
   total_vendas: Decimal = Decimal("0.00")
@@ -89,6 +96,32 @@ class KPIsRelatorio(BaseModel):
   top_clientes: List[Dict] = Field(default_factory=list)
   top_produtos: List[Dict] = Field(default_factory=list)
   top_cidades: List[Dict] = Field(default_factory=list)
+  
+  @field_serializer(
+    "total_vendas",
+    "ticket_medio",
+    "maior_nota",
+    "menor_nota",
+    "total_icms",
+    "total_ipi",
+    "total_pis",
+    "total_cofins"
+  )
+  
+  def _serializar_moeda(self, value: Decimal) -> str:
+    return _format_moeda_ptbr(value)
+
+  @field_serializer("top_clientes", "top_produtos", "top_cidades")
+  def _serializar_top(self, value: List[Dict]) -> List[Dict]:
+    resultado = []
+    for item in value:
+      if "valor_total" in item:
+        item = {
+          **item,
+          "valor_total": _format_moeda_ptbr(Decimal(item["valor_total"]))
+        }
+      resultado.append(item)
+    return resultado
 
 
 # =========================
@@ -121,3 +154,12 @@ class ProcessarNFeResponse(BaseModel):
   kpis: KPIsRelatorio
   erros: List[Dict] = Field(default_factory=list)
   data_processamento: Optional[str] = None
+  
+# =========================
+# INFRA
+# =========================
+
+class ConnSQLResponse(BaseModel):
+  sucesso: bool
+  detalhes: str
+  servidor: Optional[str] = None

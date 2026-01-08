@@ -14,6 +14,7 @@ from app.domain.kpis import KPICalculator
 from app.services.empresa_service import EmpresaService
 from app.services.nfe_notas_service import NFeNotasService
 from app.services.nfe_itens_service import NFeItensService
+from app.services.nfe_process_service import NFeProcessamentosService
 
 class ProcessarNFeService:
     def executar(self, request: ProcessarNFeRequest) -> ProcessarNFeResponse:
@@ -33,7 +34,7 @@ class ProcessarNFeService:
             if not notas:
                 raise Exception("Nenhuma NFe válida extraída")
 
-            # 3️⃣ Determinar períodos a partir das datas de emissão
+            # 3️⃣ Determinar períodos
             periodos = {
                 (n.data_emissao.year, n.data_emissao.month)
                 for n in notas
@@ -47,11 +48,6 @@ class ProcessarNFeService:
             if len(periodos) == 1:
                 periodo_ano = periodos_encontrados[0]["ano"]
                 periodo_mes = periodos_encontrados[0]["mes"]
-            else:
-                print(
-                    "[AVISO] XMLs contêm mais de um período:",
-                    periodos_encontrados
-                )
 
             # 4️⃣ Identificar CNPJ emitente
             cnpjs = {n.emitente_cnpj for n in notas}
@@ -59,8 +55,7 @@ class ProcessarNFeService:
                 raise Exception("Mais de um CNPJ de emitente encontrado")
 
             cnpj_emitente = cnpjs.pop()
-            print(f"[INFO] CNPJ identificado: {cnpj_emitente}")
-            
+
             # 5️⃣ Identificar nome do emitente
             nomes_emitente = {
                 xml.emitente_nome.strip()
@@ -68,46 +63,53 @@ class ProcessarNFeService:
                 if xml.emitente_nome
             }
             if not nomes_emitente:
-                raise Exception("Nome do emitente não encontrado nos XMLs")
-
-            if len(nomes_emitente) > 1:
-                print(
-                    "[AVISO] Mais de um nome de emitente encontrado:",
-                    nomes_emitente
-                )
+                raise Exception("Nome do emitente não encontrado")
 
             nome_emitente = next(iter(nomes_emitente))
-            
-            # 5️⃣ Consolidar notas e itens
-            consolidacao = NFeConsolidator().consolidar(notas)
-            print(f"[INFO] Notas processadas: {consolidacao.notas_processadas}")
-            print(f"[INFO] Itens processados: {consolidacao.itens_processados}")
 
-            # 6️⃣ Registrar empresa (somente uma vez)
+            # 6️⃣ Consolidar notas e itens
+            consolidacao = NFeConsolidator().consolidar(notas)
+
+            # 7️⃣ Registrar empresa
             empresa_id = request.empresa_id
             if not empresa_id:
                 empresa_id = EmpresaService().obter_ou_criar(
                     cnpj_emitente=cnpj_emitente,
                     nome_emitente=nome_emitente
                 )
-            print(f"[INFO] Empresa identificada: {empresa_id}")
-            
-            # 7️⃣ Registrar notas no banco
-            notas_registradas = NFeNotasService().registrar_notas(
-                consolidacao.notas
-            )
-            print(f"[INFO] Notas registradas: {notas_registradas}")
-            
-            # 8️⃣ Registrar itens no banco
-            itens_registrados = NFeItensService().registrar_itens(
-                consolidacao.notas
-            )
-            print(f"[INFO] Itens registrados: {itens_registrados}")
 
-            # 9️⃣ Calcular KPIs
+            # 8️⃣ Registrar notas
+            NFeNotasService().registrar_notas(consolidacao.notas)
+
+            # 9️⃣ Registrar itens
+            NFeItensService().registrar_itens(consolidacao.notas)
+
+            # 🔟 Calcular KPIs
             kpis = KPICalculator().calcular(consolidacao.notas)
 
-            # 🔟 Retorno final (sucesso)
+            # 1️⃣1️⃣ Registrar processamento
+            processamento_id = NFeProcessamentosService().registrar_processamento(
+                empresa_id=empresa_id,
+                cnpj_emitente=cnpj_emitente,
+                periodo_ano=periodo_ano,
+                periodo_mes=periodo_mes,
+                origem=request.origem,
+                pasta_xml=request.pasta_xml,
+                periodo_solicitado=request.periodo,
+                periodos_encontrados=periodos_encontrados,
+                notas_processadas=consolidacao.notas_processadas,
+                itens_processados=consolidacao.itens_processados,
+                status="processado",
+                data_processamento=datetime.utcnow()
+            )
+
+            # 1️⃣2️⃣ Registrar KPIs
+            KPICalculator().registrar_kpis(
+                processamento_id=processamento_id,
+                kpis=kpis
+            )
+
+            # ✅ RETORNO DE SUCESSO (ERA ISSO QUE FALTAVA)
             return ProcessarNFeResponse(
                 status="processado",
                 cnpj_emitente=cnpj_emitente,
@@ -122,8 +124,6 @@ class ProcessarNFeService:
             )
 
         except Exception as exc:
-            print(f"[ERRO NO PROCESSAMENTO] {exc}")
-
             return ProcessarNFeResponse(
                 status="erro",
                 cnpj_emitente=cnpj_emitente,

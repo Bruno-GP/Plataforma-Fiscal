@@ -12,6 +12,7 @@ from app.domain.extractor import NFeExtractor
 from app.domain.consolidator import NFeConsolidator
 from app.domain.kpis import KPICalculator
 from app.services.empresa_service import EmpresaService
+from app.services.nfe_notas_service import NFeNotasService
 
 class ProcessarNFeService:
     def executar(self, request: ProcessarNFeRequest) -> ProcessarNFeResponse:
@@ -75,6 +76,11 @@ class ProcessarNFeService:
                 )
 
             nome_emitente = next(iter(nomes_emitente))
+            
+            # 5️⃣ Consolidar notas e itens
+            consolidacao = NFeConsolidator().consolidar(notas)
+            print(f"[INFO] Notas processadas: {consolidacao.notas_processadas}")
+            print(f"[INFO] Itens processados: {consolidacao.itens_processados}")
 
             # 6️⃣ Registrar empresa (somente uma vez)
             empresa_id = request.empresa_id
@@ -84,11 +90,12 @@ class ProcessarNFeService:
                     nome_emitente=nome_emitente
                 )
             print(f"[INFO] Empresa identificada: {empresa_id}")
-
-            # 5️⃣ Consolidar notas e itens
-            consolidacao = NFeConsolidator().consolidar(notas)
-            print(f"[INFO] Notas processadas: {consolidacao.notas_processadas}")
-            print(f"[INFO] Itens processados: {consolidacao.itens_processados}")
+            
+            # 7️⃣ Registrar notas no banco
+            notas_registradas = NFeNotasService().registrar_notas(
+                consolidacao.notas
+            )
+            print(f"[INFO] Notas registradas: {notas_registradas}")
 
             # 8️⃣ Calcular KPIs
             kpis = KPICalculator().calcular(consolidacao.notas)

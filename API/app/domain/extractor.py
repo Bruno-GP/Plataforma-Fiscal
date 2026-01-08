@@ -56,6 +56,9 @@ class NotaExtraida:
         valor_ipi: Decimal,
         valor_pis: Decimal,
         valor_cofins: Decimal,
+        valor_produtos: Decimal,
+        valor_desconto: Decimal,
+        valor_frete: Decimal,
 
         itens: List[ItemNota]
     ):
@@ -75,6 +78,9 @@ class NotaExtraida:
         self.valor_ipi = valor_ipi
         self.valor_pis = valor_pis
         self.valor_cofins = valor_cofins
+        self.valor_produtos = valor_produtos
+        self.valor_desconto = valor_desconto
+        self.valor_frete = valor_frete
 
         self.itens = itens
 
@@ -184,6 +190,9 @@ class NFeExtractor:
                     valor_ipi=d("nfe:vIPI"),
                     valor_pis=d("nfe:vPIS"),
                     valor_cofins=d("nfe:vCOFINS"),
+                    valor_produtos=d("nfe:vProd"),
+                    valor_desconto=d("nfe:vDesc"),
+                    valor_frete=d("nfe:vFrete"),
 
                     itens=itens
                 )

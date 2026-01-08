@@ -2,15 +2,19 @@ import os
 from typing import Dict
 import psycopg
 
+from app.services.postres_config import carregar_config_postgres
+
 class ConnPostgresService:
     """Serviço simples para validar a conexão com o PostgreSQL."""
 
     def __init__(self):
-      self.host = os.environ["POSTGRES_HOST"]
-      self.port = int(os.environ["POSTGRES_PORT"])
-      self.database = os.environ["POSTGRES_DB"]
-      self.user = os.environ["POSTGRES_USER"]
-      self.password = os.environ["POSTGRES_PASSWORD"]
+      config = carregar_config_postgres()
+      
+      self.host = config["host"]
+      self.port = config["port"]
+      self.database = config["database"]
+      self.user = config["user"]
+      self.password = config["password"]
 
     def executar(self) -> Dict:
       servidor = f"{self.host}:{self.port}/{self.database}"

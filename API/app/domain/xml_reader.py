@@ -28,12 +28,18 @@ class XmlReader:
                 if not cnpj:
                     print(f"[XML IGNORADO] Sem CNPJ: {arquivo}")
                     continue
+                
+                nome = emit.findtext("nfe:xNome", default="", namespaces=NS)
+                if not nome:
+                    print(f"[XML IGNORADO] Sem xNome: {arquivo}")
+                    continue
 
                 xmls.append(
                     XmlNFe(
                         caminho=caminho,
                         xml=root,
-                        emitente_cnpj=cnpj
+                        emitente_cnpj=cnpj,
+                        emitente_nome=nome
                     )
                 )
 

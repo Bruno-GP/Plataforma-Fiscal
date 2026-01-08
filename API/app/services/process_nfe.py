@@ -11,6 +11,7 @@ from app.domain.xml_reader import XmlReader
 from app.domain.extractor import NFeExtractor
 from app.domain.consolidator import NFeConsolidator
 from app.domain.kpis import KPICalculator
+from app.services.empresa_service import EmpresaService
 
 class ProcessarNFeService:
     def executar(self, request: ProcessarNFeRequest) -> ProcessarNFeResponse:
@@ -57,16 +58,42 @@ class ProcessarNFeService:
 
             cnpj_emitente = cnpjs.pop()
             print(f"[INFO] CNPJ identificado: {cnpj_emitente}")
+            
+            # 5️⃣ Identificar nome do emitente
+            nomes_emitente = {
+                xml.emitente_nome.strip()
+                for xml in xmls
+                if xml.emitente_nome
+            }
+            if not nomes_emitente:
+                raise Exception("Nome do emitente não encontrado nos XMLs")
+
+            if len(nomes_emitente) > 1:
+                print(
+                    "[AVISO] Mais de um nome de emitente encontrado:",
+                    nomes_emitente
+                )
+
+            nome_emitente = next(iter(nomes_emitente))
+
+            # 6️⃣ Registrar empresa (somente uma vez)
+            empresa_id = request.empresa_id
+            if not empresa_id:
+                empresa_id = EmpresaService().obter_ou_criar(
+                    cnpj_emitente=cnpj_emitente,
+                    nome_emitente=nome_emitente
+                )
+            print(f"[INFO] Empresa identificada: {empresa_id}")
 
             # 5️⃣ Consolidar notas e itens
             consolidacao = NFeConsolidator().consolidar(notas)
             print(f"[INFO] Notas processadas: {consolidacao.notas_processadas}")
             print(f"[INFO] Itens processados: {consolidacao.itens_processados}")
 
-            # 6️⃣ Calcular KPIs
+            # 8️⃣ Calcular KPIs
             kpis = KPICalculator().calcular(consolidacao.notas)
 
-            # 7️⃣ Retorno final (sucesso)
+            # 9️⃣ Retorno final (sucesso)
             return ProcessarNFeResponse(
                 status="processado",
                 cnpj_emitente=cnpj_emitente,

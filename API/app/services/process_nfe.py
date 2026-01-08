@@ -13,6 +13,7 @@ from app.domain.consolidator import NFeConsolidator
 from app.domain.kpis import KPICalculator
 from app.services.empresa_service import EmpresaService
 from app.services.nfe_notas_service import NFeNotasService
+from app.services.nfe_itens_service import NFeItensService
 
 class ProcessarNFeService:
     def executar(self, request: ProcessarNFeRequest) -> ProcessarNFeResponse:
@@ -96,11 +97,17 @@ class ProcessarNFeService:
                 consolidacao.notas
             )
             print(f"[INFO] Notas registradas: {notas_registradas}")
+            
+            # 8️⃣ Registrar itens no banco
+            itens_registrados = NFeItensService().registrar_itens(
+                consolidacao.notas
+            )
+            print(f"[INFO] Itens registrados: {itens_registrados}")
 
-            # 8️⃣ Calcular KPIs
+            # 9️⃣ Calcular KPIs
             kpis = KPICalculator().calcular(consolidacao.notas)
 
-            # 9️⃣ Retorno final (sucesso)
+            # 🔟 Retorno final (sucesso)
             return ProcessarNFeResponse(
                 status="processado",
                 cnpj_emitente=cnpj_emitente,

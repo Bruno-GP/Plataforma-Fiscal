@@ -70,6 +70,22 @@ class NFeNota(BaseModel):
 # KPIs
 # =========================
 
+class NFeKPI(BaseModel):
+  id: int
+  processamento_id: int
+  total_vendas: Decimal = Decimal("0.00")
+  quantidade_notas: int = 0
+  ticket_medio: Decimal = Decimal("0.00")
+  maior_nota: Decimal = Decimal("0.00")
+  menor_nota: Decimal = Decimal("0.00")
+  total_icms: Decimal = Decimal("0.00")
+  total_ipi: Decimal = Decimal("0.00")
+  total_pis: Decimal = Decimal("0.00")
+  total_cofins: Decimal = Decimal("0.00")
+  top_clientes: List[Dict] = Field(default_factory=list)
+  top_produtos: List[Dict] = Field(default_factory=list)
+  top_cidades: List[Dict] = Field(default_factory=list)
+
 def _format_decimal_ptbr(value: Decimal) -> str:
   quantized = value.quantize(Decimal("0.01"))
   formatted = f"{quantized:,.2f}"
@@ -122,7 +138,11 @@ class KPIsRelatorio(BaseModel):
         }
       resultado.append(item)
     return resultado
-
+  
+class NFeKPIConsulta(BaseModel):
+  periodo_ano: Optional[int] = None
+  periodo_mes: Optional[int] = None
+  kpis: NFeKPI
 
 # =========================
 # ERROS
@@ -132,7 +152,6 @@ class ErroProcessamento(BaseModel):
   codigo: str
   mensagem: str
   detalhe: Optional[str] = None
-
 
 # =========================
 # RESPONSE
@@ -163,3 +182,12 @@ class ConnSQLResponse(BaseModel):
   sucesso: bool
   detalhes: str
   servidor: Optional[str] = None
+  
+# =========================
+# CONSULTA
+# =========================
+
+class ConsultaNFeResponse(BaseModel):
+  status: str
+  total: int
+  notas: List[NFeNota] = Field(default_factory=list)

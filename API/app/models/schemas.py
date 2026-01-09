@@ -72,6 +72,7 @@ class NFeNota(BaseModel):
 class NFeKPI(BaseModel):
   id: int
   processamento_id: int
+  emitente_cnpj: str | None = None
   total_vendas: Decimal = Decimal("0.00")
   quantidade_notas: int = 0
   ticket_medio: Decimal = Decimal("0.00")

@@ -106,6 +106,7 @@ class ProcessarNFeService:
             # 1️⃣2️⃣ Registrar KPIs
             KPICalculator().registrar_kpis(
                 processamento_id=processamento_id,
+                emitente_cnpj=cnpj_emitente,
                 kpis=kpis
             )
 

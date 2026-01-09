@@ -19,7 +19,6 @@ class ProcessarNFeRequest(BaseModel):
     description="Período esperado (YYYY-MM). Apenas informativo"
   )
 
-
 # =========================
 # DOMÍNIO NFE
 # =========================
@@ -143,6 +142,12 @@ class NFeKPIConsulta(BaseModel):
   periodo_ano: Optional[int] = None
   periodo_mes: Optional[int] = None
   kpis: NFeKPI
+
+
+class ConsultaKPIResponse(BaseModel):
+  status: str
+  total: int
+  resultados: List[NFeKPIConsulta] = Field(default_factory=list)
 
 # =========================
 # ERROS

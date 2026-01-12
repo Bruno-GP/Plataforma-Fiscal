@@ -32,7 +32,7 @@ class EmpresaService:
         logger.debug("Inicializando EmpresaService")
 
         config = carregar_config_postgres()
-        logger.debug(f"Config PostgreSQL carregada: {config}")
+        #logger.debug(f"Config PostgreSQL carregada: {config}")
 
         self.conn_params = {
             "host": config["host"],
@@ -47,17 +47,17 @@ class EmpresaService:
         logger.debug("Iniciando obter_ou_criar")
 
         cnpj = normalizar_cnpj(cnpj_emitente)
-        logger.debug(f"CNPJ recebido: {cnpj_emitente}")
-        logger.debug(f"CNPJ normalizado: {cnpj}")
-        logger.debug(f"Nome emitente: {nome_emitente}")
+        #logger.debug(f"CNPJ recebido: {cnpj_emitente}")
+        #logger.debug(f"CNPJ normalizado: {cnpj}")
+        #logger.debug(f"Nome emitente: {nome_emitente}")
 
         try:
-            logger.debug("Abrindo conexão com PostgreSQL")
+            #logger.debug("Abrindo conexão com PostgreSQL")
             with psycopg.connect(**self.conn_params) as conn:
-                logger.debug("Conexão aberta com sucesso")
+                #logger.debug("Conexão aberta com sucesso")
 
                 with conn.cursor() as cur:
-                    logger.debug("Cursor criado")
+                    #logger.debug("Cursor criado")
 
                     sql_insert = """
                         INSERT INTO public.empresas (cnpj, nome)
@@ -68,20 +68,20 @@ class EmpresaService:
                     """
 
                     logger.debug("Executando SQL INSERT/UPDATE")
-                    logger.debug(f"SQL: {sql_insert.strip()}")
-                    logger.debug(f"Params: {(cnpj, nome_emitente)}")
+                    #logger.debug(f"SQL: {sql_insert.strip()}")
+                    #logger.debug(f"Params: {(cnpj, nome_emitente)}")
 
                     cur.execute(sql_insert, (cnpj, nome_emitente))
 
-                    logger.debug("SQL executado, buscando RETURNING id")
+                    #logger.debug("SQL executado, buscando RETURNING id")
                     row = cur.fetchone()
-                    logger.debug(f"Resultado RETURNING: {row}")
+                    #logger.debug(f"Resultado RETURNING: {row}")
 
                     if row:
-                        logger.info(f"Empresa obtida/criada com ID={row[0]}")
+                        #logger.info(f"Empresa obtida/criada com ID={row[0]}")
                         return row[0]
 
-                    logger.warning("RETURNING não retornou ID, executando SELECT fallback")
+                    #logger.warning("RETURNING não retornou ID, executando SELECT fallback")
 
                     sql_select = """
                         SELECT id
@@ -89,10 +89,10 @@ class EmpresaService:
                         WHERE cnpj = %s;
                     """
 
-                    logger.debug(f"SQL fallback: {sql_select.strip()}")
+                    #logger.debug(f"SQL fallback: {sql_select.strip()}")
                     cur.execute(sql_select, (cnpj,))
                     row = cur.fetchone()
-                    logger.debug(f"Resultado SELECT fallback: {row}")
+                    #logger.debug(f"Resultado SELECT fallback: {row}")
 
                     if not row:
                         logger.error("Empresa não encontrada nem após fallback")

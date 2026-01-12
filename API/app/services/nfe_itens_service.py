@@ -23,7 +23,7 @@ class NFeItensService:
         logger.debug("Inicializando NFeItensService")
 
         config = carregar_config_postgres()
-        logger.debug(f"Config PostgreSQL carregada: {config}")
+        #logger.debug(f"Config PostgreSQL carregada: {config}")
 
         self.conn_params = {
             "host": config["host"],
@@ -76,9 +76,9 @@ class NFeItensService:
         """
 
         try:
-            logger.debug("Abrindo conexão com PostgreSQL")
+            #logger.debug("Abrindo conexão com PostgreSQL")
             with psycopg.connect(**self.conn_params) as conn:
-                logger.debug("Conexão aberta com sucesso")
+                #logger.debug("Conexão aberta com sucesso")
                 with conn.cursor() as cur:
                     inseridos = 0
                     for nota in notas_list:

@@ -22,7 +22,7 @@ class NFeNotasService:
         logger.debug("Inicializando NFeNotasService")
 
         config = carregar_config_postgres()
-        logger.debug(f"Config PostgreSQL carregada: {config}")
+        #logger.debug(f"Config PostgreSQL carregada: {config}")
 
         self.conn_params = {
             "host": config["host"],
@@ -108,11 +108,11 @@ class NFeNotasService:
             )
 
         try:
-            logger.debug("Abrindo conexão com PostgreSQL")
+            #logger.debug("Abrindo conexão com PostgreSQL")
             with psycopg.connect(**self.conn_params) as conn:
-                logger.debug("Conexão aberta com sucesso")
+                #logger.debug("Conexão aberta com sucesso")
                 with conn.cursor() as cur:
-                    logger.debug("Executando INSERT em nfe_notas")
+                    #logger.debug("Executando INSERT em nfe_notas")
                     inseridos = 0
                     for valor in valores:
                         cur.execute(sql_insert, valor)

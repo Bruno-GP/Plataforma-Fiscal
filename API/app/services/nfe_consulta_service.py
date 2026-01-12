@@ -22,7 +22,7 @@ class NFeConsultaService:
     logger.debug("Inicializando NFeConsultaService")
 
     config = carregar_config_postgres()
-    logger.debug(f"Config PostgreSQL carregada: {config}")
+    #logger.debug(f"Config PostgreSQL carregada: {config}")
 
     self.conn_params = {
       "host": config["host"],
@@ -93,9 +93,9 @@ class NFeConsultaService:
     parametros.extend([limite, offset])
 
     try:
-      logger.debug("Abrindo conexão com PostgreSQL")
+      #logger.debug("Abrindo conexão com PostgreSQL")
       with psycopg.connect(**self.conn_params) as conn:
-        logger.debug("Conexão aberta com sucesso")
+        #logger.debug("Conexão aberta com sucesso")
         with conn.cursor() as cur:
           logger.debug("Consultando KPIs")
           cur.execute(sql_kpis, parametros)

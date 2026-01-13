@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query, HTTPException, status
 from app.services.process_nfe import ProcessarNFeService
 from app.services.nfe_consulta_service import NFeConsultaService
 from app.models.schemas import (
+  ComparativoKPIMensalResponse,
   ConsultaNFeResponse,
   ConsultaKPIResponse,
   ProcessarNFeRequest,
@@ -43,6 +44,50 @@ def consultar_kpis(
     status="ok",
     total=len(resultados),
     resultados=resultados,
+  )
+  
+# -------------------------
+# Comparativo mensal de KPIs
+# -------------------------
+@nfe_router.get(
+  "/kpis/comparativo",
+  response_model=ComparativoKPIMensalResponse,
+)
+def comparar_kpis_mensal(
+  emitente_cnpj: str | None = Query(default=None),
+  periodo_ano: int = Query(..., ge=2000, le=2100),
+  periodo_mes: int = Query(..., ge=1, le=12),
+):
+  if periodo_mes == 1:
+    periodo_anterior_mes = 12
+    periodo_anterior_ano = periodo_ano - 1
+  else:
+    periodo_anterior_mes = periodo_mes - 1
+    periodo_anterior_ano = periodo_ano
+
+  kpis = NFeConsultaService().comparar_kpis_mensal(
+    emitente_cnpj=emitente_cnpj,
+    periodo_ano=periodo_ano,
+    periodo_mes=periodo_mes,
+  )
+
+  if not kpis:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail=(
+        "KPIs não encontrados para o período atual e/ou "
+        "o período anterior."
+      ),
+    )
+
+  return ComparativoKPIMensalResponse(
+    status="ok",
+    periodo_atual_ano=periodo_ano,
+    periodo_atual_mes=periodo_mes,
+    periodo_anterior_ano=periodo_anterior_ano,
+    periodo_anterior_mes=periodo_anterior_mes,
+    emitente_cnpj=emitente_cnpj,
+    kpis=kpis,
   )
 
 # -------------------------

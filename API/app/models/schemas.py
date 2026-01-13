@@ -149,6 +149,40 @@ class ConsultaKPIResponse(BaseModel):
   status: str
   total: int
   resultados: List[NFeKPIConsulta] = Field(default_factory=list)
+  
+# =========================
+# KPIs Comparativo
+# =========================
+
+class KPIComparativoValor(BaseModel):
+  atual: Decimal = Decimal("0.00")
+  anterior: Decimal = Decimal("0.00")
+  variacao_percentual: Optional[Decimal] = None
+
+class KPIComparativoQuantidade(BaseModel):
+  atual: int = 0
+  anterior: int = 0
+  variacao_percentual: Optional[Decimal] = None
+
+class KPIsComparativo(BaseModel):
+  total_vendas: KPIComparativoValor
+  quantidade_notas: KPIComparativoQuantidade
+  ticket_medio: KPIComparativoValor
+  maior_nota: KPIComparativoValor
+  menor_nota: KPIComparativoValor
+  total_icms: KPIComparativoValor
+  total_ipi: KPIComparativoValor
+  total_pis: KPIComparativoValor
+  total_cofins: KPIComparativoValor
+
+class ComparativoKPIMensalResponse(BaseModel):
+  status: str
+  periodo_atual_ano: int
+  periodo_atual_mes: int
+  periodo_anterior_ano: int
+  periodo_anterior_mes: int
+  emitente_cnpj: Optional[str] = None
+  kpis: KPIsComparativo
 
 # =========================
 # ERROS

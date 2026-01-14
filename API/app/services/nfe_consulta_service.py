@@ -19,7 +19,7 @@ logger.setLevel(logging.DEBUG)
 
 handler = logging.StreamHandler()
 formatter = logging.Formatter(
-    "[%(asctime)s] [%(levelname)s] %(message)s"
+  "[%(asctime)s] [%(levelname)s] %(message)s"
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -40,6 +40,26 @@ class NFeConsultaService:
       "connect_timeout": 5,
     }
     
+  def _filtro_vendas(self) -> str:
+    return """
+      EXISTS (
+        SELECT 1
+        FROM public.nfe_notas AS n
+        JOIN public.nfe_itens AS i
+          ON i.nota_id = n.id
+        JOIN public.cfops AS c
+          ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
+             = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+        WHERE n.processamento_id = k.processamento_id
+          AND LEFT(
+                regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g'),
+                1
+              ) IN ('5','6','7')
+          AND COALESCE(c.descricao, '') ILIKE 'venda%%'
+        LIMIT 1
+      )
+    """
+    
   def obter_ultimo_periodo(
     self,
     emitente_cnpj: Optional[str] = None,
@@ -49,9 +69,11 @@ class NFeConsultaService:
 
     if emitente_cnpj:
       filtros.append(
-        "regexp_replace(cnpj_emitente, '\\\\D', '', 'g') = %s"
+        "regexp_replace(emitente_cnpj, '\\\\D', '', 'g') = %s"
       )
       parametros.append(normalizar_cnpj(emitente_cnpj))
+      
+    filtros.append(self._filtro_vendas())  
 
     where_clause = ""
     if filtros:
@@ -61,9 +83,9 @@ class NFeConsultaService:
       SELECT
         periodo_ano,
         periodo_mes
-      FROM public.nfe_processamentos
+      FROM public.nfe_kpis AS k
       {where_clause}
-      ORDER BY data_processamento DESC NULLS LAST
+      ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
       LIMIT 1;
     """
 
@@ -83,14 +105,16 @@ class NFeConsultaService:
     periodo_mes: int,
     emitente_cnpj: Optional[str] = None,
   ) -> Optional[NFeKPI]:
-    filtros = ["p.periodo_ano = %s", "p.periodo_mes = %s"]
+    filtros = ["k.periodo_ano = %s", "k.periodo_mes = %s"]
     parametros: List[object] = [periodo_ano, periodo_mes]
 
     if emitente_cnpj:
       filtros.append(
-        "regexp_replace(p.cnpj_emitente, '\\\\D', '', 'g') = %s"
+        "regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s"
       )
       parametros.append(normalizar_cnpj(emitente_cnpj))
+      
+    filtros.append(self._filtro_vendas())
 
     where_clause = " AND ".join(filtros)
     if where_clause:
@@ -117,7 +141,7 @@ class NFeConsultaService:
       LEFT JOIN public.nfe_processamentos AS p
         ON p.id = k.processamento_id
       {where_clause}
-      ORDER BY p.data_processamento DESC NULLS LAST, k.id DESC
+      ORDER BY k.periodo_ano DESC, k.periodo_mes DESC, k.id DESC
       LIMIT 1;
     """
 
@@ -188,17 +212,19 @@ class NFeConsultaService:
 
     if emitente_cnpj:
       filtros.append(
-        "regexp_replace(p.cnpj_emitente, '\\\\D', '', 'g') = %s"
+        "regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s"
       )
       parametros.append(normalizar_cnpj(emitente_cnpj))
 
     if periodo_ano:
-      filtros.append("p.periodo_ano = %s")
+      filtros.append("k.periodo_ano = %s")
       parametros.append(periodo_ano)
 
     if periodo_mes:
-      filtros.append("p.periodo_mes = %s")
+      filtros.append("k.periodo_mes = %s")
       parametros.append(periodo_mes)
+      
+    filtros.append(self._filtro_vendas())
 
     where_clause = " AND ".join(filtros)
     if where_clause:
@@ -206,8 +232,8 @@ class NFeConsultaService:
 
     sql_kpis = f"""
       SELECT
-        p.periodo_ano,
-        p.periodo_mes,
+        k.periodo_ano,
+        k.periodo_mes,
         k.emitente_cnpj,
         k.id,
         k.processamento_id,
@@ -224,10 +250,8 @@ class NFeConsultaService:
         k.top_produtos,
         k.top_cidades
       FROM public.nfe_kpis AS k
-      LEFT JOIN public.nfe_processamentos AS p
-        ON p.id = k.processamento_id
       {where_clause}
-      ORDER BY p.data_processamento DESC NULLS LAST, k.id DESC
+      ORDER BY k.periodo_ano DESC, k.periodo_mes DESC, k.id DESC
       LIMIT %s OFFSET %s;
     """
     parametros.extend([limite, offset])

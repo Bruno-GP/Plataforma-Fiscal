@@ -103,6 +103,8 @@ CREATE TABLE IF NOT EXISTS nfe_kpis (
     id                   BIGSERIAL PRIMARY KEY,
     processamento_id     BIGINT NOT NULL REFERENCES nfe_processamentos(id) ON DELETE CASCADE,
     emitente_cnpj        VARCHAR(14),
+    periodo_ano          INTEGER,
+    periodo_mes          INTEGER,
     total_vendas         NUMERIC(18,2) DEFAULT 0,
     quantidade_notas     INT DEFAULT 0,
     ticket_medio         NUMERIC(18,2) DEFAULT 0,

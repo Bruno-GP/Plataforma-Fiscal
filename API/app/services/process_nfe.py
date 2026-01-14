@@ -108,6 +108,8 @@ class ProcessarNFeService:
             KPICalculator().registrar_kpis(
                 processamento_id=processamento_id,
                 emitente_cnpj=cnpj_emitente,
+                periodo_ano=periodo_ano,
+                periodo_mes=periodo_mes,
                 kpis=kpis
             )
 

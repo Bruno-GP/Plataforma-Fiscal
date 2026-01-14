@@ -105,12 +105,16 @@ class KPICalculator:
         self,
         processamento_id: int,
         emitente_cnpj: str,
+        periodo_ano: int,
+        periodo_mes: int,
         kpis: KPIsRelatorio
     ) -> int:
         sql = """
             INSERT INTO public.nfe_kpis (
                 processamento_id,
                 emitente_cnpj,
+                periodo_ano,
+                periodo_mes,
                 total_vendas,
                 quantidade_notas,
                 ticket_medio,
@@ -124,8 +128,20 @@ class KPICalculator:
                 top_produtos,
                 top_cidades
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (processamento_id) DO NOTHING;
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (processamento_id) DO UPDATE SET
+                total_vendas      = EXCLUDED.total_vendas,
+                quantidade_notas  = EXCLUDED.quantidade_notas,
+                ticket_medio      = EXCLUDED.ticket_medio,
+                maior_nota        = EXCLUDED.maior_nota,
+                menor_nota        = EXCLUDED.menor_nota,
+                total_icms        = EXCLUDED.total_icms,
+                total_ipi         = EXCLUDED.total_ipi,
+                total_pis         = EXCLUDED.total_pis,
+                total_cofins      = EXCLUDED.total_cofins,
+                top_clientes      = EXCLUDED.top_clientes,
+                top_produtos      = EXCLUDED.top_produtos,
+                top_cidades       = EXCLUDED.top_cidades;
         """
 
         payload = _serializar_decimais({
@@ -137,6 +153,8 @@ class KPICalculator:
         valores = (
             processamento_id,
             emitente_cnpj,
+            periodo_ano,
+            periodo_mes,
             kpis.total_vendas,
             kpis.quantidade_notas,
             kpis.ticket_medio,

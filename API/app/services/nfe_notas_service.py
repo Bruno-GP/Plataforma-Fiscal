@@ -78,6 +78,15 @@ class NFeNotasService:
                   AND data_emissao = %s
             );
         """
+        
+        sql_atualizar_processamento = """
+            UPDATE public.nfe_notas
+            SET processamento_id = %s
+            WHERE numero_nf = %s
+              AND emitente_cnpj = %s
+              AND data_emissao = %s
+              AND processamento_id IS NULL;
+        """
 
         valores = []
         for nota in notas_list:
@@ -117,6 +126,17 @@ class NFeNotasService:
                     for valor in valores:
                         cur.execute(sql_insert, valor)
                         inseridos += cur.rowcount
+                        if cur.rowcount == 0 and processamento_id is not None:
+                            cur.execute(
+                                sql_atualizar_processamento,
+                                (
+                                    processamento_id,
+                                    valor[1],
+                                    valor[2],
+                                    valor[3],
+                                ),
+                            )
+                            inseridos += cur.rowcount
                     logger.info(
                         "Notas registradas com sucesso: %s",
                         inseridos

@@ -23,7 +23,7 @@ class NFeProcessamentosService:
         origem: str,
         pasta_xml: str,
         periodo_solicitado: str,
-        periodos_encontrados: list,
+        periodos_encontrados: list | None,
         notas_processadas: int,
         itens_processados: int,
         status: str,
@@ -47,6 +47,12 @@ class NFeProcessamentosService:
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING id;
         """
+        
+        periodos_payload = (
+            Json(periodos_encontrados)
+            if periodos_encontrados is not None
+            else None
+        )
 
         valores = (
             empresa_id,
@@ -56,7 +62,7 @@ class NFeProcessamentosService:
             origem,
             pasta_xml,
             periodo_solicitado,
-            Json(periodos_encontrados),
+            periodos_payload,
             notas_processadas,
             itens_processados,
             status,

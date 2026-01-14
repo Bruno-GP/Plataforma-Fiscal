@@ -40,15 +40,16 @@ class ProcessarNFeService:
                 (n.data_emissao.year, n.data_emissao.month)
                 for n in notas
             }
+            
+            periodos_ordenados = sorted(periodos)
 
             periodos_encontrados = [
                 {"ano": ano, "mes": mes}
-                for ano, mes in sorted(periodos)
+                for ano, mes in periodos_ordenados
             ]
 
-            if len(periodos) == 1:
-                periodo_ano = periodos_encontrados[0]["ano"]
-                periodo_mes = periodos_encontrados[0]["mes"]
+            if len(periodos_ordenados) == 1:
+                periodo_ano, periodo_mes = periodos_ordenados[0]
 
             # 4️⃣ Identificar CNPJ emitente
             cnpjs = {n.emitente_cnpj for n in notas}
@@ -85,33 +86,51 @@ class ProcessarNFeService:
             # 9️⃣ Registrar itens
             NFeItensService().registrar_itens(consolidacao.notas)
 
-            # 🔟 Calcular KPIs
-            kpis = KPICalculator().calcular(consolidacao.notas)
+            # 🔟 Calcular KPIs (total e por período)
+            kpi_calculator = KPICalculator()
+            notas_por_periodo = {}
+            for nota in notas:
+                chave_periodo = (nota.data_emissao.year, nota.data_emissao.month)
+                notas_por_periodo.setdefault(chave_periodo, []).append(nota)
 
-            # 1️⃣1️⃣ Registrar processamento
-            processamento_id = NFeProcessamentosService().registrar_processamento(
-                empresa_id=empresa_id,
-                cnpj_emitente=cnpj_emitente,
-                periodo_ano=periodo_ano,
-                periodo_mes=periodo_mes,
-                origem=request.origem,
-                pasta_xml=request.pasta_xml,
-                periodo_solicitado=request.periodo,
-                periodos_encontrados=periodos_encontrados,
-                notas_processadas=consolidacao.notas_processadas,
-                itens_processados=consolidacao.itens_processados,
-                status="processado",
-                data_processamento=datetime.utcnow()
-            )
+            # 1️⃣1️⃣ Registrar processamento por período
+            processamento_service = NFeProcessamentosService()
 
-            # 1️⃣2️⃣ Registrar KPIs
-            KPICalculator().registrar_kpis(
-                processamento_id=processamento_id,
-                emitente_cnpj=cnpj_emitente,
-                periodo_ano=periodo_ano,
-                periodo_mes=periodo_mes,
-                kpis=kpis
-            )
+            for ano, mes in periodos_ordenados:
+                notas_periodo = notas_por_periodo.get((ano, mes), [])
+
+                if not notas_periodo:
+                    continue
+
+                itens_periodo = sum(len(nota.itens) for nota in notas_periodo)
+
+                # Registrar processamento
+                processamento_id = processamento_service.registrar_processamento(
+                    empresa_id=empresa_id,
+                    cnpj_emitente=cnpj_emitente,
+                    periodo_ano=ano,
+                    periodo_mes=mes,
+                    origem=request.origem,
+                    pasta_xml=request.pasta_xml,
+                    periodo_solicitado=request.periodo,
+                    periodos_encontrados=None,
+                    notas_processadas=len(notas_periodo),
+                    itens_processados=itens_periodo,
+                    status="processado",
+                    data_processamento=datetime.utcnow()
+                )
+
+                # 🔹 Calcular KPI SOMENTE desse processamento
+                kpis_periodo = kpi_calculator.calcular(notas_periodo)
+
+                # 🔹 Registrar KPI vinculado ao processamento
+                kpi_calculator.registrar_kpis(
+                    processamento_id=processamento_id,
+                    emitente_cnpj=cnpj_emitente,
+                    periodo_ano=ano,
+                    periodo_mes=mes,
+                    kpis=kpis_periodo
+                )
 
             # ✅ RETORNO DE SUCESSO (ERA ISSO QUE FALTAVA)
             return ProcessarNFeResponse(

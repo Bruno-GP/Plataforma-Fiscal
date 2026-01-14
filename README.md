@@ -28,6 +28,32 @@ Após iniciar, a documentação interativa estará em `http://localhost:8000/doc
 
 - `GET /health` – Verificação de disponibilidade.
 - `POST /api/nfe/processar` – Processa um conjunto de XMLs e retorna consolidação e KPIs.
+- `GET /api/nfe/kpis` – Consulta KPIs consolidados com filtros opcionais e paginação.
+- `GET /api/nfe/kpis/comparativo` – Compara KPIs do mês atual com o mês anterior.
+- `GET /api/nfe/notas` – Endpoint reservado para consulta detalhada (não implementado).
+
+### Notas das rotas
+
+- `POST /api/nfe/processar`
+  - Lê XMLs a partir de `pasta_xml` e retorna KPIs formatados em moeda pt-BR.
+  - `periodo_ano`/`periodo_mes` só são preenchidos quando todas as notas estão no mesmo mês. Se houver múltiplos meses, a resposta traz apenas `periodos_encontrados`.
+- `GET /api/nfe/kpis`
+  - Filtros opcionais: `emitente_cnpj`, `periodo_ano`, `periodo_mes`.
+  - Paginação via `limite` (1–500) e `offset`.
+- `GET /api/nfe/kpis/comparativo`
+  - Parâmetros obrigatórios: `periodo_ano` e `periodo_mes`.
+  - Retorna 404 quando não há KPIs para o período atual e/ou anterior.
+- `GET /api/nfe/notas`
+  - Retorna 501 (não implementado). Use `GET /api/nfe/kpis` para indicadores consolidados.
+
+## Regras de negócio (processamento de NFe)
+
+- É obrigatório haver pelo menos um XML válido na pasta informada.
+- As notas extraídas precisam conter data de emissão válida.
+- Todas as notas processadas devem pertencer ao mesmo CNPJ de emitente (senão o processamento falha).
+- O nome do emitente é obrigatório para cadastro automático.
+- Deduplicação de notas usa a combinação: número da NF, data de emissão, documento do destinatário e valor total.
+- KPIs consolidam top 5 clientes, produtos e cidades por valor total, além dos totais de impostos.
 
 ### Exemplo de requisição
 

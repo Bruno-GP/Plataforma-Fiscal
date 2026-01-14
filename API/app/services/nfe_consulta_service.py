@@ -40,6 +40,43 @@ class NFeConsultaService:
       "connect_timeout": 5,
     }
     
+  def obter_ultimo_periodo(
+    self,
+    emitente_cnpj: Optional[str] = None,
+  ) -> tuple[int, int]:
+    filtros = []
+    parametros: List[object] = []
+
+    if emitente_cnpj:
+      filtros.append(
+        "regexp_replace(cnpj_emitente, '\\\\D', '', 'g') = %s"
+      )
+      parametros.append(normalizar_cnpj(emitente_cnpj))
+
+    where_clause = ""
+    if filtros:
+      where_clause = "WHERE " + " AND ".join(filtros)
+
+    sql = f"""
+      SELECT
+        periodo_ano,
+        periodo_mes
+      FROM public.nfe_processamentos
+      {where_clause}
+      ORDER BY data_processamento DESC NULLS LAST
+      LIMIT 1;
+    """
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(sql, parametros)
+        row = cur.fetchone()
+
+    if not row:
+      raise ValueError("Nenhum processamento encontrado para o emitente.")
+
+    return row[0], row[1]
+
   def _buscar_kpi_periodo(
     self,
     periodo_ano: int,
@@ -108,6 +145,19 @@ class NFeConsultaService:
       top_clientes=row[12] or [],
       top_produtos=row[13] or [],
       top_cidades=row[14] or [],
+    )
+
+  def _calcular_variacao_percentual(
+    self,
+    atual: Decimal,
+    anterior: Decimal,
+  ) -> Optional[Decimal]:
+    if anterior == 0:
+      if atual == 0:
+        return Decimal("0.00")
+      return None
+    return ((atual - anterior) / anterior * Decimal("100")).quantize(
+      Decimal("0.01")
     )
 
   def _calcular_variacao_percentual(

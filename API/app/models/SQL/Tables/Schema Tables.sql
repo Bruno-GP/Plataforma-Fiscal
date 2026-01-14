@@ -75,6 +75,15 @@ CREATE TABLE IF NOT EXISTS nfe_itens (
     icms_valor      NUMERIC(18,2)
 );
 
+-- 3.1) Tabela de CFOPs
+CREATE TABLE IF NOT EXISTS cfops (
+    id         BIGSERIAL PRIMARY KEY,
+    codigo     VARCHAR(10) NOT NULL UNIQUE,
+    descricao  VARCHAR(255) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cfops_codigo ON cfops (codigo);
+
 CREATE INDEX IF NOT EXISTS idx_nfe_itens_nota ON nfe_itens (nota_id);
 CREATE INDEX IF NOT EXISTS idx_nfe_itens_produto ON nfe_itens (produto_codigo);
 

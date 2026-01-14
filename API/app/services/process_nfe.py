@@ -22,6 +22,7 @@ class ProcessarNFeService:
         periodo_ano = 0
         periodo_mes = 0
         periodos_encontrados = []
+        erros_processamento = []
 
         try:
             # 1️⃣ Ler XMLs
@@ -120,11 +121,19 @@ class ProcessarNFeService:
                 notas_processadas=consolidacao.notas_processadas,
                 itens_processados=consolidacao.itens_processados,
                 kpis=kpis,
-                erros=[],
+                erros=erros_processamento,
                 data_processamento=datetime.utcnow().isoformat()
             )
 
         except Exception as exc:
+            erros = list(erros_processamento)
+            erros.append(
+                ErroProcessamento(
+                    codigo="PROCESSAMENTO_NFE_ERRO",
+                    mensagem=str(exc)
+                ).model_dump()
+            )
+            
             return ProcessarNFeResponse(
                 status="erro",
                 cnpj_emitente=cnpj_emitente,
@@ -134,11 +143,6 @@ class ProcessarNFeService:
                 notas_processadas=0,
                 itens_processados=0,
                 kpis=KPIsRelatorio(),
-                erros=[
-                    ErroProcessamento(
-                        codigo="PROCESSAMENTO_NFE_ERRO",
-                        mensagem=str(exc)
-                    ).model_dump()
-                ],
+                erros=erros_processamento,
                 data_processamento=datetime.utcnow().isoformat()
             )

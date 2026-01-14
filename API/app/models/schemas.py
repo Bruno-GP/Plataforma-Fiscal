@@ -213,6 +213,13 @@ class ProcessarNFeResponse(BaseModel):
   kpis: KPIsRelatorio
   erros: List[Dict] = Field(default_factory=list)
   data_processamento: Optional[str] = None
+
+class ImportarCFOPResponse(BaseModel):
+  status: str
+  total_encontrado: int
+  inseridos: int
+  ignorados: int
+  erros: List[Dict] = Field(default_factory=list)
   
 # =========================
 # INFRA

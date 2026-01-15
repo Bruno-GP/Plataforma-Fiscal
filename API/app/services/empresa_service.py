@@ -2,7 +2,6 @@ import psycopg
 import logging
 from app.services.postres_config import carregar_config_postgres
 
-
 # =========================
 # LOG CONFIG
 # =========================
@@ -16,13 +15,11 @@ formatter = logging.Formatter(
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-
 # =========================
 # UTILS
 # =========================
 def normalizar_cnpj(cnpj: str) -> str:
     return "".join(filter(str.isdigit, cnpj))
-
 
 # =========================
 # SERVICE

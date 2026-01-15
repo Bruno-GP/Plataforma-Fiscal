@@ -72,8 +72,6 @@ class NFeConsultaService:
         "regexp_replace(emitente_cnpj, '\\\\D', '', 'g') = %s"
       )
       parametros.append(normalizar_cnpj(emitente_cnpj))
-      
-    filtros.append(self._filtro_vendas())  
 
     where_clause = ""
     if filtros:
@@ -113,8 +111,6 @@ class NFeConsultaService:
         "regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s"
       )
       parametros.append(normalizar_cnpj(emitente_cnpj))
-      
-    filtros.append(self._filtro_vendas())
 
     where_clause = " AND ".join(filtros)
     if where_clause:
@@ -205,10 +201,9 @@ class NFeConsultaService:
     limite: int = 100,
     offset: int = 0,
   ) -> List[NFeKPIConsulta]:
-    logger.debug("Iniciando listar_kpis")
 
     filtros = []
-    parametros: List[object] = []
+    parametros = []
 
     if emitente_cnpj:
       filtros.append(
@@ -223,8 +218,6 @@ class NFeConsultaService:
     if periodo_mes:
       filtros.append("k.periodo_mes = %s")
       parametros.append(periodo_mes)
-      
-    filtros.append(self._filtro_vendas())
 
     where_clause = " AND ".join(filtros)
     if where_clause:

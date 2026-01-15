@@ -4,6 +4,7 @@ from app.models.schemas import (
     ProcessarNFeRequest,
     ProcessarNFeResponse,
     ErroProcessamento,
+    KPIPorPeriodo, 
     KPIsRelatorio
 )
 
@@ -134,11 +135,16 @@ class ProcessarNFeService:
                     kpis=kpis_periodo
                 )
                 
-                kpis_por_periodo.append({
-                    "ano": ano,
-                    "mes": mes,
-                    "kpis": kpis_periodo
-                })
+                # 🔹 Converter dict de KPIs para o schema correto do response
+                kpis_relatorio = KPIsRelatorio(**kpis_periodo)
+
+                kpis_por_periodo.append(
+                    KPIPorPeriodo(
+                        ano=ano,
+                        mes=mes,
+                        kpis=kpis_relatorio
+                    )
+                )
 
 
             # ✅ RETORNO DE SUCESSO (ERA ISSO QUE FALTAVA)
@@ -173,7 +179,7 @@ class ProcessarNFeService:
                 periodos_encontrados=periodos_encontrados,
                 notas_processadas=0,
                 itens_processados=0,
-                kpis=KPIsRelatorio(),
-                erros=erros_processamento,
+                kpis=[],
+                erros=erros,
                 data_processamento=datetime.utcnow().isoformat()
             )

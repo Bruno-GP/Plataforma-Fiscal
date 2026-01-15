@@ -45,6 +45,7 @@ Após iniciar, a documentação interativa estará em `http://localhost:8000/doc
   - Lê XMLs a partir de `pasta_xml` e retorna KPIs formatados em moeda pt-BR.
   - `periodo_ano`/`periodo_mes` só são preenchidos quando todas as notas estão no mesmo mês. Se houver múltiplos meses, a resposta traz apenas `periodos_encontrados`.
   - Registra automaticamente a empresa quando `empresa_id` não é informado (usa CNPJ e nome do emitente).
+  - Processa e registra KPIs **por período encontrado**, retornando uma lista `kpis` com `{ano, mes, kpis}`.
 - `GET /api/nfe/kpis`
   - Filtros opcionais: `emitente_cnpj`, `periodo_ano`, `periodo_mes`.
   - Paginação via `limite` (1–500) e `offset`.
@@ -57,9 +58,12 @@ Após iniciar, a documentação interativa estará em `http://localhost:8000/doc
 ## Regras de negócio (processamento de NFe)
 
 - É obrigatório haver pelo menos um XML válido na pasta informada.
-- As notas extraídas precisam conter data de emissão válida.
+- As notas extraídas precisam conter data de emissão válida (`dhEmi`) e totais (`ICMSTot`); XMLs sem essas informações são ignorados.
+- XMLs sem `infNFe`, `ide` ou `emit` também são descartados.
 - Todas as notas processadas devem pertencer ao mesmo CNPJ de emitente (senão o processamento falha).
 - O nome do emitente é obrigatório para cadastro automático.
+- O destinatário é opcional: quando ausente, a nota é processada com campos vazios e o cliente entra como "CLIENTE NÃO IDENTIFICADO".
+- Quando há múltiplos períodos (mês/ano) nos XMLs, o processamento é feito por período e cada período gera um KPI separado.
 - Deduplicação de notas usa a combinação: número da NF, data de emissão, documento do destinatário e valor total.
 - KPIs consolidam top 5 clientes, produtos e cidades por valor total, além dos totais de impostos.
 
@@ -89,14 +93,16 @@ Após iniciar, a documentação interativa estará em `http://localhost:8000/doc
 | `periodos_encontrados` | array | Lista de `{ "ano": int, "mes": int }` detectados nos XMLs. |
 | `notas_processadas` | int | Quantidade de notas processadas após consolidação. |
 | `itens_processados` | int | Quantidade total de itens processados. |
-| `kpis` | object | KPIs consolidados (valores monetários formatados em pt-BR). |
+| `kpis` | array | KPIs por período com `{ "ano": int, "mes": int, "kpis": object }`.  |
 | `erros` | array | Lista de erros (vazia no sucesso). |
 | `data_processamento` | string | Timestamp ISO-8601 do processamento. |
 
 **KPIs no retorno**
 
-- Valores monetários (`total_vendas`, `ticket_medio`, `maior_nota`, `menor_nota`, `total_icms`, `total_ipi`, `total_pis`, `total_cofins`) são retornados como **string** formatada em moeda pt-BR (ex.: `"R$ 1.234,56"`).
+- Cada item de `kpis` traz o objeto `kpis` com valores monetários (`total_vendas`, `ticket_medio`, `maior_nota`, `menor_nota`, `total_icms`, `total_ipi`, `total_pis`, `total_cofins`) como **string** formatada em moeda pt-BR (ex.: `"R$ 1.234,56"`).
 - `top_clientes`, `top_produtos`, `top_cidades` retornam até 5 itens, cada um com `valor_total` em moeda pt-BR e `percentual` numérico.
+- Em caso de falha, a resposta traz `status = "erro"`, `kpis` vazio e contagens zeradas.
+
 
 **Resposta (erro)**
 
@@ -196,20 +202,26 @@ Content-Type: application/json
   "periodos_encontrados": [{"ano": 2024, "mes": 5}],
   "notas_processadas": 10,
   "itens_processados": 120,
-  "kpis": {
-    "total_vendas": "150000.00",
-    "quantidade_notas": 10,
-    "ticket_medio": "15000.00",
-    "maior_nota": "25000.00",
-    "menor_nota": "5000.00",
-    "total_icms": "18000.00",
-    "total_ipi": "0.00",
-    "total_pis": "0.00",
-    "total_cofins": "0.00",
-    "top_clientes": [],
-    "top_produtos": [],
-    "top_cidades": []
-  },
+  "kpis": [
+    {
+      "ano": 2024,
+      "mes": 5,
+      "kpis": {
+        "total_vendas": "R$ 150.000,00",
+        "quantidade_notas": 10,
+        "ticket_medio": "R$ 15.000,00",
+        "maior_nota": "R$ 25.000,00",
+        "menor_nota": "R$ 5.000,00",
+        "total_icms": "R$ 18.000,00",
+        "total_ipi": "R$ 0,00",
+        "total_pis": "R$ 0,00",
+        "total_cofins": "R$ 0,00",
+        "top_clientes": [],
+        "top_produtos": [],
+        "top_cidades": []
+      }
+    }
+  ],
   "erros": [],
   "data_processamento": "2024-05-10T12:00:00.000Z"
 }
@@ -220,8 +232,9 @@ Content-Type: application/json
 1. **Leitura de XMLs** pela classe `XmlReader`.
 2. **Extração** de notas via `NFeExtractor`.
 3. **Consolidação** das notas e itens com `NFeConsolidator`.
-4. **Cálculo de KPIs** pelo `KPICalculator`.
-5. **Resposta** no formato `ProcessarNFeResponse`, incluindo status, períodos encontrados, contagens e indicadores.
+4. **Cálculo de KPIs por período** pelo `KPICalculator` (um bloco por ano/mês encontrado).
+5. **Persistência por período** via `NFeProcessamentosService` + registro de KPIs associados.
+6. **Resposta** no formato `ProcessarNFeResponse`, incluindo status, períodos encontrados, contagens e lista de indicadores.
 
 ## Estrutura do projeto
 

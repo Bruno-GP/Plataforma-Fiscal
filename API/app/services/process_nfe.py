@@ -92,6 +92,8 @@ class ProcessarNFeService:
             for nota in notas:
                 chave_periodo = (nota.data_emissao.year, nota.data_emissao.month)
                 notas_por_periodo.setdefault(chave_periodo, []).append(nota)
+                
+            kpis_por_periodo = []
 
             # 1️⃣1️⃣ Registrar processamento por período
             processamento_service = NFeProcessamentosService()
@@ -131,6 +133,13 @@ class ProcessarNFeService:
                     periodo_mes=mes,
                     kpis=kpis_periodo
                 )
+                
+                kpis_por_periodo.append({
+                    "ano": ano,
+                    "mes": mes,
+                    "kpis": kpis_periodo
+                })
+
 
             # ✅ RETORNO DE SUCESSO (ERA ISSO QUE FALTAVA)
             return ProcessarNFeResponse(
@@ -141,10 +150,11 @@ class ProcessarNFeService:
                 periodos_encontrados=periodos_encontrados,
                 notas_processadas=consolidacao.notas_processadas,
                 itens_processados=consolidacao.itens_processados,
-                kpis=kpis,
+                kpis=kpis_por_periodo,
                 erros=erros_processamento,
                 data_processamento=datetime.utcnow().isoformat()
             )
+
 
         except Exception as exc:
             erros = list(erros_processamento)

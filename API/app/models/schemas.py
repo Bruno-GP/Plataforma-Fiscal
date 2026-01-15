@@ -197,6 +197,11 @@ class ErroProcessamento(BaseModel):
 # RESPONSE
 # =========================
 
+class KPIPorPeriodo(BaseModel):
+  ano: int
+  mes: int
+  kpis: KPIsRelatorio
+
 class ProcessarNFeResponse(BaseModel):
   status: str
   cnpj_emitente: str
@@ -210,7 +215,7 @@ class ProcessarNFeResponse(BaseModel):
 
   notas_processadas: int
   itens_processados: int
-  kpis: KPIsRelatorio
+  kpis: List[KPIPorPeriodo]
   erros: List[Dict] = Field(default_factory=list)
   data_processamento: Optional[str] = None
 

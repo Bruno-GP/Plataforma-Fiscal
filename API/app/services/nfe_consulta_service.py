@@ -224,7 +224,7 @@ class NFeConsultaService:
       where_clause = f"WHERE {where_clause}"
 
     sql_kpis = f"""
-      SELECT
+      SELECT DISTINCT ON (k.emitente_cnpj)
         k.periodo_ano,
         k.periodo_mes,
         k.emitente_cnpj,
@@ -244,7 +244,11 @@ class NFeConsultaService:
         k.top_cidades
       FROM public.nfe_kpis AS k
       {where_clause}
-      ORDER BY k.periodo_ano DESC, k.periodo_mes DESC, k.id DESC
+      ORDER BY
+        k.emitente_cnpj,
+        k.periodo_ano DESC,
+        k.periodo_mes DESC,
+        k.id DESC
       LIMIT %s OFFSET %s;
     """
     parametros.extend([limite, offset])

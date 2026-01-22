@@ -1,44 +1,117 @@
-import { TrendingUp, Users, Receipt, AlertTriangle } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMemo } from 'react';
+import { TrendingUp, Users, Receipt, Percent } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
-const stats = [
-  {
-    title: 'Faturamento Mensal',
-    value: 'R$ 84.750',
-    description: '+12.5% vs mês anterior',
-    icon: TrendingUp,
-    trend: 'up',
-  },
-  {
-    title: 'Clientes Ativos',
-    value: '156',
-    description: '+8 novos este mês',
-    icon: Users,
-    trend: 'up',
-  },
-  {
-    title: 'Receitas Pendentes',
-    value: 'R$ 12.400',
-    description: '18 faturas em aberto',
-    icon: Receipt,
-    trend: 'neutral',
-  },
-  {
-    title: 'Inadimplência',
-    value: '2.8%',
-    description: 'Dentro da meta',
-    icon: AlertTriangle,
-    trend: 'down',
-  },
-];
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
+
+const emitenteCnpjPadrao = '00000000000000';
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 
 export default function Dashboard() {
+
+  const comparativoQuery = useQuery({
+    queryKey: ['nfe-kpis-comparativo-atual'],
+    queryFn: fetchNfeKpisComparativoAtual,
+    staleTime: 5 * 60 * 1000,
+  });
+  const latestKpiQuery = useQuery({
+    queryKey: ['nfe-kpis-latest', emitenteCnpjPadrao],
+    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpjPadrao, limite: 12 }),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const latestKpi = useMemo(() => {
+    const resultados = latestKpiQuery.data?.resultados ?? [];
+    return [...resultados].sort((a, b) => {
+      const anoA = a.periodo_ano ?? 0;
+      const anoB = b.periodo_ano ?? 0;
+      if (anoA !== anoB) {
+        return anoB - anoA;
+      }
+      return (b.periodo_mes ?? 0) - (a.periodo_mes ?? 0);
+    })[0];
+  }, [latestKpiQuery.data]);
+
+  const stats = useMemo(() => {
+    const kpis = comparativoQuery.data?.kpis;
+    const totalSales = parseDecimal(kpis?.total_vendas.atual ?? 0);
+    const totalSalesChange = parseDecimal(kpis?.total_vendas.variacao_percentual ?? 0);
+    const totalNotes = kpis?.quantidade_notas.atual ?? 0;
+    const totalNotesChange = parseDecimal(kpis?.quantidade_notas.variacao_percentual ?? 0);
+    const ticketMedio = parseDecimal(kpis?.ticket_medio.atual ?? 0);
+    const ticketChange = parseDecimal(kpis?.ticket_medio.variacao_percentual ?? 0);
+    const totalTaxes = parseDecimal(kpis?.total_icms.atual ?? 0)
+      + parseDecimal(kpis?.total_ipi.atual ?? 0)
+      + parseDecimal(kpis?.total_pis.atual ?? 0)
+      + parseDecimal(kpis?.total_cofins.atual ?? 0);
+    const previousTaxes = parseDecimal(kpis?.total_icms.anterior ?? 0)
+      + parseDecimal(kpis?.total_ipi.anterior ?? 0)
+      + parseDecimal(kpis?.total_pis.anterior ?? 0)
+      + parseDecimal(kpis?.total_cofins.anterior ?? 0);
+    const totalTaxesChange = previousTaxes
+      ? ((totalTaxes - previousTaxes) / previousTaxes) * 100
+      : 0;
+
+    return [
+      {
+        title: 'Faturamento Mensal',
+        value: formatCurrency(totalSales),
+        description: formatPercent(totalSalesChange),
+        icon: TrendingUp,
+        trend: totalSalesChange >= 0 ? 'up' : 'down',
+      },
+      {
+        title: 'Notas Emitidas',
+        value: totalNotes.toString(),
+        description: formatPercent(totalNotesChange),
+        icon: Receipt,
+        trend: totalNotesChange >= 0 ? 'up' : 'down',
+      },
+      {
+        title: 'Ticket Médio',
+        value: formatCurrency(ticketMedio),
+        description: formatPercent(ticketChange),
+        icon: Users,
+        trend: ticketChange >= 0 ? 'up' : 'down',
+      },
+      {
+        title: 'Total de Impostos',
+        value: formatCurrency(totalTaxes),
+        description: formatPercent(totalTaxesChange),
+        icon: Percent,
+        trend: totalTaxesChange >= 0 ? 'up' : 'down',
+      },
+    ];
+  }, [comparativoQuery.data]);
+
+  const topClientes = latestKpi?.kpis.top_clientes ?? [];
+  const topProdutos = latestKpi?.kpis.top_produtos ?? [];
+  const isLoading = comparativoQuery.isLoading || latestKpiQuery.isLoading;
+  const hasError = comparativoQuery.isError || latestKpiQuery.isError;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">Visão geral do seu negócio</p>
       </div>
+
+      {hasError && (
+        <Alert variant="destructive">
+          <AlertTitle>Erro ao carregar indicadores</AlertTitle>
+          <AlertDescription>
+            Não foi possível buscar os KPIs mais recentes na API.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
@@ -50,13 +123,15 @@ export default function Dashboard() {
               <stat.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+              <div className="text-2xl font-bold">
+                {isLoading ? 'Carregando...' : stat.value}
+              </div>
               <p className={`text-xs ${
                 stat.trend === 'up' ? 'text-green-600' : 
                 stat.trend === 'down' ? 'text-red-600' : 
                 'text-muted-foreground'
               }`}>
-                {stat.description}
+                {isLoading ? '--' : `${stat.description} vs mês anterior`}
               </p>
             </CardContent>
           </Card>
@@ -66,50 +141,64 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Atividade Recente</CardTitle>
-            <CardDescription>Últimas movimentações do sistema</CardDescription>
+            <CardTitle>Top Clientes</CardTitle>
+            <CardDescription>Clientes com maior faturamento no último período</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { action: 'Nova venda registrada', time: 'Há 5 minutos', value: 'R$ 1.250,00' },
-                { action: 'Pagamento recebido', time: 'Há 23 minutos', value: 'R$ 3.800,00' },
-                { action: 'Novo cliente cadastrado', time: 'Há 1 hora', value: 'Tech Corp' },
-                { action: 'Fatura enviada', time: 'Há 2 horas', value: 'R$ 5.600,00' },
-              ].map((item, index) => (
-                <div key={index} className="flex items-center justify-between border-b pb-2 last:border-0">
-                  <div>
-                    <p className="font-medium">{item.action}</p>
-                    <p className="text-sm text-muted-foreground">{item.time}</p>
+              {isLoading ? (
+                <p className="text-sm text-muted-foreground">Carregando ranking...</p>
+              ) : topClientes.length ? (
+                topClientes.map((cliente, index) => (
+                  <div key={`${cliente.cliente}-${index}`} className="flex items-center justify-between border-b pb-2 last:border-0">
+                    <div>
+                      <p className="font-medium">{cliente.cliente ?? 'Cliente não identificado'}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {cliente.percentual !== undefined
+                          ? `${parseDecimal(cliente.percentual).toFixed(1)}% do faturamento`
+                          : 'Participação não informada'}
+                      </p>
+                    </div>
+                    <span className="text-sm font-medium">
+                      {formatCurrency(parseDecimal(cliente.valor_total ?? 0))}
+                    </span>
                   </div>
-                  <span className="text-sm font-medium">{item.value}</span>
-                </div>
-              ))}
+                 ))
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum cliente registrado.</p>
+              )}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Próximos Vencimentos</CardTitle>
-            <CardDescription>Faturas a vencer nos próximos 7 dias</CardDescription>
+            <CardTitle>Top Produtos</CardTitle>
+            <CardDescription>Itens com maior faturamento no último período</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { client: 'ABC Ltda', date: '25/01', value: 'R$ 2.300,00' },
-                { client: 'XYZ Corp', date: '26/01', value: 'R$ 4.500,00' },
-                { client: 'Tech Solutions', date: '27/01', value: 'R$ 1.800,00' },
-                { client: 'Global Inc', date: '28/01', value: 'R$ 3.200,00' },
-              ].map((item, index) => (
-                <div key={index} className="flex items-center justify-between border-b pb-2 last:border-0">
-                  <div>
-                    <p className="font-medium">{item.client}</p>
-                    <p className="text-sm text-muted-foreground">Vence em {item.date}</p>
+              {isLoading ? (
+                <p className="text-sm text-muted-foreground">Carregando ranking...</p>
+              ) : topProdutos.length ? (
+                topProdutos.map((produto, index) => (
+                  <div key={`${produto.produto}-${index}`} className="flex items-center justify-between border-b pb-2 last:border-0">
+                    <div>
+                      <p className="font-medium">{produto.produto ?? 'Produto não identificado'}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {produto.percentual !== undefined
+                          ? `${parseDecimal(produto.percentual).toFixed(1)}% do faturamento`
+                          : 'Participação não informada'}
+                      </p>
+                    </div>
+                    <span className="text-sm font-medium">
+                      {formatCurrency(parseDecimal(produto.valor_total ?? 0))}
+                    </span>
                   </div>
-                  <span className="text-sm font-medium">{item.value}</span>
-                </div>
-              ))}
+                  ))
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum produto registrado.</p>
+              )}
             </div>
           </CardContent>
         </Card>

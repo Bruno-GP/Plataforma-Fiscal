@@ -10,6 +10,17 @@ export interface NfeKpi {
   total_ipi: number | string;
   total_pis: number | string;
   total_cofins: number | string;
+  top_clientes?: NfeRankingItem[];
+  top_produtos?: NfeRankingItem[];
+  top_cidades?: NfeRankingItem[];
+}
+
+export interface NfeRankingItem {
+  cliente?: string;
+  produto?: string;
+  cidade?: string;
+  valor_total?: number | string;
+  percentual?: number | string;
 }
 
 export interface NfeKpiConsulta {
@@ -30,6 +41,38 @@ export interface FetchKpiParams {
   periodo_mes?: number;
   limite?: number;
   offset?: number;
+}
+
+export interface KpiComparativoValor {
+  atual: number | string;
+  anterior: number | string;
+  variacao_percentual?: number | string | null;
+}
+
+export interface KpiComparativoQuantidade {
+  atual: number;
+  anterior: number;
+  variacao_percentual?: number | string | null;
+}
+
+export interface KpiComparativoResponse {
+  status: string;
+  periodo_atual_ano: number;
+  periodo_atual_mes: number;
+  periodo_anterior_ano: number;
+  periodo_anterior_mes: number;
+  emitente_cnpj?: string | null;
+  kpis: {
+    total_vendas: KpiComparativoValor;
+    quantidade_notas: KpiComparativoQuantidade;
+    ticket_medio: KpiComparativoValor;
+    maior_nota: KpiComparativoValor;
+    menor_nota: KpiComparativoValor;
+    total_icms: KpiComparativoValor;
+    total_ipi: KpiComparativoValor;
+    total_pis: KpiComparativoValor;
+    total_cofins: KpiComparativoValor;
+  };
 }
 
 export const parseDecimal = (value: unknown): number => {
@@ -84,4 +127,14 @@ export const fetchNfeKpis = async (params: FetchKpiParams = {}): Promise<Consult
   }
 
   return response.json() as Promise<ConsultaKpiResponse>;
+};
+
+export const fetchNfeKpisComparativoAtual = async (): Promise<KpiComparativoResponse> => {
+  const response = await fetch(`${API_BASE_URL}/nfe/kpis/comparativo/atual`);
+
+  if (!response.ok) {
+    throw new Error("Não foi possível carregar o comparativo de KPIs.");
+  }
+
+  return response.json() as Promise<KpiComparativoResponse>;
 };

@@ -1,0 +1,87 @@
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+
+export interface NfeKpi {
+  total_vendas: number | string;
+  quantidade_notas: number;
+  ticket_medio: number | string;
+  maior_nota: number | string;
+  menor_nota: number | string;
+  total_icms: number | string;
+  total_ipi: number | string;
+  total_pis: number | string;
+  total_cofins: number | string;
+}
+
+export interface NfeKpiConsulta {
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  kpis: NfeKpi;
+}
+
+export interface ConsultaKpiResponse {
+  status: string;
+  total: number;
+  resultados: NfeKpiConsulta[];
+}
+
+export interface FetchKpiParams {
+  emitente_cnpj?: string;
+  periodo_ano?: number;
+  periodo_mes?: number;
+  limite?: number;
+  offset?: number;
+}
+
+export const parseDecimal = (value: unknown): number => {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return 0;
+  }
+
+  const cleaned = value.replace(/[^\d,.-]/g, "");
+  if (!cleaned) {
+    return 0;
+  }
+
+  if (cleaned.includes(",") && !cleaned.includes(".")) {
+    return Number(cleaned.replace(",", ".")) || 0;
+  }
+
+  return Number(cleaned.replace(/,/g, "")) || 0;
+};
+
+export const fetchNfeKpis = async (params: FetchKpiParams = {}): Promise<ConsultaKpiResponse> => {
+  const searchParams = new URLSearchParams();
+
+  if (params.emitente_cnpj) {
+    searchParams.set("emitente_cnpj", params.emitente_cnpj);
+  }
+
+  if (params.periodo_ano) {
+    searchParams.set("periodo_ano", String(params.periodo_ano));
+  }
+
+  if (params.periodo_mes) {
+    searchParams.set("periodo_mes", String(params.periodo_mes));
+  }
+
+  if (params.limite) {
+    searchParams.set("limite", String(params.limite));
+  }
+
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const queryString = searchParams.toString();
+  const response = await fetch(`${API_BASE_URL}/nfe/kpis${queryString ? `?${queryString}` : ""}`);
+
+  if (!response.ok) {
+    throw new Error("Não foi possível carregar os KPIs da NFe.");
+  }
+
+  return response.json() as Promise<ConsultaKpiResponse>;
+};

@@ -2,7 +2,7 @@ from typing import List
 from datetime import datetime, date
 from decimal import Decimal
 
-from app.domain.xml_models import XmlNFe
+from app.domain.nfe.xml_models import XmlNFe
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 

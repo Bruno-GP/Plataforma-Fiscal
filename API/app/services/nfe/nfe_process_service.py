@@ -1,7 +1,7 @@
 import psycopg
 from psycopg.types.json import Json
 
-from app.services.postres_config import carregar_config_postgres
+from app.services.nfe.postres_config import carregar_config_postgres
 
 class NFeProcessamentosService:
     def __init__(self):

@@ -120,3 +120,17 @@ CREATE TABLE IF NOT EXISTS nfe_kpis (
 );
 
 CREATE INDEX IF NOT EXISTS idx_nfe_kpis_proc ON nfe_kpis (processamento_id);
+
+-- 6) Login
+CREATE TABLE IF NOT EXISTS login (
+    id          BIGSERIAL PRIMARY KEY,
+    empresa_id  BIGINT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    cnpj        VARCHAR(20) NOT NULL,
+    email       VARCHAR(255) NOT NULL UNIQUE,
+    senha_hash  TEXT NOT NULL,
+    senha_salt  TEXT NOT NULL,
+    criado_em   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_empresa ON login (empresa_id);
+CREATE INDEX IF NOT EXISTS idx_login_cnpj ON login (cnpj);

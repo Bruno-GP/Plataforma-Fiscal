@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from typing import List, Dict, Tuple
 from collections import defaultdict
 
-from app.models.schemas import NFeNota
-from app.domain.extractor import NotaExtraida, ItemNota
+from app.models.nfe.schemas import NFeNota
+from app.domain.nfe.extractor import NotaExtraida, ItemNota
 
 class ConsolidacaoNFe:
     def __init__(self, notas: List[NotaExtraida]):

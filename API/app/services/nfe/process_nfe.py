@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.models.schemas import (
+from app.models.nfe.schemas import (
     ProcessarNFeRequest,
     ProcessarNFeResponse,
     ErroProcessamento,
@@ -8,14 +8,14 @@ from app.models.schemas import (
     KPIsRelatorio
 )
 
-from app.domain.xml_reader import XmlReader
-from app.domain.extractor import NFeExtractor
-from app.domain.consolidator import NFeConsolidator
-from app.domain.kpis import KPICalculator
-from app.services.empresa_service import EmpresaService
-from app.services.nfe_notas_service import NFeNotasService
-from app.services.nfe_itens_service import NFeItensService
-from app.services.nfe_process_service import NFeProcessamentosService
+from app.domain.nfe.xml_reader import XmlReader
+from app.domain.nfe.extractor import NFeExtractor
+from app.domain.nfe.consolidator import NFeConsolidator
+from app.domain.nfe.kpis import KPICalculator
+from app.services.nfe.empresa_service import EmpresaService
+from app.services.nfe.nfe_notas_service import NFeNotasService
+from app.services.nfe.nfe_itens_service import NFeItensService
+from app.services.nfe.nfe_process_service import NFeProcessamentosService
 
 class ProcessarNFeService:
     def executar(self, request: ProcessarNFeRequest) -> ProcessarNFeResponse:

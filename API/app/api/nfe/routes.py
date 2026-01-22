@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Query, HTTPException, status
 
-from app.services.process_nfe import ProcessarNFeService
-from app.services.nfe_consulta_service import NFeConsultaService
-from app.models.schemas import (
+from app.services.nfe.process_nfe import ProcessarNFeService
+from app.services.nfe.nfe_consulta_service import NFeConsultaService
+from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
   ConsultaNFeResponse,
   ConsultaKPIResponse,

@@ -5,9 +5,9 @@ import logging
 import psycopg
 from psycopg.types.json import Json
 
-from app.domain.extractor import NotaExtraida
-from app.models.schemas import KPIsRelatorio
-from app.services.postres_config import carregar_config_postgres
+from app.domain.nfe.extractor import NotaExtraida
+from app.models.nfe.schemas import KPIsRelatorio
+from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("KPICalculator")
 logger.setLevel(logging.INFO)

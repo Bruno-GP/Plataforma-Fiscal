@@ -1,0 +1,65 @@
+from fastapi import APIRouter, HTTPException, status
+
+from app.models.auth.schemas import (
+    LoginCadastroRequest,
+    LoginCadastroResponse,
+    LoginRequest,
+    LoginResponse,
+)
+from app.services.auth.login_service import LoginService
+
+router = APIRouter()
+
+auth_router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+@auth_router.post(
+    "/registrar",
+    response_model=LoginCadastroResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def registrar_login(request: LoginCadastroRequest):
+    try:
+        resultado = LoginService().registrar(
+            email=request.email,
+            senha=request.senha,
+            cnpj=request.cnpj,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    return LoginCadastroResponse(
+        status="cadastrado",
+        login_id=resultado.login_id,
+        empresa_id=resultado.empresa_id,
+        cnpj=resultado.cnpj,
+        email=resultado.email,
+    )
+
+
+@auth_router.post("/entrar", response_model=LoginResponse)
+def autenticar_login(request: LoginRequest):
+    try:
+        resultado = LoginService().autenticar(
+            email=request.email,
+            senha=request.senha,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        ) from exc
+
+    return LoginResponse(
+        status="ok",
+        login_id=resultado.login_id,
+        empresa_id=resultado.empresa_id,
+        cnpj=resultado.cnpj,
+        email=resultado.email,
+    )
+
+
+router.include_router(auth_router)

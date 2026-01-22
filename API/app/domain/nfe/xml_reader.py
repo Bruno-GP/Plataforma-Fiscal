@@ -1,7 +1,7 @@
 import os
 import xml.etree.ElementTree as ET
 from typing import List
-from app.domain.xml_models import XmlNFe
+from app.domain.nfe.xml_models import XmlNFe
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 

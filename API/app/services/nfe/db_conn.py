@@ -1,7 +1,7 @@
 from typing import Dict
 import psycopg
 
-from app.services.postres_config import carregar_config_postgres
+from app.services.nfe.postres_config import carregar_config_postgres
 
 class ConnPostgresService:
   """Serviço simples para validar a conexão com o PostgreSQL."""

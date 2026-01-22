@@ -4,15 +4,15 @@ from decimal import Decimal
 
 import psycopg
 
-from app.models.schemas import (
+from app.models.nfe.schemas import (
   KPIComparativoQuantidade,
   KPIComparativoValor,
   KPIsComparativo,
   NFeKPI,
   NFeKPIConsulta,
 )
-from app.services.empresa_service import normalizar_cnpj
-from app.services.postres_config import carregar_config_postgres
+from app.services.nfe.empresa_service import normalizar_cnpj
+from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("NFeConsultaService")
 logger.setLevel(logging.DEBUG)

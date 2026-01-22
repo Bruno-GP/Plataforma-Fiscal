@@ -1,6 +1,7 @@
 import psycopg
 import logging
-from app.services.postres_config import carregar_config_postgres
+
+from app.services.nfe.postres_config import carregar_config_postgres
 
 # =========================
 # LOG CONFIG

@@ -3,9 +3,9 @@ from typing import Iterable
 
 import psycopg
 
-from app.domain.extractor import NotaExtraida
-from app.services.empresa_service import normalizar_cnpj
-from app.services.postres_config import carregar_config_postgres
+from app.domain.nfe.extractor import NotaExtraida
+from app.services.nfe.empresa_service import normalizar_cnpj
+from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("NFeItensService")
 logger.setLevel(logging.DEBUG)

@@ -35,7 +35,7 @@ export default function Login() {
           description: 'Email ou senha inválidos.',
         });
       }
-    } catch (error) {
+    } catch  {
       toast({
         variant: 'destructive',
         title: 'Erro',

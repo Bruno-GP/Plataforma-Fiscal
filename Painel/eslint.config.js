@@ -12,9 +12,28 @@ export default defineConfig([
     extends: [
       js.configs.recommended,
       tseslint.configs.recommended,
-      reactHooks.configs.flat.recommended,
+      reactHooks.configs['recommended-latest'],
       reactRefresh.configs.vite,
     ],
+    rules: {
+      'react-refresh/only-export-components': [
+        'error',
+        {
+          allowConstantExport: true,
+          allowExportNames: [
+            'badgeVariants',
+            'buttonVariants',
+            'navigationMenuTriggerStyle',
+            'toast',
+            'toggleVariants',
+            'useAuth',
+            'useChat',
+            'useFormField',
+            'useSidebar',
+          ],
+        },
+      ],
+    },
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,

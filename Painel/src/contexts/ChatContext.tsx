@@ -26,7 +26,7 @@ export const useChat = () => {
   return context;
 };
 
-const generateAIResponse = async (userMessage: string, messages: Message[]): Promise<string> => {
+const generateAIResponse = async (userMessage: string): Promise<string> => {
   // Simulated AI responses based on context
   await new Promise(resolve => setTimeout(resolve, 1000));
   
@@ -91,7 +91,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
 
     try {
-      const response = await generateAIResponse(content, messages);
+      const response = await generateAIResponse(content);
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',

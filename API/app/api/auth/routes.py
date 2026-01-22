@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.models.auth.schemas import (
+from app.models.nfe.auth.schemas import (
     LoginCadastroRequest,
     LoginCadastroResponse,
     LoginRequest,
     LoginResponse,
 )
-from app.services.auth.login_service import LoginService
+from app.services.nfe.auth.login_service import LoginService
 
 router = APIRouter()
 

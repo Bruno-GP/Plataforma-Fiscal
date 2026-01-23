@@ -26,8 +26,7 @@ def processar_nfe(request: ProcessarNFeRequest):
 # -------------------------
 @nfe_router.get("/kpis", response_model=ConsultaKPIResponse)
 def consultar_kpis(
-  emitente_cnpj: str | None = Query(default=None),
-  email: str | None = Query(default=None),
+  emitente_cnpj: str = Query(...),
   periodo_ano: int | None = Query(default=None, ge=2000, le=2100),
   periodo_mes: int | None = Query(default=None, ge=1, le=12),
   limite: int = Query(default=100, ge=1, le=500),
@@ -37,10 +36,10 @@ def consultar_kpis(
   
   emitente_resolvido = service.resolver_emitente_cnpj(
     emitente_cnpj=emitente_cnpj,
-    email=email,
+    email=None,
   )
   
-  if emitente_cnpj and not emitente_resolvido and not email:
+  if not emitente_resolvido:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail="CNPJ inválido ou zerado não é permitido.",
@@ -68,8 +67,7 @@ def consultar_kpis(
   response_model=ComparativoKPIMensalResponse,
 )
 def comparar_kpis_mensal(
-  emitente_cnpj: str | None = Query(default=None),
-  email: str | None = Query(default=None),
+  emitente_cnpj: str = Query(...),
   periodo_ano: int = Query(..., ge=2000, le=2100),
   periodo_mes: int = Query(..., ge=1, le=12),
   periodo_anterior_ano: int | None = Query(default=None, ge=2000, le=2100),
@@ -87,10 +85,10 @@ def comparar_kpis_mensal(
   
   emitente_resolvido = service.resolver_emitente_cnpj(
     emitente_cnpj=emitente_cnpj,
-    email=email,
+    email=None,
   )
   
-  if emitente_cnpj and not emitente_resolvido and not email:
+  if not emitente_resolvido:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail="CNPJ inválido ou zerado não é permitido.",
@@ -131,17 +129,16 @@ def comparar_kpis_mensal(
   response_model=ComparativoKPIMensalResponse,
 )
 def comparar_kpis_mensal_atual(
-  emitente_cnpj: str | None = Query(default=None),
-  email: str | None = Query(default=None),
+  emitente_cnpj: str = Query(...),
 ):
   service = NFeConsultaService()
   
   emitente_resolvido = service.resolver_emitente_cnpj(
     emitente_cnpj=emitente_cnpj,
-    email=email,
+    email=None,
   )
   
-  if emitente_cnpj and not emitente_resolvido and not email:
+  if not emitente_resolvido:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail="CNPJ inválido ou zerado não é permitido.",

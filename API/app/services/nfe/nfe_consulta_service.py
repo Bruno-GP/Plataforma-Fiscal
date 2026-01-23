@@ -52,6 +52,49 @@ class NFeConsultaService:
       return None
 
     return cnpj  
+  
+  def obter_cnpj_por_email(
+    self,
+    email: Optional[str],
+  ) -> Optional[str]:
+    if not email:
+      return None
+
+    email_normalizado = email.strip().lower()
+    if not email_normalizado:
+      return None
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          """
+          SELECT cnpj
+          FROM public.login
+          WHERE email = %s;
+          """,
+          (email_normalizado,),
+        )
+        row = cur.fetchone()
+
+    if not row or not row[0]:
+      return None
+
+    cnpj = normalizar_cnpj(row[0])
+    if not cnpj or set(cnpj) == {"0"}:
+      return None
+
+    return cnpj
+
+  def resolver_emitente_cnpj(
+    self,
+    emitente_cnpj: Optional[str],
+    email: Optional[str],
+  ) -> Optional[str]:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
+    if cnpj_filtrado:
+      return cnpj_filtrado
+
+    return self.obter_cnpj_por_email(email)
     
   def _filtro_vendas(self) -> str:
     return """

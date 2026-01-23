@@ -40,6 +40,19 @@ class NFeConsultaService:
       "connect_timeout": 5,
     }
     
+  def _normalizar_cnpj_filtro(
+    self,
+    emitente_cnpj: Optional[str],
+  ) -> Optional[str]:
+    if not emitente_cnpj:
+      return None
+
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    if not cnpj or set(cnpj) == {"0"}:
+      return None
+
+    return cnpj  
+    
   def _filtro_vendas(self) -> str:
     return """
       EXISTS (
@@ -66,12 +79,14 @@ class NFeConsultaService:
   ) -> tuple[int, int]:
     filtros = []
     parametros: List[object] = []
+    
+    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
 
-    if emitente_cnpj:
+    if cnpj_filtrado:
       filtros.append(
         "regexp_replace(emitente_cnpj, '\\\\D', '', 'g') = %s"
       )
-      parametros.append(normalizar_cnpj(emitente_cnpj))
+      parametros.append(cnpj_filtrado)
 
     where_clause = ""
     if filtros:
@@ -105,11 +120,13 @@ class NFeConsultaService:
     filtros = []
     parametros: List[object] = []
 
-    if emitente_cnpj:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
+    
+    if cnpj_filtrado:
       filtros.append(
         "regexp_replace(emitente_cnpj, '\\\\D', '', 'g') = %s"
       )
-      parametros.append(normalizar_cnpj(emitente_cnpj))
+      parametros.append(cnpj_filtrado)
 
     where_clause = ""
     if filtros:
@@ -142,11 +159,13 @@ class NFeConsultaService:
     filtros = ["k.periodo_ano = %s", "k.periodo_mes = %s"]
     parametros: List[object] = [periodo_ano, periodo_mes]
 
-    if emitente_cnpj:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
+    
+    if cnpj_filtrado:
       filtros.append(
         "regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s"
       )
-      parametros.append(normalizar_cnpj(emitente_cnpj))
+      parametros.append(cnpj_filtrado)
 
     where_clause = " AND ".join(filtros)
     if where_clause:
@@ -241,11 +260,13 @@ class NFeConsultaService:
     filtros = []
     parametros = []
 
-    if emitente_cnpj:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
+    
+    if cnpj_filtrado:
       filtros.append(
         "regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s"
       )
-      parametros.append(normalizar_cnpj(emitente_cnpj))
+      parametros.append(cnpj_filtrado)
 
     if periodo_ano:
       filtros.append("k.periodo_ano = %s")

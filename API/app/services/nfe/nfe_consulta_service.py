@@ -43,12 +43,16 @@ class NFeConsultaService:
   def _normalizar_cnpj_filtro(
     self,
     emitente_cnpj: Optional[str],
+    permitir_zerado: bool = False,
   ) -> Optional[str]:
     if not emitente_cnpj:
       return None
 
     cnpj = normalizar_cnpj(emitente_cnpj)
-    if not cnpj or set(cnpj) == {"0"}:
+    if not cnpj:
+      return None
+
+    if not permitir_zerado and set(cnpj) == {"0"}:
       return None
 
     return cnpj  
@@ -90,7 +94,10 @@ class NFeConsultaService:
     emitente_cnpj: Optional[str],
     email: Optional[str],
   ) -> Optional[str]:
-    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=True,
+    )
     if cnpj_filtrado:
       return cnpj_filtrado
 
@@ -123,7 +130,10 @@ class NFeConsultaService:
     filtros = []
     parametros: List[object] = []
     
-    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=True,
+    )
 
     if cnpj_filtrado:
       filtros.append(
@@ -163,7 +173,10 @@ class NFeConsultaService:
     filtros = []
     parametros: List[object] = []
 
-    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=True,
+    )
     
     if cnpj_filtrado:
       filtros.append(
@@ -202,7 +215,10 @@ class NFeConsultaService:
     filtros = ["k.periodo_ano = %s", "k.periodo_mes = %s"]
     parametros: List[object] = [periodo_ano, periodo_mes]
 
-    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=True,
+    )
     
     if cnpj_filtrado:
       filtros.append(
@@ -303,7 +319,10 @@ class NFeConsultaService:
     filtros = []
     parametros = []
 
-    cnpj_filtrado = self._normalizar_cnpj_filtro(emitente_cnpj)
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=True,
+    )
     
     if cnpj_filtrado:
       filtros.append(

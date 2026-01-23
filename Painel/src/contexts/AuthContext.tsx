@@ -15,6 +15,19 @@ interface AuthContextType {
   logout: () => void;
 }
 
+interface LoginResponse {
+  status: string;
+  login_id: number | string;
+  empresa_id: number | string;
+  cnpj: string;
+  email: string;
+}
+
+const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const API_BASE_URL = RAW_API_BASE_URL.endsWith('/api')
+  ? RAW_API_BASE_URL
+  : `${RAW_API_BASE_URL.replace(/\/$/, '')}/api`;
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
@@ -33,19 +46,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     // Simulated login - in production, this would call an API
-    if (email && password) {
-      const mockUser: User = {
-        id: '1',
-        name: 'João Silva',
-        email: email,
-        emitente_cnpj: '12345678000195',
-        avatar: undefined,
-      };
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      return true;
+      if (!email || !password) {
+      return false;
     }
-    return false;
+
+    const response = await fetch(`${API_BASE_URL}/auth/entrar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        senha: password,
+      }),
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const data = (await response.json()) as LoginResponse;
+    const resolvedId = data.login_id ?? data.empresa_id ?? email;
+    const nextUser: User = {
+      id: String(resolvedId),
+      name: data.email,
+      email: data.email,
+      emitente_cnpj: data.cnpj,
+      avatar: undefined,
+    };
+
+    setUser(nextUser);
+    localStorage.setItem('user', JSON.stringify(nextUser));
+    return true;
   };
 
   const logout = () => {

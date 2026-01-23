@@ -40,7 +40,10 @@ class LoginService:
         return digest.hex()
 
     def _verificar_senha(self, senha: str, senha_hash: str, senha_salt: str) -> bool:
-        salt = bytes.fromhex(senha_salt)
+        try:
+            salt = bytes.fromhex(senha_salt)
+        except ValueError:
+            return False
         digest = self._hash_senha(senha, salt)
         return hmac.compare_digest(digest, senha_hash)
 

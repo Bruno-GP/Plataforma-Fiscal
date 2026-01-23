@@ -40,6 +40,12 @@ def consultar_kpis(
     email=email,
   )
   
+  if emitente_cnpj and not emitente_resolvido and not email:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="CNPJ inválido ou zerado não é permitido.",
+    )
+  
   resultados = service.listar_kpis(
     emitente_cnpj=emitente_resolvido,
     periodo_ano=periodo_ano,
@@ -83,6 +89,12 @@ def comparar_kpis_mensal(
     emitente_cnpj=emitente_cnpj,
     email=email,
   )
+  
+  if emitente_cnpj and not emitente_resolvido and not email:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="CNPJ inválido ou zerado não é permitido.",
+    )
   
   kpis = service.comparar_kpis_mensal(
     emitente_cnpj=emitente_resolvido,
@@ -128,6 +140,12 @@ def comparar_kpis_mensal_atual(
     emitente_cnpj=emitente_cnpj,
     email=email,
   )
+  
+  if emitente_cnpj and not emitente_resolvido and not email:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="CNPJ inválido ou zerado não é permitido.",
+    )
   
   try:
     periodos_disponiveis = service.obter_periodos_disponiveis(emitente_resolvido)

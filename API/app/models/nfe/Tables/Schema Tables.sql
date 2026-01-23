@@ -134,3 +134,11 @@ CREATE TABLE IF NOT EXISTS login (
 
 CREATE INDEX IF NOT EXISTS idx_login_empresa ON login (empresa_id);
 CREATE INDEX IF NOT EXISTS idx_login_cnpj ON login (cnpj);
+
+BEGIN;
+
+ALTER TABLE public.login
+  ALTER COLUMN senha_hash TYPE VARCHAR(255) USING senha_hash::varchar,
+  ALTER COLUMN senha_salt TYPE VARCHAR(32) USING senha_salt::varchar;
+
+COMMIT;

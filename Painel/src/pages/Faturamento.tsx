@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useChat } from '@/contexts/ChatContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { getBillingData, getBillingStats } from '@/data/billingData';
 
 const formatCurrency = (value: number) => {
@@ -23,15 +24,18 @@ export default function Faturamento() {
   const [selectedYear, setSelectedYear] = useState('2025');
   const { toggleChat, sendMessage, isOpen } = useChat();
   
+  const { user } = useAuth();
+  const emitenteCnpj = user?.emitente_cnpj;
+  
   const year = Number.parseInt(selectedYear, 10);
   const kpisQuery = useQuery({
-    queryKey: ['nfe-kpis', year],
-    queryFn: () => fetchNfeKpis({ periodo_ano: year }),
+    queryKey: ['nfe-kpis', emitenteCnpj, year],
+    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year }),
     staleTime: 5 * 60 * 1000,
   });
   const previousYearQuery = useQuery({
-    queryKey: ['nfe-kpis', year - 1],
-    queryFn: () => fetchNfeKpis({ periodo_ano: year - 1 }),
+    queryKey: ['nfe-kpis', emitenteCnpj, year - 1],
+    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 }),
     enabled: year > 2000,
     staleTime: 5 * 60 * 1000,
   });

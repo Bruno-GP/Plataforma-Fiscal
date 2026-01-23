@@ -33,11 +33,12 @@ const formatCurrency = (value: number) =>
 export default function Clientes() {
   const [search, setSearch] = useState('');
   const { user } = useAuth();
-  const email = user?.email;
+  
+  const emitenteCnpj = user?.emitente_cnpj;
 
   const kpisQuery = useQuery({
-    queryKey: ['nfe-kpis-clientes', email],
-    queryFn: () => fetchNfeKpis({ email, limite: 12 }),
+    queryKey: ['nfe-kpis-clientes', emitenteCnpj],
+    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 12 }),
     staleTime: 5 * 60 * 1000,
   });
 

@@ -40,7 +40,6 @@ export interface ConsultaKpiResponse {
 
 export interface FetchKpiParams {
   emitente_cnpj?: string;
-  email?: string;
   periodo_ano?: number;
   periodo_mes?: number;
   limite?: number;
@@ -124,8 +123,6 @@ export const fetchNfeKpis = async (params: FetchKpiParams = {}): Promise<Consult
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
   if (cnpjParam) {
     searchParams.set("emitente_cnpj", cnpjParam);
-  } else if (params.email) {
-    searchParams.set("email", params.email);
   }
 
   if (params.periodo_ano) {

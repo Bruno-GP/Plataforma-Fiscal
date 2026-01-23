@@ -4,6 +4,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  emitente_cnpj: string;
   avatar?: string;
 }
 
@@ -37,6 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         id: '1',
         name: 'João Silva',
         email: email,
+        emitente_cnpj: '12345678000195',
         avatar: undefined,
       };
       setUser(mockUser);

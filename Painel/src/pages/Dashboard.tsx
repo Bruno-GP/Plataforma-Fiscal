@@ -17,17 +17,18 @@ const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixe
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const email = user?.email;
+
+  const emitenteCnpj = user?.emitente_cnpj;
 
   const comparativoQuery = useQuery({
-    queryKey: ['nfe-kpis-comparativo-atual', email],
-    queryFn: () => fetchNfeKpisComparativoAtual(undefined, email),
+     queryKey: ['nfe-kpis-comparativo-atual', emitenteCnpj],
+    queryFn: () => fetchNfeKpisComparativoAtual(emitenteCnpj),
     staleTime: 5 * 60 * 1000,
   });
 
   const latestKpiQuery = useQuery({
-    queryKey: ['nfe-kpis-latest', email],
-    queryFn: () => fetchNfeKpis({ email, limite: 12 }),
+    queryKey: ['nfe-kpis-latest', emitenteCnpj],
+    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 12 }),
     staleTime: 5 * 60 * 1000,
   });
 

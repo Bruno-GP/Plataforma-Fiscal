@@ -96,7 +96,7 @@ class NFeConsultaService:
   ) -> Optional[str]:
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
-      permitir_zerado=True,
+      permitir_zerado=False,
     )
     if cnpj_filtrado:
       return cnpj_filtrado
@@ -132,7 +132,7 @@ class NFeConsultaService:
     
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
-      permitir_zerado=True,
+      permitir_zerado=False,
     )
 
     if cnpj_filtrado:
@@ -175,7 +175,7 @@ class NFeConsultaService:
 
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
-      permitir_zerado=True,
+      permitir_zerado=False,
     )
     
     if cnpj_filtrado:
@@ -217,7 +217,7 @@ class NFeConsultaService:
 
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
-      permitir_zerado=True,
+      permitir_zerado=False,
     )
     
     if cnpj_filtrado:
@@ -321,7 +321,7 @@ class NFeConsultaService:
 
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
-      permitir_zerado=True,
+      permitir_zerado=False,
     )
     
     if cnpj_filtrado:

@@ -11,8 +11,10 @@ import { useToast } from '@/hooks/use-toast';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [cnpj, setCnpj] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -21,20 +23,27 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const success = await login(email, password);
-      if (success) {
+      const result = isRegistering
+        ? await register(email, password, cnpj)
+        : await login(email, password);
+
+      if (result.ok) {
         toast({
-          title: 'Login realizado!',
-          description: 'Bem-vindo ao painel de gestão.',
+          title: isRegistering ? 'Cadastro realizado!' : 'Login realizado!',
+          description: isRegistering
+            ? 'Sua conta foi criada e você já pode acessar o painel.'
+            : 'Bem-vindo ao painel de gestão.',
         });
         navigate('/dashboard');
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Erro no login',
-          description: 'Email ou senha inválidos.',
-        });
+        return;
       }
+      toast({
+        variant: 'destructive',
+        title: isRegistering ? 'Erro no cadastro' : 'Erro no login',
+        description:
+          result.message ??
+          (isRegistering ? 'Não foi possível cadastrar.' : 'Email ou senha inválidos.'),
+      });
     } catch  {
       toast({
         variant: 'destructive',
@@ -54,7 +63,11 @@ export default function Login() {
             G
           </div>
           <CardTitle className="text-2xl">Painel de Gestão</CardTitle>
-          <CardDescription>Entre com suas credenciais para acessar</CardDescription>
+          <CardDescription>
+            {isRegistering
+              ? 'Crie sua conta para acessar o painel'
+              : 'Entre com suas credenciais para acessar'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,11 +93,36 @@ export default function Login() {
                 required
               />
             </div>
+            {isRegistering && (
+              <div className="space-y-2">
+                <Label htmlFor="cnpj">CNPJ da empresa</Label>
+                <Input
+                  id="cnpj"
+                  type="text"
+                  placeholder="00.000.000/0000-00"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(e.target.value)}
+                  required
+                />
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Entrar
+              {isRegistering ? 'Cadastrar' : 'Entrar'}
             </Button>
           </form>
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            {isRegistering ? 'Já tem conta?' : 'Ainda não tem conta?'}{' '}
+            <button
+              type="button"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+              onClick={() => {
+                setIsRegistering((prev) => !prev);
+              }}
+            >
+              {isRegistering ? 'Fazer login' : 'Cadastre-se'}
+            </button>
+          </div>
         </CardContent>
       </Card>
     </div>

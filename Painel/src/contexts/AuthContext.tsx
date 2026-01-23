@@ -8,10 +8,16 @@ interface User {
   avatar?: string;
 }
 
+interface AuthResult {
+  ok: boolean;
+  message?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  llogin: (email: string, password: string) => Promise<AuthResult>;
+  register: (email: string, password: string, cnpj: string) => Promise<AuthResult>;
   logout: () => void;
 }
 
@@ -44,10 +50,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return stored ? JSON.parse(stored) : null;
   });
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    // Simulated login - in production, this would call an API
-      if (!email || !password) {
-      return false;
+  const login = async (email: string, password: string): Promise<AuthResult> => {
+    if (!email || !password) {
+      return { ok: false, message: 'Informe email e senha.' };
     }
 
     const response = await fetch(`${API_BASE_URL}/auth/entrar`, {
@@ -62,7 +67,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     if (!response.ok) {
-      return false;
+      const errorData = await response.json().catch(() => null);
+      return {
+        ok: false,
+        message: errorData?.detail ?? 'Email ou senha inválidos.',
+      };
     }
 
     const data = (await response.json()) as LoginResponse;
@@ -77,7 +86,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setUser(nextUser);
     localStorage.setItem('user', JSON.stringify(nextUser));
-    return true;
+    return { ok: true };
+  };
+
+  const register = async (
+    email: string,
+    password: string,
+    cnpj: string,
+  ): Promise<AuthResult> => {
+    if (!email || !password || !cnpj) {
+      return { ok: false, message: 'Informe email, senha e CNPJ.' };
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/registrar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        senha: password,
+        cnpj,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      return {
+        ok: false,
+        message: errorData?.detail ?? 'Não foi possível cadastrar.',
+      };
+    }
+
+    const data = (await response.json()) as LoginResponse;
+    const resolvedId = data.login_id ?? data.empresa_id ?? email;
+    const nextUser: User = {
+      id: String(resolvedId),
+      name: data.email,
+      email: data.email,
+      emitente_cnpj: data.cnpj,
+      avatar: undefined,
+    };
+
+    setUser(nextUser);
+    localStorage.setItem('user', JSON.stringify(nextUser));
+
+    return { ok: true };
   };
 
   const logout = () => {
@@ -86,7 +140,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        login,
+        register,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

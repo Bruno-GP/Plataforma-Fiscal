@@ -142,6 +142,7 @@ class KPIsRelatorio(BaseModel):
 class NFeKPIConsulta(BaseModel):
   periodo_ano: Optional[int] = None
   periodo_mes: Optional[int] = None
+  emitente_cnpj: Optional[str] = None
   kpis: NFeKPI
 
 

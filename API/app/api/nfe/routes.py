@@ -96,56 +96,6 @@ def comparar_kpis_mensal(
   )
 
 # -------------------------
-# Comparativo mensal de KPIs (auto)
-# -------------------------
-@nfe_router.get(
-  "/kpis/comparativo/atual",
-  response_model=ComparativoKPIMensalResponse,
-)
-def comparar_kpis_mensal_atual():
-  emitente_cnpj = "00000000000000"
-  service = NFeConsultaService()
-  try:
-    periodo_ano, periodo_mes = service.obter_ultimo_periodo(emitente_cnpj)
-  except ValueError as exc:
-    raise HTTPException(
-      status_code=status.HTTP_404_NOT_FOUND,
-      detail=str(exc),
-    ) from exc
-
-  kpis = service.comparar_kpis_mensal(
-    emitente_cnpj=emitente_cnpj,
-    periodo_ano=periodo_ano,
-    periodo_mes=periodo_mes,
-  )
-
-  if not kpis:
-    raise HTTPException(
-      status_code=status.HTTP_404_NOT_FOUND,
-      detail=(
-        "KPIs não encontrados para o período atual e/ou "
-        "o período anterior."
-      ),
-    )
-
-  if periodo_mes == 1:
-    periodo_anterior_mes = 12
-    periodo_anterior_ano = periodo_ano - 1
-  else:
-    periodo_anterior_mes = periodo_mes - 1
-    periodo_anterior_ano = periodo_ano
-
-  return ComparativoKPIMensalResponse(
-    status="ok",
-    periodo_atual_ano=periodo_ano,
-    periodo_atual_mes=periodo_mes,
-    periodo_anterior_ano=periodo_anterior_ano,
-    periodo_anterior_mes=periodo_anterior_mes,
-    emitente_cnpj=emitente_cnpj,
-    kpis=kpis,
-  )
-
-# -------------------------
 # Consulta de notas (detalhado)
 # -------------------------
 @nfe_router.get("/notas", response_model=ConsultaNFeResponse)

@@ -271,6 +271,7 @@ class NFeConsultaService:
           NFeKPIConsulta(
             periodo_ano=row[0],
             periodo_mes=row[1],
+            emitente_cnpj=row[2],
             kpis=NFeKPI(
               emitente_cnpj=row[2],
               id=row[3],

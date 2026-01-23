@@ -152,38 +152,18 @@ class LoginService:
 
                 login_id, empresa_id, cnpj, email_db, senha_hash, senha_salt = login
 
-                if self._verificar_senha(senha, senha_hash, senha_salt):
-                    return LoginResult(
-                        login_id=login_id,
-                        empresa_id=empresa_id,
-                        cnpj=cnpj,
-                        email=email_db,
+                if not self._verificar_senha(senha, senha_hash, senha_salt):
+                    raise ValueError("Credenciais inválidas.")
+
+            logger.info(
+                        "Autenticação concluída para %s (empresa_id=%s)",
+                        email_db,
+                        empresa_id,
                     )
-        
-        logger.info(
-            "Autenticação concluída para %s (empresa_id=%s)",
-            email_db,
-            empresa_id,
-        )
 
-        if senha != senha_hash:
-            raise ValueError("Credenciais inválidas.")
-
-        salt = os.urandom(16)
-        senha_hash_atualizada = self._hash_senha(senha, salt)
-        cur.execute(
-            """
-            UPDATE public.login
-            SET senha_hash = %s,
-                senha_salt = %s
-            WHERE id = %s;
-            """,
-            (senha_hash_atualizada, salt.hex(), login_id),
-        )
-
-        return LoginResult(
-            login_id=login_id,
-            empresa_id=empresa_id,
-            cnpj=cnpj,
-            email=email_db,
-        )
+            return LoginResult(
+                login_id=login_id,
+                empresa_id=empresa_id,
+                cnpj=cnpj,
+                email=email_db,
+            )

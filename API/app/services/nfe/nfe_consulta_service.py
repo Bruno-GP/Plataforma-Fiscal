@@ -343,7 +343,7 @@ class NFeConsultaService:
       where_clause = f"WHERE {where_clause}"
 
     sql_kpis = f"""
-      SELECT DISTINCT ON (k.emitente_cnpj)
+      SELECT
         k.periodo_ano,
         k.periodo_mes,
         k.emitente_cnpj,

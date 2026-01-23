@@ -26,39 +26,38 @@ def processar_nfe(request: ProcessarNFeRequest):
 # -------------------------
 @nfe_router.get("/kpis", response_model=ConsultaKPIResponse)
 def consultar_kpis(
-  emitente_cnpj: str | None = Query(default=None),
-  email: str | None = Query(default=None),
-  periodo_ano: int | None = Query(default=None, ge=2000, le=2100),
-  periodo_mes: int | None = Query(default=None, ge=1, le=12),
-  limite: int = Query(default=100, ge=1, le=500),
-  offset: int = Query(default=0, ge=0),
+    emitente_cnpj: str | None = Query(default=None),
+    periodo_ano: int | None = Query(default=None),
+    periodo_mes: int | None = Query(default=None),
+    limite: int = Query(default=100),
+    offset: int = Query(default=0),
 ):
-  service = NFeConsultaService()
-  
-  emitente_resolvido = service.resolver_emitente_cnpj(
-    emitente_cnpj=emitente_cnpj,
-    email=email,
-  )
-  
-  if not emitente_resolvido:
-    raise HTTPException(
-      status_code=status.HTTP_400_BAD_REQUEST,
-      detail="CNPJ inválido ou zerado não é permitido.",
-    )
-  
-  resultados = service.listar_kpis(
-    emitente_cnpj=emitente_resolvido,
-    periodo_ano=periodo_ano,
-    periodo_mes=periodo_mes,
-    limite=limite,
-    offset=offset,
-  )
+    service = NFeConsultaService()
 
-  return ConsultaKPIResponse(
-    status="ok",
-    total=len(resultados),
-    resultados=resultados,
-  )
+    emitente_resolvido = service._normalizar_cnpj_filtro(
+        emitente_cnpj,
+        permitir_zerado=False
+    )
+
+    if not emitente_resolvido:
+        raise HTTPException(
+            status_code=400,
+            detail="Informe um emitente_cnpj válido.",
+        )
+
+    resultados = service.listar_kpis(
+        emitente_cnpj=emitente_resolvido,
+        periodo_ano=periodo_ano,
+        periodo_mes=periodo_mes,
+        limite=limite,
+        offset=offset,
+    )
+
+    return ConsultaKPIResponse(
+        status="ok",
+        total=len(resultados),
+        resultados=resultados,
+    )
   
 # -------------------------
 # Comparativo mensal de KPIs

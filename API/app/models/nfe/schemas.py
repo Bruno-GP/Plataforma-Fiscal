@@ -151,6 +151,10 @@ class ConsultaKPIResponse(BaseModel):
   total: int
   resultados: List[NFeKPIConsulta] = Field(default_factory=list)
   
+class ConsultaCNPJResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  
 # =========================
 # KPIs Comparativo
 # =========================

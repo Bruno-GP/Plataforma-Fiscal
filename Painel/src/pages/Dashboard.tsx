@@ -4,9 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
 
-const emitenteCnpjPadrao = '00000000000000';
+import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
+import { useAuth } from '@/contexts/AuthContext'
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -16,15 +16,18 @@ const formatCurrency = (value: number) =>
 const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const email = user?.email;
 
   const comparativoQuery = useQuery({
-    queryKey: ['nfe-kpis-comparativo-atual', emitenteCnpjPadrao],
-    queryFn: () => fetchNfeKpisComparativoAtual(emitenteCnpjPadrao),
+    queryKey: ['nfe-kpis-comparativo-atual', email],
+    queryFn: () => fetchNfeKpisComparativoAtual(undefined, email),
     staleTime: 5 * 60 * 1000,
   });
+
   const latestKpiQuery = useQuery({
-    queryKey: ['nfe-kpis-latest', emitenteCnpjPadrao],
-    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpjPadrao, limite: 12 }),
+    queryKey: ['nfe-kpis-latest', email],
+    queryFn: () => fetchNfeKpis({ email, limite: 12 }),
     staleTime: 5 * 60 * 1000,
   });
 

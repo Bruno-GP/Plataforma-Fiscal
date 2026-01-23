@@ -40,6 +40,7 @@ export interface ConsultaKpiResponse {
 
 export interface FetchKpiParams {
   emitente_cnpj?: string;
+  email?: string;
   periodo_ano?: number;
   periodo_mes?: number;
   limite?: number;
@@ -99,11 +100,32 @@ export const parseDecimal = (value: unknown): number => {
   return Number(cleaned.replace(/,/g, "")) || 0;
 };
 
+const normalizeCnpjParam = (value?: string): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const digits = value.replace(/\D/g, "");
+  if (!digits || digits.length < 14) {
+    return null;
+  }
+
+  if ([...digits].every((digit) => digit === "0")) {
+    return null;
+  }
+
+  return digits;
+};
+
+
 export const fetchNfeKpis = async (params: FetchKpiParams = {}): Promise<ConsultaKpiResponse> => {
   const searchParams = new URLSearchParams();
 
-  if (params.emitente_cnpj) {
-    searchParams.set("emitente_cnpj", params.emitente_cnpj);
+  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+  if (cnpjParam) {
+    searchParams.set("emitente_cnpj", cnpjParam);
+  } else if (params.email) {
+    searchParams.set("email", params.email);
   }
 
   if (params.periodo_ano) {
@@ -133,12 +155,16 @@ export const fetchNfeKpis = async (params: FetchKpiParams = {}): Promise<Consult
 };
 
 export const fetchNfeKpisComparativoAtual = async (
-  emitenteCnpj?: string
+  emitenteCnpj?: string,
+  email?: string
 ): Promise<KpiComparativoResponse> => {
   const searchParams = new URLSearchParams();
 
-  if (emitenteCnpj) {
-    searchParams.set("emitente_cnpj", emitenteCnpj);
+  const cnpjParam = normalizeCnpjParam(emitenteCnpj);
+  if (cnpjParam) {
+    searchParams.set("emitente_cnpj", cnpjParam);
+  } else if (email) {
+    searchParams.set("email", email);
   }
 
   const queryString = searchParams.toString();

@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react';
 import { Search, MoreHorizontal } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+
 import { fetchNfeKpis, parseDecimal } from '@/services/nfe';
+import { useAuth } from '@/contexts/AuthContext';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -22,8 +24,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-const emitenteCnpjPadrao = '00000000000000';
-
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -32,10 +32,12 @@ const formatCurrency = (value: number) =>
 
 export default function Clientes() {
   const [search, setSearch] = useState('');
+  const { user } = useAuth();
+  const email = user?.email;
 
   const kpisQuery = useQuery({
-    queryKey: ['nfe-kpis-clientes', emitenteCnpjPadrao],
-    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpjPadrao, limite: 12 }),
+    queryKey: ['nfe-kpis-clientes', email],
+    queryFn: () => fetchNfeKpis({ email, limite: 12 }),
     staleTime: 5 * 60 * 1000,
   });
 

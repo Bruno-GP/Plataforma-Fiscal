@@ -18,8 +18,8 @@ const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixe
 export default function Dashboard() {
 
   const comparativoQuery = useQuery({
-    queryKey: ['nfe-kpis-comparativo-atual'],
-    queryFn: fetchNfeKpisComparativoAtual,
+    queryKey: ['nfe-kpis-comparativo-atual', emitenteCnpjPadrao],
+    queryFn: () => fetchNfeKpisComparativoAtual(emitenteCnpjPadrao),
     staleTime: 5 * 60 * 1000,
   });
   const latestKpiQuery = useQuery({

@@ -132,8 +132,19 @@ export const fetchNfeKpis = async (params: FetchKpiParams = {}): Promise<Consult
   return response.json() as Promise<ConsultaKpiResponse>;
 };
 
-export const fetchNfeKpisComparativoAtual = async (): Promise<KpiComparativoResponse> => {
-  const response = await fetch(`${API_BASE_URL}/nfe/kpis/comparativo/atual`);
+export const fetchNfeKpisComparativoAtual = async (
+  emitenteCnpj?: string
+): Promise<KpiComparativoResponse> => {
+  const searchParams = new URLSearchParams();
+
+  if (emitenteCnpj) {
+    searchParams.set("emitente_cnpj", emitenteCnpj);
+  }
+
+  const queryString = searchParams.toString();
+  const response = await fetch(
+    `${API_BASE_URL}/nfe/kpis/comparativo/atual${queryString ? `?${queryString}` : ""}`
+  );
 
   if (!response.ok) {
     throw new Error("Não foi possível carregar o comparativo de KPIs.");

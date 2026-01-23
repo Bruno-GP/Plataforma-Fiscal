@@ -102,8 +102,9 @@ def comparar_kpis_mensal(
   "/kpis/comparativo/atual",
   response_model=ComparativoKPIMensalResponse,
 )
-def comparar_kpis_mensal_atual():
-  emitente_cnpj = "00000000000000"
+def comparar_kpis_mensal_atual(
+  emitente_cnpj: str | None = Query(default=None),
+):
   service = NFeConsultaService()
   try:
     periodo_ano, periodo_mes = service.obter_ultimo_periodo(emitente_cnpj)

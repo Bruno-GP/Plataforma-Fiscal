@@ -97,6 +97,42 @@ class NFeConsultaService:
 
     return row[0], row[1]
 
+  def obter_periodos_disponiveis(
+    self,
+    emitente_cnpj: Optional[str] = None,
+    limite: int = 2,
+  ) -> List[tuple[int, int]]:
+    filtros = []
+    parametros: List[object] = []
+
+    if emitente_cnpj:
+      filtros.append(
+        "regexp_replace(emitente_cnpj, '\\\\D', '', 'g') = %s"
+      )
+      parametros.append(normalizar_cnpj(emitente_cnpj))
+
+    where_clause = ""
+    if filtros:
+      where_clause = "WHERE " + " AND ".join(filtros)
+
+    sql = f"""
+      SELECT
+        periodo_ano,
+        periodo_mes
+      FROM public.nfe_kpis AS k
+      {where_clause}
+      ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
+      LIMIT %s;
+    """
+    parametros.append(limite)
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(sql, parametros)
+        rows = cur.fetchall()
+
+    return [(row[0], row[1]) for row in rows]
+
   def _buscar_kpi_periodo(
     self,
     periodo_ano: int,
@@ -302,13 +338,16 @@ class NFeConsultaService:
     periodo_ano: int,
     periodo_mes: int,
     emitente_cnpj: Optional[str] = None,
+    periodo_anterior_ano: Optional[int] = None,
+    periodo_anterior_mes: Optional[int] = None,
   ) -> Optional[KPIsComparativo]:
-    if periodo_mes == 1:
-      periodo_anterior_mes = 12
-      periodo_anterior_ano = periodo_ano - 1
-    else:
-      periodo_anterior_mes = periodo_mes - 1
-      periodo_anterior_ano = periodo_ano
+    if periodo_anterior_ano is None or periodo_anterior_mes is None:
+      if periodo_mes == 1:
+        periodo_anterior_mes = 12
+        periodo_anterior_ano = periodo_ano - 1
+      else:
+        periodo_anterior_mes = periodo_mes - 1
+        periodo_anterior_ano = periodo_ano
 
     kpi_atual = self._buscar_kpi_periodo(
       periodo_ano=periodo_ano,
@@ -321,25 +360,50 @@ class NFeConsultaService:
       emitente_cnpj=emitente_cnpj,
     )
 
-    if not kpi_atual or not kpi_anterior:
+    if not kpi_atual:
       return None
+    
+    return self._montar_comparativo(kpi_atual, kpi_anterior)
+
+  def _montar_comparativo(
+    self,
+    kpi_atual: NFeKPI,
+    kpi_anterior: Optional[NFeKPI],
+  ) -> KPIsComparativo:
+    anterior = kpi_anterior or NFeKPI(
+      emitente_cnpj=kpi_atual.emitente_cnpj,
+      id=0,
+      processamento_id=0,
+      total_vendas=0,
+      quantidade_notas=0,
+      ticket_medio=0,
+      maior_nota=0,
+      menor_nota=0,
+      total_icms=0,
+      total_ipi=0,
+      total_pis=0,
+      total_cofins=0,
+      top_clientes=[],
+      top_produtos=[],
+      top_cidades=[],
+    )
 
     total_vendas_atual = Decimal(kpi_atual.total_vendas)
-    total_vendas_anterior = Decimal(kpi_anterior.total_vendas)
+    total_vendas_anterior = Decimal(anterior.total_vendas)
     ticket_medio_atual = Decimal(kpi_atual.ticket_medio)
-    ticket_medio_anterior = Decimal(kpi_anterior.ticket_medio)
+    ticket_medio_anterior = Decimal(anterior.ticket_medio)
     maior_nota_atual = Decimal(kpi_atual.maior_nota)
-    maior_nota_anterior = Decimal(kpi_anterior.maior_nota)
+    maior_nota_anterior = Decimal(anterior.maior_nota)
     menor_nota_atual = Decimal(kpi_atual.menor_nota)
-    menor_nota_anterior = Decimal(kpi_anterior.menor_nota)
+    menor_nota_anterior = Decimal(anterior.menor_nota)
     total_icms_atual = Decimal(kpi_atual.total_icms)
-    total_icms_anterior = Decimal(kpi_anterior.total_icms)
+    total_icms_anterior = Decimal(anterior.total_icms)
     total_ipi_atual = Decimal(kpi_atual.total_ipi)
-    total_ipi_anterior = Decimal(kpi_anterior.total_ipi)
+    total_ipi_anterior = Decimal(anterior.total_ipi)
     total_pis_atual = Decimal(kpi_atual.total_pis)
-    total_pis_anterior = Decimal(kpi_anterior.total_pis)
+    total_pis_anterior = Decimal(anterior.total_pis)
     total_cofins_atual = Decimal(kpi_atual.total_cofins)
-    total_cofins_anterior = Decimal(kpi_anterior.total_cofins)
+    total_cofins_anterior = Decimal(anterior.total_cofins)
 
     return KPIsComparativo(
       total_vendas=KPIComparativoValor(
@@ -351,10 +415,10 @@ class NFeConsultaService:
       ),
       quantidade_notas=KPIComparativoQuantidade(
         atual=kpi_atual.quantidade_notas,
-        anterior=kpi_anterior.quantidade_notas,
+        anterior=anterior.quantidade_notas,
         variacao_percentual=self._calcular_variacao_percentual(
           Decimal(kpi_atual.quantidade_notas),
-          Decimal(kpi_anterior.quantidade_notas),
+          Decimal(anterior.quantidade_notas),
         ),
       ),
       ticket_medio=KPIComparativoValor(

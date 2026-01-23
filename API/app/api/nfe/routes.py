@@ -107,17 +107,35 @@ def comparar_kpis_mensal_atual(
 ):
   service = NFeConsultaService()
   try:
-    periodo_ano, periodo_mes = service.obter_ultimo_periodo(emitente_cnpj)
+    periodos_disponiveis = service.obter_periodos_disponiveis(emitente_cnpj)
   except ValueError as exc:
     raise HTTPException(
       status_code=status.HTTP_404_NOT_FOUND,
       detail=str(exc),
     ) from exc
+    
+  if not periodos_disponiveis:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Nenhum processamento encontrado para o emitente.",
+    )
+
+  periodo_ano, periodo_mes = periodos_disponiveis[0]
+  if len(periodos_disponiveis) > 1:
+    periodo_anterior_ano, periodo_anterior_mes = periodos_disponiveis[1]
+  elif periodo_mes == 1:
+    periodo_anterior_mes = 12
+    periodo_anterior_ano = periodo_ano - 1
+  else:
+    periodo_anterior_mes = periodo_mes - 1
+    periodo_anterior_ano = periodo_ano
 
   kpis = service.comparar_kpis_mensal(
     emitente_cnpj=emitente_cnpj,
     periodo_ano=periodo_ano,
     periodo_mes=periodo_mes,
+    periodo_anterior_ano=periodo_anterior_ano,
+    periodo_anterior_mes=periodo_anterior_mes
   )
 
   if not kpis:
@@ -128,13 +146,6 @@ def comparar_kpis_mensal_atual(
         "o período anterior."
       ),
     )
-
-  if periodo_mes == 1:
-    periodo_anterior_mes = 12
-    periodo_anterior_ano = periodo_ano - 1
-  else:
-    periodo_anterior_mes = periodo_mes - 1
-    periodo_anterior_ano = periodo_ano
 
   return ComparativoKPIMensalResponse(
     status="ok",

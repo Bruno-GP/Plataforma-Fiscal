@@ -50,13 +50,21 @@ class LoginService:
         )
         return digest.hex()
 
-    def _verificar_senha(self, senha: str, senha_hash: str, senha_salt: str) -> bool:
+    def _verificar_senha(self, senha: str, senha_armazenada: str) -> bool:
+        if not senha_armazenada:
+            return False
+
+        if ":" not in senha_armazenada:
+            return hmac.compare_digest(senha_armazenada, senha)
+
+        salt_hex, digest_armazenado = senha_armazenada.split(":", 1)
+        
         try:
-            salt = bytes.fromhex(senha_salt)
+            salt = bytes.fromhex(salt_hex)
         except ValueError:
             return False
         digest = self._hash_senha(senha, salt)
-        return hmac.compare_digest(digest, senha_hash)
+        return hmac.compare_digest(digest, digest_armazenado)
 
     def registrar(self, email: str, senha: str, cnpj: str) -> LoginResult:
         cnpj_normalizado = normalizar_cnpj(cnpj)
@@ -101,19 +109,19 @@ class LoginService:
 
                 salt = os.urandom(16)
                 senha_hash = self._hash_senha(senha, salt)
+                senha_armazenada = f"{salt.hex()}:{senha_hash}"
 
                 cur.execute(
                     """
-                    INSERT INTO public.login (empresa_id, cnpj, email, senha_hash, senha_salt)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO public.login (empresa_id, cnpj, email, senha)
+                    VALUES (%s, %s, %s, %s)
                     RETURNING id;
                     """,
                     (
                         empresa[0],
                         cnpj_normalizado,
                         email_normalizado,
-                        senha_hash,
-                        salt.hex(),
+                        senha_armazenada
                     ),
                 )
                 login_id = cur.fetchone()[0]
@@ -139,7 +147,7 @@ class LoginService:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, empresa_id, cnpj, email, senha_hash, senha_salt
+                    SELECT id, empresa_id, cnpj, email, senha
                     FROM public.login
                     WHERE email = %s;
                     """,
@@ -150,9 +158,9 @@ class LoginService:
                 if not login:
                     raise ValueError("Credenciais inválidas.")
 
-                login_id, empresa_id, cnpj, email_db, senha_hash, senha_salt = login
+                login_id, empresa_id, cnpj, email_db, senha_armazenada = login
 
-                if not self._verificar_senha(senha, senha_hash, senha_salt):
+                if not self._verificar_senha(senha, senha_armazenada):
                     raise ValueError("Credenciais inválidas.")
 
             logger.info(

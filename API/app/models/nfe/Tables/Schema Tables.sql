@@ -127,18 +127,13 @@ CREATE TABLE IF NOT EXISTS login (
     empresa_id  BIGINT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
     cnpj        VARCHAR(20) NOT NULL,
     email       VARCHAR(255) NOT NULL UNIQUE,
-    senha_hash  TEXT NOT NULL,
-    senha_salt  TEXT NOT NULL,
+    senha 		VARCHAR(255) NOT NULL,
     criado_em   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_login_empresa ON login (empresa_id);
+
 CREATE INDEX IF NOT EXISTS idx_login_cnpj ON login (cnpj);
 
-BEGIN;
-
-ALTER TABLE public.login
-  ALTER COLUMN senha_hash TYPE VARCHAR(255) USING senha_hash::varchar,
-  ALTER COLUMN senha_salt TYPE VARCHAR(32) USING senha_salt::varchar;
-
-COMMIT;
+-- Ajustes para ambientes já existentes (migrations rápidas)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_login_email_lower ON login (LOWER(email));

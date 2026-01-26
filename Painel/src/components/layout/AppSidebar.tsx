@@ -39,7 +39,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
+        <SidebarGroup className="px-4">
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {

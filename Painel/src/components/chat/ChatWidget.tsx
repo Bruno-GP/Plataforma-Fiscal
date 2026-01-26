@@ -38,12 +38,12 @@ export function ChatWidget() {
       {/* Chat Window */}
       <div
         className={cn(
-          'fixed bottom-20 right-4 z-50 w-96 rounded-lg border bg-background shadow-xl transition-all duration-300',
+          'fixed bottom-20 right-4 z-50 w-96 rounded-lg border bg-card text-card-foreground shadow-xl transition-all duration-300',
           isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b p-4">
+        <div className="flex items-center justify-between border-b bg-card p-4">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <MessageCircle className="h-4 w-4" />
@@ -59,7 +59,7 @@ export function ChatWidget() {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="h-80 p-4" ref={scrollRef}>
+        <ScrollArea className="h-80 bg-card p-4" ref={scrollRef}>
           <div className="flex flex-col gap-3">
             {messages.map((message) => (
               <div
@@ -84,7 +84,7 @@ export function ChatWidget() {
         </ScrollArea>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="border-t p-4">
+        <form onSubmit={handleSubmit} className="border-t bg-card p-4">
           <div className="flex gap-2">
             <Input
               ref={inputRef}

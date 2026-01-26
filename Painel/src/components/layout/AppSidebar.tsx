@@ -27,8 +27,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-2">
+      <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2">
+        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
             G
           </div>
@@ -39,7 +39,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup className="px-4">
+        <SidebarGroup className="px-4 group-data-[collapsible=icon]:px-2">
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
@@ -53,7 +53,7 @@ export function AppSidebar() {
                     >
                       <NavLink
                         to={item.url}
-                        className="flex items-center gap-3"
+                        className="flex items-center gap-3 group-data-[collapsible=icon]:justify-cente"
                         activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
                       >
                         <item.icon className="h-5 w-5" />

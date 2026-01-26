@@ -19,13 +19,15 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
-        <SidebarInset className="flex min-h-svh flex-1 flex-col">
-          <AppHeader />
-            <main className="flex-1 overflow-auto p-6">
-              {children}
-            </main>
-        </SidebarInset>
+      <div className="flex min-h-svh w-full">
+        <AppSidebar />
+          <SidebarInset className="flex min-h-svh flex-1 flex-col">
+            <AppHeader />
+              <div className="flex-1 overflow-auto px-8 py-6 max-w-[1400px]">
+                {children}
+              </div>
+          </SidebarInset>
+        </div>
       <ChatWidget />
     </SidebarProvider>
   );

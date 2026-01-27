@@ -96,8 +96,24 @@ export default function Dashboard() {
     ];
   }, [comparativoQuery.data]);
 
+  const totalFaturamento = parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
   const topClientes = latestKpi?.kpis.top_clientes ?? [];
   const topProdutos = latestKpi?.kpis.top_produtos ?? [];
+  const topCidades = latestKpi?.kpis.top_cidades ?? [];
+
+  const resolvePercentual = (percentual?: number | string, valorTotal?: number | string) => {
+    if (percentual !== undefined && percentual !== null) {
+      return parseDecimal(percentual);
+    }
+
+    const valor = parseDecimal(valorTotal ?? 0);
+    if (!totalFaturamento || !valor) {
+      return null;
+    }
+
+    return (valor / totalFaturamento) * 100;
+  };
+
   const isLoading = comparativoQuery.isLoading || latestKpiQuery.isLoading;
   const hasError = comparativoQuery.isError || latestKpiQuery.isError;
 
@@ -142,7 +158,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Top Clientes</CardTitle>
@@ -153,21 +169,25 @@ export default function Dashboard() {
               {isLoading ? (
                 <p className="text-sm text-muted-foreground">Carregando ranking...</p>
               ) : topClientes.length ? (
-                topClientes.map((cliente, index) => (
-                  <div key={`${cliente.cliente}-${index}`} className="flex items-center justify-between border-b pb-2 last:border-0">
-                    <div>
-                      <p className="font-medium">{cliente.cliente ?? 'Cliente não identificado'}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {cliente.percentual !== undefined
-                          ? `${parseDecimal(cliente.percentual).toFixed(1)}% do faturamento`
-                          : 'Participação não informada'}
-                      </p>
-                    </div>
-                    <span className="text-sm font-medium">
-                      {formatCurrency(parseDecimal(cliente.valor_total ?? 0))}
-                    </span>
-                  </div>
-                 ))
+                topClientes.map((cliente, index) => {
+                  const percentual = resolvePercentual(cliente.percentual, cliente.valor_total);
+
+                  return (
+                      <div key={`${cliente.cliente}-${index}`} className="flex items-center justify-between border-b pb-2 last:border-0">
+                        <div>
+                          <p className="font-medium">{cliente.cliente ?? 'Cliente não identificado'}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {percentual !== null
+                              ? `${percentual.toFixed(1)}% do faturamento`
+                              : 'Participação não informada'}
+                          </p>
+                        </div>
+                        <span className="text-sm font-medium">
+                          {formatCurrency(parseDecimal(cliente.valor_total ?? 0))}
+                        </span>
+                      </div>
+                    );
+                })
               ) : (
                 <p className="text-sm text-muted-foreground">Nenhum cliente registrado.</p>
               )}
@@ -185,23 +205,62 @@ export default function Dashboard() {
               {isLoading ? (
                 <p className="text-sm text-muted-foreground">Carregando ranking...</p>
               ) : topProdutos.length ? (
-                topProdutos.map((produto, index) => (
-                  <div key={`${produto.produto}-${index}`} className="flex items-center justify-between border-b pb-2 last:border-0">
-                    <div>
-                      <p className="font-medium">{produto.produto ?? 'Produto não identificado'}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {produto.percentual !== undefined
-                          ? `${parseDecimal(produto.percentual).toFixed(1)}% do faturamento`
-                          : 'Participação não informada'}
-                      </p>
-                    </div>
-                    <span className="text-sm font-medium">
-                      {formatCurrency(parseDecimal(produto.valor_total ?? 0))}
-                    </span>
-                  </div>
-                  ))
+                topProdutos.map((produto, index) => {
+                  const percentual = resolvePercentual(produto.percentual, produto.valor_total);
+
+                  return (
+                      <div key={`${produto.produto}-${index}`} className="flex items-center justify-between border-b pb-2 last:border-0">
+                        <div>
+                          <p className="font-medium">{produto.produto ?? 'Produto não identificado'}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {percentual !== null
+                              ? `${percentual.toFixed(1)}% do faturamento`
+                              : 'Participação não informada'}
+                          </p>
+                        </div>
+                        <span className="text-sm font-medium">
+                          {formatCurrency(parseDecimal(produto.valor_total ?? 0))}
+                        </span>
+                      </div>
+                    );
+                })
               ) : (
                 <p className="text-sm text-muted-foreground">Nenhum produto registrado.</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Cidades</CardTitle>
+            <CardDescription>Cidades com maior faturamento no último período</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {isLoading ? (
+                <p className="text-sm text-muted-foreground">Carregando ranking...</p>
+              ) : topCidades.length ? (
+                topCidades.map((cidade, index) => {
+                  const percentual = resolvePercentual(cidade.percentual, cidade.valor_total);
+
+                  return (
+                    <div key={`${cidade.cidade}-${index}`} className="flex items-center justify-between border-b pb-2 last:border-0">
+                      <div>
+                        <p className="font-medium">{cidade.cidade ?? 'Cidade não identificada'}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {percentual !== null
+                            ? `${percentual.toFixed(1)}% do faturamento`
+                            : 'Participação não informada'}
+                        </p>
+                      </div>
+                      <span className="text-sm font-medium">
+                        {formatCurrency(parseDecimal(cidade.valor_total ?? 0))}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhuma cidade registrada.</p>
               )}
             </div>
           </CardContent>

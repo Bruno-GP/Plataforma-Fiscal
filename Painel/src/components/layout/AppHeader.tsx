@@ -31,12 +31,13 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background">
-      <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center justify-between px-8 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-4">
+      <div className="flex h-14 w-full items-center">
+        {/* <div className="flex items-center ml-44 gap-4 pl-6 sm:pl-6 lg:pl-8">
           <SidebarTrigger className="-ml-1" />
-        </div>
+        </div> */}
 
-        <DropdownMenu>
+        <div className="ml-auto flex items-center pr-1 sm:pr-4 lg:pr-6">
+          <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent focus:outline-none">
               <Avatar className="h-8 w-8">
                 <AvatarImage src={user?.avatar} />
@@ -68,6 +69,7 @@ export function AppHeader() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
       </div>
     </header>
   );

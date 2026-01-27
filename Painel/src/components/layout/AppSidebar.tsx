@@ -29,12 +29,12 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
-            G
+          <div className="flex h-auto w-30 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
+            Nome empresa
           </div>
-          {!collapsed && (
+          {/* {!collapsed && (
             <span className="font-semibold text-sidebar-foreground">Gestão</span>
-          )}
+          )} */}
         </div>
       </SidebarHeader>
 

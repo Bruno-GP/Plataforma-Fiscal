@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, Receipt, Sparkles } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Receipt } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 
@@ -7,9 +7,7 @@ import { fetchNfeKpis, parseDecimal } from '@/services/nfe';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useChat } from '@/contexts/ChatContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getBillingData, getBillingStats } from '@/data/billingData';
 
@@ -22,7 +20,6 @@ const formatCurrency = (value: number) => {
 
 export default function Faturamento() {
   const [selectedYear, setSelectedYear] = useState('2025');
-  const { toggleChat, sendMessage, isOpen } = useChat();
   
   const { user } = useAuth();
   const emitenteCnpj = user?.emitente_cnpj;
@@ -102,15 +99,6 @@ export default function Faturamento() {
       ? 'Não foi possível carregar os gráficos.'
       : `Nenhum dado disponível para ${selectedYear}.`;
   const hasChartData = billingData.length > 0;
-
-  const handleAIPlanAction = async () => {
-    if (!isOpen) {
-      toggleChat();
-    }
-    setTimeout(() => {
-      sendMessage('Gere um plano de ação baseado nos dados atuais de faturamento');
-    }, 300);
-  };
 
   return (
     <div className="space-y-6">
@@ -198,12 +186,6 @@ export default function Faturamento() {
           </CardContent>
         </Card>
       </div>
-
-      {/* AI Action Button */}
-      <Button onClick={handleAIPlanAction} className="gap-2">
-        <Sparkles className="h-4 w-4" />
-        Gerar Plano de Ação com IA
-      </Button>
 
       {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-2">

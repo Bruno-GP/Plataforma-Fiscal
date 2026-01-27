@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
-import { TrendingUp, Users, Receipt, Percent } from 'lucide-react';
+import { TrendingUp, Users, Receipt, Percent, Sparkles } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 
 import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
 import { useAuth } from '@/contexts/AuthContext'
+import { useChat } from '@/contexts/ChatContext';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -17,6 +19,7 @@ const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixe
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { toggleChat, sendMessage, isOpen } = useChat();
 
   const emitenteCnpj = user?.emitente_cnpj;
 
@@ -128,12 +131,26 @@ export default function Dashboard() {
   const isLoading = comparativoQuery.isLoading || latestKpiQuery.isLoading;
   const hasError = comparativoQuery.isError || latestKpiQuery.isError;
 
+  const handleAIPlanAction = async () => {
+    if (!isOpen) {
+      toggleChat();
+    }
+    setTimeout(() => {
+      sendMessage('Gere um plano de ação baseado nos dados atuais de faturamento');
+    }, 300);
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">Visão geral do seu negócio</p>
       </div>
+
+      <Button onClick={handleAIPlanAction} className="w-fit gap-2">
+        <Sparkles className="h-4 w-4" />
+        Gerar Plano de Ação com IA
+      </Button>
 
       {hasError && (
         <Alert variant="destructive">

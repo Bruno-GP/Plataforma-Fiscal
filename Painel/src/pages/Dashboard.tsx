@@ -44,6 +44,17 @@ export default function Dashboard() {
     })[0];
   }, [latestKpiQuery.data]);
 
+    const faturamentoPeriodo = useMemo(() => {
+    const mes = latestKpi?.periodo_mes;
+    const ano = latestKpi?.periodo_ano;
+
+    if (!mes || !ano) {
+      return null;
+    }
+
+    return `${String(mes).padStart(2, '0')}/${ano}`;
+  }, [latestKpi?.periodo_mes, latestKpi?.periodo_ano]);
+
   const stats = useMemo(() => {
     const kpis = comparativoQuery.data?.kpis;
     const totalSales = parseDecimal(kpis?.total_vendas.atual ?? 0);
@@ -66,7 +77,7 @@ export default function Dashboard() {
 
     return [
       {
-        title: 'Faturamento Mensal',
+        title: `Faturamento Mensal${faturamentoPeriodo ? ` (Período ${faturamentoPeriodo})` : ''}`,
         value: formatCurrency(totalSales),
         description: formatPercent(totalSalesChange),
         icon: TrendingUp,
@@ -94,7 +105,7 @@ export default function Dashboard() {
         trend: totalTaxesChange >= 0 ? 'up' : 'down',
       },
     ];
-  }, [comparativoQuery.data]);
+  }, [comparativoQuery.data, faturamentoPeriodo]);
 
   const totalFaturamento = parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
   const topClientes = latestKpi?.kpis.top_clientes ?? [];

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, Receipt } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
@@ -9,7 +9,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
-import { getBillingData, getBillingStats } from '@/data/billingData';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -18,18 +17,30 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
+const monthLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
 export default function Faturamento() {
+  const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedYear, setSelectedYear] = useState('2025');
   
   const { user } = useAuth();
   const emitenteCnpj = user?.emitente_cnpj;
   
+  const monthNumber = Number.parseInt(selectedMonth, 10);
   const year = Number.parseInt(selectedYear, 10);
+
+  const yearsQuery = useQuery({
+    queryKey: ['nfe-kpis-years', emitenteCnpj],
+    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const kpisQuery = useQuery({
     queryKey: ['nfe-kpis', emitenteCnpj, year],
     queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year }),
     staleTime: 5 * 60 * 1000,
   });
+
   const previousYearQuery = useQuery({
     queryKey: ['nfe-kpis', emitenteCnpj, year - 1],
     queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 }),
@@ -38,10 +49,13 @@ export default function Faturamento() {
   });
 
   const billingData = useMemo(() => {
-    const monthLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const resultados = kpisQuery.data?.resultados ?? [];
 
-    return [...resultados]
+    const filteredResultados = selectedMonth === 'all'
+      ? resultados
+      : resultados.filter((item) => item.periodo_mes === monthNumber);
+
+    return [...filteredResultados]
       .filter((item) => item.periodo_mes)
       .sort((a, b) => (a.periodo_mes ?? 0) - (b.periodo_mes ?? 0))
       .map((item, index) => {
@@ -53,13 +67,21 @@ export default function Faturamento() {
           meta: faturamento * 1.05,
         };
       });
-  }, [kpisQuery.data]);
+  }, [kpisQuery.data, monthNumber, selectedMonth]);
 
   const stats = useMemo(() => {
     const resultados = kpisQuery.data?.resultados ?? [];
     const previousResultados = previousYearQuery.data?.resultados ?? [];
 
-    const totals = resultados.reduce(
+    const filteredResultados = selectedMonth === 'all'
+      ? resultados
+      : resultados.filter((item) => item.periodo_mes === monthNumber);
+
+    const filteredPreviousResultados = selectedMonth === 'all'
+      ? previousResultados
+      : previousResultados.filter((item) => item.periodo_mes === monthNumber);
+
+    const totals = filteredResultados.reduce(
       (acc, item) => {
         acc.totalSales += parseDecimal(item.kpis.total_vendas);
         acc.totalNotes += item.kpis.quantidade_notas ?? 0;
@@ -72,7 +94,7 @@ export default function Faturamento() {
       { totalSales: 0, totalNotes: 0, totalTaxes: 0 }
     );
 
-    const previousTotals = previousResultados.reduce(
+    const previousTotals = filteredPreviousResultados.reduce(
       (acc, item) => {
         acc.totalSales += parseDecimal(item.kpis.total_vendas);
         return acc;
@@ -92,13 +114,40 @@ export default function Faturamento() {
       ticketMedio,
       percentChange,
     };
-  }, [kpisQuery.data, previousYearQuery.data]);
+    }, [kpisQuery.data, monthNumber, previousYearQuery.data, selectedMonth]);
+
+  const yearOptions = useMemo(() => {
+    const resultados = yearsQuery.data?.resultados ?? [];
+    const uniqueYears = new Set<number>();
+
+    resultados.forEach((item) => {
+      if (item.periodo_ano) {
+        uniqueYears.add(item.periodo_ano);
+      }
+    });
+
+    return [...uniqueYears].sort((a, b) => b - a);
+  }, [yearsQuery.data]);
+  const availableYears = yearOptions.length ? yearOptions : [year];
+  const selectedMonthLabel = selectedMonth === 'all' ? null : monthLabels[monthNumber - 1];
   const chartMessage = kpisQuery.isLoading
     ? 'Carregando dados...'
     : kpisQuery.isError
       ? 'Não foi possível carregar os gráficos.'
-      : `Nenhum dado disponível para ${selectedYear}.`;
+        : selectedMonthLabel
+          ? `Nenhum dado disponível para ${selectedMonthLabel} de ${selectedYear}.`
+          : `Nenhum dado disponível para ${selectedYear}.`;
   const hasChartData = billingData.length > 0;
+
+  useEffect(() => {
+    if (!yearOptions.length) {
+      return;
+    }
+
+    if (!yearOptions.includes(year)) {
+      setSelectedYear(String(yearOptions[0]));
+    }
+  }, [year, yearOptions]);
 
   return (
     <div className="space-y-6">
@@ -107,15 +156,33 @@ export default function Faturamento() {
           <h1 className="text-3xl font-bold">Faturamento</h1>
           <p className="text-muted-foreground">Acompanhe suas receitas e métricas financeiras</p>
         </div>
-        <Select value={selectedYear} onValueChange={setSelectedYear}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="2024">2024</SelectItem>
-            <SelectItem value="2025">2025</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Mês" />
+            </SelectTrigger>
+            <SelectContent className="bg-white">
+              <SelectItem value="all">Todos os meses</SelectItem>
+              {monthLabels.map((label, index) => (
+                <SelectItem key={label} value={(index + 1).toString()}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-white">
+              {availableYears.map((yearOption) => (
+                <SelectItem key={yearOption} value={String(yearOption)}>
+                  {yearOption}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {kpisQuery.isError && (
@@ -143,7 +210,7 @@ export default function Faturamento() {
               {kpisQuery.isLoading ? 'Carregando...' : formatCurrency(stats.totalSales)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Acumulado em {selectedYear}
+              {selectedMonthLabel ? `${selectedMonthLabel} de ${selectedYear}` : `Acumulado em ${selectedYear}`}
             </p>
           </CardContent>
         </Card>
@@ -164,7 +231,9 @@ export default function Faturamento() {
               {kpisQuery.isLoading ? '--' : `${stats.percentChange >= 0 ? '+' : ''}${stats.percentChange.toFixed(1)}%`}
             </div>
             <p className="text-xs text-muted-foreground">
-              vs. mesmo período {year - 1}
+              {selectedMonthLabel
+                ? `vs. ${selectedMonthLabel} de ${year - 1}`
+                : `vs. mesmo período ${year - 1}`}
             </p>
           </CardContent>
         </Card>
@@ -192,7 +261,11 @@ export default function Faturamento() {
         <Card>
           <CardHeader>
             <CardTitle>Evolução do Faturamento</CardTitle>
-            <CardDescription>Faturamento mensal ao longo de {selectedYear}</CardDescription>
+            <CardDescription>
+              {selectedMonthLabel
+                ? `Faturamento de ${selectedMonthLabel} em ${selectedYear}`
+                : `Faturamento mensal ao longo de ${selectedYear}`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {hasChartData ? (

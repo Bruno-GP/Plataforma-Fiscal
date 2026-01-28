@@ -8,7 +8,7 @@ import { ChatProvider } from "@/contexts/ChatContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import Faturamento from "./pages/Faturamento";
+import Faturamento from "./pages/faturamento/components/Faturamento";
 import Clientes from "./pages/Clientes";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";

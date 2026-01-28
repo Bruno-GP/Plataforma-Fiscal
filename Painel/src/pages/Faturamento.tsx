@@ -63,11 +63,40 @@ export default function Faturamento() {
         const faturamento = parseDecimal(item.kpis.total_vendas);
         return {
           month: monthLabels[monthIndex] ?? `Mês ${item.periodo_mes ?? index + 1}`,
-          faturamento,
-          meta: faturamento * 1.05,
+          faturamento
         };
       });
   }, [kpisQuery.data, monthNumber, selectedMonth]);
+
+  const rankingSource = useMemo(() => {
+    const resultados = kpisQuery.data?.resultados ?? [];
+
+    const filteredResultados = selectedMonth === 'all'
+      ? resultados
+      : resultados.filter((item) => item.periodo_mes === monthNumber);
+
+    return [...filteredResultados]
+      .filter((item) => item.periodo_mes)
+      .sort((a, b) => (b.periodo_mes ?? 0) - (a.periodo_mes ?? 0))[0];
+  }, [kpisQuery.data, monthNumber, selectedMonth]);
+
+  const buildRankingData = (
+    items: Array<{ valor_total?: number | string; cliente?: string; produto?: string; cidade?: string }>,
+    key: 'cliente' | 'produto' | 'cidade',
+    fallbackLabel: string
+  ) => items.map((item, index) => {
+    const fullName = item[key] ?? `${fallbackLabel} ${index + 1}`;
+    const name = fullName.length > 18 ? `${fullName.slice(0, 18)}…` : fullName;
+    return {
+      name,
+      fullName,
+      value: parseDecimal(item.valor_total ?? 0),
+    };
+  });
+
+  const topClientesData = buildRankingData(rankingSource?.kpis.top_clientes ?? [], 'cliente', 'Cliente');
+  const topProdutosData = buildRankingData(rankingSource?.kpis.top_produtos ?? [], 'produto', 'Produto');
+  const topCidadesData = buildRankingData(rankingSource?.kpis.top_cidades ?? [], 'cidade', 'Cidade');
 
   const stats = useMemo(() => {
     const resultados = kpisQuery.data?.resultados ?? [];
@@ -257,7 +286,7 @@ export default function Faturamento() {
       </div>
 
       {/* Charts */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Evolução do Faturamento</CardTitle>
@@ -311,57 +340,150 @@ export default function Faturamento() {
             )}
           </CardContent>
         </Card>
+      </div>
 
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>Faturamento vs Meta</CardTitle>
-            <CardDescription>Comparação com metas mensais</CardDescription>
+            <CardTitle>Top Clientes</CardTitle>
+            <CardDescription>Ranking por faturamento no período selecionado</CardDescription>
           </CardHeader>
           <CardContent>
-            {hasChartData ? (
-              <div className="h-80">
+            {kpisQuery.isLoading ? (
+              <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
+                Carregando ranking...
+              </div>
+            ) : topClientesData.length ? (
+              <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={billingData}>
+                  <BarChart data={topClientesData} layout="vertical" margin={{ left: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis 
-                      dataKey="month" 
-                      className="text-xs"
+                    <XAxis
+                      type="number"
                       tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                    />
-                    <YAxis 
                       className="text-xs"
-                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
                       tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                     />
-                    <Tooltip 
-                      formatter={(value: number, name: string) => [
-                        formatCurrency(value), 
-                        name === 'faturamento' ? 'Faturamento' : 'Meta'
-                      ]}
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--background))', 
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      width={110}
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      className="text-xs"
+                    />
+                    <Tooltip
+                      formatter={(value: number) => [formatCurrency(value), 'Faturamento']}
+                      labelFormatter={(_, payload) => payload?.[0]?.payload.fullName ?? ''}
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--background))',
                         border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px'
+                        borderRadius: '8px',
                       }}
                     />
-                    <Legend />
-                    <Bar 
-                      dataKey="faturamento" 
-                      fill="hsl(var(--primary))" 
-                      name="Faturamento"
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar 
-                      dataKey="meta" 
-                      fill="hsl(var(--muted))" 
-                      name="Meta"
-                      radius={[4, 4, 0, 0]}
-                    />
+                    <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex h-80 items-center justify-center text-sm text-muted-foreground">
+              <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
+                Nenhum cliente registrado.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Cidades</CardTitle>
+            <CardDescription>Ranking por faturamento no período selecionado</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {kpisQuery.isLoading ? (
+              <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
+                Carregando ranking...
+              </div>
+            ) : topCidadesData.length ? (
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topCidadesData} layout="vertical" margin={{ left: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis
+                      type="number"
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      className="text-xs"
+                      tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                    />
+                     <YAxis
+                      dataKey="name"
+                      type="category"
+                      width={110}
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      className="text-xs"
+                    />
+                    <Tooltip
+                      formatter={(value: number) => [formatCurrency(value), 'Faturamento']}
+                      labelFormatter={(_, payload) => payload?.[0]?.payload.fullName ?? ''}
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--background))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
+                Nenhuma cidade registrada.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Produtos</CardTitle>
+            <CardDescription>Ranking por faturamento no período selecionado</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {kpisQuery.isLoading ? (
+              <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
+                Carregando ranking...
+              </div>
+            ) : topProdutosData.length ? (
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topProdutosData} layout="vertical" margin={{ left: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis
+                      type="number"
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      className="text-xs"
+                      tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                    />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      width={110}
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      className="text-xs"
+                    />
+                    <Tooltip
+                      formatter={(value: number) => [formatCurrency(value), 'Faturamento']}
+                      labelFormatter={(_, payload) => payload?.[0]?.payload.fullName ?? ''}
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--background))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
                 {chartMessage}
               </div>
             )}

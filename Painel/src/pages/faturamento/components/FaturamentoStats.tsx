@@ -2,7 +2,7 @@ import { DollarSign, Receipt, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { formatCurrency } from '../components/utils';
+import { formatCurrency } from '../utils/utils';
 
 interface FaturamentoStatsData {
   totalSales: number;

@@ -2,7 +2,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { formatCurrency } from '../components/utils';
+import { formatCurrency } from '../utils/utils';
 
 export interface RankingEntry {
   name: string;

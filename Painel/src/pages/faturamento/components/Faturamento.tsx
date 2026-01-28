@@ -10,7 +10,7 @@ import { FaturamentoEvolucaoChart } from './FaturamentoEvolucaoChart';
 import { FaturamentoHeader } from './FaturamentoHeader';
 import { FaturamentoRankingCard, type RankingEntry } from './FaturamentoRankingCard';
 import { FaturamentoStats } from './FaturamentoStats';
-import { monthLabels } from './utils';
+import { monthLabels } from '../utils/utils';
 
 export default function Faturamento() {
   const [selectedMonth, setSelectedMonth] = useState('all');

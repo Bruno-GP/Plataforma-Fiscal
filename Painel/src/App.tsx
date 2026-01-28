@@ -7,7 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
+import Dashboard from "./pages/dashboard/components/Dashboard";
 import Faturamento from "./pages/faturamento/components/Faturamento";
 import Clientes from "./pages/Clientes";
 import Configuracoes from "./pages/Configuracoes";

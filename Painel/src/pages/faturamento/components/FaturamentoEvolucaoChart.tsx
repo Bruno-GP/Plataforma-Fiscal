@@ -2,7 +2,7 @@ import { Line, LineChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, X
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { formatCurrency } from '../components/utils';
+import { formatCurrency } from '../utils/utils';
 
 interface BillingDataPoint {
   month: string;

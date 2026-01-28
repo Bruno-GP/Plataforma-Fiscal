@@ -101,7 +101,7 @@ export default function Dashboard() {
         trend: ticketChange >= 0 ? 'up' : 'down',
       },
       {
-        title: 'Total de Impostos',
+        title: 'Impostos sobre vendas',
         value: formatCurrency(totalTaxes),
         description: formatPercent(totalTaxesChange),
         icon: Percent,

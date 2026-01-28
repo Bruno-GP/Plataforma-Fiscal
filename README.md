@@ -25,6 +25,7 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe), consolidar 
 - [Formato dos KPIs](#formato-dos-kpis)
 - [Persistência e tabelas esperadas](#persistência-e-tabelas-esperadas)
 - [Estrutura do projeto](#estrutura-do-projeto)
+- [Documentação do Painel (Front-end)](#documentação-do-painel-front-end)
 
 ---
 
@@ -91,10 +92,147 @@ A aplicação carrega um `.env` localizado em `API/app/.env` usando `python-dote
 
 - **Base da API:** `http://127.0.0.1:8000`
 - **Docs (Swagger UI):** `http://127.0.0.1:8000/docs`
-- **OpenAPI JSON:** `http://127.0.0.1:8000/openapi.json`
-- **Prefixo das rotas de API:** `/api`
-- **OpenAPI JSON:** `http://127.0.0.1:8000/openapi.json`
-- **Prefixo das rotas de API:** `/api`
+
+---
+
+## Documentação do Painel (Front-end)
+
+### Visão geral
+
+Front-end em React + Vite para visualizar KPIs de NFe, com autenticação, rankings e comparativos de períodos. Ele consome a API descrita neste README e normaliza automaticamente a URL base quando necessário.
+
+Principais objetivos do painel:
+
+- Autenticação de usuários (login/registro) vinculados a empresas.
+- Visualização de KPIs e comparativos por período.
+- Rankings de clientes, produtos e cidades.
+- Navegação por páginas de dashboard, faturamento e clientes.
+
+### Requisitos
+
+- Node.js **18+**
+- Yarn (recomendado) ou npm
+
+### Instalação
+
+Na pasta `Painel`:
+
+```bash
+yarn install
+```
+
+> Se preferir npm: `npm install`.
+
+### Configuração de ambiente
+
+Crie um arquivo `.env` em `Painel/.env` com a URL base da API:
+
+```bash
+VITE_API_URL=http://localhost:8000
+```
+
+Observações:
+
+- Se a URL não terminar com `/api`, o painel adiciona automaticamente.
+- Exemplo alternativo já com prefixo: `VITE_API_URL=http://localhost:8000/api`.
+- Ajuste a variável de CORS na API para permitir a origem do painel (ex.: `http://localhost:5173`).
+
+### Checklist rápido de integração
+
+1. **API rodando** em `http://localhost:8000` (ou outro host/porta).
+2. **CORS configurado** no `.env` da API com o domínio do painel (ex.: `http://localhost:5173`).
+3. **Painel com `VITE_API_URL`** apontando para a API.
+4. **Banco populado** com KPIs para o CNPJ/usuário do painel (necessário para as páginas de indicadores).
+
+### Executando em desenvolvimento
+
+```bash
+yarn dev
+```
+
+O painel ficará disponível em `http://localhost:5173`.
+
+### Build e preview
+
+```bash
+yarn build
+yarn preview
+```
+
+### Scripts úteis
+
+| Script | Descrição |
+| --- | --- |
+| `yarn dev` | Inicia o servidor de desenvolvimento. |
+| `yarn build` | Gera build de produção. |
+| `yarn preview` | Preview do build. |
+| `yarn lint` | Executa ESLint. |
+
+### Endpoints da API utilizados
+
+O painel consome os seguintes endpoints (prefixo `/api`):
+
+- `POST /auth/entrar` — login.
+- `POST /auth/registrar` — cadastro de acesso.
+- `GET /nfe/kpis` — consulta de KPIs por período.
+- `GET /nfe/kpis/comparativo/atual` — comparativo dos dois períodos mais recentes.
+
+#### Detalhes de uso por funcionalidade
+
+- **Login/Registro:** as telas de autenticação usam `POST /auth/entrar` e `POST /auth/registrar`.
+  - Em caso de erro, o painel exibe mensagens como "Credenciais inválidas" ou "E-mail já cadastrado".
+- **Dashboard:** utiliza `GET /nfe/kpis/comparativo/atual` para exibir a comparação dos dois períodos mais recentes.
+  - O painel resolve o CNPJ a partir do login e, quando necessário, usa o `email` como fallback.
+- **Faturamento:** utiliza `GET /nfe/kpis` para obter o período atual e montar cards e gráficos.
+  - Requer `emitente_cnpj` válido.
+- **Clientes/Rankings:** usa `GET /nfe/kpis` para exibir rankings a partir de `top_clientes`.
+
+### Estrutura do painel
+
+Organização principal (pasta `Painel/src`):
+
+- `pages/` — páginas do app (ex.: dashboard, faturamento, clientes).
+- `contexts/` — contexto de autenticação (login, registro e dados do usuário).
+- `services/` — serviços de integração com a API (ex.: `nfe.ts`).
+- `components/` — componentes reutilizáveis (cartões, gráficos, tabelas, etc).
+- `routes/` — definição de rotas e navegação.
+- `styles/` ou configurações de Tailwind — estilos globais e classes utilitárias.
+
+### Comportamentos e formatação de dados
+
+- **Normalização de valores monetários:** o painel aceita KPIs numéricos ou formatados (`"R$ 1.234,56"`).
+- **Conversão de strings monetárias:** há conversão de strings para número quando necessário (por exemplo, para gráficos).
+- **Comparativo:** quando `variacao_percentual` é `null`, o painel representa crescimento a partir de base zero.
+- **Rankings:** itens podem não conter todas as chaves (`cliente`, `produto`, `cidade`); o painel trata campos ausentes.
+
+### Erros comuns e solução de problemas
+
+- **Erro de CORS:** confira `CORS_ALLOW_ORIGINS` na API.
+- **Sem dados:** garanta que há KPIs persistidos antes de abrir o dashboard.
+- **CNPJ inválido:** o painel ignora CNPJs vazios ou com dígitos zerados.
+- **Erro ao buscar KPIs:** confirme se o endpoint `/api/nfe/kpis` está acessível e se o `emitente_cnpj` é válido.
+  - Em ambientes de teste, execute o processamento de XML antes para gerar KPIs.
+
+### Build de produção
+
+1. Gere o build:
+
+   ```bash
+   yarn build
+   ```
+
+2. Sirva o build:
+
+   ```bash
+   yarn preview
+   ```
+
+3. Configure a variável `VITE_API_URL` no ambiente de deploy (ex.: `.env.production`).
+
+### Observações de segurança
+
+- Nunca commite o arquivo `.env` com credenciais reais.
+- Em ambientes públicos, configure `CORS_ALLOW_ORIGINS` com a origem exata do painel.
 
 ---
 

@@ -50,6 +50,7 @@ class NFeNotasService:
                 processamento_id,
                 numero_nf,
                 emitente_cnpj,
+                modelo,
                 data_emissao,
                 natureza_operacao,
                 destinatario_documento,
@@ -67,7 +68,7 @@ class NFeNotasService:
             )
             SELECT
                 %s, %s, %s, %s, %s,
-                %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
                 %s, %s, %s,
                 %s, %s, %s, %s, %s
             WHERE NOT EXISTS (
@@ -96,6 +97,7 @@ class NFeNotasService:
                     processamento_id,
                     str(nota.numero_nf),
                     emitente_cnpj,
+                    nota.modelo,
                     nota.data_emissao,
                     nota.natureza_operacao,
                     nota.destinatario_documento,
@@ -134,6 +136,7 @@ class NFeNotasService:
                                     valor[1],
                                     valor[2],
                                     valor[3],
+                                    valor[4]
                                 ),
                             )
                             inseridos += cur.rowcount

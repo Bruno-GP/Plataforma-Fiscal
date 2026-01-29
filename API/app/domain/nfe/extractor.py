@@ -43,6 +43,7 @@ class NotaExtraida:
         chave: str,
         numero_nf: int,
         emitente_cnpj: str,
+        modelo: str,
         data_emissao: date,
         natureza_operacao: str,
 
@@ -106,6 +107,7 @@ class NFeExtractor:
 
             numero_nf = int(ide.findtext("nfe:nNF", "0", NS))
             natureza_operacao = ide.findtext("nfe:natOp", "", NS)
+            modelo = ide.findtext("nfe:mod", "", NS)
 
             dh_emi = ide.findtext("nfe:dhEmi", "", NS)
             if not dh_emi:
@@ -141,6 +143,9 @@ class NFeExtractor:
                 destinatario_cidade = ""
                 destinatario_uf = ""
                 print("[AVISO] XML sem destinatário identificado")
+                
+            if modelo == "65" and not destinatario_nome:
+                destinatario_nome = "Consumidor Final"
 
             # ===== Totais =====
             tot = inf.find("nfe:total/nfe:ICMSTot", NS)
@@ -177,6 +182,7 @@ class NFeExtractor:
                     chave=chave,
                     numero_nf=numero_nf,
                     emitente_cnpj=emitente_cnpj,
+                    modelo=modelo,
                     data_emissao=data_emissao,
                     natureza_operacao=natureza_operacao,
 

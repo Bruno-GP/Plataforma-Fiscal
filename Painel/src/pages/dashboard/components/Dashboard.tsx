@@ -27,7 +27,7 @@ export default function Dashboard() {
   const emitenteCnpj = user?.emitente_cnpj;
 
   const comparativoQuery = useQuery({
-     queryKey: ['nfe-kpis-comparativo-atual', emitenteCnpj],
+    queryKey: ['nfe-kpis-comparativo-atual', emitenteCnpj],
     queryFn: () => fetchNfeKpisComparativoAtual(emitenteCnpj),
     staleTime: 5 * 60 * 1000,
   });

@@ -43,6 +43,7 @@ class NFeItem(BaseModel):
 class NFeNota(BaseModel):
   numero_nf: str
   emitente_cnpj: str
+  modelo: str
   data_emissao: date
   natureza_operacao: str
 

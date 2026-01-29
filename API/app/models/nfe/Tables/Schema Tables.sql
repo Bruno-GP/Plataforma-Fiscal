@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS nfe_notas (
     processamento_id        BIGINT REFERENCES nfe_processamentos(id) ON DELETE SET NULL,
     numero_nf               VARCHAR(50) NOT NULL,
     emitente_cnpj           VARCHAR(20) NOT NULL,
+    modelo                  VARCHAR(5),
     data_emissao            DATE NOT NULL,
     natureza_operacao       VARCHAR(255),
     destinatario_documento  VARCHAR(20),

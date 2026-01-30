@@ -157,7 +157,7 @@ class ProcessarNFeService:
                         )
                 
                 # 🔹 Converter dict de KPIs para o schema correto do response
-                kpis_relatorio = KPIsRelatorio(**kpis_periodo)
+                kpis_relatorio = kpis_periodo
 
                 kpis_por_periodo.append(
                     KPIPorPeriodo(

@@ -2,15 +2,22 @@ from typing import List
 from datetime import datetime, date
 from decimal import Decimal
 
+import re
+import logging
+
 from app.domain.nfe.xml_models import XmlNFe
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
+
+logger = logging.getLogger("NFeExtractor")
 
 def _parse_data_emissao(dh_emi: str, d_emi: str) -> date:
     if dh_emi:
         valor = dh_emi.strip()
         if valor.endswith("Z"):
             valor = valor[:-1] + "+00:00"
+        if re.search(r"[+-]\d{4}$", valor):
+            valor = f"{valor[:-2]}:{valor[-2:]}"
         return datetime.fromisoformat(valor).date()
 
     valor = d_emi.strip()

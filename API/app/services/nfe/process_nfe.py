@@ -103,6 +103,7 @@ class ProcessarNFeService:
                     continue
 
                 itens_periodo = sum(len(nota.itens) for nota in notas_periodo)
+                kpis_periodo = kpi_calculator.calcular(notas_periodo)
 
                 # Registrar processamento
                 config = carregar_config_postgres()
@@ -138,7 +139,8 @@ class ProcessarNFeService:
 
                         NFeNotasService().registrar_notas(
                             conn=conn,
-                            notas=notas_periodo
+                            notas=notas_periodo,
+                            processamento_id=processamento_id,
                         )
 
                         NFeItensService().registrar_itens(
@@ -147,7 +149,6 @@ class ProcessarNFeService:
                         )
 
                         kpi_calculator.registrar_kpis(
-                            conn=conn,
                             processamento_id=processamento_id,
                             emitente_cnpj=cnpj_emitente,
                             periodo_ano=ano,

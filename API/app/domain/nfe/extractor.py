@@ -6,6 +6,20 @@ from app.domain.nfe.xml_models import XmlNFe
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
+def _parse_data_emissao(dh_emi: str, d_emi: str) -> date:
+    if dh_emi:
+        valor = dh_emi.strip()
+        if valor.endswith("Z"):
+            valor = valor[:-1] + "+00:00"
+        return datetime.fromisoformat(valor).date()
+
+    valor = d_emi.strip()
+    try:
+        return date.fromisoformat(valor)
+    except ValueError:
+        if len(valor) == 8 and valor.isdigit():
+            return datetime.strptime(valor, "%Y%m%d").date()
+        raise
 
 # =========================
 # ITEM DA NOTA
@@ -114,12 +128,7 @@ class NFeExtractor:
             if not dh_emi and not d_emi:
                 continue
 
-            if dh_emi:
-                data_emissao = datetime.fromisoformat(
-                    dh_emi.replace("Z", "")
-                ).date()
-            else:
-                data_emissao = date.fromisoformat(d_emi)
+            data_emissao = _parse_data_emissao(dh_emi, d_emi)
 
             # ===== Emitente =====
             emit = inf.find("nfe:emit", NS)

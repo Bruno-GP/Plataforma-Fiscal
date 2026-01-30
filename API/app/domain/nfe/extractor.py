@@ -110,12 +110,16 @@ class NFeExtractor:
             modelo = ide.findtext("nfe:mod", "", NS)
 
             dh_emi = ide.findtext("nfe:dhEmi", "", NS)
-            if not dh_emi:
+            d_emi = ide.findtext("nfe:dEmi", "", NS)
+            if not dh_emi and not d_emi:
                 continue
 
-            data_emissao = datetime.fromisoformat(
-                dh_emi.replace("Z", "")
-            ).date()
+            if dh_emi:
+                data_emissao = datetime.fromisoformat(
+                    dh_emi.replace("Z", "")
+                ).date()
+            else:
+                data_emissao = date.fromisoformat(d_emi)
 
             # ===== Emitente =====
             emit = inf.find("nfe:emit", NS)

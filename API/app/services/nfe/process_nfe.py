@@ -1,5 +1,8 @@
 from datetime import datetime
 
+import psycopg
+from app.services.nfe.postres_config import carregar_config_postgres
+
 from app.models.nfe.schemas import (
     ProcessarNFeRequest,
     ProcessarNFeResponse,
@@ -81,12 +84,6 @@ class ProcessarNFeService:
                     nome_emitente=nome_emitente
                 )
 
-            # 8️⃣ Registrar notas
-            NFeNotasService().registrar_notas(consolidacao.notas)
-
-            # 9️⃣ Registrar itens
-            NFeItensService().registrar_itens(consolidacao.notas)
-
             # 🔟 Calcular KPIs (total e por período)
             kpi_calculator = KPICalculator()
             notas_por_periodo = {}
@@ -108,32 +105,55 @@ class ProcessarNFeService:
                 itens_periodo = sum(len(nota.itens) for nota in notas_periodo)
 
                 # Registrar processamento
-                processamento_id = processamento_service.registrar_processamento(
-                    empresa_id=empresa_id,
-                    cnpj_emitente=cnpj_emitente,
-                    periodo_ano=ano,
-                    periodo_mes=mes,
-                    origem=request.origem,
-                    pasta_xml=request.pasta_xml,
-                    periodo_solicitado=request.periodo,
-                    periodos_encontrados=None,
-                    notas_processadas=len(notas_periodo),
-                    itens_processados=itens_periodo,
-                    status="processado",
-                    data_processamento=datetime.utcnow()
-                )
+                config = carregar_config_postgres()
 
-                # 🔹 Calcular KPI SOMENTE desse processamento
-                kpis_periodo = kpi_calculator.calcular(notas_periodo)
+                with psycopg.connect(
+                    host=config["host"],
+                    port=config["port"],
+                    dbname=config["database"],
+                    user=config["user"],
+                    password=config["password"],
+                ) as conn:
 
-                # 🔹 Registrar KPI vinculado ao processamento
-                kpi_calculator.registrar_kpis(
-                    processamento_id=processamento_id,
-                    emitente_cnpj=cnpj_emitente,
-                    periodo_ano=ano,
-                    periodo_mes=mes,
-                    kpis=kpis_periodo
-                )
+                    with conn.transaction():
+
+                        processamento_id = processamento_service.registrar_processamento(
+                            conn=conn,
+                            empresa_id=empresa_id,
+                            cnpj_emitente=cnpj_emitente,
+                            periodo_ano=ano,
+                            periodo_mes=mes,
+                            origem=request.origem,
+                            pasta_xml=request.pasta_xml,
+                            periodo_solicitado=request.periodo,
+                            periodos_encontrados=None,
+                            notas_processadas=len(notas_periodo),
+                            itens_processados=itens_periodo,
+                            status="processado",
+                            data_processamento=datetime.utcnow()
+                        )
+
+                        if not processamento_id:
+                            raise Exception("Processamento não registrado")
+
+                        NFeNotasService().registrar_notas(
+                            conn=conn,
+                            notas=notas_periodo
+                        )
+
+                        NFeItensService().registrar_itens(
+                            conn=conn,
+                            notas=notas_periodo
+                        )
+
+                        kpi_calculator.registrar_kpis(
+                            conn=conn,
+                            processamento_id=processamento_id,
+                            emitente_cnpj=cnpj_emitente,
+                            periodo_ano=ano,
+                            periodo_mes=mes,
+                            kpis=kpis_periodo
+                        )
                 
                 # 🔹 Converter dict de KPIs para o schema correto do response
                 kpis_relatorio = KPIsRelatorio(**kpis_periodo)

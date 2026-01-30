@@ -35,6 +35,7 @@ class NFeNotasService:
 
     def registrar_notas(
         self,
+        conn,
         notas: Iterable[NotaExtraida],
         processamento_id: Optional[int] = None
     ) -> int:
@@ -120,31 +121,30 @@ class NFeNotasService:
 
         try:
             #logger.debug("Abrindo conexão com PostgreSQL")
-            with psycopg.connect(**self.conn_params) as conn:
-                #logger.debug("Conexão aberta com sucesso")
-                with conn.cursor() as cur:
-                    #logger.debug("Executando INSERT em nfe_notas")
-                    inseridos = 0
-                    for valor in valores:
-                        cur.execute(sql_insert, valor)
+            #logger.debug("Conexão aberta com sucesso")
+            with conn.cursor() as cur:
+                #logger.debug("Executando INSERT em nfe_notas")
+                inseridos = 0
+                for valor in valores:
+                    cur.execute(sql_insert, valor)
+                    inseridos += cur.rowcount
+                    if cur.rowcount == 0 and processamento_id is not None:
+                        cur.execute(
+                            sql_atualizar_processamento,
+                            (
+                                processamento_id,
+                                valor[1],
+                                valor[2],
+                                valor[3],
+                                valor[4]
+                            ),
+                        )
                         inseridos += cur.rowcount
-                        if cur.rowcount == 0 and processamento_id is not None:
-                            cur.execute(
-                                sql_atualizar_processamento,
-                                (
-                                    processamento_id,
-                                    valor[1],
-                                    valor[2],
-                                    valor[3],
-                                    valor[4]
-                                ),
-                            )
-                            inseridos += cur.rowcount
-                    logger.info(
-                        "Notas registradas com sucesso: %s",
-                        inseridos
-                    )
-            return inseridos
+                logger.info(
+                    "Notas registradas com sucesso: %s",
+                    inseridos
+                )
+                return inseridos
         except Exception:
             logger.exception("Erro ao registrar notas NFe")
             raise

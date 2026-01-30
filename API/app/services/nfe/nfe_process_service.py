@@ -16,6 +16,7 @@ class NFeProcessamentosService:
 
     def registrar_processamento(
         self,
+        conn,
         empresa_id: int,
         cnpj_emitente: str,
         periodo_ano: int,
@@ -69,7 +70,6 @@ class NFeProcessamentosService:
             data_processamento,
         )
 
-        with psycopg.connect(**self.conn_params) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, valores)
-                return cur.fetchone()[0]
+        with conn.cursor() as cur:
+            cur.execute(sql, valores)
+            return cur.fetchone()[0]

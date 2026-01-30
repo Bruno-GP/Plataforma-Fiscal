@@ -76,7 +76,7 @@ class NFeConsolidator:
         notas_final = list(mapa.values())
         itens_total = sum(len(n.itens) for n in notas_final)
 
-        return ConsolidacaoNFe(notas)
+        return ConsolidacaoNFe(notas_final)
 
     def _chave_dedupe(self, nota: NFeNota) -> Tuple:
         """

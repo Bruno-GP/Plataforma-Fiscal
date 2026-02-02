@@ -43,7 +43,7 @@ export function ChatWidget() {
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b bg-card p-4 bg-white">
+        <div className="flex items-center justify-between border-b bg-card p-4">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <MessageCircle className="h-4 w-4" />
@@ -59,7 +59,7 @@ export function ChatWidget() {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="h-80 bg-card bg-white p-4" ref={scrollRef}>
+        <ScrollArea className="h-80 bg-card p-4" ref={scrollRef}>
           <div className="flex flex-col gap-3">
             {messages.map((message) => (
               <div
@@ -84,7 +84,7 @@ export function ChatWidget() {
         </ScrollArea>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="border-t bg-card p-4 bg-white">
+        <form onSubmit={handleSubmit} className="border-t bg-card p-4">
           <div className="flex gap-2">
             <Input
               ref={inputRef}

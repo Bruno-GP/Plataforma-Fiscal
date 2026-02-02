@@ -28,7 +28,7 @@ export function FaturamentoHeader({
           <SelectTrigger className="w-36">
             <SelectValue placeholder="Mês" />
           </SelectTrigger>
-          <SelectContent className="bg-white">
+          <SelectContent className="bg-popover">
             <SelectItem value="all">Todos os meses</SelectItem>
             {monthLabels.map((label, index) => (
               <SelectItem key={label} value={(index + 1).toString()}>
@@ -41,7 +41,7 @@ export function FaturamentoHeader({
           <SelectTrigger className="w-32">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-white">
+          <SelectContent className="bg-popover">
             {availableYears.map((yearOption) => (
               <SelectItem key={yearOption} value={String(yearOption)}>
                 {yearOption}

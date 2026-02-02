@@ -88,6 +88,7 @@ export default function Dashboard() {
         description: formatPercent(totalSalesChange),
         icon: TrendingUp,
         trend: totalSalesChange >= 0 ? 'up' : 'down',
+        accentClass: 'border-l-sky-500',
       },
       {
         title: 'Notas Emitidas',
@@ -95,6 +96,7 @@ export default function Dashboard() {
         description: formatPercent(totalNotesChange),
         icon: Receipt,
         trend: totalNotesChange >= 0 ? 'up' : 'down',
+        accentClass: 'border-l-emerald-500',
       },
       {
         title: 'Ticket Médio',
@@ -102,6 +104,7 @@ export default function Dashboard() {
         description: formatPercent(ticketChange),
         icon: Users,
         trend: ticketChange >= 0 ? 'up' : 'down',
+        accentClass: 'border-l-amber-400',
       },
       {
         title: 'Impostos sobre vendas',
@@ -109,6 +112,7 @@ export default function Dashboard() {
         description: formatPercent(totalTaxesChange),
         icon: Percent,
         trend: totalTaxesChange >= 0 ? 'up' : 'down',
+        accentClass: 'border-l-violet-500',
       },
     ];
   }, [comparativoQuery.data, faturamentoPeriodo]);

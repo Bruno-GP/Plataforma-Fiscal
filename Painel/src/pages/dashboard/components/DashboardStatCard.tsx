@@ -18,22 +18,25 @@ export function DashboardStatCard({
   icon: Icon,
   trend,
   isLoading,
+  accentClass = 'border-l-slate-700',
 }: DashboardStatCardProps) {
   return (
-    <Card className="shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+    <Card
+      className={`rounded-2xl border-l-4 border-slate-800/70 bg-gradient-to-br from-slate-950/80 via-slate-900/85 to-slate-950/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_45px_-30px_rgba(0,0,0,0.9)] backdrop-blur ${accentClass}`}
+    >
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="text-sm font-medium text-slate-300">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-slate-300/80" />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{isLoading ? 'Carregando...' : value}</div>
+        <div className="text-3xl font-semibold text-white font-bold">{isLoading ? 'Carregando...' : value}</div>
         <p
-          className={`text-xs ${
+          className={`mt-2 text-xs font-medium ${
             trend === 'up'
-              ? 'text-green-600'
+              ? 'text-emerald-400'
               : trend === 'down'
-                ? 'text-red-600'
-                : 'text-muted-foreground'
+                ? 'text-rose-400'
+                : 'text-slate-400'
           }`}
         >
           {isLoading ? '--' : `${description} vs mês anterior`}

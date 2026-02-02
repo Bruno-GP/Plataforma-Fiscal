@@ -1,6 +1,8 @@
 from datetime import datetime
 
 import psycopg
+import logging
+
 from app.services.nfe.postres_config import carregar_config_postgres
 
 from app.models.nfe.schemas import (
@@ -19,6 +21,8 @@ from app.services.nfe.empresa_service import EmpresaService
 from app.services.nfe.nfe_notas_service import NFeNotasService
 from app.services.nfe.nfe_itens_service import NFeItensService
 from app.services.nfe.nfe_process_service import NFeProcessamentosService
+
+logger = logging.getLogger("ProcessarNFeService")
 
 class ProcessarNFeService:
     def executar(self, request: ProcessarNFeRequest) -> ProcessarNFeResponse:
@@ -136,21 +140,6 @@ class ProcessarNFeService:
 
                         if not processamento_id:
                             raise Exception("Processamento não registrado")
-                        
-                        logger.debug(f"""
-                        Tentando inserir NF:
-                        numero_nf={nota.numero_nf}
-                        cnpj={cnpj_emitente}
-                        data={nota.data_emissao}
-                        modelo={nota.modelo}
-                        """)
-
-
-                        NFeNotasService().registrar_notas(
-                            conn=conn,
-                            notas=notas_periodo,
-                            processamento_id=processamento_id,
-                        )
                         
                         qtd = NFeNotasService().registrar_notas(
                             conn=conn,

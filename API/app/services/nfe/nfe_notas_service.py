@@ -75,10 +75,11 @@ class NFeNotasService:
 
         with conn.cursor() as cur:
             for nota in notas:
+                emitente_cnpj = normalizar_cnpj(nota.emitente_cnpj)
                 cur.execute(sql, (
                     processamento_id,
                     str(nota.numero_nf),
-                    nota.emitente_cnpj,
+                    emitente_cnpj,
                     nota.modelo,
                     nota.data_emissao,
                     nota.natureza_operacao,

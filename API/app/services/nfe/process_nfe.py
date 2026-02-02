@@ -136,13 +136,30 @@ class ProcessarNFeService:
 
                         if not processamento_id:
                             raise Exception("Processamento não registrado")
+                        
+                        logger.debug(f"""
+                        Tentando inserir NF:
+                        numero_nf={nota.numero_nf}
+                        cnpj={cnpj_emitente}
+                        data={nota.data_emissao}
+                        modelo={nota.modelo}
+                        """)
+
 
                         NFeNotasService().registrar_notas(
                             conn=conn,
                             notas=notas_periodo,
                             processamento_id=processamento_id,
                         )
-
+                        
+                        qtd = NFeNotasService().registrar_notas(
+                            conn=conn,
+                            notas=notas_periodo,
+                            processamento_id=processamento_id,
+                        )
+                        logger.warning(f"NOTAS INSERIDAS: {qtd}")
+                        
+                        
                         NFeItensService().registrar_itens(
                             conn=conn,
                             notas=notas_periodo

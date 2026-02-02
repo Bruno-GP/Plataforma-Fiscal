@@ -110,6 +110,27 @@ class KPICalculator:
         kpis: KPIsRelatorio
     ) -> int:
         sql = """
+            WITH atualiza AS (
+                UPDATE public.nfe_kpis
+                SET
+                    emitente_cnpj   = %s,
+                    periodo_ano     = %s,
+                    periodo_mes     = %s,
+                    total_vendas    = %s,
+                    quantidade_notas = %s,
+                    ticket_medio    = %s,
+                    maior_nota      = %s,
+                    menor_nota      = %s,
+                    total_icms      = %s,
+                    total_ipi       = %s,
+                    total_pis       = %s,
+                    total_cofins    = %s,
+                    top_clientes    = %s,
+                    top_produtos    = %s,
+                    top_cidades     = %s
+                WHERE processamento_id = %s
+                RETURNING 1
+            )
             INSERT INTO public.nfe_kpis (
                 processamento_id,
                 emitente_cnpj,
@@ -128,20 +149,9 @@ class KPICalculator:
                 top_produtos,
                 top_cidades
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (processamento_id) DO UPDATE SET
-                total_vendas      = EXCLUDED.total_vendas,
-                quantidade_notas  = EXCLUDED.quantidade_notas,
-                ticket_medio      = EXCLUDED.ticket_medio,
-                maior_nota        = EXCLUDED.maior_nota,
-                menor_nota        = EXCLUDED.menor_nota,
-                total_icms        = EXCLUDED.total_icms,
-                total_ipi         = EXCLUDED.total_ipi,
-                total_pis         = EXCLUDED.total_pis,
-                total_cofins      = EXCLUDED.total_cofins,
-                top_clientes      = EXCLUDED.top_clientes,
-                top_produtos      = EXCLUDED.top_produtos,
-                top_cidades       = EXCLUDED.top_cidades;
+            SELECT
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            WHERE NOT EXISTS (SELECT 1 FROM atualiza);
         """
 
         payload = _serializar_decimais({
@@ -151,6 +161,23 @@ class KPICalculator:
         })
 
         valores = (
+            emitente_cnpj,
+            periodo_ano,
+            periodo_mes,
+            kpis.total_vendas,
+            kpis.quantidade_notas,
+            kpis.ticket_medio,
+            kpis.maior_nota,
+            kpis.menor_nota,
+            kpis.total_icms,
+            kpis.total_ipi,
+            kpis.total_pis,
+            kpis.total_cofins,
+            Json(payload["top_clientes"]),
+            Json(payload["top_produtos"]),
+            Json(payload["top_cidades"]),
+            processamento_id,
+            
             processamento_id,
             emitente_cnpj,
             periodo_ano,

@@ -87,6 +87,7 @@ class NotaExtraida:
         self.chave = chave
         self.numero_nf = numero_nf
         self.emitente_cnpj = emitente_cnpj
+        self.modelo = modelo
         self.data_emissao = data_emissao
         self.natureza_operacao = natureza_operacao
 

@@ -33,20 +33,14 @@ class NFeNotasService:
             "connect_timeout": 5,
         }
 
-    def registrar_notas(
-        self,
-        conn,
-        notas: Iterable[NotaExtraida],
-        processamento_id: Optional[int] = None
-    ) -> int:
-        logger.debug("Iniciando registrar_notas")
+    def registrar_notas(self, conn, notas, processamento_id=None) -> int:
+        logger.warning("📌 Registrando notas no banco (modo seguro)")
 
-        notas_list = list(notas)
-        if not notas_list:
-            logger.info("Nenhuma nota para registrar")
+        if not notas:
+            logger.warning("Nenhuma nota para registrar")
             return 0
 
-        sql_insert = """
+        sql = """
             INSERT INTO public.nfe_notas (
                 processamento_id,
                 numero_nf,
@@ -66,38 +60,25 @@ class NFeNotasService:
                 valor_pis,
                 valor_cofins,
                 valor_total_nf
-            )
-            SELECT
+            ) VALUES (
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s,
                 %s, %s, %s, %s, %s
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM public.nfe_notas
-                WHERE numero_nf = %s
-                  AND emitente_cnpj = %s
-                  AND data_emissao = %s
-            );
-        """
-        
-        sql_atualizar_processamento = """
-            UPDATE public.nfe_notas
-            SET processamento_id = %s
-            WHERE numero_nf = %s
-              AND emitente_cnpj = %s
-              AND data_emissao = %s
-              AND processamento_id IS NULL;
+            )
+            ON CONFLICT (numero_nf, emitente_cnpj, data_emissao)
+            DO UPDATE SET
+                processamento_id = EXCLUDED.processamento_id;
         """
 
-        valores = []
-        for nota in notas_list:
-            emitente_cnpj = normalizar_cnpj(nota.emitente_cnpj)
-            valores.append(
-                (
+        total = 0
+
+        with conn.cursor() as cur:
+            for nota in notas:
+                cur.execute(sql, (
                     processamento_id,
                     str(nota.numero_nf),
-                    emitente_cnpj,
+                    nota.emitente_cnpj,
                     nota.modelo,
                     nota.data_emissao,
                     nota.natureza_operacao,
@@ -113,37 +94,8 @@ class NFeNotasService:
                     nota.valor_pis,
                     nota.valor_cofins,
                     nota.valor_total_nf,
-                    str(nota.numero_nf),
-                    emitente_cnpj,
-                    nota.data_emissao,
-                )
-            )
+                ))
+                total += cur.rowcount
 
-        try:
-            #logger.debug("Abrindo conexão com PostgreSQL")
-            #logger.debug("Conexão aberta com sucesso")
-            with conn.cursor() as cur:
-                #logger.debug("Executando INSERT em nfe_notas")
-                inseridos = 0
-                for valor in valores:
-                    cur.execute(sql_insert, valor)
-                    inseridos += cur.rowcount
-                    if cur.rowcount == 0 and processamento_id is not None:
-                        cur.execute(
-                            sql_atualizar_processamento,
-                            (
-                                processamento_id,
-                                valor[1],
-                                valor[2],
-                                valor[4]
-                            ),
-                        )
-                        inseridos += cur.rowcount
-                logger.info(
-                    "Notas registradas com sucesso: %s",
-                    inseridos
-                )
-                return inseridos
-        except Exception:
-            logger.exception("Erro ao registrar notas NFe")
-            raise
+        logger.warning(f"✅ Notas afetadas no banco: {total}")
+        return total

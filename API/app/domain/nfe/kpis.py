@@ -107,7 +107,8 @@ class KPICalculator:
         emitente_cnpj: str,
         periodo_ano: int,
         periodo_mes: int,
-        kpis: KPIsRelatorio
+        kpis: KPIsRelatorio,
+        conn: psycopg.Connection | None = None
     ) -> int:
         sql = """
             WITH atualiza AS (
@@ -196,7 +197,12 @@ class KPICalculator:
             Json(payload["top_cidades"]),
         )
 
-        with psycopg.connect(**self.conn_params) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, valores)
-                return cur.rowcount
+        if conn is None:
+            with psycopg.connect(**self.conn_params) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql, valores)
+                    return cur.rowcount
+
+        with conn.cursor() as cur:
+            cur.execute(sql, valores)
+            return cur.rowcount

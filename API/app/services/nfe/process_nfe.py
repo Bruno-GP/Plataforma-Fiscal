@@ -159,7 +159,8 @@ class ProcessarNFeService:
                             emitente_cnpj=cnpj_emitente,
                             periodo_ano=ano,
                             periodo_mes=mes,
-                            kpis=kpis_periodo
+                            kpis=kpis_periodo,
+                            conn=conn,
                         )
                 
                 # 🔹 Converter dict de KPIs para o schema correto do response

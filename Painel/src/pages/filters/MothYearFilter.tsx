@@ -32,7 +32,7 @@ export function MonthYearFilter({
     <div className={cn('flex items-center gap-2', className)}>
       <Select value={selectedMonth} onValueChange={onMonthChange} >
         <SelectTrigger className="w-36">
-          <SelectValue placeholder={monthPlaceholder} />
+          <SelectValue className="bg-black" placeholder={monthPlaceholder} />
         </SelectTrigger>
         <SelectContent className="bg-popover">
           {includeAllMonths && <SelectItem value="all">{allMonthsLabel}</SelectItem>}

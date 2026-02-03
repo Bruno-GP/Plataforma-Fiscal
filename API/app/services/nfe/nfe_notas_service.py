@@ -100,3 +100,34 @@ class NFeNotasService:
 
         logger.warning(f"✅ Notas afetadas no banco: {total}")
         return total
+    
+    def remover_notas_sem_cfop_venda(self, conn, processamento_id: int) -> int:
+        logger.warning(
+            "🧹 Removendo notas sem CFOP de venda para o processamento %s",
+            processamento_id,
+        )
+
+        sql = """
+            DELETE FROM public.nfe_notas AS n
+            WHERE n.processamento_id = %s
+              AND NOT EXISTS (
+                SELECT 1
+                FROM public.nfe_itens AS i
+                JOIN public.cfops AS c
+                  ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
+                     = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+                WHERE i.nota_id = n.id
+                  AND LEFT(
+                        regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g'),
+                        1
+                      ) IN ('5','6','7')
+                  AND COALESCE(c.descricao, '') ILIKE 'venda%%'
+              );
+        """
+
+        with conn.cursor() as cur:
+            cur.execute(sql, (processamento_id,))
+            removidas = cur.rowcount
+
+        logger.warning("🧹 Notas removidas: %s", removidas)
+        return removidas

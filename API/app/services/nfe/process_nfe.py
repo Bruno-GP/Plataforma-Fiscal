@@ -154,6 +154,11 @@ class ProcessarNFeService:
                             conn=conn,
                             notas=notas_periodo
                         )
+                        
+                        NFeNotasService().remover_notas_sem_cfop_venda(
+                            conn=conn,
+                            processamento_id=processamento_id,
+                        )
 
                         kpi_calculator.registrar_kpis(
                             processamento_id=processamento_id,

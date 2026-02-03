@@ -96,7 +96,10 @@ export function DashboardRankingCard({
                   <button
                     type="button"
                     key={item.key}
-                    onClick={() => setSelectedKey(item.key)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedKey(item.key);
+                    }}
                     disabled={isDisabled}
                     className={`flex w-full items-center justify-between gap-3 border-b border-slate-800/70 pb-2 text-left transition-colors duration-300 last:border-0 ${
                       isDisabled

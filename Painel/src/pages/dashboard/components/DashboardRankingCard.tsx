@@ -51,7 +51,10 @@ export function DashboardRankingCard({
   }, [items, selectedKey]);
 
   const hasSelection = Boolean(selectedItem);
-  const selectedPercent = selectedItem?.percent ?? (totalValueLabel ? 100 : 0);
+  const selectedPercent = selectedItem?.percent ?? 100;
+  const headlineLabel = selectedItem ? 'Faturamento selecionado' : 'Faturamento Total';
+  const headlineValue = selectedItem?.value ?? totalValue;
+  const captionTitle = selectedItem?.title ?? 'Faturamento Total';
   const progressValue = Math.min(Math.max(selectedPercent, 0), 100);
 
   return (
@@ -68,17 +71,15 @@ export function DashboardRankingCard({
             <>
               <div className="space-y-2 rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Faturamento selecionado</span>
-                  {selectedItem ? (
-                    <span className="font-medium text-foreground">{selectedItem.value}</span>
-                  ) : null}
+                  <span>{headlineLabel}</span>
+                  <span className="font-medium text-foreground">{headlineValue}</span>
                 </div>
                 <Progress
                   value={progressValue}
-                  className="h-2 border border-slate-800/80 bg-slate-900/80 [&>div]:bg-sky-500"
+                  className="h-2 border border-slate-800/80 bg-slate-900/80 [&>div]:bg-sky-500 [&>div]:transition-all [&>div]:duration-500 [&>div]:ease-out"
                 />
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{selectedItem?.title ?? 'Selecione um item'}</span>
+                  <span>{captionTitle}</span>
                   <span>
                     {selectedItem?.percent !== null
                       ? `${selectedPercent.toFixed(1)}% do período`
@@ -88,21 +89,30 @@ export function DashboardRankingCard({
               </div>
               {items.map((item) => {
                 const isSelected = item.key === selectedItem?.key;
+                const isMuted = hasSelection && !isSelected;
 
                 return (
                   <button
                     type="button"
                     key={item.key}
                     onClick={() => setSelectedKey(item.key)}
-                    className="flex w-full items-center justify-between gap-3 border-b border-slate-800/70 pb-2 text-left transition hover:text-foreground/90 last:border-0"
+                    className="flex w-full items-center justify-between gap-3 border-b border-slate-800/70 pb-2 text-left transition-colors duration-300 hover:text-foreground/90 last:border-0"
                   >
                     <div>
-                      <p className={`font-medium ${isSelected ? 'text-foreground' : ''}`}>
+                      <p
+                        className={`font-medium transition-colors duration-300 ${
+                          isSelected || !hasSelection ? 'text-foreground' : ''
+                        } ${isMuted ? 'text-slate-400' : ''}`}
+                      >
                         {item.title}
                       </p>
                       <p className="text-sm text-muted-foreground">{item.subtitle}</p>
                     </div>
-                    <span className={`text-sm font-medium ${isSelected ? 'text-foreground' : ''}`}>
+                    <span
+                      className={`text-sm font-medium transition-colors duration-300 ${
+                        isSelected || !hasSelection ? 'text-foreground' : ''
+                      } ${isMuted ? 'text-slate-400' : ''}`}
+                    >
                       {item.value}
                     </span>
                   </button>

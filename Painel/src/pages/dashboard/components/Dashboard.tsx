@@ -69,7 +69,31 @@ export default function Dashboard() {
       }
       return (b.periodo_mes ?? 0) - (a.periodo_mes ?? 0);
     })[0];
-  }, [filteredResultados.data]);
+  }, [filteredResultados]);
+
+  const previousPeriodKpi = useMemo(() => {
+    if (!latestKpi?.periodo_mes || !latestKpi?.periodo_ano) {
+      return null;
+    }
+
+    const currentMonth = latestKpi.periodo_mes;
+    const currentYear = latestKpi.periodo_ano;
+    const previousMonth = currentMonth - 1;
+
+    if (previousMonth >= 1) {
+      return (
+        (kpisQuery.data?.resultados ?? []).find(
+          (item) => item.periodo_mes === previousMonth && item.periodo_ano === currentYear
+        ) ?? null
+      );
+    }
+
+    return (
+      (previousYearQuery.data?.resultados ?? []).find(
+        (item) => item.periodo_mes === 12 && item.periodo_ano === currentYear - 1
+      ) ?? null
+    );
+  }, [kpisQuery.data, latestKpi, previousYearQuery.data]);
 
   const faturamentoPeriodo = useMemo(() => {
     const mes = latestKpi?.periodo_mes;
@@ -83,36 +107,26 @@ export default function Dashboard() {
   }, [latestKpi?.periodo_mes, latestKpi?.periodo_ano]);
 
   const stats = useMemo(() => {
-    const previousResultados = previousYearQuery.data?.resultados ?? [];
-    const filteredPreviousResultados = selectedMonth === 'all'
-      ? previousResultados
-      : previousResultados.filter((item) => item.periodo_mes === monthNumber);
+    const currentKpis = latestKpi?.kpis;
+    const previousKpis = previousPeriodKpi?.kpis;
 
-    const totals = filteredResultados.reduce(
-      (acc, item) => {
-        acc.totalSales += parseDecimal(item.kpis.total_vendas);
-        acc.totalNotes += item.kpis.quantidade_notas ?? 0;
-        acc.totalTaxes += parseDecimal(item.kpis.total_icms)
-          + parseDecimal(item.kpis.total_ipi)
-          + parseDecimal(item.kpis.total_pis)
-          + parseDecimal(item.kpis.total_cofins);
-        return acc;
-      },
-      { totalSales: 0, totalNotes: 0, totalTaxes: 0 }
-    );
+    const totals = {
+      totalSales: parseDecimal(currentKpis?.total_vendas ?? 0),
+      totalNotes: currentKpis?.quantidade_notas ?? 0,
+      totalTaxes: parseDecimal(currentKpis?.total_icms ?? 0)
+        + parseDecimal(currentKpis?.total_ipi ?? 0)
+        + parseDecimal(currentKpis?.total_pis ?? 0)
+        + parseDecimal(currentKpis?.total_cofins ?? 0),
+    };
 
-    const previousTotals = filteredPreviousResultados.reduce(
-      (acc, item) => {
-        acc.totalSales += parseDecimal(item.kpis.total_vendas);
-        acc.totalNotes += item.kpis.quantidade_notas ?? 0;
-        acc.totalTaxes += parseDecimal(item.kpis.total_icms)
-          + parseDecimal(item.kpis.total_ipi)
-          + parseDecimal(item.kpis.total_pis)
-          + parseDecimal(item.kpis.total_cofins);
-        return acc;
-      },
-      { totalSales: 0, totalNotes: 0, totalTaxes: 0 }
-    );
+    const previousTotals = {
+      totalSales: parseDecimal(previousKpis?.total_vendas ?? 0),
+      totalNotes: previousKpis?.quantidade_notas ?? 0,
+      totalTaxes: parseDecimal(previousKpis?.total_icms ?? 0)
+        + parseDecimal(previousKpis?.total_ipi ?? 0)
+        + parseDecimal(previousKpis?.total_pis ?? 0)
+        + parseDecimal(previousKpis?.total_cofins ?? 0),
+    };
 
     const totalSalesChange = previousTotals.totalSales
       ? ((totals.totalSales - previousTotals.totalSales) / previousTotals.totalSales) * 100
@@ -165,7 +179,7 @@ export default function Dashboard() {
         accentClass: 'border-l-violet-500',
       },
     ];
-  }, [faturamentoPeriodo, filteredResultados, monthNumber, previousYearQuery.data, selectedMonth]);
+  }, [faturamentoPeriodo, latestKpi, previousPeriodKpi]);
 
   const totalFaturamento = parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
   const topClientes = latestKpi?.kpis.top_clientes ?? [];

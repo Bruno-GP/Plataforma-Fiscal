@@ -19,6 +19,7 @@ interface DashboardRankingCardProps {
   isLoading: boolean;
   loadingMessage: string;
   emptyMessage: string;
+  totalValue: string;
 }
 
 export function DashboardRankingCard({
@@ -28,13 +29,12 @@ export function DashboardRankingCard({
   isLoading,
   loadingMessage,
   emptyMessage,
+  totalValue
 }: DashboardRankingCardProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (items.length) {
-      setSelectedKey(items[0].key);
-    } else {
+    if (!items.length) {
       setSelectedKey(null);
     }
   }, [items]);
@@ -43,11 +43,15 @@ export function DashboardRankingCard({
     if (!items.length) {
       return null;
     }
+    if (!selectedKey) {
+      return null;
+    }
 
-    return items.find((item) => item.key === selectedKey) ?? items[0];
+    return items.find((item) => item.key === selectedKey) ?? null;
   }, [items, selectedKey]);
 
-  const selectedPercent = selectedItem?.percent ?? 0;
+  const hasSelection = Boolean(selectedItem);
+  const selectedPercent = selectedItem?.percent ?? (totalValueLabel ? 100 : 0);
   const progressValue = Math.min(Math.max(selectedPercent, 0), 100);
 
   return (
@@ -56,7 +60,7 @@ export function DashboardRankingCard({
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent onClick={() => setSelectedKey(null)}>
         <div className="space-y-4">
           {isLoading ? (
             <p className="text-sm text-muted-foreground">{loadingMessage}</p>

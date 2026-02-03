@@ -230,6 +230,7 @@ export default function Dashboard() {
           isLoading={isLoading}
           loadingMessage="Carregando ranking..."
           emptyMessage="Nenhum cliente registrado."
+          totalValue={formatCurrency(totalFaturamento)}
         />
         <DashboardRankingCard
           title="Top Produtos"
@@ -238,6 +239,7 @@ export default function Dashboard() {
           isLoading={isLoading}
           loadingMessage="Carregando ranking..."
           emptyMessage="Nenhum produto registrado."
+          totalValue={formatCurrency(totalFaturamento)}
         />
         <DashboardRankingCard
           title="Top Cidades"
@@ -246,6 +248,7 @@ export default function Dashboard() {
           isLoading={isLoading}
           loadingMessage="Carregando ranking..."
           emptyMessage="Nenhuma cidade registrada."
+          totalValue={formatCurrency(totalFaturamento)}
         />
       </div>
     </div>

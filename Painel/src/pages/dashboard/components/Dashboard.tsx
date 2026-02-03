@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TrendingUp, Users, Receipt, Percent, Sparkles } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+// import { Button } from '@/components/ui/button';
 
 import { DashboardHeader } from './DashboardHeader';
 import { DashboardRankingCard } from './DashboardRankingCard';
@@ -11,7 +11,8 @@ import { DashboardStatCard } from './DashboardStatCard';
 
 import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
 import { useAuth } from '@/contexts/AuthContext'
-import { useChat } from '@/contexts/ChatContext';
+// import { useChat } from '@/contexts/ChatContext';
+import { monthLabels } from '../../faturamento/utils/utils';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -22,25 +23,45 @@ const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixe
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { toggleChat, sendMessage, isOpen } = useChat();
+  // const { toggleChat, sendMessage, isOpen } = useChat();
+
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
 
   const emitenteCnpj = user?.emitente_cnpj;
 
-  const comparativoQuery = useQuery({
-    queryKey: ['nfe-kpis-comparativo-atual', emitenteCnpj],
-    queryFn: () => fetchNfeKpisComparativoAtual(emitenteCnpj),
+  const monthNumber = Number.parseInt(selectedMonth, 10);
+  const year = Number.parseInt(selectedYear, 10);
+
+  const yearsQuery = useQuery({
+    queryKey: ['nfe-kpis-years', emitenteCnpj],
+    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
     staleTime: 5 * 60 * 1000,
   });
 
-  const latestKpiQuery = useQuery({
-    queryKey: ['nfe-kpis-latest', emitenteCnpj],
-    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 12 }),
+  const kpisQuery = useQuery({
+    queryKey: ['nfe-kpis', emitenteCnpj, year],
+    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year }),
     staleTime: 5 * 60 * 1000,
   });
+
+  const previousYearQuery = useQuery({
+    queryKey: ['nfe-kpis', emitenteCnpj, year - 1],
+    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 }),
+    enabled: year > 2000,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const filteredResultados = useMemo(() => {
+    const resultados = kpisQuery.data?.resultados ?? [];
+    if (selectedMonth === 'all') {
+      return resultados;
+    }
+    return resultados.filter((item) => item.periodo_mes === monthNumber);
+  }, [kpisQuery.data, monthNumber, selectedMonth]);
 
   const latestKpi = useMemo(() => {
-    const resultados = latestKpiQuery.data?.resultados ?? [];
-    return [...resultados].sort((a, b) => {
+    return [...filteredResultados].sort((a, b) => {
       const anoA = a.periodo_ano ?? 0;
       const anoB = b.periodo_ano ?? 0;
       if (anoA !== anoB) {
@@ -48,9 +69,9 @@ export default function Dashboard() {
       }
       return (b.periodo_mes ?? 0) - (a.periodo_mes ?? 0);
     })[0];
-  }, [latestKpiQuery.data]);
+  }, [filteredResultados.data]);
 
-    const faturamentoPeriodo = useMemo(() => {
+  const faturamentoPeriodo = useMemo(() => {
     const mes = latestKpi?.periodo_mes;
     const ano = latestKpi?.periodo_ano;
 
@@ -62,29 +83,58 @@ export default function Dashboard() {
   }, [latestKpi?.periodo_mes, latestKpi?.periodo_ano]);
 
   const stats = useMemo(() => {
-    const kpis = comparativoQuery.data?.kpis;
-    const totalSales = parseDecimal(kpis?.total_vendas.atual ?? 0);
-    const totalSalesChange = parseDecimal(kpis?.total_vendas.variacao_percentual ?? 0);
-    const totalNotes = kpis?.quantidade_notas.atual ?? 0;
-    const totalNotesChange = parseDecimal(kpis?.quantidade_notas.variacao_percentual ?? 0);
-    const ticketMedio = parseDecimal(kpis?.ticket_medio.atual ?? 0);
-    const ticketChange = parseDecimal(kpis?.ticket_medio.variacao_percentual ?? 0);
-    const totalTaxes = parseDecimal(kpis?.total_icms.atual ?? 0)
-      + parseDecimal(kpis?.total_ipi.atual ?? 0)
-      + parseDecimal(kpis?.total_pis.atual ?? 0)
-      + parseDecimal(kpis?.total_cofins.atual ?? 0);
-    const previousTaxes = parseDecimal(kpis?.total_icms.anterior ?? 0)
-      + parseDecimal(kpis?.total_ipi.anterior ?? 0)
-      + parseDecimal(kpis?.total_pis.anterior ?? 0)
-      + parseDecimal(kpis?.total_cofins.anterior ?? 0);
-    const totalTaxesChange = previousTaxes
-      ? ((totalTaxes - previousTaxes) / previousTaxes) * 100
+    const previousResultados = previousYearQuery.data?.resultados ?? [];
+    const filteredPreviousResultados = selectedMonth === 'all'
+      ? previousResultados
+      : previousResultados.filter((item) => item.periodo_mes === monthNumber);
+
+    const totals = filteredResultados.reduce(
+      (acc, item) => {
+        acc.totalSales += parseDecimal(item.kpis.total_vendas);
+        acc.totalNotes += item.kpis.quantidade_notas ?? 0;
+        acc.totalTaxes += parseDecimal(item.kpis.total_icms)
+          + parseDecimal(item.kpis.total_ipi)
+          + parseDecimal(item.kpis.total_pis)
+          + parseDecimal(item.kpis.total_cofins);
+        return acc;
+      },
+      { totalSales: 0, totalNotes: 0, totalTaxes: 0 }
+    );
+
+    const previousTotals = filteredPreviousResultados.reduce(
+      (acc, item) => {
+        acc.totalSales += parseDecimal(item.kpis.total_vendas);
+        acc.totalNotes += item.kpis.quantidade_notas ?? 0;
+        acc.totalTaxes += parseDecimal(item.kpis.total_icms)
+          + parseDecimal(item.kpis.total_ipi)
+          + parseDecimal(item.kpis.total_pis)
+          + parseDecimal(item.kpis.total_cofins);
+        return acc;
+      },
+      { totalSales: 0, totalNotes: 0, totalTaxes: 0 }
+    );
+
+    const totalSalesChange = previousTotals.totalSales
+      ? ((totals.totalSales - previousTotals.totalSales) / previousTotals.totalSales) * 100
+      : 0;
+    const totalNotesChange = previousTotals.totalNotes
+      ? ((totals.totalNotes - previousTotals.totalNotes) / previousTotals.totalNotes) * 100
+      : 0;
+    const ticketMedio = totals.totalNotes ? totals.totalSales / totals.totalNotes : 0;
+    const previousTicketMedio = previousTotals.totalNotes
+      ? previousTotals.totalSales / previousTotals.totalNotes
+      : 0;
+    const ticketChange = previousTicketMedio
+      ? ((ticketMedio - previousTicketMedio) / previousTicketMedio) * 100
+      : 0;
+    const totalTaxesChange = previousTotals.totalTaxes
+      ? ((totals.totalTaxes - previousTotals.totalTaxes) / previousTotals.totalTaxes) * 100
       : 0;
 
     return [
       {
         title: `Faturamento Mensal${faturamentoPeriodo ? ` (Período ${faturamentoPeriodo})` : ''}`,
-        value: formatCurrency(totalSales),
+        value: formatCurrency(totals.totalSales),
         description: formatPercent(totalSalesChange),
         icon: TrendingUp,
         trend: totalSalesChange >= 0 ? 'up' : 'down',
@@ -92,7 +142,7 @@ export default function Dashboard() {
       },
       {
         title: 'Notas Emitidas',
-        value: totalNotes.toString(),
+        value: totals.totalNotes.toString(),
         description: formatPercent(totalNotesChange),
         icon: Receipt,
         trend: totalNotesChange >= 0 ? 'up' : 'down',
@@ -108,14 +158,14 @@ export default function Dashboard() {
       },
       {
         title: 'Impostos sobre vendas',
-        value: formatCurrency(totalTaxes),
+        value: formatCurrency(totals.totalTaxes),
         description: formatPercent(totalTaxesChange),
         icon: Percent,
         trend: totalTaxesChange >= 0 ? 'up' : 'down',
         accentClass: 'border-l-violet-500',
       },
     ];
-  }, [comparativoQuery.data, faturamentoPeriodo]);
+  }, [faturamentoPeriodo, filteredResultados, monthNumber, previousYearQuery.data, selectedMonth]);
 
   const totalFaturamento = parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
   const topClientes = latestKpi?.kpis.top_clientes ?? [];
@@ -135,17 +185,8 @@ export default function Dashboard() {
     return (valor / totalFaturamento) * 100;
   };
 
-  const isLoading = comparativoQuery.isLoading || latestKpiQuery.isLoading;
-  const hasError = comparativoQuery.isError || latestKpiQuery.isError;
-
-  const handleAIPlanAction = async () => {
-    if (!isOpen) {
-      toggleChat();
-    }
-    setTimeout(() => {
-      sendMessage('Gere um plano de ação baseado nos dados atuais de faturamento');
-    }, 300);
-  };
+  const isLoading = kpisQuery.isLoading || previousYearQuery.isLoading;
+  const hasError = kpisQuery.isError || previousYearQuery.isError;
 
   const topClientesItems = topClientes.map((cliente, index) => {
     const percentual = resolvePercentual(cliente.percentual, cliente.valor_total);
@@ -198,9 +239,43 @@ export default function Dashboard() {
     };
   });
 
+  const yearOptions = useMemo(() => {
+    const resultados = yearsQuery.data?.resultados ?? [];
+    const uniqueYears = new Set<number>();
+
+    resultados.forEach((item) => {
+      if (item.periodo_ano) {
+        uniqueYears.add(item.periodo_ano);
+      }
+    });
+
+    return [...uniqueYears].sort((a, b) => b - a);
+  }, [yearsQuery.data]);
+
+  const availableYears = yearOptions.length ? yearOptions : [year];
+
+  useEffect(() => {
+    if (!yearOptions.length) {
+      return;
+    }
+
+    if (!yearOptions.includes(year)) {
+      setSelectedYear(String(yearOptions[0]));
+    }
+  }, [year, yearOptions]);
+
   return (
     <div className="space-y-6">
-      <DashboardHeader title="Dashboard" subtitle="Visão geral do seu negócio" />
+      <DashboardHeader
+        title="Dashboard"
+        subtitle="Visão geral do seu negócio"
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+        availableYears={availableYears}
+        monthLabels={monthLabels}
+        onMonthChange={setSelectedMonth}
+        onYearChange={setSelectedYear}
+      />
 
       {/* <Button onClick={handleAIPlanAction} className="w-fit gap-2">
         <Sparkles className="h-4 w-4" />

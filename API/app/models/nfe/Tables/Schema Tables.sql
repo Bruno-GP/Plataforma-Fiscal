@@ -122,6 +122,9 @@ CREATE TABLE IF NOT EXISTS nfe_kpis (
 
 CREATE INDEX IF NOT EXISTS idx_nfe_kpis_proc ON nfe_kpis (processamento_id);
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nfe_kpis_periodo
+    ON nfe_kpis (emitente_cnpj, periodo_ano, periodo_mes);
+
 -- 6) Login
 CREATE TABLE IF NOT EXISTS login (
     id          BIGSERIAL PRIMARY KEY,

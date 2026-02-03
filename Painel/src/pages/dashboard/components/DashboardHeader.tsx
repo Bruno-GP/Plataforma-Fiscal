@@ -14,12 +14,28 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ 
   title, 
-  subtitle
+  subtitle,
+  selectedMonth,
+  selectedYear,
+  availableYears,
+  monthLabels,
+  onMonthChange,
+  onYearChange,
  }: DashboardHeaderProps) {
   return (
-    <div>
-      <h1 className="text-3xl font-bold">{title}</h1>
-      <p className="text-muted-foreground">{subtitle}</p>
+    <div className="flex items-center justify-between">
+      <div>
+        <h1 className="text-3xl font-bold">{title}</h1>
+        <p className="text-muted-foreground">{subtitle}</p>
+      </div>
+      <MonthYearFilter
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+        availableYears={availableYears}
+        monthLabels={monthLabels}
+        onMonthChange={onMonthChange}
+        onYearChange={onYearChange}
+      />
     </div>
   );
 }

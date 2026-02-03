@@ -30,7 +30,7 @@ export function MonthYearFilter({
 }: MonthYearFilterProps) {
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <Select value={selectedMonth} onValueChange={onMonthChange}>
+      <Select value={selectedMonth} onValueChange={onMonthChange} >
         <SelectTrigger className="w-36">
           <SelectValue placeholder={monthPlaceholder} />
         </SelectTrigger>

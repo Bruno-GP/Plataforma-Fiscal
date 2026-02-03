@@ -52,13 +52,61 @@ export default function Dashboard() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const isAllMonths = selectedMonth === 'all';
+
   const filteredResultados = useMemo(() => {
     const resultados = kpisQuery.data?.resultados ?? [];
-    if (selectedMonth === 'all') {
+    if (isAllMonths) {
       return resultados;
     }
     return resultados.filter((item) => item.periodo_mes === monthNumber);
-  }, [kpisQuery.data, monthNumber, selectedMonth]);
+  }, [isAllMonths, kpisQuery.data, monthNumber]);
+
+  const aggregatedData = useMemo(() => {
+    const totals = {
+      totalSales: 0,
+      totalNotes: 0,
+      totalTaxes: 0,
+    };
+    const topClientesMap = new Map<string, number>();
+    const topProdutosMap = new Map<string, number>();
+    const topCidadesMap = new Map<string, number>();
+
+    filteredResultados.forEach((item) => {
+      const kpis = item.kpis;
+      totals.totalSales += parseDecimal(kpis.total_vendas ?? 0);
+      totals.totalNotes += kpis.quantidade_notas ?? 0;
+      totals.totalTaxes += parseDecimal(kpis.total_icms ?? 0)
+        + parseDecimal(kpis.total_ipi ?? 0)
+        + parseDecimal(kpis.total_pis ?? 0)
+        + parseDecimal(kpis.total_cofins ?? 0);
+
+      (kpis.top_clientes ?? []).forEach((cliente, index) => {
+        const nome = cliente.cliente ?? `Cliente não identificado ${index + 1}`;
+        const atual = topClientesMap.get(nome) ?? 0;
+        topClientesMap.set(nome, atual + parseDecimal(cliente.valor_total ?? 0));
+      });
+
+      (kpis.top_produtos ?? []).forEach((produto, index) => {
+        const nome = produto.produto ?? `Produto não identificado ${index + 1}`;
+        const atual = topProdutosMap.get(nome) ?? 0;
+        topProdutosMap.set(nome, atual + parseDecimal(produto.valor_total ?? 0));
+      });
+
+      (kpis.top_cidades ?? []).forEach((cidade, index) => {
+        const nome = cidade.cidade ?? `Cidade não identificada ${index + 1}`;
+        const atual = topCidadesMap.get(nome) ?? 0;
+        topCidadesMap.set(nome, atual + parseDecimal(cidade.valor_total ?? 0));
+      });
+    });
+
+    return {
+      totals,
+      topClientesMap,
+      topProdutosMap,
+      topCidadesMap,
+    };
+  }, [filteredResultados]);
 
   const latestKpi = useMemo(() => {
     return [...filteredResultados].sort((a, b) => {
@@ -96,6 +144,18 @@ export default function Dashboard() {
   }, [kpisQuery.data, latestKpi, previousYearQuery.data]);
 
   const faturamentoPeriodo = useMemo(() => {
+    if (isAllMonths) {
+      const months = filteredResultados
+        .map((item) => item.periodo_mes)
+        .filter((item): item is number => Boolean(item));
+      if (!months.length) {
+        return null;
+      }
+      const minMonth = Math.min(...months);
+      const maxMonth = Math.max(...months);
+      return `${String(minMonth).padStart(2, '0')}/${selectedYear} a ${String(maxMonth).padStart(2, '0')}/${selectedYear}`;
+    }
+
     const mes = latestKpi?.periodo_mes;
     const ano = latestKpi?.periodo_ano;
 
@@ -104,29 +164,46 @@ export default function Dashboard() {
     }
 
     return `${String(mes).padStart(2, '0')}/${ano}`;
-  }, [latestKpi?.periodo_mes, latestKpi?.periodo_ano]);
+  }, [filteredResultados, isAllMonths, latestKpi?.periodo_mes, latestKpi?.periodo_ano, selectedYear]);
 
   const stats = useMemo(() => {
     const currentKpis = latestKpi?.kpis;
     const previousKpis = previousPeriodKpi?.kpis;
 
-    const totals = {
-      totalSales: parseDecimal(currentKpis?.total_vendas ?? 0),
-      totalNotes: currentKpis?.quantidade_notas ?? 0,
-      totalTaxes: parseDecimal(currentKpis?.total_icms ?? 0)
-        + parseDecimal(currentKpis?.total_ipi ?? 0)
-        + parseDecimal(currentKpis?.total_pis ?? 0)
-        + parseDecimal(currentKpis?.total_cofins ?? 0),
-    };
+    const previousYearResultados = previousYearQuery.data?.resultados ?? [];
 
-    const previousTotals = {
-      totalSales: parseDecimal(previousKpis?.total_vendas ?? 0),
-      totalNotes: previousKpis?.quantidade_notas ?? 0,
-      totalTaxes: parseDecimal(previousKpis?.total_icms ?? 0)
-        + parseDecimal(previousKpis?.total_ipi ?? 0)
-        + parseDecimal(previousKpis?.total_pis ?? 0)
-        + parseDecimal(previousKpis?.total_cofins ?? 0),
-    };
+    const totals = isAllMonths
+      ? aggregatedData.totals
+      : {
+        totalSales: parseDecimal(currentKpis?.total_vendas ?? 0),
+        totalNotes: currentKpis?.quantidade_notas ?? 0,
+        totalTaxes: parseDecimal(currentKpis?.total_icms ?? 0)
+          + parseDecimal(currentKpis?.total_ipi ?? 0)
+          + parseDecimal(currentKpis?.total_pis ?? 0)
+          + parseDecimal(currentKpis?.total_cofins ?? 0),
+      };
+
+    const previousTotals = isAllMonths
+      ? previousYearResultados.reduce(
+        (acc, item) => {
+          acc.totalSales += parseDecimal(item.kpis.total_vendas ?? 0);
+          acc.totalNotes += item.kpis.quantidade_notas ?? 0;
+          acc.totalTaxes += parseDecimal(item.kpis.total_icms ?? 0)
+            + parseDecimal(item.kpis.total_ipi ?? 0)
+            + parseDecimal(item.kpis.total_pis ?? 0)
+            + parseDecimal(item.kpis.total_cofins ?? 0);
+          return acc;
+        },
+        { totalSales: 0, totalNotes: 0, totalTaxes: 0 }
+      )
+      : {
+        totalSales: parseDecimal(previousKpis?.total_vendas ?? 0),
+        totalNotes: previousKpis?.quantidade_notas ?? 0,
+        totalTaxes: parseDecimal(previousKpis?.total_icms ?? 0)
+          + parseDecimal(previousKpis?.total_ipi ?? 0)
+          + parseDecimal(previousKpis?.total_pis ?? 0)
+          + parseDecimal(previousKpis?.total_cofins ?? 0),
+      };
 
     const totalSalesChange = previousTotals.totalSales
       ? ((totals.totalSales - previousTotals.totalSales) / previousTotals.totalSales) * 100
@@ -179,12 +256,35 @@ export default function Dashboard() {
         accentClass: 'border-l-violet-500',
       },
     ];
-  }, [faturamentoPeriodo, latestKpi, previousPeriodKpi]);
+    }, [aggregatedData.totals, faturamentoPeriodo, isAllMonths, latestKpi, previousPeriodKpi, previousYearQuery.data]);
 
-  const totalFaturamento = parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
-  const topClientes = latestKpi?.kpis.top_clientes ?? [];
-  const topProdutos = latestKpi?.kpis.top_produtos ?? [];
-  const topCidades = latestKpi?.kpis.top_cidades ?? [];
+  const aggregatedTopClientes = useMemo(() => {
+    return [...aggregatedData.topClientesMap.entries()]
+      .map(([cliente, valor_total]) => ({ cliente, valor_total }))
+      .sort((a, b) => b.valor_total - a.valor_total)
+      .slice(0, 5);
+  }, [aggregatedData.topClientesMap]);
+
+  const aggregatedTopProdutos = useMemo(() => {
+    return [...aggregatedData.topProdutosMap.entries()]
+      .map(([produto, valor_total]) => ({ produto, valor_total }))
+      .sort((a, b) => b.valor_total - a.valor_total)
+      .slice(0, 5);
+  }, [aggregatedData.topProdutosMap]);
+
+  const aggregatedTopCidades = useMemo(() => {
+    return [...aggregatedData.topCidadesMap.entries()]
+      .map(([cidade, valor_total]) => ({ cidade, valor_total }))
+      .sort((a, b) => b.valor_total - a.valor_total)
+      .slice(0, 5);
+  }, [aggregatedData.topCidadesMap]);
+
+  const totalFaturamento = isAllMonths
+    ? aggregatedData.totals.totalSales
+    : parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
+  const topClientes = isAllMonths ? aggregatedTopClientes : (latestKpi?.kpis.top_clientes ?? []);
+  const topProdutos = isAllMonths ? aggregatedTopProdutos : (latestKpi?.kpis.top_produtos ?? []);
+  const topCidades = isAllMonths ? aggregatedTopCidades : (latestKpi?.kpis.top_cidades ?? []);
 
   const resolvePercentual = (percentual?: number | string, valorTotal?: number | string) => {
     if (percentual !== undefined && percentual !== null) {

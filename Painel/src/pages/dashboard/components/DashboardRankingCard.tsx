@@ -90,13 +90,19 @@ export function DashboardRankingCard({
               {items.map((item) => {
                 const isSelected = item.key === selectedItem?.key;
                 const isMuted = hasSelection && !isSelected;
+                const isDisabled = hasSelection && !isSelected;
 
                 return (
                   <button
                     type="button"
                     key={item.key}
                     onClick={() => setSelectedKey(item.key)}
-                    className="flex w-full items-center justify-between gap-3 border-b border-slate-800/70 pb-2 text-left transition-colors duration-300 hover:text-foreground/90 last:border-0"
+                    disabled={isDisabled}
+                    className={`flex w-full items-center justify-between gap-3 border-b border-slate-800/70 pb-2 text-left transition-colors duration-300 last:border-0 ${
+                      isDisabled
+                        ? 'cursor-not-allowed text-slate-500'
+                        : 'hover:text-foreground/90'
+                    }`}
                   >
                     <div>
                       <p
@@ -106,7 +112,13 @@ export function DashboardRankingCard({
                       >
                         {item.title}
                       </p>
-                      <p className="text-sm text-muted-foreground">{item.subtitle}</p>
+                      <p
+                        className={`text-sm transition-colors duration-300 ${
+                          isMuted ? 'text-slate-500' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {item.subtitle}
+                      </p>
                     </div>
                     <span
                       className={`text-sm font-medium transition-colors duration-300 ${

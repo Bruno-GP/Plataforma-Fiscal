@@ -69,7 +69,10 @@ export function DashboardRankingCard({
                     <span className="font-medium text-foreground">{selectedItem.value}</span>
                   ) : null}
                 </div>
-                <Progress value={progressValue} className="h-2" />
+                <Progress
+                  value={progressValue}
+                  className="h-2 border border-slate-800/80 bg-slate-900/80 [&>div]:bg-sky-500"
+                />
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>{selectedItem?.title ?? 'Selecione um item'}</span>
                   <span>

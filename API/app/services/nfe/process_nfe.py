@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import time
 import psycopg
 import logging
 
@@ -100,7 +101,7 @@ class ProcessarNFeService:
             # 1️⃣1️⃣ Registrar processamento por período
             processamento_service = NFeProcessamentosService()
 
-            for ano, mes in periodos_ordenados:
+            for indice, (ano, mes) in enumerate(periodos_ordenados):
                 notas_periodo = notas_por_periodo.get((ano, mes), [])
 
                 if not notas_periodo:
@@ -173,6 +174,12 @@ class ProcessarNFeService:
                         kpis=kpis_relatorio
                     )
                 )
+                
+                if indice < len(periodos_ordenados) - 1:
+                    logger.info(
+                        "Aguardando 30 segundos antes de processar o próximo mês."
+                    )
+                    time.sleep(30)
 
 
             # ✅ RETORNO DE SUCESSO (ERA ISSO QUE FALTAVA)

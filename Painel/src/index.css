@@ -21,7 +21,7 @@
     --popover-foreground: 210 40% 98%;
 
     --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
 
     --secondary: 217 32% 18%;
     --secondary-foreground: 210 40% 98%;
@@ -42,12 +42,12 @@
     --radius: 0.5rem;
 
     /* SIDEBAR (você usa no config) */
-    --sidebar-background: 222 47% 8%;
-    --sidebar-foreground: 210 40% 90%;
+    --sidebar-background: var(--primary);
+    --sidebar-foreground: var(--foreground);
     --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 222 37% 14%;
-    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-accent: 217 91% 52%;
+    --sidebar-accent-foreground: var(--foreground);
     --sidebar-border: 220 35% 18%;
     --sidebar-ring: 217 91% 60%;
   }

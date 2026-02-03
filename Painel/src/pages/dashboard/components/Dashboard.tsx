@@ -147,8 +147,9 @@ export default function Dashboard() {
     }, 300);
   };
 
-    const topClientesItems = topClientes.map((cliente, index) => {
+  const topClientesItems = topClientes.map((cliente, index) => {
     const percentual = resolvePercentual(cliente.percentual, cliente.valor_total);
+    const valorTotal = parseDecimal(cliente.valor_total ?? 0);
 
     return {
       key: `${cliente.cliente}-${index}`,
@@ -157,12 +158,15 @@ export default function Dashboard() {
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
           : 'Participação não informada',
-      value: formatCurrency(parseDecimal(cliente.valor_total ?? 0)),
+      value: formatCurrency(valorTotal),
+      rawValue: valorTotal,
+      percent: percentual,
     };
   });
 
   const topProdutosItems = topProdutos.map((produto, index) => {
     const percentual = resolvePercentual(produto.percentual, produto.valor_total);
+    const valorTotal = parseDecimal(produto.valor_total ?? 0);
 
     return {
       key: `${produto.produto}-${index}`,
@@ -171,12 +175,15 @@ export default function Dashboard() {
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
           : 'Participação não informada',
-      value: formatCurrency(parseDecimal(produto.valor_total ?? 0)),
+      value: formatCurrency(valorTotal),
+      rawValue: valorTotal,
+      percent: percentual,
     };
   });
 
   const topCidadesItems = topCidades.map((cidade, index) => {
     const percentual = resolvePercentual(cidade.percentual, cidade.valor_total);
+    const valorTotal = parseDecimal(cidade.valor_total ?? 0);
 
     return {
       key: `${cidade.cidade}-${index}`,
@@ -185,7 +192,9 @@ export default function Dashboard() {
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
           : 'Participação não informada',
-      value: formatCurrency(parseDecimal(cidade.valor_total ?? 0)),
+      value: formatCurrency(valorTotal),
+      rawValue: valorTotal,
+      percent: percentual,
     };
   });
 

@@ -41,14 +41,14 @@ const App = () => (
                   </MainLayout>
                 }
               />
-              <Route
+              {/* <Route
                 path="/clientes"
                 element={
                   <MainLayout>
                     <Clientes />
                   </MainLayout>
                 }
-              />
+              /> */}
               <Route
                 path="/configuracoes"
                 element={

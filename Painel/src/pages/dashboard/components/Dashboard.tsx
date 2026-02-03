@@ -202,10 +202,10 @@ export default function Dashboard() {
     <div className="space-y-6">
       <DashboardHeader title="Dashboard" subtitle="Visão geral do seu negócio" />
 
-      <Button onClick={handleAIPlanAction} className="w-fit gap-2">
+      {/* <Button onClick={handleAIPlanAction} className="w-fit gap-2">
         <Sparkles className="h-4 w-4" />
         Gerar Plano de Ação com IA
-      </Button>
+      </Button> */}
 
       {hasError && (
         <Alert variant="destructive">

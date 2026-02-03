@@ -90,7 +90,6 @@ export function DashboardRankingCard({
               {items.map((item) => {
                 const isSelected = item.key === selectedItem?.key;
                 const isMuted = hasSelection && !isSelected;
-                const isDisabled = hasSelection && !isSelected;
 
                 return (
                   <button
@@ -100,11 +99,8 @@ export function DashboardRankingCard({
                       event.stopPropagation();
                       setSelectedKey(item.key);
                     }}
-                    disabled={isDisabled}
                     className={`flex w-full items-center justify-between gap-3 border-b border-slate-800/70 pb-2 text-left transition-colors duration-300 last:border-0 ${
-                      isDisabled
-                        ? 'cursor-not-allowed text-slate-500'
-                        : 'hover:text-foreground/90'
+                      isMuted ? 'text-slate-500' : 'hover:text-foreground/90'
                     }`}
                   >
                     <div>

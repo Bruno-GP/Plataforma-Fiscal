@@ -54,14 +54,14 @@ export function AppHeader() {
                 <span className="text-xs text-muted-foreground">{user?.email}</span>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/configuracoes')}>
+              {/* <DropdownMenuItem onClick={() => navigate('/configuracoes')}>
                 <User className="mr-2 h-4 w-4" />
                 Meu Perfil
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate('/configuracoes')}>
                 <Settings className="mr-2 h-4 w-4" />
                 Preferências
-              </DropdownMenuItem>
+              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />

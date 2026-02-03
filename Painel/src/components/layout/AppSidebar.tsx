@@ -16,8 +16,8 @@ import {
 const menuItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Faturamento', url: '/faturamento', icon: Receipt },
-  { title: 'Clientes', url: '/clientes', icon: Users },
-  { title: 'Configurações', url: '/configuracoes', icon: Settings },
+  // { title: 'Clientes', url: '/clientes', icon: Users },
+  // { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ];
 
 export function AppSidebar() {

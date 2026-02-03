@@ -33,7 +33,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         </SidebarInset>
       </div>
 
-      <ChatWidget />
+      {/* <ChatWidget /> */}
     </SidebarProvider>
   );
 }

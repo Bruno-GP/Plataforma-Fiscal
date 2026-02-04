@@ -156,7 +156,6 @@ class ProcessarNFeService:
                         )
                         logger.warning(f"NOTAS INSERIDAS: {qtd}")
                         
-                        
                         NFeItensService().registrar_itens(
                             conn=conn,
                             notas=notas_periodo
@@ -189,9 +188,9 @@ class ProcessarNFeService:
                 
                 if indice < len(periodos_ordenados) - 1:
                     logger.info(
-                        "Aguardando 30 segundos antes de processar o próximo mês."
+                        "Aguardando 15 segundos antes de processar o próximo mês."
                     )
-                    time.sleep(30)
+                    time.sleep(15)
 
 
             # ✅ RETORNO DE SUCESSO (ERA ISSO QUE FALTAVA)

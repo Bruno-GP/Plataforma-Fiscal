@@ -11,9 +11,12 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe), consolidar 
 - [Requisitos](#requisitos)
 - [Instalação e execução](#instalação-e-execução)
 - [Configuração por variáveis de ambiente](#configuração-por-variáveis-de-ambiente)
+- [Preparação do banco de dados](#preparação-do-banco-de-dados)
 - [URLs importantes](#urls-importantes)
+- [Documentação do Painel (Front-end)](#documentação-do-painel-front-end)
 - [Arquitetura e fluxo de processamento](#arquitetura-e-fluxo-de-processamento)
 - [Regras de negócio e validações](#regras-de-negócio-e-validações)
+- [Fluxo completo (XML → KPIs → Painel)](#fluxo-completo-xml--kpis--painel)
 - [Contratos detalhados da API](#contratos-detalhados-da-api)
   - [Saúde](#get-health)
   - [Autenticação](#auth)
@@ -25,7 +28,8 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe), consolidar 
 - [Formato dos KPIs](#formato-dos-kpis)
 - [Persistência e tabelas esperadas](#persistência-e-tabelas-esperadas)
 - [Estrutura do projeto](#estrutura-do-projeto)
-- [Documentação do Painel (Front-end)](#documentação-do-painel-front-end)
+- [Observabilidade e logs](#observabilidade-e-logs)
+- [FAQ e solução de problemas](#faq-e-solução-de-problemas)
 
 ---
 
@@ -87,6 +91,109 @@ A aplicação carrega um `.env` localizado em `API/app/.env` usando `python-dote
 | `CORS_ALLOW_CREDENTIALS` | Não | `true` | Controla se o CORS permitirá credenciais. Se `CORS_ALLOW_ORIGINS=*`, a aplicação força `allow_credentials=False` para evitar configuração inválida. |
 
 ---
+
+## Preparação do banco de dados
+
+O projeto **não possui migrações** automatizadas. Portanto, você deve criar o schema no PostgreSQL antes de iniciar a API. Abaixo está um **exemplo de script SQL** compatível com as tabelas e colunas utilizadas pelo código. Ajuste nomes/tipos conforme sua política interna.
+
+> **Dica:** rode o SQL no banco definido nas variáveis `POSTGRES_*`.
+
+```sql
+create table if not exists public.empresas (
+  id serial primary key,
+  cnpj varchar(20) not null unique,
+  nome varchar(255) not null
+);
+
+create table if not exists public.login (
+  id serial primary key,
+  empresa_id int not null references public.empresas(id),
+  cnpj varchar(20) not null,
+  email varchar(255) not null unique,
+  senha varchar(255) not null
+);
+
+create table if not exists public.nfe_processamentos (
+  id serial primary key,
+  empresa_id int,
+  cnpj_emitente varchar(20) not null,
+  periodo_ano int not null,
+  periodo_mes int not null,
+  origem varchar(50),
+  pasta_xml text,
+  periodo_solicitado varchar(10),
+  periodos_encontrados jsonb,
+  notas_processadas int,
+  itens_processados int,
+  status varchar(50),
+  data_processamento timestamp
+);
+
+create table if not exists public.nfe_kpis (
+  id serial primary key,
+  processamento_id int not null unique references public.nfe_processamentos(id),
+  emitente_cnpj varchar(20) not null,
+  periodo_ano int not null,
+  periodo_mes int not null,
+  total_vendas numeric,
+  quantidade_notas int,
+  ticket_medio numeric,
+  maior_nota numeric,
+  menor_nota numeric,
+  total_icms numeric,
+  total_ipi numeric,
+  total_pis numeric,
+  total_cofins numeric,
+  top_clientes jsonb,
+  top_produtos jsonb,
+  top_cidades jsonb
+);
+
+create table if not exists public.nfe_notas (
+  id serial primary key,
+  processamento_id int references public.nfe_processamentos(id),
+  numero_nf varchar(30),
+  emitente_cnpj varchar(20),
+  data_emissao timestamp,
+  natureza_operacao varchar(255),
+  destinatario_documento varchar(30),
+  destinatario_nome varchar(255),
+  destinatario_cidade varchar(100),
+  destinatario_uf varchar(10),
+  valor_produtos numeric,
+  valor_desconto numeric,
+  valor_frete numeric,
+  valor_icms numeric,
+  valor_ipi numeric,
+  valor_pis numeric,
+  valor_cofins numeric,
+  valor_total_nf numeric
+);
+
+create table if not exists public.nfe_itens (
+  id serial primary key,
+  nota_id int not null references public.nfe_notas(id),
+  item_numero int,
+  produto_codigo varchar(60),
+  descricao varchar(255),
+  ncm varchar(20),
+  cfop varchar(10),
+  quantidade numeric,
+  valor_unitario numeric,
+  valor_total numeric
+);
+```
+
+### Validando a conexão com o banco
+
+Antes de rodar a API, valide a conexão para evitar erros de runtime:
+
+```bash
+psql "host=$POSTGRES_HOST port=$POSTGRES_PORT dbname=$POSTGRES_DB user=$POSTGRES_USER password=$POSTGRES_PASSWORD"
+```
+
+---
+
 
 ## URLs importantes
 
@@ -291,6 +398,36 @@ As regras abaixo refletem o comportamento **real** do código:
   - documento do destinatário,
   - valor total da nota.
 - **Observação**: embora o código calcule uma lista deduplicada, o objeto de retorno da consolidação atualmente utiliza a lista original de notas. Isso significa que, na prática, `notas_processadas` e `itens_processados` refletem o conjunto completo, mesmo que haja duplicatas.
+
+---
+
+## Fluxo completo (XML → KPIs → Painel)
+
+Esta seção resume o caminho **de ponta a ponta**, do XML até o dashboard:
+
+1. **Preparar os XMLs**  
+   Coloque os arquivos `.xml` em uma pasta local no servidor (ex.: `./xmls`). Somente arquivos `.xml` serão considerados.
+2. **Processar via API**  
+   Envie `POST /api/nfe/processar` indicando `pasta_xml` e `origem`. A API irá:
+   - Ler os XMLs, extrair notas/itens.
+   - Consolidar dados e persistir em `nfe_notas` e `nfe_itens`.
+   - Calcular KPIs e salvar em `nfe_kpis`.
+3. **Consumir KPIs**  
+   Use `GET /api/nfe/kpis` (ou endpoints de comparativo) para consultar os indicadores.
+4. **Exibir no painel**  
+   Configure `VITE_API_URL` no front-end e acesse o dashboard.
+
+### Exemplo rápido com `curl`
+
+```bash
+curl -X POST http://localhost:8000/api/nfe/processar \
+  -H "Content-Type: application/json" \
+  -d '{
+    "origem": "pasta_local",
+    "pasta_xml": "./xmls",
+    "periodo": "2024-05"
+  }'
+```
 
 ---
 
@@ -682,6 +819,50 @@ Campos utilizados:
 - `API/app/domain/` – Leitura de XML, extração, consolidação e cálculo de KPIs.
 - `API/app/models/` – Schemas Pydantic para requests e responses.
 - `API/app/core/` – Configurações e constantes gerais (quando aplicável).
+
+---
+
+## Observabilidade e logs
+
+- A aplicação utiliza o logger padrão do Python (ver `API/app/core/logger.py`).
+- Em produção, considere:
+  - **Nível de log** configurável por variável de ambiente.
+  - **Log estruturado** (JSON) para ferramentas como ELK, Datadog ou Grafana Loki.
+  - **Rotação de logs** via `logrotate` ou driver do runtime de containers.
+
+---
+
+## FAQ e solução de problemas
+
+### 1) A API sobe, mas não conecta no banco
+
+Verifique:
+
+- Se as variáveis `POSTGRES_*` estão corretas.
+- Se o PostgreSQL está aceitando conexões externas.
+- Se o usuário tem permissão nas tabelas.
+
+### 2) Erro de CORS no painel
+
+Garanta que `CORS_ALLOW_ORIGINS` inclui o domínio do painel. Exemplo:
+
+```
+CORS_ALLOW_ORIGINS=http://localhost:5173
+```
+
+### 3) Nenhum KPI aparece no dashboard
+
+- Confirme se o `POST /api/nfe/processar` foi executado com sucesso.
+- Verifique se `nfe_kpis` contém registros para o CNPJ esperado.
+- No painel, valide se o usuário autenticado tem vínculo com o CNPJ correto.
+
+### 4) XMLs ignorados
+
+Motivos comuns:
+
+- Falta de `<emit>` ou `xNome`.
+- `dhEmi` ausente.
+- Falta de `<total><ICMSTot>`.
 
 ---
 

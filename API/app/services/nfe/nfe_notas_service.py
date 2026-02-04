@@ -32,6 +32,56 @@ class NFeNotasService:
             "password": config["password"],
             "connect_timeout": 5,
         }
+        
+    def _normalizar_cfop(self, cfop: Optional[str]) -> str:
+        if not cfop:
+            return ""
+        return "".join(ch for ch in cfop if ch.isdigit())
+
+    def obter_cfops_venda(self, conn) -> set[str]:
+        sql = """
+            SELECT c.codigo
+            FROM public.cfops AS c
+            WHERE LEFT(
+                    regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g'),
+                    1
+                  ) IN ('5','6','7')
+              AND COALESCE(c.descricao, '') ILIKE 'venda%%';
+        """
+
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+
+        return {
+            self._normalizar_cfop(row[0])
+            for row in rows
+            if row and self._normalizar_cfop(row[0])
+        }
+
+    def filtrar_notas_com_cfop_venda(
+        self,
+        conn,
+        notas: Iterable[NotaExtraida],
+    ) -> list[NotaExtraida]:
+        notas_list = list(notas)
+        if not notas_list:
+            return []
+
+        cfops_venda = self.obter_cfops_venda(conn)
+        if not cfops_venda:
+            logger.warning("Nenhum CFOP de venda encontrado para filtrar notas.")
+            return []
+
+        notas_filtradas: list[NotaExtraida] = []
+        for nota in notas_list:
+            if any(
+                self._normalizar_cfop(item.cfop) in cfops_venda
+                for item in nota.itens
+            ):
+                notas_filtradas.append(nota)
+
+        return notas_filtradas
 
     def registrar_notas(self, conn, notas, processamento_id=None) -> int:
         logger.warning("📌 Registrando notas no banco (modo seguro)")

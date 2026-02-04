@@ -108,7 +108,6 @@ class ProcessarNFeService:
                     continue
 
                 itens_periodo = sum(len(nota.itens) for nota in notas_periodo)
-                kpis_periodo = kpi_calculator.calcular(notas_periodo)
 
                 # Registrar processamento
                 config = carregar_config_postgres()
@@ -142,7 +141,15 @@ class ProcessarNFeService:
                         if not processamento_id:
                             raise Exception("Processamento não registrado")
                         
-                        qtd = NFeNotasService().registrar_notas(
+                        notas_service = NFeNotasService()
+                        
+                        notas_para_kpi = notas_service.filtrar_notas_com_cfop_venda(
+                            conn=conn,
+                            notas=notas_periodo,
+                        )
+                        kpis_periodo = kpi_calculator.calcular(notas_para_kpi)
+
+                        qtd = notas_service.registrar_notas(
                             conn=conn,
                             notas=notas_periodo,
                             processamento_id=processamento_id,
@@ -155,7 +162,7 @@ class ProcessarNFeService:
                             notas=notas_periodo
                         )
                         
-                        NFeNotasService().remover_notas_sem_cfop_venda(
+                        notas_service.remover_notas_sem_cfop_venda(
                             conn=conn,
                             processamento_id=processamento_id,
                         )

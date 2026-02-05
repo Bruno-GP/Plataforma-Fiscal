@@ -122,31 +122,42 @@ class NFeNotasService:
         """
 
         total = 0
+        notas_list = list(notas)
+        batch_size = 500
 
         with conn.cursor() as cur:
-            for nota in notas:
-                emitente_cnpj = normalizar_cnpj(nota.emitente_cnpj)
-                cur.execute(sql, (
-                    processamento_id,
-                    str(nota.numero_nf),
-                    emitente_cnpj,
-                    nota.modelo,
-                    nota.data_emissao,
-                    nota.natureza_operacao,
-                    nota.destinatario_documento,
-                    nota.destinatario_nome,
-                    nota.destinatario_cidade,
-                    nota.destinatario_uf,
-                    nota.valor_produtos,
-                    nota.valor_desconto,
-                    nota.valor_frete,
-                    nota.valor_icms,
-                    nota.valor_ipi,
-                    nota.valor_pis,
-                    nota.valor_cofins,
-                    nota.valor_total_nf,
-                ))
-                total += cur.rowcount
+            for start in range(0, len(notas_list), batch_size):
+                chunk = notas_list[start:start + batch_size]
+                valores = []
+                for nota in chunk:
+                    emitente_cnpj = normalizar_cnpj(nota.emitente_cnpj)
+                    valores.append((
+                        processamento_id,
+                        str(nota.numero_nf),
+                        emitente_cnpj,
+                        nota.modelo,
+                        nota.data_emissao,
+                        nota.natureza_operacao,
+                        nota.destinatario_documento,
+                        nota.destinatario_nome,
+                        nota.destinatario_cidade,
+                        nota.destinatario_uf,
+                        nota.valor_produtos,
+                        nota.valor_desconto,
+                        nota.valor_frete,
+                        nota.valor_icms,
+                        nota.valor_ipi,
+                        nota.valor_pis,
+                        nota.valor_cofins,
+                        nota.valor_total_nf,
+                    ))
+                cur.executemany(sql, valores)
+                total += len(chunk)
+                logger.info(
+                    "📌 Notas processadas até agora: %s/%s",
+                    min(start + batch_size, len(notas_list)),
+                    len(notas_list),
+                )
 
         logger.warning(f"✅ Notas afetadas no banco: {total}")
         return total

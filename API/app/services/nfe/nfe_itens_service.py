@@ -48,7 +48,7 @@ class NFeItensService:
 
         sql_buscar_nota = """
             SELECT id
-            FROM public.nfe_notas
+            FROM public.notas
             WHERE numero_nf = %s
               AND emitente_cnpj = %s
               AND data_emissao = %s
@@ -56,7 +56,7 @@ class NFeItensService:
         """
 
         sql_insert_item = """
-            INSERT INTO public.nfe_itens (
+            INSERT INTO public.itens (
                 nota_id,
                 item_numero,
                 produto_codigo,
@@ -72,7 +72,7 @@ class NFeItensService:
                 %s, %s, %s, %s
             WHERE NOT EXISTS (
                 SELECT 1
-                FROM public.nfe_itens
+                FROM public.itens
                 WHERE nota_id = %s
                   AND item_numero = %s
                   AND produto_codigo = %s

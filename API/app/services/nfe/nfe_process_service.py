@@ -31,7 +31,7 @@ class NFeProcessamentosService:
         data_processamento
     ) -> int:
         sql = """
-            INSERT INTO public.nfe_processamentos (
+            INSERT INTO public.processamentos (
                 empresa_id,
                 cnpj_emitente,
                 periodo_ano,

@@ -91,7 +91,7 @@ class NFeNotasService:
             return 0
 
         sql = """
-            INSERT INTO public.nfe_notas (
+            INSERT INTO public.notas (
                 processamento_id,
                 numero_nf,
                 emitente_cnpj,
@@ -158,11 +158,11 @@ class NFeNotasService:
         )
 
         sql = """
-            DELETE FROM public.nfe_notas AS n
+            DELETE FROM public.notas AS n
             WHERE n.processamento_id = %s
               AND NOT EXISTS (
                 SELECT 1
-                FROM public.nfe_itens AS i
+                FROM public.itens AS i
                 JOIN public.cfops AS c
                   ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
                      = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')

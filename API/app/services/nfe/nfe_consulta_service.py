@@ -107,8 +107,8 @@ class NFeConsultaService:
     return """
       EXISTS (
         SELECT 1
-        FROM public.nfe_notas AS n
-        JOIN public.nfe_itens AS i
+        FROM public.notas AS n
+        JOIN public.itens AS i
           ON i.nota_id = n.id
         JOIN public.cfops AS c
           ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
@@ -149,7 +149,7 @@ class NFeConsultaService:
       SELECT
         periodo_ano,
         periodo_mes
-      FROM public.nfe_kpis AS k
+      FROM public.kpis AS k
       {where_clause}
       ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
       LIMIT 1;
@@ -192,7 +192,7 @@ class NFeConsultaService:
       SELECT
         periodo_ano,
         periodo_mes
-      FROM public.nfe_kpis AS k
+      FROM public.kpis AS k
       {where_clause}
       ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
       LIMIT %s;
@@ -247,8 +247,8 @@ class NFeConsultaService:
         k.top_clientes,
         k.top_produtos,
         k.top_cidades
-      FROM public.nfe_kpis AS k
-      LEFT JOIN public.nfe_processamentos AS p
+      FROM public.kpis AS k
+      LEFT JOIN public.processamentos AS p
         ON p.id = k.processamento_id
       {where_clause}
       ORDER BY k.periodo_ano DESC, k.periodo_mes DESC, k.id DESC
@@ -361,7 +361,7 @@ class NFeConsultaService:
         k.top_clientes,
         k.top_produtos,
         k.top_cidades
-      FROM public.nfe_kpis AS k
+      FROM public.kpis AS k
       {where_clause}
       ORDER BY
         k.emitente_cnpj,

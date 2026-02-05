@@ -34,7 +34,7 @@ export function MonthYearFilter({
         <SelectTrigger className="w-36">
           <SelectValue className="bg-black" placeholder={monthPlaceholder} />
         </SelectTrigger>
-        <SelectContent className="bg-card text-card-foreground">
+        <SelectContent>
           {includeAllMonths && <SelectItem value="all">{allMonthsLabel}</SelectItem>}
           {monthLabels.map((label, index) => (
             <SelectItem key={label} value={(index + 1).toString()}>
@@ -47,7 +47,7 @@ export function MonthYearFilter({
         <SelectTrigger className="w-32">
           <SelectValue placeholder={yearPlaceholder} />
         </SelectTrigger>
-        <SelectContent className="bg-card text-card-foreground">
+        <SelectContent>
           {availableYears.map((yearOption) => (
             <SelectItem key={yearOption} value={String(yearOption)}>
               {yearOption}

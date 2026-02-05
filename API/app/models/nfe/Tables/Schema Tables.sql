@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS empresas (
 );
 
 -- Tabela de processamentos (com FK para empresas)
-CREATE TABLE IF NOT EXISTS nfe_processamentos (
+CREATE TABLE IF NOT EXISTS processamentos (
     id                  BIGSERIAL PRIMARY KEY,
     empresa_id          BIGINT REFERENCES empresas(id) ON DELETE SET NULL,
     origem              TEXT,
@@ -25,14 +25,14 @@ CREATE TABLE IF NOT EXISTS nfe_processamentos (
 );
 
 -- Índice útil para buscar processamentos por empresa
-CREATE INDEX IF NOT EXISTS idx_nfe_processamentos_empresa
-    ON nfe_processamentos (empresa_id);
+CREATE INDEX IF NOT EXISTS idx_processamentos_empresa
+    ON processamentos (empresa_id);
 
 
 -- 2) Notas
-CREATE TABLE IF NOT EXISTS nfe_notas (
+CREATE TABLE IF NOT EXISTS notas (
     id                      BIGSERIAL PRIMARY KEY,
-    processamento_id        BIGINT REFERENCES nfe_processamentos(id) ON DELETE SET NULL,
+    processamento_id        BIGINT REFERENCES processamentos(id) ON DELETE SET NULL,
     numero_nf               VARCHAR(50) NOT NULL,
     emitente_cnpj           VARCHAR(20) NOT NULL,
     modelo                  VARCHAR(5),
@@ -55,13 +55,13 @@ CREATE TABLE IF NOT EXISTS nfe_notas (
 );
 
 -- Índices úteis para notas
-CREATE INDEX IF NOT EXISTS idx_nfe_notas_emitente_data ON nfe_notas (emitente_cnpj, data_emissao);
-CREATE INDEX IF NOT EXISTS idx_nfe_notas_numero_emitente ON nfe_notas (numero_nf, emitente_cnpj);
+CREATE INDEX IF NOT EXISTS idx_notas_emitente_data ON notas (emitente_cnpj, data_emissao);
+CREATE INDEX IF NOT EXISTS idx_notas_numero_emitente ON notas (numero_nf, emitente_cnpj);
 
 -- 3) Itens
-CREATE TABLE IF NOT EXISTS nfe_itens (
+CREATE TABLE IF NOT EXISTS itens (
     id              BIGSERIAL PRIMARY KEY,
-    nota_id         BIGINT NOT NULL REFERENCES nfe_notas(id) ON DELETE CASCADE,
+    nota_id         BIGINT NOT NULL REFERENCES notas(id) ON DELETE CASCADE,
     item_numero     INT,
     produto_codigo  VARCHAR(120),
     descricao       VARCHAR(255),
@@ -85,24 +85,24 @@ CREATE TABLE IF NOT EXISTS cfops (
 
 CREATE INDEX IF NOT EXISTS idx_cfops_codigo ON cfops (codigo);
 
-CREATE INDEX IF NOT EXISTS idx_nfe_itens_nota ON nfe_itens (nota_id);
-CREATE INDEX IF NOT EXISTS idx_nfe_itens_produto ON nfe_itens (produto_codigo);
+CREATE INDEX IF NOT EXISTS idx_itens_nota ON itens (nota_id);
+CREATE INDEX IF NOT EXISTS idx_itens_produto ON itens (produto_codigo);
 
 -- 4) Erros do processamento (opcional)
-CREATE TABLE IF NOT EXISTS nfe_processamento_erros (
+CREATE TABLE IF NOT EXISTS processamento_erros (
     id                 BIGSERIAL PRIMARY KEY,
-    processamento_id   BIGINT NOT NULL REFERENCES nfe_processamentos(id) ON DELETE CASCADE,
+    processamento_id   BIGINT NOT NULL REFERENCES processamentos(id) ON DELETE CASCADE,
     codigo             VARCHAR(50) NOT NULL,
     mensagem           TEXT NOT NULL,
     detalhe            TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_nfe_proc_erros_proc ON nfe_processamento_erros (processamento_id);
+CREATE INDEX IF NOT EXISTS idx_proc_erros_proc ON processamento_erros (processamento_id);
 
 -- 5) KPIs do processamento (opcional)
-CREATE TABLE IF NOT EXISTS nfe_kpis (
+CREATE TABLE IF NOT EXISTS kpis (
     id                   BIGSERIAL PRIMARY KEY,
-    processamento_id     BIGINT NOT NULL REFERENCES nfe_processamentos(id) ON DELETE CASCADE,
+    processamento_id     BIGINT NOT NULL REFERENCES processamentos(id) ON DELETE CASCADE,
     emitente_cnpj        VARCHAR(14),
     periodo_ano          INTEGER,
     periodo_mes          INTEGER,
@@ -120,10 +120,10 @@ CREATE TABLE IF NOT EXISTS nfe_kpis (
     top_cidades          JSONB DEFAULT '[]'::jsonb
 );
 
-CREATE INDEX IF NOT EXISTS idx_nfe_kpis_proc ON nfe_kpis (processamento_id);
+CREATE INDEX IF NOT EXISTS idx_kpis_proc ON kpis (processamento_id);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_nfe_kpis_periodo
-    ON nfe_kpis (emitente_cnpj, periodo_ano, periodo_mes);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kpis_periodo
+    ON kpis (emitente_cnpj, periodo_ano, periodo_mes);
 
 -- 6) Login
 CREATE TABLE IF NOT EXISTS login (

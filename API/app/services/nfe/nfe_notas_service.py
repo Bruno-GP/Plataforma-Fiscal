@@ -91,6 +91,14 @@ class NFeNotasService:
             return 0
 
         sql = """
+            WITH atualizacao AS (
+                UPDATE public.notas
+                SET processamento_id = %s
+                WHERE numero_nf = %s
+                  AND emitente_cnpj = %s
+                  AND data_emissao = %s
+                RETURNING id
+            )
             INSERT INTO public.notas (
                 processamento_id,
                 numero_nf,
@@ -110,15 +118,12 @@ class NFeNotasService:
                 valor_pis,
                 valor_cofins,
                 valor_total_nf
-            ) VALUES (
+            ) SELECT
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s,
                 %s, %s, %s, %s, %s
-            )
-            ON CONFLICT (numero_nf, emitente_cnpj, data_emissao)
-            DO UPDATE SET
-                processamento_id = EXCLUDED.processamento_id;
+            WHERE NOT EXISTS (SELECT 1 FROM atualizacao);
         """
 
         total = 0
@@ -132,6 +137,11 @@ class NFeNotasService:
                 for nota in chunk:
                     emitente_cnpj = normalizar_cnpj(nota.emitente_cnpj)
                     valores.append((
+                        processamento_id,
+                        str(nota.numero_nf),
+                        emitente_cnpj,
+                        nota.data_emissao,
+                        
                         processamento_id,
                         str(nota.numero_nf),
                         emitente_cnpj,
@@ -151,7 +161,17 @@ class NFeNotasService:
                         nota.valor_cofins,
                         nota.valor_total_nf,
                     ))
-                cur.executemany(sql, valores)
+                    
+                try:
+                    cur.executemany(sql, valores)
+                except psycopg.Error:
+                    logger.exception(
+                        "Erro ao registrar notas em lote %s-%s.",
+                        start + 1,
+                        min(start + batch_size, len(notas_list)),
+                    )
+                    raise
+                
                 total += len(chunk)
                 logger.info(
                     "📌 Notas processadas até agora: %s/%s",

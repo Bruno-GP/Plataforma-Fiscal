@@ -26,7 +26,7 @@ class LoginResult:
     empresa_id: int
     cnpj: str
     email: str
-
+    empresa_nome: str
 
 class LoginService:
     def __init__(self) -> None:
@@ -65,6 +65,13 @@ class LoginService:
             return False
         digest = self._hash_senha(senha, salt)
         return hmac.compare_digest(digest, digest_armazenado)
+    
+    def _primeiro_nome(self, nome: str | None) -> str:
+        if not nome:
+            return ""
+
+        partes = nome.strip().split()
+        return partes[0] if partes else ""
 
     def registrar(self, email: str, senha: str, cnpj: str) -> LoginResult:
         cnpj_normalizado = normalizar_cnpj(cnpj)
@@ -75,7 +82,7 @@ class LoginService:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, cnpj
+                    SELECT id, cnpj, nome
                     FROM public.empresas
                     WHERE cnpj = %s;
                     """,
@@ -137,6 +144,7 @@ class LoginService:
             empresa_id=empresa[0],
             cnpj=cnpj_normalizado,
             email=email_normalizado,
+            empresa_nome=self._primeiro_nome(empresa[2]),
         )
 
     def autenticar(self, email: str, senha: str) -> LoginResult:
@@ -147,9 +155,15 @@ class LoginService:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, empresa_id, cnpj, email, senha
+                    SELECT login.id,
+                           login.empresa_id,
+                           login.cnpj,
+                           login.email,
+                           login.senha,
+                           empresas.nome
                     FROM public.login
-                    WHERE email = %s;
+                    JOIN public.empresas ON empresas.id = login.empresa_id
+                    WHERE login.email = %s;
                     """,
                     (email_normalizado,),
                 )
@@ -158,7 +172,15 @@ class LoginService:
                 if not login:
                     raise ValueError("Credenciais inválidas.")
 
-                login_id, empresa_id, cnpj, email_db, senha_armazenada = login
+                (
+                    login_id,
+                    empresa_id,
+                    cnpj,
+                    email_db,
+                    senha_armazenada,
+                    empresa_nome,
+                ) = login
+
 
                 if not self._verificar_senha(senha, senha_armazenada):
                     raise ValueError("Credenciais inválidas.")
@@ -174,4 +196,5 @@ class LoginService:
                 empresa_id=empresa_id,
                 cnpj=cnpj,
                 email=email_db,
+                empresa_nome=self._primeiro_nome(empresa_nome),
             )

@@ -37,6 +37,7 @@ def registrar_login(request: LoginCadastroRequest):
         empresa_id=resultado.empresa_id,
         cnpj=resultado.cnpj,
         email=resultado.email,
+        empresa_nome=resultado.empresa_nome,
     )
 
 
@@ -59,6 +60,7 @@ def autenticar_login(request: LoginRequest):
         empresa_id=resultado.empresa_id,
         cnpj=resultado.cnpj,
         email=resultado.email,
+        empresa_nome=resultado.empresa_nome,
     )
 
 

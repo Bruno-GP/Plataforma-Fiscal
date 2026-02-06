@@ -1,6 +1,7 @@
 import { LayoutDashboard, Receipt, Users, Settings } from 'lucide-react';
-import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
+
+import { NavLink } from '@/components/NavLink';
 import {
   Sidebar,
   SidebarContent,
@@ -12,6 +13,7 @@ import {
   SidebarHeader,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { useAuth } from '@/contexts/AuthContext';
 
 const menuItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
@@ -24,13 +26,14 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const location = useLocation();
+  const { user } = useAuth();
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <div className="flex h-auto w-30 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
-            Nome empresa
+            {user?.name ?? 'Empresa'}
           </div>
           {/* {!collapsed && (
             <span className="font-semibold text-sidebar-foreground">Gestão</span>

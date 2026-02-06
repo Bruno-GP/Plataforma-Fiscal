@@ -27,6 +27,7 @@ interface LoginResponse {
   empresa_id: number | string;
   cnpj: string;
   email: string;
+  empresa_nome: string;
 }
 
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -76,9 +77,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const data = (await response.json()) as LoginResponse;
     const resolvedId = data.login_id ?? data.empresa_id ?? email;
+    const displayName = data.empresa_nome?.trim();
     const nextUser: User = {
       id: String(resolvedId),
-      name: data.email,
+      name: displayName,
       email: data.email,
       emitente_cnpj: data.cnpj,
       avatar: undefined,
@@ -120,9 +122,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const data = (await response.json()) as LoginResponse;
     const resolvedId = data.login_id ?? data.empresa_id ?? email;
+    const displayName = data.empresa_nome?.trim();
     const nextUser: User = {
       id: String(resolvedId),
-      name: data.email,
+      name: displayName,
       email: data.email,
       emitente_cnpj: data.cnpj,
       avatar: undefined,

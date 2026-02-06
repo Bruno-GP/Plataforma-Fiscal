@@ -30,26 +30,39 @@ export function MonthYearFilter({
 }: MonthYearFilterProps) {
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <Select value={selectedMonth} onValueChange={onMonthChange} >
-        <SelectTrigger className="w-36">
-          <SelectValue className="bg-black" placeholder={monthPlaceholder} />
+      <Select value={selectedMonth} onValueChange={onMonthChange}>
+        <SelectTrigger className="w-36 bg-[#0E1525] text-white border-[#1E293B]">
+          <SelectValue placeholder={monthPlaceholder} />
         </SelectTrigger>
-        <SelectContent>
-          {includeAllMonths && <SelectItem value="all">{allMonthsLabel}</SelectItem>}
+
+        <SelectContent className="bg-[#0E1525] text-white border-[#1E293B]">
+          {includeAllMonths && (
+            <SelectItem value="all">Todos</SelectItem>
+          )}
           {monthLabels.map((label, index) => (
-            <SelectItem key={label} value={(index + 1).toString()}>
+            <SelectItem
+              key={label}
+              value={(index + 1).toString()}
+              className="focus:bg-[#1E293B]"
+            >
               {label}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
+
       <Select value={selectedYear} onValueChange={onYearChange}>
-        <SelectTrigger className="w-32">
+        <SelectTrigger className="w-32 bg-[#0E1525] text-white border-[#1E293B]">
           <SelectValue placeholder={yearPlaceholder} />
         </SelectTrigger>
-        <SelectContent>
+
+        <SelectContent className="bg-[#0E1525] text-white border-[#1E293B]">
           {availableYears.map((yearOption) => (
-            <SelectItem key={yearOption} value={String(yearOption)}>
+            <SelectItem
+              key={yearOption}
+              value={String(yearOption)}
+              className="focus:bg-[#1E293B]"
+            >
               {yearOption}
             </SelectItem>
           ))}

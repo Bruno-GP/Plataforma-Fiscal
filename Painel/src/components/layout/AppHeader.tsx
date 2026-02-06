@@ -30,39 +30,44 @@ export function AppHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-primary text-primary-foreground">
-      <div className="flex h-14 w-full items-center">
-        {/* <div className="flex items-center ml-44 gap-4 pl-6 sm:pl-6 lg:pl-8">
-          <SidebarTrigger className="-ml-1" />
-        </div> */}
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0E1525] text-white">
+      <div className="flex h-14 w-full items-center px-4">
 
-        <div className="ml-auto flex items-center pr-1 sm:pr-4 lg:pr-6">
+        {/* ESQUERDA — Empresa / Logo */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">
+            {user?.name ?? 'Empresa'}
+          </span>
+        </div>
+
+        {/* ESPAÇO FLEXÍVEL */}
+        <div className="flex-1" />
+
+        {/* DIREITA — Usuário */}
+        <div className="flex items-center gap-2">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1.5 text-primary-foreground focus:outline-none">
+            <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1.5 text-white focus:outline-none">
               <Avatar className="h-8 w-8">
                 <AvatarImage src={user?.avatar} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                <AvatarFallback className="bg-[#0E1525] text-white text-sm border border-white/10">
                   {user ? getInitials(user.name) : 'U'}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden text-sm font-medium md:block">{user?.name}</span>
-              <ChevronDown className="h-4 w-4 text-primary-foreground/80" />
+              <span className="hidden text-sm font-medium md:block">
+                {user?.name}
+              </span>
+              <ChevronDown className="h-4 w-4 text-white/80" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-primary text-primary-foreground">
+
+            <DropdownMenuContent
+              align="end"
+              className="w-56 bg-[#0E1525] text-white border border-white/10"
+            >
               <div className="flex flex-col px-2 py-1.5">
                 <span className="text-sm font-medium">{user?.name}</span>
-                <span className="text-xs text-muted-foreground">{user?.email}</span>
+                <span className="text-xs text-white/60">{user?.email}</span>
               </div>
-              <DropdownMenuSeparator />
-              {/* <DropdownMenuItem onClick={() => navigate('/configuracoes')}>
-                <User className="mr-2 h-4 w-4" />
-                Meu Perfil
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/configuracoes')}>
-                <Settings className="mr-2 h-4 w-4" />
-                Preferências
-              </DropdownMenuItem> */}
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-white/10" />
               <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
                 Sair
@@ -70,7 +75,9 @@ export function AppHeader() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
       </div>
     </header>
+
   );
 }

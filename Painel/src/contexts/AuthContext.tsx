@@ -51,6 +51,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return stored ? JSON.parse(stored) : null;
   });
 
+    const resolveDisplayName = (empresaNome: string | null | undefined, email: string) => {
+      const trimmed = empresaNome?.trim() ?? '';
+      if (!trimmed) {
+        return '';
+      }
+
+      const emailNormalizado = email.trim().toLowerCase();
+      if (emailNormalizado && trimmed.toLowerCase() === emailNormalizado) {
+        return '';
+      }
+
+      const normalizedName = trimmed.split('/').pop()?.trim() ?? trimmed;
+      const firstWord = normalizedName.split(/\s+/)[0];
+      return firstWord;
+    };
+
   const login = async (email: string, password: string): Promise<AuthResult> => {
     if (!email || !password) {
       return { ok: false, message: 'Informe email e senha.' };
@@ -77,7 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const data = (await response.json()) as LoginResponse;
     const resolvedId = data.login_id ?? data.empresa_id ?? email;
-    const displayName = data.empresa_nome?.trim();
+    const displayName = resolveDisplayName(data.empresa_nome, data.email);
     const nextUser: User = {
       id: String(resolvedId),
       name: displayName,
@@ -122,7 +138,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const data = (await response.json()) as LoginResponse;
     const resolvedId = data.login_id ?? data.empresa_id ?? email;
-    const displayName = data.empresa_nome?.trim();
+    const displayName = resolveDisplayName(data.empresa_nome, data.email);
     const nextUser: User = {
       id: String(resolvedId),
       name: displayName,

@@ -29,19 +29,16 @@ export function AppSidebar() {
   const { user } = useAuth();
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2">
+    <Sidebar collapsible="icon" className="bg-[#0E1525] text-white border-r border-white/10">
+      <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2 bg-[#0E1525]">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          <div className="flex h-auto w-30 items-center justify-center rounded-full bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
+          <div className="flex h-auto w-30 items-center justify-center rounded-full bg-[#0E1525] text-white text-sm font-semibold border border-white/10 px-3 py-1">
             {user?.name ?? 'Empresa'}
           </div>
-          {/* {!collapsed && (
-            <span className="font-semibold text-sidebar-foreground">Gestão</span>
-          )} */}
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="bg-[#0E1525]">
         <SidebarGroup className="px-4 group-data-[collapsible=icon]:px-2">
           <SidebarGroupContent>
             <SidebarMenu>
@@ -56,8 +53,8 @@ export function AppSidebar() {
                     >
                       <NavLink
                         to={item.url}
-                        className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center"
-                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground"
+                        className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center text-white/80 hover:text-white"
+                        activeClassName="bg-white/10 text-white"
                       >
                         <item.icon className="h-5 w-5" />
                         <span className="group-data-[collapsible=icon]:hidden">

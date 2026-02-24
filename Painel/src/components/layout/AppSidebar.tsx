@@ -33,7 +33,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="bg-[#0E1525] text-white border-r border-white/10">
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2 bg-[#0E1525]">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          <div className="flex h-auto w-30 items-center justify-center rounded-full bg-[#0E1525] text-white text-sm font-semibold border border-white/10 px-3 py-1">
+          <div className="flex h-auto w-full items-center justify-center rounded-md bg-[#0E1525] text-white text-sm font-semibold border border-white/10 px-3 py-2 text-center whitespace-normal break-words leading-tight">
             {user?.name ?? 'Empresa'}
           </div>
         </div>

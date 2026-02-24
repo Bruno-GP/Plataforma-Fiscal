@@ -30,7 +30,11 @@ export function AppSidebar() {
   const { user } = useAuth();
 
   return (
-    <Sidebar collapsible="icon" className="bg-[#0E1525] text-white border-r border-white/10">
+    <Sidebar
+      variant="inset"
+      collapsible="icon"
+      className="hidden md:flex bg-[#0E1525] text-white border-r border-white/10"
+    >
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2 bg-[#0E1525]">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <div className="flex h-auto w-full items-center justify-center rounded-md bg-[#0E1525] text-white text-sm font-semibold border border-white/10 px-3 py-2 text-center whitespace-normal break-words leading-tight">
@@ -41,8 +45,8 @@ export function AppSidebar() {
 
       <SidebarContent className="bg-[#0E1525]">
         <SidebarGroup className="px-4 group-data-[collapsible=icon]:px-2">
-          <SidebarGroupContent>
-            <SidebarMenu>
+          <SidebarGroupContent className="flex justify-center">
+            <SidebarMenu className="w-full">
               {menuItems.map((item) => {
                 const isActive = location.pathname === item.url;
                 return (

@@ -19,7 +19,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-svh w-full">
+      <div className="flex min-h-screen w-full">
         <AppSidebar />
         
         <SidebarInset className="flex min-h-svh flex-1 flex-col">

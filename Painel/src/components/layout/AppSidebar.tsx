@@ -49,15 +49,16 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild
+                      size="sm"
                       isActive={isActive}
                       tooltip={collapsed ? item.title : undefined}
                     >
                       <NavLink
                         to={item.url}
-                        className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center text-white/80 hover:text-white"
+                        className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center text-sm text-white/80 hover:text-white"
                         activeClassName="bg-white/10 text-white"
                       >
-                        <item.icon className="h-5 w-5" />
+                        <item.icon className="h-4 w-4" />
                         <span className="group-data-[collapsible=icon]:hidden">
                           {item.title}
                         </span>

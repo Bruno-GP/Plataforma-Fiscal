@@ -73,8 +73,11 @@ class LoginService:
         partes = nome.strip().split()
         return partes[0] if partes else ""
 
-    def registrar(self, email: str, senha: str, cnpj: str) -> LoginResult:
+    def registrar(self, empresa_nome: str, email: str, senha: str, cnpj: str) -> LoginResult:
         cnpj_normalizado = normalizar_cnpj(cnpj)
+        empresa_nome_normalizado = empresa_nome.strip()
+        if len(empresa_nome_normalizado) < 2:
+            raise ValueError("Informe um nome de empresa válido.")
         email_normalizado = email.lower()
         logger.debug("Iniciando registro de login para %s", email_normalizado)
 
@@ -91,12 +94,20 @@ class LoginService:
                 empresa = cur.fetchone()
 
                 if not empresa:
-                    logger.warning(
-                        "Empresa não encontrada para CNPJ %s durante cadastro",
+                    logger.info(
+                        "Empresa não encontrada para CNPJ %s. Criando cadastro automaticamente.",
                         cnpj_normalizado,
                     )
                     
-                    raise ValueError("CNPJ não encontrado no cadastro de empresas.")
+                    cur.execute(
+                        """
+                        INSERT INTO public.empresas (cnpj, nome)
+                        VALUES (%s, %s)
+                        RETURNING id, cnpj, nome;
+                        """,
+                        (cnpj_normalizado, empresa_nome_normalizado),
+                    )
+                    empresa = cur.fetchone()
 
                 cur.execute(
                     """

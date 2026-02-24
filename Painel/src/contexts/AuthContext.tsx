@@ -16,8 +16,8 @@ interface AuthResult {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  llogin: (email: string, password: string) => Promise<AuthResult>;
-  register: (email: string, password: string, cnpj: string) => Promise<AuthResult>;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  register: (empresaNome: string, email: string, password: string, cnpj: string, autoLogin?: boolean) => Promise<AuthResult>;
   logout: () => void;
 }
 
@@ -108,12 +108,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const register = async (
+    empresaNome: string,
     email: string,
     password: string,
     cnpj: string,
+    autoLogin = true,
   ): Promise<AuthResult> => {
-    if (!email || !password || !cnpj) {
-      return { ok: false, message: 'Informe email, senha e CNPJ.' };
+    if (!empresaNome || !email || !password || !cnpj) {
+      return { ok: false, message: 'Informe empresa, email, senha e CNPJ.' };
     }
 
     const response = await fetch(`${API_BASE_URL}/auth/registrar`, {
@@ -122,6 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        empresa_nome: empresaNome,
         email,
         senha: password,
         cnpj,
@@ -137,18 +140,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const data = (await response.json()) as LoginResponse;
-    const resolvedId = data.login_id ?? data.empresa_id ?? email;
-    const displayName = resolveDisplayName(data.empresa_nome, data.email);
-    const nextUser: User = {
-      id: String(resolvedId),
-      name: displayName,
-      email: data.email,
-      emitente_cnpj: data.cnpj,
-      avatar: undefined,
-    };
+    
+    if (autoLogin) {
+      const resolvedId = data.login_id ?? data.empresa_id ?? email;
+      const displayName = resolveDisplayName(data.empresa_nome, data.email);
+      const nextUser: User = {
+        id: String(resolvedId),
+        name: displayName,
+        email: data.email,
+        emitente_cnpj: data.cnpj,
+        avatar: undefined,
+      };
 
-    setUser(nextUser);
-    localStorage.setItem('user', JSON.stringify(nextUser));
+      setUser(nextUser);
+      localStorage.setItem('user', JSON.stringify(nextUser));
+    }
 
     return { ok: true };
   };

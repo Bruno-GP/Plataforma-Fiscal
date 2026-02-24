@@ -21,6 +21,7 @@ auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 def registrar_login(request: LoginCadastroRequest):
     try:
         resultado = LoginService().registrar(
+            empresa_nome=request.empresa_nome,
             email=request.email,
             senha=request.senha,
             cnpj=request.cnpj,

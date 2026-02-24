@@ -12,6 +12,7 @@ import Faturamento from "./pages/faturamento/components/Faturamento";
 import Clientes from "./pages/Clientes";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
+import CadastroEmpresa from "./pages/CadastroEmpresa";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/interno/cadastro-empresa" element={<CadastroEmpresa />} />
               <Route
                 path="/dashboard"
                 element={

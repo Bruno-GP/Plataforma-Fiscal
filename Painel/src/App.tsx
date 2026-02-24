@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { MainLayout } from "@/components/layout/MainLayout";
+
 import Login from "./pages/Login";
 import Dashboard from "./pages/dashboard/components/Dashboard";
 import Faturamento from "./pages/faturamento/components/Faturamento";
@@ -13,6 +14,7 @@ import Clientes from "./pages/Clientes";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 import CadastroEmpresa from "./pages/CadastroEmpresa";
+import ImportacaoXML from "./pages/ImportacaoXML";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +58,14 @@ const App = () => (
                 element={
                   <MainLayout>
                     <Configuracoes />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/importacao-xml"
+                element={
+                  <MainLayout>
+                    <ImportacaoXML />
                   </MainLayout>
                 }
               />

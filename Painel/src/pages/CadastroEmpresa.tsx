@@ -108,7 +108,7 @@ export default function CadastroEmpresaInterno() {
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Cadastrar empresa e acesso
+              Cadastrar empresa
             </Button>
           </form>
         </CardContent>

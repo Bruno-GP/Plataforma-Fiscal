@@ -1,4 +1,4 @@
-import { LayoutDashboard, Receipt, Users, Settings } from 'lucide-react';
+import { FileUp, LayoutDashboard, Receipt } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 import { NavLink } from '@/components/NavLink';
@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 const menuItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Faturamento', url: '/faturamento', icon: Receipt },
+  { title: 'Importação XML', url: '/importacao-xml', icon: FileUp },
   // { title: 'Clientes', url: '/clientes', icon: Users },
   // { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ];

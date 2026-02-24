@@ -63,8 +63,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const normalizedName = trimmed.split('/').pop()?.trim() ?? trimmed;
-      const firstWord = normalizedName.split(/\s+/)[0];
-      return firstWord;
+
+      return normalizedName;
     };
 
   const login = async (email: string, password: string): Promise<AuthResult> => {

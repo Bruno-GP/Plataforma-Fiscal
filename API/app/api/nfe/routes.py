@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Query, HTTPException, status
+from fastapi import APIRouter, Query, HTTPException, status, UploadFile, File
 
 from app.services.nfe.process_nfe import ProcessarNFeService
 from app.services.nfe.nfe_consulta_service import NFeConsultaService
+from app.services.nfe.xml_importacao_service import XMLImportacaoService
 from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
   ConsultaNFeResponse,
   ConsultaKPIResponse,
+  ImportacaoXMLResponse,
+  ImportacaoXMLArquivoResultado,
   ProcessarNFeRequest,
   ProcessarNFeResponse
 )
@@ -20,6 +23,38 @@ nfe_router = APIRouter(prefix="/nfe", tags=["NFe"])
 @nfe_router.post("/processar", response_model=ProcessarNFeResponse)
 def processar_nfe(request: ProcessarNFeRequest):
   return ProcessarNFeService().executar(request)
+
+@nfe_router.post("/xml/importar", response_model=ImportacaoXMLResponse)
+async def importar_xml(arquivos: list[UploadFile] = File(...)):
+  if len(arquivos) > 1000:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="O limite máximo por importação é de 1000 XMLs.",
+    )
+
+  conteudos: list[tuple[str, bytes]] = []
+  for arquivo in arquivos:
+    if not arquivo.filename.lower().endswith(".xml"):
+      continue
+    conteudos.append((arquivo.filename, await arquivo.read()))
+
+  if not conteudos:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Nenhum arquivo XML válido foi enviado.",
+    )
+
+  resultados_service = XMLImportacaoService().importar_arquivos(conteudos)
+  resultados = [ImportacaoXMLArquivoResultado(**resultado.__dict__) for resultado in resultados_service]
+
+  return ImportacaoXMLResponse(
+    status="ok",
+    total_arquivos=len(resultados),
+    importados=sum(1 for item in resultados if item.status == "importado"),
+    duplicados=sum(1 for item in resultados if item.status == "duplicado"),
+    erros=sum(1 for item in resultados if item.status == "erro"),
+    resultados=resultados,
+  )
 
 # -------------------------
 # Consulta de KPIs (consolidado)

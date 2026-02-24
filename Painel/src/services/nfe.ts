@@ -175,3 +175,36 @@ export const fetchNfeKpisComparativoAtual = async (
 
   return response.json() as Promise<KpiComparativoResponse>;
 };
+
+export interface ImportacaoXmlArquivoResultado {
+  arquivo: string;
+  cnpj_emitente?: string | null;
+  status: 'importado' | 'duplicado' | 'erro';
+  mensagem: string;
+}
+
+export interface ImportacaoXmlResponse {
+  status: string;
+  total_arquivos: number;
+  importados: number;
+  duplicados: number;
+  erros: number;
+  resultados: ImportacaoXmlArquivoResultado[];
+}
+
+export const importarXmlArquivo = async (file: File): Promise<ImportacaoXmlResponse> => {
+  const formData = new FormData();
+  formData.append('arquivos', file);
+
+  const response = await fetch(`${API_BASE_URL}/nfe/xml/importar`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao importar XML.' }));
+    throw new Error(error.detail ?? 'Falha ao importar XML.');
+  }
+
+  return response.json() as Promise<ImportacaoXmlResponse>;
+};

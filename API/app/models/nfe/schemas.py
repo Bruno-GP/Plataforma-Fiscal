@@ -249,3 +249,22 @@ class ConsultaNFeResponse(BaseModel):
   status: str
   total: int
   notas: List[NFeNota] = Field(default_factory=list)
+  
+# =========================
+# XML
+# =========================  
+  
+class ImportacaoXMLArquivoResultado(BaseModel):
+  arquivo: str
+  cnpj_emitente: Optional[str] = None
+  status: str
+  mensagem: str
+
+
+class ImportacaoXMLResponse(BaseModel):
+  status: str
+  total_arquivos: int
+  importados: int
+  duplicados: int
+  erros: int
+  resultados: List[ImportacaoXMLArquivoResultado] = Field(default_factory=list)

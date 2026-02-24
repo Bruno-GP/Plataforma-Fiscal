@@ -4,16 +4,19 @@ import { FileUp, FileText, Upload, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
+import { importarXmlArquivo, type ImportacaoXmlArquivoResultado } from '@/services/nfe';
+import { useToast } from '@/hooks/use-toast';
 
 interface XmlFileItem {
   id: string;
   file: File;
 }
 
+const MAX_XML_FILES = 1000;
+
 const formatFileSize = (size: number): string => {
-  if (size >= 1024 * 1024) {
+    if (size >= 1024 * 1024) {
     return `${(size / (1024 * 1024)).toFixed(2)} MB`;
   }
 
@@ -26,6 +29,10 @@ const formatFileSize = (size: number): string => {
 
 export default function ImportacaoXML() {
   const [selectedFiles, setSelectedFiles] = useState<XmlFileItem[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importedCount, setImportedCount] = useState(0);
+  const [results, setResults] = useState<ImportacaoXmlArquivoResultado[]>([]);
+  const { toast } = useToast();
 
   const totalSize = useMemo(
     () => selectedFiles.reduce((acc, item) => acc + item.file.size, 0),
@@ -45,14 +52,27 @@ export default function ImportacaoXML() {
 
     setSelectedFiles((prev) => {
       const existingNames = new Set(prev.map((item) => item.file.name));
+      const availableSlots = MAX_XML_FILES - prev.length;
+
       const newItems = xmlFiles
         .filter((file) => !existingNames.has(file.name))
+        .slice(0, Math.max(availableSlots, 0))
         .map((file) => ({
           id: `${file.name}-${file.lastModified}`,
           file,
         }));
 
-      return [...prev, ...newItems];
+      const nextFiles = [...prev, ...newItems];
+
+      if (nextFiles.length >= MAX_XML_FILES && xmlFiles.length > newItems.length) {
+        toast({
+          title: 'Limite atingido',
+          description: 'Você pode importar no máximo 1000 XMLs por vez.',
+          variant: 'destructive',
+        });
+      }
+
+      return nextFiles;
     });
   };
 
@@ -61,7 +81,49 @@ export default function ImportacaoXML() {
   };
 
   const clearList = () => {
-    setSelectedFiles([]);
+    setImportedCount(0);
+    setResults([]);
+  };
+
+  const progressValue = selectedFiles.length ? (importedCount / selectedFiles.length) * 100 : 0;
+
+  const startImport = async () => {
+    if (!selectedFiles.length || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportedCount(0);
+    setResults([]);
+
+    const importResults: ImportacaoXmlArquivoResultado[] = [];
+
+    try {
+      for (const item of selectedFiles) {
+        const response = await importarXmlArquivo(item.file);
+        importResults.push(...response.resultados);
+        setResults([...importResults]);
+        setImportedCount((count) => count + 1);
+      }
+
+      const duplicados = importResults.filter((item) => item.status === 'duplicado').length;
+      const erros = importResults.filter((item) => item.status === 'erro').length;
+
+      toast({
+        title: 'Importação concluída',
+        description: `Importação finalizada com sucesso. Duplicados: ${duplicados}. Erros: ${erros}.`,
+      });
+
+      setSelectedFiles([]);
+    } catch (error) {
+      toast({
+        title: 'Falha na importação',
+        description: error instanceof Error ? error.message : 'Não foi possível importar os XMLs.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   return (
@@ -69,7 +131,7 @@ export default function ImportacaoXML() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Importação de XML</h1>
         <p className="text-muted-foreground">
-          Selecione os arquivos XML das notas fiscais para enviar e processar no sistema.
+          Selecione os XMLs da NFe/NFCe e importe em lotes de até 1000 arquivos. O sistema valida duplicidade por CNPJ antes de registrar cada arquivo.
         </p>
       </div>
 
@@ -80,77 +142,84 @@ export default function ImportacaoXML() {
             Enviar arquivos XML
           </CardTitle>
           <CardDescription>
-            Você pode selecionar um ou mais arquivos. Apenas arquivos com extensão .xml serão listados.
+            Clique no botão central para adicionar os XMLs, acompanhe o contador e depois inicie a importação.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border border-dashed p-6">
-            <Label htmlFor="xml-files" className="mb-2 block text-sm font-medium">
-              Arquivos de NFe/NFCe
-            </Label>
+        <CardContent className="space-y-6">
+          <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-8 text-center">
             <Input
               id="xml-files"
               type="file"
               accept=".xml,text/xml,application/xml"
               multiple
+              className="hidden"
               onChange={(event) => {
                 addFiles(event.target.files);
                 event.currentTarget.value = '';
               }}
             />
-            <p className="mt-3 text-sm text-muted-foreground">
-              Dica: você pode selecionar novos arquivos depois, eles serão adicionados à lista.
+            <Button asChild variant="secondary" size="lg" disabled={isImporting || selectedFiles.length >= MAX_XML_FILES}>
+              <label htmlFor="xml-files" className="cursor-pointer">
+                <FileUp className="mr-2 h-4 w-4" />
+                Importar arquivos XMLs
+              </label>
+            </Button>
+
+            <p className="text-sm text-muted-foreground">
+              {selectedFiles.length}/{MAX_XML_FILES} arquivo(s) • {formatFileSize(totalSize)}
             </p>
           </div>
 
-          <Separator />
-
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="font-medium">Arquivos selecionados</h2>
-                <p className="text-sm text-muted-foreground">
-                  {selectedFiles.length} arquivo(s) • {formatFileSize(totalSize)}
-                </p>
-              </div>
-
-              <Button variant="outline" onClick={clearList} disabled={!selectedFiles.length}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Limpar lista
-              </Button>
-            </div>
-
-            <div className="rounded-lg border">
-              {selectedFiles.length ? (
-                <ul className="divide-y">
-                  {selectedFiles.map((item) => (
-                    <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{item.file.name}</p>
-                        <p className="text-xs text-muted-foreground">{formatFileSize(item.file.size)}</p>
-                      </div>
-
-                      <Button variant="ghost" size="icon" onClick={() => removeFile(item.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  <FileText className="mx-auto mb-2 h-5 w-5" />
-                  Nenhum arquivo XML selecionado.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <Button disabled={!selectedFiles.length}>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <Button variant="outline" onClick={clearList} disabled={!selectedFiles.length || isImporting}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Limpar lista
+            </Button>
+            <Button onClick={startImport} disabled={!selectedFiles.length || isImporting}>
               <Upload className="mr-2 h-4 w-4" />
-              Iniciar importação
+              {isImporting ? 'Importando...' : 'Iniciar importação'}
             </Button>
           </div>
+
+          {(isImporting || importedCount > 0) && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Progresso da importação: {importedCount}/{Math.max(selectedFiles.length, importedCount)} XMLs processados
+              </p>
+              <Progress value={progressValue} />
+            </div>
+          )}
+
+          <div className="rounded-lg border">
+            {selectedFiles.length ? (
+              <ul className="max-h-72 divide-y overflow-auto">
+                {selectedFiles.map((item) => (
+                  <li key={item.id} className="px-4 py-3">
+                    <p className="truncate text-sm font-medium">{item.file.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatFileSize(item.file.size)}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <FileText className="mx-auto mb-2 h-5 w-5" />
+                Nenhum arquivo XML selecionado.
+              </div>
+            )}
+          </div>
+
+          {!!results.length && (
+            <div className="space-y-2 rounded-lg border p-4">
+              <h2 className="font-medium">Resultado da importação</h2>
+              <ul className="max-h-40 space-y-1 overflow-auto text-sm text-muted-foreground">
+                {results.map((result, index) => (
+                  <li key={`${result.arquivo}-${index}`}>
+                    <strong>{result.arquivo}:</strong> {result.mensagem}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

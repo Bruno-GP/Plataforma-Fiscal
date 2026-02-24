@@ -141,3 +141,16 @@ CREATE INDEX IF NOT EXISTS idx_login_cnpj ON login (cnpj);
 
 -- Ajustes para ambientes já existentes (migrations rápidas)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_login_email_lower ON login (LOWER(email));
+
+-- 7) Controle de XMLs importados por CNPJ
+CREATE TABLE IF NOT EXISTS xml_importados (
+    id              BIGSERIAL PRIMARY KEY,
+    cnpj_emitente   VARCHAR(20) NOT NULL,
+    nome_arquivo    TEXT NOT NULL,
+    hash_arquivo    VARCHAR(64) NOT NULL,
+    tamanho_bytes   BIGINT,
+    criado_em       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (cnpj_emitente, hash_arquivo)
+);
+
+CREATE INDEX IF NOT EXISTS idx_xml_importados_cnpj ON xml_importados (cnpj_emitente);

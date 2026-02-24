@@ -66,12 +66,8 @@ class LoginService:
         digest = self._hash_senha(senha, salt)
         return hmac.compare_digest(digest, digest_armazenado)
     
-    def _primeiro_nome(self, nome: str | None) -> str:
-        if not nome:
-            return ""
-
-        partes = nome.strip().split()
-        return partes[0] if partes else ""
+    def _nome_empresa(self, nome: str | None) -> str:
+        return nome.strip() if nome else ""
 
     def registrar(self, empresa_nome: str, email: str, senha: str, cnpj: str) -> LoginResult:
         cnpj_normalizado = normalizar_cnpj(cnpj)
@@ -155,7 +151,7 @@ class LoginService:
             empresa_id=empresa[0],
             cnpj=cnpj_normalizado,
             email=email_normalizado,
-            empresa_nome=self._primeiro_nome(empresa[2]),
+            empresa_nome=self._nome_empresa_completo(empresa[2]),
         )
 
     def autenticar(self, email: str, senha: str) -> LoginResult:
@@ -207,5 +203,5 @@ class LoginService:
                 empresa_id=empresa_id,
                 cnpj=cnpj,
                 email=email_db,
-                empresa_nome=self._primeiro_nome(empresa_nome),
+                empresa_nome=self._nome_empresa_completo(empresa_nome),
             )

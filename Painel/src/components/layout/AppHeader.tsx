@@ -18,8 +18,8 @@ export function AppHeader() {
       <div className="flex h-14 w-full items-center px-4">
 
         {/* ESQUERDA — Empresa / Logo */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold break-words">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="max-w-[20rem] truncate text-sm font-semibold" title={user?.name ?? 'Empresa'}>
             {user?.name ?? 'Empresa'}
           </span>
         </div>

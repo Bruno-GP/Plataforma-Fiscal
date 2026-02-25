@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -18,7 +18,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider style={{ "--sidebar-width": "12rem" } as CSSProperties}>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         

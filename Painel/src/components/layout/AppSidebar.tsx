@@ -36,12 +36,12 @@ export function AppSidebar() {
       className="hidden md:flex shrink-0 bg-[#0E1525] text-white border-r border-white/10"
     >
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2 bg-[#0E1525]">
-        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+        <div className="flex min-w-0 items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <div
-            className="flex h-auto w-full items-center justify-start rounded-md bg-[#0E1525] text-white text-sm font-semibold border border-white/10 px-3 py-2"
+            className="flex min-w-0 h-auto w-full items-center justify-start rounded-md bg-[#0E1525] text-white text-sm font-semibold border border-white/10 px-3 py-2 overflow-hidden"
             title={user?.name ?? 'Empresa'}
           >
-            <span className="block w-full truncate">{user?.name ?? 'Empresa'}</span>
+            <span className="block w-full truncate whitespace-nowrap">{user?.name ?? 'Empresa'}</span>
           </div>
         </div>
       </SidebarHeader>

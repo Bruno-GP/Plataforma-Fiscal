@@ -15,23 +15,27 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0E1525] text-white">
-      <div className="flex h-14 w-full items-center px-4">
+      <div className="flex h-14 w-full items-center gap-2 px-4">
 
         {/* ESQUERDA — Empresa / Logo */}
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="max-w-[20rem] truncate text-sm font-semibold" title={user?.name ?? 'Empresa'}>
+        <div className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold" title={user?.name ?? 'Empresa'}>
             {user?.name ?? 'Empresa'}
           </span>
         </div>
 
-        {/* ESPAÇO FLEXÍVEL */}
-        <div className="flex-1" />
+        {/* ESPAÇO FLEXÍVEL
+        <div className="flex-1" /> */}
 
         {/* DIREITA — Ação */}
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleLogout} className="text-white border-white/20 hover:bg-white/10">
-            <LogOut className="mr-2 h-4 w-4" />
-            Sair
+        <div className="shrink-0">
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            className="text-white border-white/20 hover:bg-white/10"
+          >
+            <LogOut className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Sair</span>
           </Button>
         </div>
 

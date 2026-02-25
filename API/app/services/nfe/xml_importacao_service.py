@@ -74,10 +74,16 @@ class XMLImportacaoService:
 
           cur.execute(
             """
-            INSERT INTO xml_importados (cnpj_emitente, nome_arquivo, hash_arquivo, tamanho_bytes)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO xml_importados (
+              cnpj_emitente,
+              nome_arquivo,
+              hash_arquivo,
+              tamanho_bytes,
+              conteudo_xml
+            )
+            VALUES (%s, %s, %s, %s, %s)
             """,
-            (cnpj_emitente, nome_arquivo, hash_arquivo, len(conteudo)),
+            (cnpj_emitente, nome_arquivo, hash_arquivo, len(conteudo), conteudo),
           )
 
           resultados.append(
@@ -103,11 +109,63 @@ class XMLImportacaoService:
           nome_arquivo TEXT NOT NULL,
           hash_arquivo VARCHAR(64) NOT NULL,
           tamanho_bytes BIGINT,
+          conteudo_xml BYTEA,
+          processado_em TIMESTAMPTZ,
           criado_em TIMESTAMPTZ DEFAULT NOW(),
           UNIQUE (cnpj_emitente, hash_arquivo)
         )
         """
       )
+      
+      cur.execute("ALTER TABLE xml_importados ADD COLUMN IF NOT EXISTS conteudo_xml BYTEA")
+      cur.execute("ALTER TABLE xml_importados ADD COLUMN IF NOT EXISTS processado_em TIMESTAMPTZ")
+
+  def listar_xmls_importados_nao_processados(self, cnpj_emitente: str) -> list[tuple[int, str, bytes]]:
+    with psycopg.connect(
+      host=self.config["host"],
+      port=self.config["port"],
+      dbname=self.config["database"],
+      user=self.config["user"],
+      password=self.config["password"],
+    ) as conn:
+      self._garantir_tabela(conn)
+
+      with conn.cursor() as cur:
+        cur.execute(
+          """
+          SELECT id, nome_arquivo, conteudo_xml
+          FROM xml_importados
+          WHERE cnpj_emitente = %s
+            AND processado_em IS NULL
+          ORDER BY id ASC
+          """,
+          (cnpj_emitente,),
+        )
+        rows = cur.fetchall()
+
+      return [(row[0], row[1], bytes(row[2]) if row[2] else b"") for row in rows]
+
+  def marcar_como_processados(self, ids_xml: list[int]) -> None:
+    if not ids_xml:
+      return
+
+    with psycopg.connect(
+      host=self.config["host"],
+      port=self.config["port"],
+      dbname=self.config["database"],
+      user=self.config["user"],
+      password=self.config["password"],
+    ) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          """
+          UPDATE xml_importados
+          SET processado_em = NOW()
+          WHERE id = ANY(%s)
+          """,
+          (ids_xml,),
+        )
+      conn.commit()
 
   def _extrair_cnpj_emitente(self, conteudo: bytes) -> str | None:
     try:

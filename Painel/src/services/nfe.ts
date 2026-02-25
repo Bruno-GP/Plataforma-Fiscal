@@ -207,4 +207,39 @@ export const importarXmlArquivo = async (file: File): Promise<ImportacaoXmlRespo
   }
 
   return response.json() as Promise<ImportacaoXmlResponse>;
+}
+
+export interface ProcessamentoNfePeriodoKpi {
+  ano: number;
+  mes: number;
+  kpis: NfeKpi;
+}
+
+export interface ProcessamentoNfeResponse {
+  status: string;
+  cnpj_emitente: string;
+  periodo_ano: number;
+  periodo_mes: number;
+  periodos_encontrados: Array<{ ano: number; mes: number }>;
+  notas_processadas: number;
+  itens_processados: number;
+  kpis: ProcessamentoNfePeriodoKpi[];
+  erros: Array<{ codigo: string; mensagem: string; detalhe?: string }>;
+  data_processamento?: string;
+}
+
+export const processarXmlsImportados = async (cnpjEmitente: string): Promise<ProcessamentoNfeResponse> => {
+  const digits = cnpjEmitente.replace(/\D/g, '');
+  const searchParams = new URLSearchParams({ cnpj_emitente: digits });
+
+  const response = await fetch(`${API_BASE_URL}/nfe/xml/processar-importados?${searchParams.toString()}`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao processar XMLs importados.' }));
+    throw new Error(error.detail ?? 'Falha ao processar XMLs importados.');
+  }
+
+  return response.json() as Promise<ProcessamentoNfeResponse>;
 };

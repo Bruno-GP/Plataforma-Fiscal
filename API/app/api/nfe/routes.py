@@ -55,6 +55,27 @@ async def importar_xml(arquivos: list[UploadFile] = File(...)):
     erros=sum(1 for item in resultados if item.status == "erro"),
     resultados=resultados,
   )
+  
+@nfe_router.post("/xml/processar-importados", response_model=ProcessarNFeResponse)
+def processar_xmls_importados(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
+  service_importacao = XMLImportacaoService()
+  xmls_importados = service_importacao.listar_xmls_importados_nao_processados(cnpj_emitente)
+
+  if not xmls_importados:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Nenhum XML pendente encontrado para o CNPJ informado.",
+    )
+
+  resposta, ids_processados = ProcessarNFeService().executar_xmls_importados(
+    cnpj_emitente=cnpj_emitente,
+    xmls_importados=xmls_importados,
+  )
+
+  if resposta.status == "processado":
+    service_importacao.marcar_como_processados(ids_processados)
+
+  return resposta
 
 # -------------------------
 # Consulta de KPIs (consolidado)

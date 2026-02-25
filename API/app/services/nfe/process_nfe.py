@@ -1,4 +1,5 @@
 from datetime import datetime
+from xml.etree import ElementTree as ET
 
 import time
 import psycopg
@@ -14,7 +15,8 @@ from app.models.nfe.schemas import (
     KPIsRelatorio
 )
 
-from app.domain.nfe.xml_reader import XmlReader
+from app.domain.nfe.xml_reader import XmlReader, NS
+from app.domain.nfe.xml_models import XmlNFe
 from app.domain.nfe.extractor import NFeExtractor
 from app.domain.nfe.consolidator import NFeConsolidator
 from app.domain.nfe.kpis import KPICalculator
@@ -27,6 +29,63 @@ logger = logging.getLogger("ProcessarNFeService")
 
 class ProcessarNFeService:
     def executar(self, request: ProcessarNFeRequest) -> ProcessarNFeResponse:
+        xmls = XmlReader().ler_pasta(request.pasta_xml)
+        return self._executar_com_xmls(
+            xmls=xmls,
+            request=request,
+        )
+
+    def executar_xmls_importados(
+        self,
+        cnpj_emitente: str,
+        xmls_importados: list[tuple[int, str, bytes]],
+    ) -> tuple[ProcessarNFeResponse, list[int]]:
+        ids_processados: list[int] = []
+        xmls = []
+
+        for xml_id, nome_arquivo, conteudo in xmls_importados:
+            if not conteudo:
+                continue
+
+            try:
+                root = ET.fromstring(conteudo)
+            except ET.ParseError:
+                continue
+
+            emit = root.find(".//nfe:emit", NS)
+            if emit is None:
+                continue
+
+            nome_emitente = emit.findtext("nfe:xNome", default="", namespaces=NS)
+            cnpj_xml = emit.findtext("nfe:CNPJ", default="", namespaces=NS)
+
+            if not cnpj_xml or cnpj_xml != cnpj_emitente:
+                continue
+
+            xmls.append(
+                XmlNFe(
+                    caminho=nome_arquivo,
+                    xml=root,
+                    emitente_cnpj=cnpj_xml,
+                    emitente_nome=nome_emitente,
+                )
+            )
+            ids_processados.append(xml_id)
+
+        request = ProcessarNFeRequest(
+            origem="upload_xml",
+            pasta_xml="xml_importados",
+            periodo=None,
+        )
+
+        return self._executar_com_xmls(xmls=xmls, request=request), ids_processados
+
+    def _executar_com_xmls(
+        self,
+        xmls,
+        request: ProcessarNFeRequest,
+    ) -> ProcessarNFeResponse:
+        
         cnpj_emitente = ""
         periodo_ano = 0
         periodo_mes = 0
@@ -35,7 +94,6 @@ class ProcessarNFeService:
 
         try:
             # 1️⃣ Ler XMLs
-            xmls = XmlReader().ler_pasta(request.pasta_xml)
             if not xmls:
                 raise Exception("Nenhum XML válido encontrado")
 

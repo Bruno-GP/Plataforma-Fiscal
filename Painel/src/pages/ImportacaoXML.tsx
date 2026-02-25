@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { importarXmlArquivo, type ImportacaoXmlArquivoResultado } from '@/services/nfe';
+import { importarXmlArquivo, processarXmlsImportados, type ImportacaoXmlArquivoResultado } from '@/services/nfe';
 import { useToast } from '@/hooks/use-toast';
 
 interface XmlFileItem {
@@ -32,6 +32,7 @@ export default function ImportacaoXML() {
   const [isImporting, setIsImporting] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
   const [results, setResults] = useState<ImportacaoXmlArquivoResultado[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
   const totalSize = useMemo(
@@ -87,6 +88,47 @@ export default function ImportacaoXML() {
 
   const progressValue = selectedFiles.length ? (importedCount / selectedFiles.length) * 100 : 0;
 
+  const cnpjsImportados = useMemo(() => {
+    const cnpjs = new Set(
+      results
+        .filter((item) => item.status === 'importado' && item.cnpj_emitente)
+        .map((item) => item.cnpj_emitente as string)
+    );
+
+    return Array.from(cnpjs);
+  }, [results]);
+
+  const processImportedXml = async () => {
+    if (!cnpjsImportados.length || isProcessing || isImporting) {
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      for (const cnpj of cnpjsImportados) {
+        const response = await processarXmlsImportados(cnpj);
+
+        if (response.status !== 'processado') {
+          throw new Error(response.erros?.[0]?.mensagem ?? 'Falha ao processar XMLs importados.');
+        }
+      }
+
+      toast({
+        title: 'Processamento concluído',
+        description: 'Itens, notas e KPIs foram registrados com sucesso.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Falha no processamento',
+        description: error instanceof Error ? error.message : 'Não foi possível processar os XMLs importados.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const startImport = async () => {
     if (!selectedFiles.length || isImporting) {
       return;
@@ -131,7 +173,7 @@ export default function ImportacaoXML() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Importação de XML</h1>
         <p className="text-muted-foreground">
-          Selecione os XMLs da NFe/NFCe e importe em lotes de até 1000 arquivos. O sistema valida duplicidade por CNPJ antes de registrar cada arquivo.
+          Selecione os XMLs da NFe/NFCe e importe em lotes de até 1000 arquivos. Depois da importação, execute a fase de processamento para registrar notas, itens e KPIs.
         </p>
       </div>
 
@@ -175,9 +217,18 @@ export default function ImportacaoXML() {
               <Trash2 className="mr-2 h-4 w-4" />
               Limpar lista
             </Button>
-            <Button onClick={startImport} disabled={!selectedFiles.length || isImporting}>
+            <Button onClick={startImport} disabled={!selectedFiles.length || isImporting || isProcessing}>
               <Upload className="mr-2 h-4 w-4" />
               {isImporting ? 'Importando...' : 'Iniciar importação'}
+            </Button>
+
+            <Button
+              variant="default"
+              onClick={processImportedXml}
+              disabled={!cnpjsImportados.length || isImporting || isProcessing}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              {isProcessing ? 'Processando NFe...' : 'Processar NFe (itens, notas e KPIs)'}
             </Button>
           </div>
 

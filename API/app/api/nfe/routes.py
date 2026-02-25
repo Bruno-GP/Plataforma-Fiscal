@@ -26,10 +26,10 @@ def processar_nfe(request: ProcessarNFeRequest):
 
 @nfe_router.post("/xml/importar", response_model=ImportacaoXMLResponse)
 async def importar_xml(arquivos: list[UploadFile] = File(...)):
-  if len(arquivos) > 1000:
+  if len(arquivos) > 10000:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
-      detail="O limite máximo por importação é de 1000 XMLs.",
+      detail="O limite máximo por importação é de 10000 XMLs.",
     )
 
   conteudos: list[tuple[str, bytes]] = []

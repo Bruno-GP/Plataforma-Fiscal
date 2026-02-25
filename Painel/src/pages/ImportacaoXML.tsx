@@ -13,7 +13,7 @@ interface XmlFileItem {
   file: File;
 }
 
-const MAX_XML_FILES = 1000;
+const MAX_XML_FILES = 10000;
 
 const formatFileSize = (size: number): string => {
     if (size >= 1024 * 1024) {
@@ -68,7 +68,7 @@ export default function ImportacaoXML() {
       if (nextFiles.length >= MAX_XML_FILES && xmlFiles.length > newItems.length) {
         toast({
           title: 'Limite atingido',
-          description: 'Você pode importar no máximo 1000 XMLs por vez.',
+          description: 'Você pode importar no máximo 10000 XMLs por vez.',
           variant: 'destructive',
         });
       }

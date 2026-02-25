@@ -22,10 +22,10 @@ export function MainLayout({ children }: MainLayoutProps) {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         
-        <SidebarInset className="flex min-h-svh flex-1 flex-col">
+        <SidebarInset className="min-w-0 flex-1">
           <AppHeader />
           
-          <div className="flex-1 overflow-auto px-8 py-4 py-6 sm:px-6 lg:px-8">
+          <div className="min-w-0 flex-1 overflow-x-hidden">
             <div className="mx-auto w-full max-w-[1500px]">
               {children}
             </div>

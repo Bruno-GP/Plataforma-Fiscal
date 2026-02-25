@@ -31,9 +31,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar
-      variant="inset"
+      variant="sidebar"
       collapsible="icon"
-      className="hidden md:flex bg-[#0E1525] text-white border-r border-white/10"
+      className="hidden md:flex bg-[#0E1525] text-white border-r border-white/10 [--sidebar-width:17rem]"
     >
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2 bg-[#0E1525]">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">

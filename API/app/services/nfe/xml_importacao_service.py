@@ -41,7 +41,7 @@ class XMLImportacaoService:
               arquivo=nome_arquivo,
               cnpj_emitente=None,
               status="erro",
-              mensagem="Não foi possível identificar o CNPJ emitente no XML.",
+              mensagem="XML não foi processado por não ser compativel",
             )
           )
           continue
@@ -173,10 +173,30 @@ class XMLImportacaoService:
     except ET.ParseError:
       return None
 
-    for element in root.iter():
-      if element.tag.endswith("CNPJ") and element.text:
-        digits = "".join(ch for ch in element.text if ch.isdigit())
-        if len(digits) == 14:
-          return digits
+    emitente = next(
+      (
+        element
+        for element in root.iter()
+        if element.tag.split("}")[-1].lower() == "emit"
+      ),
+      None,
+    )
+    if emitente is None:
+      return None
+
+    cnpj_emitente = next(
+      (
+        element
+        for element in emitente.iter()
+        if element.tag.split("}")[-1].lower() == "cnpj"
+      ),
+      None,
+    )
+    if cnpj_emitente is None or not cnpj_emitente.text:
+      return None
+
+    digits = "".join(ch for ch in cnpj_emitente.text if ch.isdigit())
+    if len(digits) == 14:
+      return digits
 
     return None

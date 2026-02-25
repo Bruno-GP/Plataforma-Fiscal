@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 export function AppHeader() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const nomeExibicao = user?.name?.trim() || 'Empresa';
+  const primeiroNome = nomeExibicao.split(/\s+/)[0];
 
   const handleLogout = () => {
     logout();
@@ -19,8 +21,8 @@ export function AppHeader() {
 
         {/* ESQUERDA — Empresa / Logo */}
         <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold" title={user?.name ?? 'Empresa'}>
-            {user?.name ?? 'Empresa'}
+          <span className="block truncate text-sm font-semibold" title={nomeExibicao}>
+            {primeiroNome}
           </span>
         </div>
 

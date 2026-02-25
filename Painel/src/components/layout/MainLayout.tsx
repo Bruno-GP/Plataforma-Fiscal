@@ -18,7 +18,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": "12rem" } as CSSProperties}>
+    <SidebarProvider style={{ "--sidebar-width": "6rem" } as CSSProperties}>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         
@@ -26,7 +26,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           <AppHeader />
           
           <div className="min-w-0 flex-1 overflow-x-hidden">
-            <div className="mx-auto w-full max-w-[1500px]">
+            <div className="mx-auto min-w-0 max-w-[1700px] px-4 md:px-8">
               {children}
             </div>
           </div>

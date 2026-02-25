@@ -52,7 +52,7 @@ const App = () => (
                     <Clientes />
                   </MainLayout>
                 }
-              /> */}
+              />
               <Route
                 path="/configuracoes"
                 element={
@@ -60,7 +60,7 @@ const App = () => (
                     <Configuracoes />
                   </MainLayout>
                 }
-              />
+              /> */}
               <Route
                 path="/importacao-xml"
                 element={

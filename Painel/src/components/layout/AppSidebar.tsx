@@ -35,13 +35,26 @@ export function AppSidebar() {
       collapsible="icon"
       className="hidden md:flex shrink-0 bg-[#0E1525] text-white border-r border-white/10"
     >
-      <SidebarHeader className="p-4 group-data-[collapsible=icon]:px-2 bg-[#0E1525]">
+      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2 bg-[#0E1525]">
         <div className="flex min-w-0 items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <div
-            className="flex min-w-0 h-auto w-full items-center justify-start rounded-md bg-[#0E1525] text-white text-sm font-semibold border border-white/10 px-3 py-2 overflow-hidden"
+            className="
+              flex min-w-0 items-center rounded-md bg-[#0E1525] text-white text-sm font-semibold
+              border border-white/10 overflow-hidden
+              px-3 py-2 w-full
+              group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:h-10
+              group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0
+              group-data-[collapsible=icon]:justify-center
+            "
             title={user?.name ?? 'Empresa'}
           >
-            <span className="block w-full truncate whitespace-nowrap">{user?.name ?? 'Empresa'}</span>
+            <span className="block w-full truncate whitespace-nowrap group-data-[collapsible=icon]:hidden">
+              {user?.name ?? 'Empresa'}
+            </span>
+
+            <span className="hidden group-data-[collapsible=icon]:block">
+              {(user?.name ?? 'E').slice(0, 1).toUpperCase()}
+            </span>
           </div>
         </div>
       </SidebarHeader>

@@ -1,10 +1,11 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { AppSidebar } from './AppSidebar';
+
 import { AppHeader } from './AppHeader';
-import { ChatWidget } from '@/components/chat/ChatWidget';
+// import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+// import { AppSidebar } from './AppSidebar';
+// import { ChatWidget } from '@/components/chat/ChatWidget';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -18,22 +19,14 @@ export function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": "6rem" } as CSSProperties}>
-      <div className="flex min-h-screen w-full">
-        <AppSidebar />
-        
-        <SidebarInset className="min-w-0 flex-1">
-          <AppHeader />
-          
-          <div className="min-w-0 flex-1 overflow-x-hidden">
-            <div className="mx-auto min-w-0 max-w-[1700px] px-4 md:px-8">
-              {children}
-            </div>
-          </div>
-        </SidebarInset>
-      </div>
+    <div className="min-h-screen w-full bg-background">
+      <AppHeader />
 
-      {/* <ChatWidget /> */}
-    </SidebarProvider>
+      <main className="min-w-0 overflow-x-hidden">
+        <div className="mx-auto min-w-0 max-w-[1700px] px-4 md:px-8">
+          {children}
+        </div>
+      </main>
+    </div>
   );
 }

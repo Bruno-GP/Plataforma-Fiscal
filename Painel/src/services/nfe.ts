@@ -209,6 +209,30 @@ export const importarXmlArquivo = async (file: File): Promise<ImportacaoXmlRespo
   return response.json() as Promise<ImportacaoXmlResponse>;
 }
 
+export interface ImportacaoXmlPendenciasResponse {
+  status: string;
+  cnpj_emitente: string;
+  total_pendentes: number;
+  possui_pendentes: boolean;
+}
+
+export const consultarPendenciasXmlImportados = async (
+  cnpjEmitente: string
+): Promise<ImportacaoXmlPendenciasResponse> => {
+  const digits = cnpjEmitente.replace(/\D/g, '');
+  const searchParams = new URLSearchParams({ cnpj_emitente: digits });
+
+  const response = await fetch(`${API_BASE_URL}/nfe/xml/pendencias?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar pendências de XML.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar pendências de XML.');
+  }
+
+  return response.json() as Promise<ImportacaoXmlPendenciasResponse>;
+};
+
+
 export interface ProcessamentoNfePeriodoKpi {
   ano: number;
   mes: number;

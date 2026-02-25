@@ -166,6 +166,30 @@ class XMLImportacaoService:
           (ids_xml,),
         )
       conn.commit()
+      
+  def contar_xmls_pendentes(self, cnpj_emitente: str) -> int:
+    with psycopg.connect(
+      host=self.config["host"],
+      port=self.config["port"],
+      dbname=self.config["database"],
+      user=self.config["user"],
+      password=self.config["password"],
+    ) as conn:
+      self._garantir_tabela(conn)
+
+      with conn.cursor() as cur:
+        cur.execute(
+          """
+          SELECT COUNT(*)
+          FROM xml_importados
+          WHERE cnpj_emitente = %s
+            AND processado_em IS NULL
+          """,
+          (cnpj_emitente,),
+        )
+        row = cur.fetchone()
+
+      return int(row[0] or 0) if row else 0
 
   def _extrair_cnpj_emitente(self, conteudo: bytes) -> str | None:
     try:

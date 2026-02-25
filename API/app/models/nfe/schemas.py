@@ -268,3 +268,9 @@ class ImportacaoXMLResponse(BaseModel):
   duplicados: int
   erros: int
   resultados: List[ImportacaoXMLArquivoResultado] = Field(default_factory=list)
+  
+class ImportacaoXMLPendenciasResponse(BaseModel):
+  status: str
+  cnpj_emitente: str
+  total_pendentes: int
+  possui_pendentes: bool

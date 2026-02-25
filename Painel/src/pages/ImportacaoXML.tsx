@@ -1,12 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FileUp, FileText, Upload, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { importarXmlArquivo, processarXmlsImportados, type ImportacaoXmlArquivoResultado } from '@/services/nfe';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+
+import {
+  consultarPendenciasXmlImportados,
+  importarXmlArquivo,
+  processarXmlsImportados,
+  type ImportacaoXmlArquivoResultado,
+  type ImportacaoXmlPendenciasResponse,
+} from '@/services/nfe';
 
 interface XmlFileItem {
   id: string;
@@ -33,7 +41,10 @@ export default function ImportacaoXML() {
   const [importedCount, setImportedCount] = useState(0);
   const [results, setResults] = useState<ImportacaoXmlArquivoResultado[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [pendenciasXml, setPendenciasXml] = useState<ImportacaoXmlPendenciasResponse | null>(null);
+  const [isLoadingPendencias, setIsLoadingPendencias] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const totalSize = useMemo(
     () => selectedFiles.reduce((acc, item) => acc + item.file.size, 0),
@@ -98,15 +109,51 @@ export default function ImportacaoXML() {
     return Array.from(cnpjs);
   }, [results]);
 
+  const carregarPendenciasXml = async () => {
+    if (!user?.emitente_cnpj) {
+      setPendenciasXml(null);
+      return;
+    }
+
+    setIsLoadingPendencias(true);
+
+    try {
+      const response = await consultarPendenciasXmlImportados(user.emitente_cnpj);
+      setPendenciasXml(response);
+    } catch {
+      setPendenciasXml(null);
+    } finally {
+      setIsLoadingPendencias(false);
+    }
+  };
+
+  useEffect(() => {
+    void carregarPendenciasXml();
+  }, [user?.emitente_cnpj]);
+
+  const cnpjsParaProcessar = useMemo(() => {
+    if (cnpjsImportados.length) {
+      return cnpjsImportados;
+    }
+
+    if (pendenciasXml?.possui_pendentes && user?.emitente_cnpj) {
+      return [user.emitente_cnpj];
+    }
+
+    return [] as string[];
+  }, [cnpjsImportados, pendenciasXml?.possui_pendentes, user?.emitente_cnpj]);
+
+  const possuiPendenciasNaoProcessadas = (pendenciasXml?.total_pendentes ?? 0) > 0;
+
   const processImportedXml = async () => {
-    if (!cnpjsImportados.length || isProcessing || isImporting) {
+    if (!cnpjsParaProcessar.length || isProcessing || isImporting) {
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      for (const cnpj of cnpjsImportados) {
+      for (const cnpj of cnpjsParaProcessar) {
         const response = await processarXmlsImportados(cnpj);
 
         if (response.status !== 'processado') {
@@ -118,6 +165,7 @@ export default function ImportacaoXML() {
         title: 'Processamento concluído',
         description: 'Itens, notas e KPIs foram registrados com sucesso.',
       });
+      await carregarPendenciasXml();
     } catch (error) {
       toast({
         title: 'Falha no processamento',
@@ -157,6 +205,7 @@ export default function ImportacaoXML() {
       });
 
       setSelectedFiles([]);
+      await carregarPendenciasXml();
     } catch (error) {
       toast({
         title: 'Falha na importação',
@@ -225,7 +274,7 @@ export default function ImportacaoXML() {
             <Button
               variant="default"
               onClick={processImportedXml}
-              disabled={!cnpjsImportados.length || isImporting || isProcessing}
+              disabled={!cnpjsParaProcessar.length || isImporting || isProcessing || isLoadingPendencias}
             >
               <FileText className="mr-2 h-4 w-4" />
               {isProcessing ? 'Processando NFe...' : 'Processar NFe (itens, notas e KPIs)'}
@@ -238,6 +287,12 @@ export default function ImportacaoXML() {
                 Progresso da importação: {importedCount}/{Math.max(selectedFiles.length, importedCount)} XMLs processados
               </p>
               <Progress value={progressValue} />
+            </div>
+          )}
+
+          {possuiPendenciasNaoProcessadas && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Ainda faltam XMLs a serem processados ({pendenciasXml?.total_pendentes}). O botão <strong>Processar NFe</strong> permanece habilitado até concluir todos.
             </div>
           )}
 

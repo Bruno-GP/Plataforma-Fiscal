@@ -9,6 +9,7 @@ from app.models.nfe.schemas import (
   ConsultaKPIResponse,
   ImportacaoXMLResponse,
   ImportacaoXMLArquivoResultado,
+  ImportacaoXMLPendenciasResponse,
   ProcessarNFeRequest,
   ProcessarNFeResponse
 )
@@ -54,6 +55,18 @@ async def importar_xml(arquivos: list[UploadFile] = File(...)):
     duplicados=sum(1 for item in resultados if item.status == "duplicado"),
     erros=sum(1 for item in resultados if item.status == "erro"),
     resultados=resultados,
+  )
+  
+@nfe_router.get("/xml/pendencias", response_model=ImportacaoXMLPendenciasResponse)
+def consultar_pendencias_xml(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
+  service_importacao = XMLImportacaoService()
+  total_pendentes = service_importacao.contar_xmls_pendentes(cnpj_emitente)
+
+  return ImportacaoXMLPendenciasResponse(
+    status="ok",
+    cnpj_emitente=cnpj_emitente,
+    total_pendentes=total_pendentes,
+    possui_pendentes=total_pendentes > 0,
   )
   
 @nfe_router.post("/xml/processar-importados", response_model=ProcessarNFeResponse)

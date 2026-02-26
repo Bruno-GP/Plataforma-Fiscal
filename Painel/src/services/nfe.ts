@@ -232,7 +232,6 @@ export const consultarPendenciasXmlImportados = async (
   return response.json() as Promise<ImportacaoXmlPendenciasResponse>;
 };
 
-
 export interface ProcessamentoNfePeriodoKpi {
   ano: number;
   mes: number;

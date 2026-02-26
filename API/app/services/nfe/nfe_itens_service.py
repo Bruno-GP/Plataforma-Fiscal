@@ -47,17 +47,24 @@ class NFeItensService:
             return 0
 
         sql_buscar_nota = """
-            SELECT id
-            FROM public.notas
-            WHERE numero_nf = %s
-              AND emitente_cnpj = %s
-              AND data_emissao = %s
+            SELECT
+                n.id,
+                p.empresa_id,
+                p.cnpj_emitente
+            FROM public.notas AS n
+            JOIN public.processamentos AS p
+              ON p.id = n.processamento_id
+            WHERE n.numero_nf = %s
+              AND n.emitente_cnpj = %s
+              AND n.data_emissao = %s
             LIMIT 1;
         """
 
         sql_insert_item = """
             INSERT INTO public.itens (
                 nota_id,
+                empresa_id,
+                cnpj,
                 item_numero,
                 produto_codigo,
                 descricao,
@@ -69,7 +76,8 @@ class NFeItensService:
             )
             SELECT
                 %s, %s, %s, %s, %s,
-                %s, %s, %s, %s
+                %s, %s, %s, %s, %s, 
+                %s
             WHERE NOT EXISTS (
                 SELECT 1
                 FROM public.itens
@@ -104,12 +112,14 @@ class NFeItensService:
                         )
                         continue
 
-                    nota_id = resultado[0]
+                    nota_id, empresa_id, cnpj = resultado
                     for item in nota.itens:
                         cur.execute(
                             sql_insert_item,
                             (
                                 nota_id,
+                                empresa_id,
+                                cnpj,
                                 item.numero_item,
                                 item.codigo_produto,
                                 item.descricao,

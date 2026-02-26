@@ -62,6 +62,8 @@ CREATE INDEX IF NOT EXISTS idx_notas_numero_emitente ON notas (numero_nf, emiten
 CREATE TABLE IF NOT EXISTS itens (
     id              BIGSERIAL PRIMARY KEY,
     nota_id         BIGINT NOT NULL REFERENCES notas(id) ON DELETE CASCADE,
+    empresa_id      BIGINT REFERENCES empresas(id) ON DELETE SET NULL,
+    cnpj            VARCHAR(20) REFERENCES empresas(cnpj) ON DELETE SET NULL,
     item_numero     INT,
     produto_codigo  VARCHAR(120),
     descricao       VARCHAR(255),
@@ -87,6 +89,15 @@ CREATE INDEX IF NOT EXISTS idx_cfops_codigo ON cfops (codigo);
 
 CREATE INDEX IF NOT EXISTS idx_itens_nota ON itens (nota_id);
 CREATE INDEX IF NOT EXISTS idx_itens_produto ON itens (produto_codigo);
+
+CREATE INDEX IF NOT EXISTS idx_itens_empresa ON itens (empresa_id);
+CREATE INDEX IF NOT EXISTS idx_itens_cnpj ON itens (cnpj);
+
+ALTER TABLE IF EXISTS itens
+    ADD COLUMN IF NOT EXISTS empresa_id BIGINT REFERENCES empresas(id) ON DELETE SET NULL;
+
+ALTER TABLE IF EXISTS itens
+    ADD COLUMN IF NOT EXISTS cnpj VARCHAR(20) REFERENCES empresas(cnpj) ON DELETE SET NULL;
 
 -- 4) Erros do processamento (opcional)
 CREATE TABLE IF NOT EXISTS processamento_erros (

@@ -135,6 +135,7 @@ def consultar_kpis(
   "/kpis/comparativo",
   response_model=ComparativoKPIMensalResponse,
 )
+
 def comparar_kpis_mensal(
   emitente_cnpj: str | None = Query(default=None),
   email: str | None = Query(default=None),
@@ -198,6 +199,7 @@ def comparar_kpis_mensal(
   "/kpis/comparativo/atual",
   response_model=ComparativoKPIMensalResponse,
 )
+
 def comparar_kpis_mensal_atual(
   emitente_cnpj: str | None = Query(default=None),
   email: str | None = Query(default=None),
@@ -283,6 +285,5 @@ def consultar_notas(
     status_code=status.HTTP_501_NOT_IMPLEMENTED,
     detail="Consulta detalhada de notas ainda não implementada. Use GET /nfe/kpis para KPIs consolidados.",
   )
-
 
 router.include_router(nfe_router)

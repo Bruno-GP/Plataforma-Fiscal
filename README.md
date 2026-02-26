@@ -30,9 +30,6 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe), consolidar 
 
 ---
 
-
----
-
 ## Sumário
 
 - [Requisitos](#requisitos)

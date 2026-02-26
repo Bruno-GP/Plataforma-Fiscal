@@ -24,11 +24,6 @@ CREATE TABLE IF NOT EXISTS processamentos (
     data_processamento  TIMESTAMPTZ
 );
 
--- Índice útil para buscar processamentos por empresa
-CREATE INDEX IF NOT EXISTS idx_processamentos_empresa
-    ON processamentos (empresa_id);
-
-
 -- 2) Notas
 CREATE TABLE IF NOT EXISTS notas (
     id                      BIGSERIAL PRIMARY KEY,
@@ -53,10 +48,6 @@ CREATE TABLE IF NOT EXISTS notas (
     criado_em               TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     atualizado_em           TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-
--- Índices úteis para notas
-CREATE INDEX IF NOT EXISTS idx_notas_emitente_data ON notas (emitente_cnpj, data_emissao);
-CREATE INDEX IF NOT EXISTS idx_notas_numero_emitente ON notas (numero_nf, emitente_cnpj);
 
 -- 3) Itens
 CREATE TABLE IF NOT EXISTS itens (
@@ -85,20 +76,6 @@ CREATE TABLE IF NOT EXISTS cfops (
     descricao  VARCHAR(255) NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_cfops_codigo ON cfops (codigo);
-
-CREATE INDEX IF NOT EXISTS idx_itens_nota ON itens (nota_id);
-CREATE INDEX IF NOT EXISTS idx_itens_produto ON itens (produto_codigo);
-
-CREATE INDEX IF NOT EXISTS idx_itens_empresa ON itens (empresa_id);
-CREATE INDEX IF NOT EXISTS idx_itens_cnpj ON itens (cnpj);
-
-ALTER TABLE IF EXISTS itens
-    ADD COLUMN IF NOT EXISTS empresa_id BIGINT REFERENCES empresas(id) ON DELETE SET NULL;
-
-ALTER TABLE IF EXISTS itens
-    ADD COLUMN IF NOT EXISTS cnpj VARCHAR(20) REFERENCES empresas(cnpj) ON DELETE SET NULL;
-
 -- 4) Erros do processamento (opcional)
 CREATE TABLE IF NOT EXISTS processamento_erros (
     id                 BIGSERIAL PRIMARY KEY,
@@ -107,8 +84,6 @@ CREATE TABLE IF NOT EXISTS processamento_erros (
     mensagem           TEXT NOT NULL,
     detalhe            TEXT
 );
-
-CREATE INDEX IF NOT EXISTS idx_proc_erros_proc ON processamento_erros (processamento_id);
 
 -- 5) KPIs do processamento (opcional)
 CREATE TABLE IF NOT EXISTS kpis (
@@ -131,11 +106,6 @@ CREATE TABLE IF NOT EXISTS kpis (
     top_cidades          JSONB DEFAULT '[]'::jsonb
 );
 
-CREATE INDEX IF NOT EXISTS idx_kpis_proc ON kpis (processamento_id);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_kpis_periodo
-    ON kpis (emitente_cnpj, periodo_ano, periodo_mes);
-
 -- 6) Login
 CREATE TABLE IF NOT EXISTS login (
     id          BIGSERIAL PRIMARY KEY,
@@ -145,13 +115,6 @@ CREATE TABLE IF NOT EXISTS login (
     senha 		VARCHAR(255) NOT NULL,
     criado_em   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-
-CREATE INDEX IF NOT EXISTS idx_login_empresa ON login (empresa_id);
-
-CREATE INDEX IF NOT EXISTS idx_login_cnpj ON login (cnpj);
-
--- Ajustes para ambientes já existentes (migrations rápidas)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_login_email_lower ON login (LOWER(email));
 
 -- 7) Controle de XMLs importados por CNPJ
 CREATE TABLE IF NOT EXISTS xml_importados (
@@ -164,4 +127,38 @@ CREATE TABLE IF NOT EXISTS xml_importados (
     UNIQUE (cnpj_emitente, hash_arquivo)
 );
 
+-- Índice útil para buscar processamentos por empresa
+CREATE INDEX IF NOT EXISTS idx_processamentos_empresa ON processamentos (empresa_id);
+
+-- Índices úteis para notas
+CREATE INDEX IF NOT EXISTS idx_notas_emitente_data ON notas (emitente_cnpj, data_emissao);
+CREATE INDEX IF NOT EXISTS idx_notas_numero_emitente ON notas (numero_nf, emitente_cnpj);
+
+CREATE INDEX IF NOT EXISTS idx_cfops_codigo ON cfops (codigo);
+
+CREATE INDEX IF NOT EXISTS idx_itens_nota ON itens (nota_id);
+CREATE INDEX IF NOT EXISTS idx_itens_produto ON itens (produto_codigo);
+
+CREATE INDEX IF NOT EXISTS idx_itens_empresa ON itens (empresa_id);
+CREATE INDEX IF NOT EXISTS idx_itens_cnpj ON itens (cnpj);
+
+CREATE INDEX IF NOT EXISTS idx_proc_erros_proc ON processamento_erros (processamento_id);
+
+CREATE INDEX IF NOT EXISTS idx_kpis_proc ON kpis (processamento_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kpis_periodo ON kpis (emitente_cnpj, periodo_ano, periodo_mes);
+
+CREATE INDEX IF NOT EXISTS idx_login_empresa ON login (empresa_id);
+
+CREATE INDEX IF NOT EXISTS idx_login_cnpj ON login (cnpj);
+
+-- Ajustes para ambientes já existentes (migrations rápidas)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_login_email_lower ON login (LOWER(email));
+
 CREATE INDEX IF NOT EXISTS idx_xml_importados_cnpj ON xml_importados (cnpj_emitente);
+
+ALTER TABLE IF EXISTS itens
+    ADD COLUMN IF NOT EXISTS empresa_id BIGINT REFERENCES empresas(id) ON DELETE SET NULL;
+
+ALTER TABLE IF EXISTS itens
+    ADD COLUMN IF NOT EXISTS cnpj VARCHAR(20) REFERENCES empresas(cnpj) ON DELETE SET NULL;

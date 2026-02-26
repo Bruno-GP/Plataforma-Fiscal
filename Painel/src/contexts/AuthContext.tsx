@@ -137,14 +137,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   ): Promise<AuthResult> => {
     const empresaNomeNormalizado = empresaNome.trim();
     const emailNormalizado = email.trim();
-    const senhaNormalizada = password.trim();
+    const senhaInformada = password;
+    const senhaParaValidacao = password.trim();
     const cnpjNormalizado = cnpj.replace(/\D/g, '');
 
-    if (!empresaNomeNormalizado || !emailNormalizado || !senhaNormalizada || !cnpjNormalizado) {
+    if (!empresaNomeNormalizado || !emailNormalizado || !senhaParaValidacao || !cnpjNormalizado) {
       return { ok: false, message: 'Informe empresa, email, senha e CNPJ.' };
     }
 
-    if (senhaNormalizada.length < 8) {
+    if (senhaParaValidacao.length < 8) {
       return { ok: false, message: 'A senha deve ter no mínimo 8 caracteres.' };
     }
 
@@ -160,7 +161,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       body: JSON.stringify({
         empresa_nome: empresaNomeNormalizado,
         email: emailNormalizado,
-        senha: senhaNormalizada,
+        senha: senhaInformada,
         cnpj: cnpjNormalizado,
       }),
     });

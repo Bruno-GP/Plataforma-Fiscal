@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 export default function CadastroEmpresaInterno() {
   const [empresaNome, setEmpresaNome] = useState('');
@@ -15,6 +16,7 @@ export default function CadastroEmpresaInterno() {
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,12 +28,9 @@ export default function CadastroEmpresaInterno() {
       if (result.ok) {
         toast({
           title: 'Cadastro realizado!',
-          description: 'Empresa e login cadastrados com sucesso.',
+          description: 'Empresa e login cadastrados com sucesso. Redirecionando para o login...',
         });
-        setEmpresaNome('');
-        setEmail('');
-        setPassword('');
-        setCnpj('');
+        navigate('/login', { replace: true });
         return;
       }
 
@@ -81,6 +80,8 @@ export default function CadastroEmpresaInterno() {
                 placeholder="00.000.000/0000-00"
                 value={cnpj}
                 onChange={(e) => setCnpj(e.target.value)}
+                inputMode="numeric"
+                maxLength={18}
                 required
               />
             </div>
@@ -103,6 +104,7 @@ export default function CadastroEmpresaInterno() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
                 required
               />
             </div>

@@ -30,6 +30,27 @@ interface LoginResponse {
   empresa_nome: string;
 }
 
+interface ApiErrorDetail {
+  detail?: string | { msg?: string }[];
+}
+
+const extractApiErrorMessage = (errorData: ApiErrorDetail | null, fallback: string) => {
+  if (!errorData?.detail) {
+    return fallback;
+  }
+
+  if (typeof errorData.detail === 'string') {
+    return errorData.detail;
+  }
+
+  const firstDetail = errorData.detail[0];
+  if (firstDetail?.msg) {
+    return firstDetail.msg;
+  }
+
+  return fallback;
+};
+
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 const API_BASE_URL = RAW_API_BASE_URL.endsWith('/api')
   ? RAW_API_BASE_URL
@@ -84,10 +105,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
+      const errorData = (await response.json().catch(() => null)) as ApiErrorDetail | null;
       return {
         ok: false,
-        message: errorData?.detail ?? 'Email ou senha inválidos.',
+        message: extractApiErrorMessage(errorData, 'Email ou senha inválidos.'),
       };
     }
 
@@ -114,8 +135,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     cnpj: string,
     autoLogin = true,
   ): Promise<AuthResult> => {
-    if (!empresaNome || !email || !password || !cnpj) {
+    const empresaNomeNormalizado = empresaNome.trim();
+    const emailNormalizado = email.trim();
+    const senhaNormalizada = password.trim();
+    const cnpjNormalizado = cnpj.replace(/\D/g, '');
+
+    if (!empresaNomeNormalizado || !emailNormalizado || !senhaNormalizada || !cnpjNormalizado) {
       return { ok: false, message: 'Informe empresa, email, senha e CNPJ.' };
+    }
+
+    if (senhaNormalizada.length < 8) {
+      return { ok: false, message: 'A senha deve ter no mínimo 8 caracteres.' };
+    }
+
+    if (cnpjNormalizado.length !== 14) {
+      return { ok: false, message: 'Informe um CNPJ válido com 14 dígitos.' };
     }
 
     const response = await fetch(`${API_BASE_URL}/auth/registrar`, {
@@ -124,25 +158,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        empresa_nome: empresaNome,
-        email,
-        senha: password,
-        cnpj,
+        empresa_nome: empresaNomeNormalizado,
+        email: emailNormalizado,
+        senha: senhaNormalizada,
+        cnpj: cnpjNormalizado,
       }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
+      const errorData = (await response.json().catch(() => null)) as ApiErrorDetail | null;
       return {
         ok: false,
-        message: errorData?.detail ?? 'Não foi possível cadastrar.',
+        message: extractApiErrorMessage(errorData, 'Não foi possível cadastrar.'),
       };
     }
 
     const data = (await response.json()) as LoginResponse;
     
     if (autoLogin) {
-      const resolvedId = data.login_id ?? data.empresa_id ?? email;
+      const resolvedId = data.login_id ?? data.empresa_id ?? emailNormalizado;
       const displayName = resolveDisplayName(data.empresa_nome, data.email);
       const nextUser: User = {
         id: String(resolvedId),

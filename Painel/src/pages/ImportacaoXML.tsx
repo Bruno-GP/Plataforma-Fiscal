@@ -93,6 +93,7 @@ export default function ImportacaoXML() {
   };
 
   const clearList = () => {
+    setSelectedFiles([]);
     setImportedCount(0);
     setResults([]);
   };

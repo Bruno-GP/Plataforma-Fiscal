@@ -15,7 +15,6 @@ export function AppHeader() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const nomeExibicao = user?.name?.trim() || 'Empresa';
-  const primeiroNome = nomeExibicao.split(/\s+/)[0];
 
   const handleLogout = () => {
     logout();
@@ -27,9 +26,9 @@ export function AppHeader() {
       <div className="flex min-h-14 w-full flex-wrap items-center gap-2 px-4 py-2 md:flex-nowrap">
 
         {/* ESQUERDA — Empresa / Logo */}
-        <div className="min-w-0 md:w-32 md:shrink-0">
-          <span className="block truncate text-sm font-semibold" title={nomeExibicao}>
-            {primeiroNome}
+        <div className="shrink-0">
+          <span className="block text-sm font-semibold" title={nomeExibicao}>
+            {nomeExibicao}
           </span>
         </div>
 

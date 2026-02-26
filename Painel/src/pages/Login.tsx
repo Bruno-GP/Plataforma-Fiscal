@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-import logo from '@/Gestão Prática_Logomarca_Serviços.svg';
+import logo from '@/assets/Nova Logo.jpeg';
 
 export default function Login() {
   const [email, setEmail] = useState('');

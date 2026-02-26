@@ -4,6 +4,33 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe), consolidar 
 
 > **Resumo rápido**: a API expõe endpoints para processamento em lote de XMLs e consulta/ comparação de KPIs, além de endpoints de autenticação (login/registro). A base de rotas da aplicação fica sob `/api`, e a documentação interativa do FastAPI pode ser acessada em `/docs`.
 
+## Atualizações recentes (itens adicionados e removidos)
+
+### ✅ Adicionado
+
+- **Fluxo de importação de XML por upload** na API:
+  - `POST /api/nfe/xml/importar` para envio em lote (até 10.000 arquivos por requisição).
+  - `GET /api/nfe/xml/pendencias` para consultar quantidade pendente por CNPJ emitente.
+  - `POST /api/nfe/xml/processar-importados` para processar XMLs importados e marcar como processados.
+- **Cadastro com dados da empresa no Auth**:
+  - `POST /api/auth/registrar` agora recebe também `empresa_nome`.
+  - Respostas de login/registro incluem `empresa_nome`.
+- **Página de Importação de XML no painel** (`/importacao-xml`), integrada aos novos endpoints da API.
+- **Cadastro interno de empresa no painel** (`/interno/cadastro-empresa`).
+
+### ❌ Removido / descontinuado
+
+- **Rotas de NFC-e não estão ativas no roteador principal**: atualmente a API expõe somente os grupos `/api/nfe` e `/api/auth`.
+- **Páginas de `Clientes` e `Configurações` foram retiradas da navegação ativa** no front-end (rotas comentadas em `App.tsx`).
+
+### 🔎 Observações de compatibilidade
+
+- O painel continua aceitando `VITE_API_URL` com ou sem sufixo `/api`.
+- O endpoint `GET /api/nfe/notas` permanece mapeado, porém retorna **501 Not Implemented**.
+
+---
+
+
 ---
 
 ## Sumário

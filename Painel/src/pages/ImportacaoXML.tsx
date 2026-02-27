@@ -188,6 +188,15 @@ export default function ImportacaoXML() {
       return;
     }
 
+    if (!user?.emitente_cnpj) {
+      toast({
+        title: 'Falha na importação',
+        description: 'Não foi possível identificar o CNPJ da empresa logada.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsImporting(true);
     setImportedCount(0);
     setResults([]);
@@ -196,7 +205,7 @@ export default function ImportacaoXML() {
 
     try {
       for (const item of selectedFiles) {
-        const response = await importarXmlArquivo(item.file);
+        const response = await importarXmlArquivo(item.file, user.emitente_cnpj);
         importResults.push(...response.resultados);
         setResults([...importResults]);
         setImportedCount((count) => count + 1);

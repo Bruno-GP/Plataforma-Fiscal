@@ -26,7 +26,10 @@ def processar_nfe(request: ProcessarNFeRequest):
   return ProcessarNFeService().executar(request)
 
 @nfe_router.post("/xml/importar", response_model=ImportacaoXMLResponse)
-async def importar_xml(arquivos: list[UploadFile] = File(...)):
+async def importar_xml(
+  arquivos: list[UploadFile] = File(...),
+  cnpj_empresa_origem: str = Query(..., min_length=14, max_length=20),
+):
   if len(arquivos) > 10000:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
@@ -45,7 +48,17 @@ async def importar_xml(arquivos: list[UploadFile] = File(...)):
       detail="Nenhum arquivo XML válido foi enviado.",
     )
 
-  resultados_service = XMLImportacaoService().importar_arquivos(conteudos)
+  try:
+    resultados_service = XMLImportacaoService().importar_arquivos(
+      conteudos,
+      cnpj_empresa_origem=cnpj_empresa_origem,
+    )
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+    
   resultados = [ImportacaoXMLArquivoResultado(**resultado.__dict__) for resultado in resultados_service]
 
   return ImportacaoXMLResponse(

@@ -21,8 +21,17 @@ class XMLImportacaoService:
   def __init__(self):
     self.config = carregar_config_postgres()
 
-  def importar_arquivos(self, arquivos: Iterable[tuple[str, bytes]]) -> list[XMLImportacaoResultado]:
+  def importar_arquivos(
+    self,
+    arquivos: Iterable[tuple[str, bytes]],
+    cnpj_empresa_origem: str,
+  ) -> list[XMLImportacaoResultado]:
     resultados: list[XMLImportacaoResultado] = []
+    
+    cnpj_empresa_origem_normalizado = self._normalizar_cnpj(cnpj_empresa_origem)
+
+    if not cnpj_empresa_origem_normalizado:
+      raise ValueError("CNPJ de origem inválido.")
 
     with psycopg.connect(
       host=self.config["host"],
@@ -42,6 +51,17 @@ class XMLImportacaoService:
               cnpj_emitente=None,
               status="erro",
               mensagem="XML não foi processado por não ser compativel",
+            )
+          )
+          continue
+        
+        if cnpj_emitente != cnpj_empresa_origem_normalizado:
+          resultados.append(
+            XMLImportacaoResultado(
+              arquivo=nome_arquivo,
+              cnpj_emitente=cnpj_emitente,
+              status="erro",
+              mensagem="XML rejeitado: o CNPJ emitente difere do CNPJ da empresa autenticada.",
             )
           )
           continue
@@ -219,7 +239,13 @@ class XMLImportacaoService:
     if cnpj_emitente is None or not cnpj_emitente.text:
       return None
 
-    digits = "".join(ch for ch in cnpj_emitente.text if ch.isdigit())
+    return self._normalizar_cnpj(cnpj_emitente.text)
+
+  def _normalizar_cnpj(self, cnpj: str | None) -> str | None:
+    if not cnpj:
+      return None
+
+    digits = "".join(ch for ch in cnpj if ch.isdigit())
     if len(digits) == 14:
       return digits
 

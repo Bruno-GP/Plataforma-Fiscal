@@ -192,11 +192,17 @@ export interface ImportacaoXmlResponse {
   resultados: ImportacaoXmlArquivoResultado[];
 }
 
-export const importarXmlArquivo = async (file: File): Promise<ImportacaoXmlResponse> => {
+export const importarXmlArquivo = async (
+  file: File,
+  cnpjEmpresaOrigem: string,
+): Promise<ImportacaoXmlResponse> => {
   const formData = new FormData();
   formData.append('arquivos', file);
 
-  const response = await fetch(`${API_BASE_URL}/nfe/xml/importar`, {
+  const cnpjDigits = cnpjEmpresaOrigem.replace(/\D/g, '');
+  const searchParams = new URLSearchParams({ cnpj_empresa_origem: cnpjDigits });
+
+  const response = await fetch(`${API_BASE_URL}/nfe/xml/importar?${searchParams.toString()}`, {
     method: 'POST',
     body: formData,
   });

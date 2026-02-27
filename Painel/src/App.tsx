@@ -15,6 +15,7 @@ import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 import CadastroEmpresa from "./pages/CadastroEmpresa";
 import ImportacaoXML from "./pages/ImportacaoXML";
+import Atualizacoes from "./pages/Atualizacoes";
 
 // QueryClient centraliza cache e invalidação de chamadas HTTP da aplicação.
 const queryClient = new QueryClient();
@@ -77,6 +78,14 @@ const App = () => (
                   </MainLayout>
                 }
               />
+              {/* <Route
+                path="/atualizacoes"
+                element={
+                  <MainLayout>
+                    <Atualizacoes />
+                  </MainLayout>
+                }
+              /> */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

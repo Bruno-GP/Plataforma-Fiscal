@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { FileUp, FileText, Upload, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ const formatFileSize = (size: number): string => {
 };
 
 export default function ImportacaoXML() {
+  const queryClient = useQueryClient();
   const [selectedFiles, setSelectedFiles] = useState<XmlFileItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
@@ -86,10 +88,6 @@ export default function ImportacaoXML() {
 
       return nextFiles;
     });
-  };
-
-  const removeFile = (id: string) => {
-    setSelectedFiles((prev) => prev.filter((item) => item.id !== id));
   };
 
   const clearList = () => {
@@ -166,6 +164,13 @@ export default function ImportacaoXML() {
         title: 'Processamento concluído',
         description: 'Itens, notas e KPIs foram registrados com sucesso.',
       });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['nfe-kpis'] }),
+        queryClient.invalidateQueries({ queryKey: ['nfe-kpis-years'] }),
+        queryClient.invalidateQueries({ queryKey: ['nfe-kpis-clientes'] }),
+      ]);
+
       await carregarPendenciasXml();
     } catch (error) {
       toast({

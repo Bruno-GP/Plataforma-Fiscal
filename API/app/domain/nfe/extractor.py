@@ -11,6 +11,7 @@ NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
 logger = logging.getLogger("NFeExtractor")
 
+"""Normaliza os formatos de data de emissão existentes em NF-e/NFC-e."""
 def _parse_data_emissao(dh_emi: str, d_emi: str) -> date:
     if dh_emi:
         valor = dh_emi.strip()
@@ -31,6 +32,8 @@ def _parse_data_emissao(dh_emi: str, d_emi: str) -> date:
 # =========================
 # ITEM DA NOTA
 # =========================
+
+"""Representa um item de produto/serviço extraído de uma nota fiscal."""
 class ItemNota:
     def __init__(
         self,
@@ -58,6 +61,8 @@ class ItemNota:
 # =========================
 # NOTA EXTRAÍDA (CONTRATO ÚNICO)
 # =========================
+
+"""Contrato interno padronizado para consumo dos serviços de NFe."""
 class NotaExtraida:
     def __init__(
         self,
@@ -111,6 +116,8 @@ class NotaExtraida:
 # =========================
 # EXTRACTOR
 # =========================
+
+"""Converte XMLs já carregados em objetos de domínio usados no processamento."""
 class NFeExtractor:
     def extrair(self, xmls: List[XmlNFe]) -> List[NotaExtraida]:
         notas: List[NotaExtraida] = []
@@ -119,9 +126,12 @@ class NFeExtractor:
             root = xml_nfe.xml
             inf = root.find(".//nfe:infNFe", NS)
             if inf is None:
+                # Sem bloco principal da NFe não há dados mínimos para extração.
                 continue
 
             # ===== Identificação =====
+            
+            # Bloco `ide` concentra número, modelo e datas oficiais do documento.
             chave = inf.attrib.get("Id", "").replace("NFe", "")
             ide = inf.find("nfe:ide", NS)
             if ide is None:
@@ -134,6 +144,7 @@ class NFeExtractor:
             dh_emi = ide.findtext("nfe:dhEmi", "", NS)
             d_emi = ide.findtext("nfe:dEmi", "", NS)
             if not dh_emi and not d_emi:
+                # Documento sem data de emissão é considerado inválido no pipeline.
                 continue
 
             data_emissao = _parse_data_emissao(dh_emi, d_emi)
@@ -146,6 +157,8 @@ class NFeExtractor:
             emitente_cnpj = emit.findtext("nfe:CNPJ", "", NS)
 
             # ===== Destinatário =====
+            
+            # Para NFC-e (modelo 65), destinatário pode vir vazio no XML.
             dest = inf.find("nfe:dest", NS)
 
             if dest is not None:
@@ -171,6 +184,7 @@ class NFeExtractor:
             # ===== Totais =====
             tot = inf.find("nfe:total/nfe:ICMSTot", NS)
             if tot is None:
+                # Totais ausentes impedem KPI e consolidação financeira.
                 continue
 
             def d(tag):

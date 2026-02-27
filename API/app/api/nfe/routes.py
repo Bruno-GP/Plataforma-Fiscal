@@ -16,15 +16,20 @@ from app.models.nfe.schemas import (
 
 router = APIRouter()
 
+# Sub-roteador de NFe/NFCe. Centraliza upload, processamento e consultas analíticas.
+
 nfe_router = APIRouter(prefix="/nfe", tags=["NFe"])
 
 # -------------------------
 # Processamento
 # -------------------------
+
+"""Processa XMLs disponíveis em pasta (origem batch/legado)."""
 @nfe_router.post("/processar", response_model=ProcessarNFeResponse)
 def processar_nfe(request: ProcessarNFeRequest):
   return ProcessarNFeService().executar(request)
 
+"""Recebe arquivos XML e persiste no staging de importação sem processar KPIs."""
 @nfe_router.post("/xml/importar", response_model=ImportacaoXMLResponse)
 async def importar_xml(
   arquivos: list[UploadFile] = File(...),
@@ -35,6 +40,7 @@ async def importar_xml(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail="O limite máximo por importação é de 10000 XMLs.",
     )
+    # `conteudos` mantém apenas nome + bytes dos arquivos válidos para o serviço de importação.
 
   conteudos: list[tuple[str, bytes]] = []
   for arquivo in arquivos:
@@ -69,7 +75,8 @@ async def importar_xml(
     erros=sum(1 for item in resultados if item.status == "erro"),
     resultados=resultados,
   )
-  
+    
+"""Informa quantos XMLs já importados ainda não foram processados."""
 @nfe_router.get("/xml/pendencias", response_model=ImportacaoXMLPendenciasResponse)
 def consultar_pendencias_xml(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
   service_importacao = XMLImportacaoService()
@@ -82,6 +89,7 @@ def consultar_pendencias_xml(cnpj_emitente: str = Query(..., min_length=14, max_
     possui_pendentes=total_pendentes > 0,
   )
   
+"""Executa processamento do staging e marca XMLs como processados em caso de sucesso."""  
 @nfe_router.post("/xml/processar-importados", response_model=ProcessarNFeResponse)
 def processar_xmls_importados(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
   service_importacao = XMLImportacaoService()
@@ -98,6 +106,7 @@ def processar_xmls_importados(cnpj_emitente: str = Query(..., min_length=14, max
     xmls_importados=xmls_importados,
   )
 
+  # A marcação evita reprocessamento dos mesmos arquivos em chamadas futuras.
   if resposta.status == "processado":
     service_importacao.marcar_como_processados(ids_processados)
 
@@ -106,6 +115,8 @@ def processar_xmls_importados(cnpj_emitente: str = Query(..., min_length=14, max
 # -------------------------
 # Consulta de KPIs (consolidado)
 # -------------------------
+
+"""Consulta KPIs consolidados por filtros de emitente/periodicidade e paginação."""
 @nfe_router.get("/kpis", response_model=ConsultaKPIResponse)
 def consultar_kpis(
     emitente_cnpj: str | None = Query(default=None),

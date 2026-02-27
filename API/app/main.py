@@ -3,6 +3,7 @@ from pathlib import Path
 
 import os
 
+# Carrega variáveis de ambiente locais para desenvolvimento e execução via scripts.
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
@@ -11,12 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
 
+# Instância principal da API (metadados aparecem no /docs automaticamente).
 app = FastAPI(
     title="API - Agente Extrator NFe",
     version="0.1.0",
     description="API para processar XML de NFe e preparar dados para relatórios executivos."
 )
 
+# Configuração de CORS por ENV para permitir múltiplos ambientes (local/homolog/prod).
 cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "*")
 cors_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
 allow_all_origins = cors_origins == ["*"]
@@ -37,4 +40,5 @@ app.include_router(api_router, prefix="/api")
 
 @app.get("/health")
 def health_check():
+    """Endpoint simples de observabilidade para monitoramento."""
     return {"status": "ok"}

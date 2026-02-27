@@ -5,12 +5,14 @@ from collections import defaultdict
 from app.models.nfe.schemas import NFeNota
 from app.domain.nfe.extractor import NotaExtraida, ItemNota
 
+"""Estrutura agregada usada pelo serviço para retorno e métricas de processamento."""
 class ConsolidacaoNFe:
     def __init__(self, notas: List[NotaExtraida]):
         self.notas = notas
         self.notas_processadas = len(notas)
         self.itens_processados = sum(len(n.itens) for n in notas)
-
+        
+        # Resultado agregado por produto/NCM/CFOP para análises de mix e volume.
         self.itens_consolidados = self._consolidar_itens()
 
     def _consolidar_itens(self):
@@ -55,10 +57,8 @@ class ConsolidacaoNFe:
         ]
 
 class NFeConsolidator:
-    """
-    Consolida e deduplica notas extraídas.
-    Prepara dados para KPIs e persistência (Sheets/SQL).
-    """
+    """ Consolida e deduplica notas extraídas. Prepara dados para KPIs e persistência (Sheets/SQL). """
+    """Remove duplicidades e devolve objeto pronto para persistência/relatórios."""
 
     def consolidar(self, notas: List[NotaExtraida]) -> ConsolidacaoNFe:
         mapa: Dict[Tuple, NFeNota] = {}
@@ -66,7 +66,8 @@ class NFeConsolidator:
 
         for nota in notas:
             chave = self._chave_dedupe(nota)
-
+            
+            # Dedupe conservador: mantém a primeira ocorrência encontrada.
             if chave in mapa:
                 duplicadas += 1
                 continue

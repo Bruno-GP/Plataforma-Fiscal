@@ -22,10 +22,11 @@ interface XmlFileItem {
   file: File;
 }
 
+// Limite alinhado com a API para evitar tentativa de envio acima do aceito no backend.
 const MAX_XML_FILES = 10000;
 
 const formatFileSize = (size: number): string => {
-    if (size >= 1024 * 1024) {
+  if (size >= 1024 * 1024) {
     return `${(size / (1024 * 1024)).toFixed(2)} MB`;
   }
 
@@ -36,6 +37,7 @@ const formatFileSize = (size: number): string => {
   return `${size} B`;
 };
 
+// Fluxo da tela: selecionar XMLs -> importar para staging -> processar para gerar KPIs.
 export default function ImportacaoXML() {
   const queryClient = useQueryClient();
   const [selectedFiles, setSelectedFiles] = useState<XmlFileItem[]>([]);
@@ -54,6 +56,7 @@ export default function ImportacaoXML() {
   );
 
   const addFiles = (files: FileList | null) => {
+    // Mantém apenas .xml e remove duplicidades por nome para reduzir erro operacional.
     if (!files?.length) {
       return;
     }
@@ -109,6 +112,7 @@ export default function ImportacaoXML() {
   }, [results]);
 
   const carregarPendenciasXml = async () => {
+    // Consulta pendências sempre com base no CNPJ da empresa logada.
     if (!user?.emitente_cnpj) {
       setPendenciasXml(null);
       return;
@@ -145,6 +149,7 @@ export default function ImportacaoXML() {
   const possuiPendenciasNaoProcessadas = (pendenciasXml?.total_pendentes ?? 0) > 0;
 
   const processImportedXml = async () => {
+    // Processa por CNPJ para suportar importações misturadas no mesmo lote.
     if (!cnpjsParaProcessar.length || isProcessing || isImporting) {
       return;
     }
@@ -184,6 +189,7 @@ export default function ImportacaoXML() {
   };
 
   const startImport = async () => {
+    // Importação é sequencial para atualizar progresso visual e facilitar troubleshooting por arquivo.
     if (!selectedFiles.length || isImporting) {
       return;
     }

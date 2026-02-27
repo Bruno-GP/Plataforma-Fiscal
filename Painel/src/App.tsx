@@ -16,6 +16,7 @@ import NotFound from "./pages/NotFound";
 import CadastroEmpresa from "./pages/CadastroEmpresa";
 import ImportacaoXML from "./pages/ImportacaoXML";
 
+// QueryClient centraliza cache e invalidação de chamadas HTTP da aplicação.
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -26,6 +27,13 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+
+            {/*
+              Rotas principais da aplicação.
+              Para criar uma nova página, adicione import + <Route> aqui
+              e, quando necessário, encapsule com <MainLayout>.
+            */}
+            
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/interno/cadastro-empresa" element={<CadastroEmpresa />} />

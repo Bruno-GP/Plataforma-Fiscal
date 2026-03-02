@@ -103,9 +103,13 @@ A aplicação carrega um `.env` localizado em `API/app/.env` usando `python-dote
 | --- | --- | --- | --- |
 | `POSTGRES_HOST` | Sim | Host do PostgreSQL | `localhost` |
 | `POSTGRES_PORT` | Sim | Porta do PostgreSQL (inteiro) | `5432` |
-| `POSTGRES_DB` | Sim | Nome do banco | `nfe` |
+| `POSTGRES_DB` | Sim* | Banco padrão/legado (fallback) | `nfe` |
+| `POSTGRES_DB_NFE` | Não | Nome do banco dedicado da NFe | `nfe` |
+| `POSTGRES_DB_SPED` | Não | Nome do banco dedicado do SPED Fiscal | `sped_fiscal` |
 | `POSTGRES_USER` | Sim | Usuário do banco | `postgres` |
 | `POSTGRES_PASSWORD` | Sim | Senha do banco | `postgres` |
+
+> \* A aplicação mantém compatibilidade com `POSTGRES_DB`. Se `POSTGRES_DB_NFE`/`POSTGRES_DB_SPED` forem informados, cada contexto passa a usar seu banco dedicado.
 
 ### CORS (Cross-Origin Resource Sharing)
 
@@ -119,6 +123,8 @@ A aplicação carrega um `.env` localizado em `API/app/.env` usando `python-dote
 ## Preparação do banco de dados
 
 O projeto **não possui migrações** automatizadas. Portanto, você deve criar o schema no PostgreSQL antes de iniciar a API. Abaixo está um **exemplo de script SQL** compatível com as tabelas e colunas utilizadas pelo código. Ajuste nomes/tipos conforme sua política interna.
+
+Para ambientes com bancos separados por domínio, utilize primeiro `API/app/file/sql/create_databases.sql` e depois aplique os schemas de cada módulo (`NFe` e `SPED`).
 
 > **Dica:** rode o SQL no banco definido nas variáveis `POSTGRES_*`.
 

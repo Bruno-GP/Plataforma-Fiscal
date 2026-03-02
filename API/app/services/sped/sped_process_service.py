@@ -10,8 +10,11 @@ from app.services.sped.postgres_config import carregar_config_postgres_sped
 
 
 class ProcessarSpedFiscalService:
+  def __init__(self):
+    self.config = carregar_config_postgres_sped()
+  
   def executar(self, request: ProcessarSpedFiscalRequest) -> ProcessarSpedFiscalResponse:
-    config = carregar_config_postgres_sped()
+    config = self.config
 
     # Validação rápida da conexão do banco SPED antes do processamento completo.
     with connect(

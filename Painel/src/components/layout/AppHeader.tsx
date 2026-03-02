@@ -1,4 +1,4 @@
-import { BellRing, FileUp, LayoutDashboard, LogOut, Receipt } from 'lucide-react';
+import { BellRing, FileDigit, FileUp, LayoutDashboard, Receipt } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { hasUnreadUpdates } from '../../contexts/updates';
@@ -11,6 +11,7 @@ const menuItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Faturamento', url: '/faturamento', icon: Receipt },
   { title: 'Importação XML', url: '/importacao-xml', icon: FileUp },
+  { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit },
   // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
   // { title: 'Clientes', url: '/clientes', icon: Users },
   // { title: 'Configurações', url: '/configuracoes', icon: Settings },

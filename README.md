@@ -8,6 +8,9 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe), consolidar 
 
 ### ✅ Adicionado
 
+- **Processamento inicial de SPED Fiscal**:
+  - `POST /api/sped/processar` para ler arquivo TXT do SPED, validar conexão do banco SPED e retornar resumo por tipo de registro.
+
 - **Fluxo de importação de XML por upload** na API:
   - `POST /api/nfe/xml/importar` para envio em lote (até 10.000 arquivos por requisição).
   - `GET /api/nfe/xml/pendencias` para consultar quantidade pendente por CNPJ emitente.
@@ -20,7 +23,7 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe), consolidar 
 
 ### ❌ Removido / descontinuado
 
-- **Rotas de NFC-e não estão ativas no roteador principal**: atualmente a API expõe somente os grupos `/api/nfe` e `/api/auth`.
+- **Rotas de NFC-e não estão ativas no roteador principal**: atualmente a API expõe os grupos `/api/nfe`, `/api/sped` e `/api/auth`.
 - **Páginas de `Clientes` e `Configurações` foram retiradas da navegação ativa** no front-end (rotas comentadas em `App.tsx`).
 
 ### 🔎 Observações de compatibilidade
@@ -105,7 +108,12 @@ A aplicação carrega um `.env` localizado em `API/app/.env` usando `python-dote
 | `POSTGRES_PORT` | Sim | Porta do PostgreSQL (inteiro) | `5432` |
 | `POSTGRES_DB` | Sim* | Banco padrão/legado (fallback) | `nfe` |
 | `POSTGRES_DB_NFE` | Não | Nome do banco dedicado da NFe | `nfe` |
-| `POSTGRES_DB_SPED` | Não | Nome do banco dedicado do SPED Fiscal | `sped_fiscal` |
+| `POSTGRES_DB_SPED` | Não | Nome do banco dedicado do SPED Fiscal (compatibilidade) | `sped_fiscal` |
+| `POSTGRES_SPED_HOST` | Não | Host dedicado do banco SPED (fallback para `POSTGRES_HOST`) | `localhost` |
+| `POSTGRES_SPED_PORT` | Não | Porta dedicada do banco SPED (fallback para `POSTGRES_PORT`) | `5432` |
+| `POSTGRES_SPED_DB` | Não | Banco dedicado do SPED (prioritário) | `sped_fiscal` |
+| `POSTGRES_SPED_USER` | Não | Usuário dedicado do banco SPED (fallback para `POSTGRES_USER`) | `postgres` |
+| `POSTGRES_SPED_PASSWORD` | Não | Senha dedicada do banco SPED (fallback para `POSTGRES_PASSWORD`) | `postgres` |
 | `POSTGRES_USER` | Sim | Usuário do banco | `postgres` |
 | `POSTGRES_PASSWORD` | Sim | Senha do banco | `postgres` |
 
@@ -901,3 +909,11 @@ Motivos comuns:
 - Para produção, configure CORS com origens específicas em `CORS_ALLOW_ORIGINS`.
 - Em ambientes com múltiplos períodos, a API retorna um KPI por período encontrado.
 - A consulta detalhada de notas ainda não está disponível; utilize `GET /api/nfe/kpis` para indicadores.
+
+### Exemplo de `.env`
+
+Use o arquivo `API/app/.env.example` como base para o seu `API/app/.env`.
+
+```bash
+cp API/app/.env.example API/app/.env
+```

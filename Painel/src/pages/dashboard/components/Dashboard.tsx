@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
 
   const emitenteCnpj = user?.emitente_cnpj;
+  const hasEmitenteCnpj = Boolean(emitenteCnpj);
 
   const monthNumber = Number.parseInt(selectedMonth, 10);
   const year = Number.parseInt(selectedYear, 10);
@@ -36,19 +37,21 @@ export default function Dashboard() {
   const yearsQuery = useQuery({
     queryKey: ['nfe-kpis-years', emitenteCnpj],
     queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+    enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
   const kpisQuery = useQuery({
     queryKey: ['nfe-kpis', emitenteCnpj, year],
     queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year }),
+    enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
   const previousYearQuery = useQuery({
     queryKey: ['nfe-kpis', emitenteCnpj, year - 1],
     queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 }),
-    enabled: year > 2000,
+    enabled: hasEmitenteCnpj && year > 2000,
     staleTime: 5 * 60 * 1000,
   });
 

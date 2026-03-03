@@ -8,6 +8,15 @@ interface User {
   avatar?: string;
 }
 
+interface StoredUserLegacy {
+  id?: string;
+  name?: string;
+  email?: string;
+  emitente_cnpj?: string;
+  cnpj?: string;
+  avatar?: string;
+}
+
 interface AuthResult {
   ok: boolean;
   message?: string;
@@ -69,7 +78,25 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem('user');
-    return stored ? JSON.parse(stored) : null;
+
+    if (!stored) {
+      return null;
+    }
+
+    const parsed = JSON.parse(stored) as StoredUserLegacy;
+    const emitenteCnpj = (parsed.emitente_cnpj ?? parsed.cnpj ?? '').replace(/\D/g, '');
+
+    if (!parsed.id || !parsed.email || !emitenteCnpj) {
+      return null;
+    }
+
+    return {
+      id: String(parsed.id),
+      name: parsed.name ?? '',
+      email: parsed.email,
+      emitente_cnpj: emitenteCnpj,
+      avatar: parsed.avatar,
+    };
   });
 
     const resolveDisplayName = (empresaNome: string | null | undefined, email: string) => {

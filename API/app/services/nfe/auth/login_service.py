@@ -83,18 +83,13 @@ class LoginService:
     def _nome_empresa_completo(self, nome: str | None) -> str:
         return nome.strip() if nome else ""
 
-    def _has_tem_sped_column(self, cur) -> bool:
+    def _ensure_tem_sped_column(self, cur) -> None:
         cur.execute(
             """
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name = 'empresas'
-              AND column_name = 'tem_sped'
-            LIMIT 1;
+            ALTER TABLE public.empresas
+            ADD COLUMN IF NOT EXISTS tem_sped BOOLEAN NOT NULL DEFAULT FALSE;
             """
         )
-        return cur.fetchone() is not None
 
     def registrar(self, empresa_nome: str, email: str, senha: str, cnpj: str, tem_sped: bool = False) -> LoginResult:
         cnpj_normalizado = normalizar_cnpj(cnpj)
@@ -106,7 +101,7 @@ class LoginService:
 
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
-                has_tem_sped_column = self._has_tem_sped_column(cur)
+                self._ensure_tem_sped_column(cur)
                 cur.execute(
                     """
                     SELECT id, cnpj, nome
@@ -124,24 +119,15 @@ class LoginService:
                     )
                     
                     cur.execute(
-                        (
-                            """
-                            INSERT INTO public.empresas (cnpj, nome, tem_sped)
-                            VALUES (%s, %s, %s)
-                            RETURNING id, cnpj, nome;
-                            """
-                            if has_tem_sped_column
-                            else
-                            """
-                            INSERT INTO public.empresas (cnpj, nome)
-                            VALUES (%s, %s)
-                            RETURNING id, cnpj, nome;
-                            """
-                        ),
-                        (cnpj_normalizado, empresa_nome_normalizado, tem_sped) if has_tem_sped_column else (cnpj_normalizado, empresa_nome_normalizado),
+                        """
+                        INSERT INTO public.empresas (cnpj, nome, tem_sped)
+                        VALUES (%s, %s, %s)
+                        RETURNING id, cnpj, nome;
+                        """,
+                        (cnpj_normalizado, empresa_nome_normalizado, tem_sped),
                     )
                     empresa = cur.fetchone()
-                elif has_tem_sped_column:
+                else:
                     
                     cur.execute(
                         """
@@ -209,36 +195,20 @@ class LoginService:
         
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
-                has_tem_sped_column = self._has_tem_sped_column(cur)
+                self._ensure_tem_sped_column(cur)
                 cur.execute(
-                    (
-                        """
-                        SELECT login.id,
-                               login.empresa_id,
-                               login.cnpj,
-                               login.email,
-                               login.senha,
-                               empresas.nome,
-                               COALESCE(empresas.tem_sped, false)
-                        FROM public.login
-                        JOIN public.empresas ON empresas.id = login.empresa_id
-                        WHERE login.email = %s;
-                        """
-                        if has_tem_sped_column
-                        else
-                        """
-                        SELECT login.id,
-                               login.empresa_id,
-                               login.cnpj,
-                               login.email,
-                               login.senha,
-                               empresas.nome,
-                               false AS tem_sped
-                        FROM public.login
-                        JOIN public.empresas ON empresas.id = login.empresa_id
-                        WHERE login.email = %s;
-                        """
-                    ),
+                    """
+                    SELECT login.id,
+                           login.empresa_id,
+                           login.cnpj,
+                           login.email,
+                           login.senha,
+                           empresas.nome,
+                           COALESCE(empresas.tem_sped, false)
+                    FROM public.login
+                    JOIN public.empresas ON empresas.id = login.empresa_id
+                    WHERE login.email = %s;
+                    """,
                     (email_normalizado,),
                 )
                 login = cur.fetchone()

@@ -79,7 +79,7 @@ async def importar_sped(
 
 @sped_router.get("/pendencias", response_model=ImportacaoSpedPendenciasResponse)
 def consultar_pendencias_sped(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
-  _validar_empresa_sped(cnpj_empresa_origem)
+  _validar_empresa_sped(cnpj_emitente)
   service = SpedImportacaoService()
   total_pendentes = service.contar_pendentes(cnpj_emitente)
 
@@ -93,7 +93,7 @@ def consultar_pendencias_sped(cnpj_emitente: str = Query(..., min_length=14, max
 
 @sped_router.post("/processar-importados", response_model=ProcessarSpedImportadosResponse)
 def processar_sped_importados(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
-  _validar_empresa_sped(cnpj_empresa_origem)
+  _validar_empresa_sped(cnpj_emitente)
   service = SpedImportacaoService()
 
   try:

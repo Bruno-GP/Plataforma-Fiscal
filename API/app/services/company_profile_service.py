@@ -16,18 +16,13 @@ class CompanyProfileService:
       "connect_timeout": 5,
     }
 
-  def _has_tem_sped_column(self, cur) -> bool:
+  def _ensure_tem_sped_column(self, cur) -> None:
     cur.execute(
       """
-      SELECT 1
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'empresas'
-        AND column_name = 'tem_sped'
-      LIMIT 1;
+      ALTER TABLE public.empresas
+      ADD COLUMN IF NOT EXISTS tem_sped BOOLEAN NOT NULL DEFAULT FALSE;
       """
     )
-    return cur.fetchone() is not None
 
   def empresa_tem_sped(self, cnpj: str) -> bool:
     cnpj_normalizado = normalizar_cnpj(cnpj)
@@ -36,8 +31,7 @@ class CompanyProfileService:
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
-        if not self._has_tem_sped_column(cur):
-          return False
+        self._ensure_tem_sped_column(cur)
 
         cur.execute(
           """

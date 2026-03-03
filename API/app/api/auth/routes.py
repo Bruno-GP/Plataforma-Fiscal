@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+import psycopg
 
 from app.models.nfe.auth.schemas import (
     LoginCadastroRequest,
@@ -31,6 +32,11 @@ def registrar_login(request: LoginCadastroRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+    except psycopg.OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Serviço de autenticação indisponível no momento.",
+        ) from exc
 
     return LoginCadastroResponse(
         status="cadastrado",
@@ -53,6 +59,11 @@ def autenticar_login(request: LoginRequest):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
+        ) from exc
+    except psycopg.OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Serviço de autenticação indisponível no momento.",
         ) from exc
 
     return LoginResponse(

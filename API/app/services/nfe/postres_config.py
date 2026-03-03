@@ -85,3 +85,32 @@ def carregar_config_postgres() -> dict:
             default=dsn_config.get("sslmode"),
         ),
     }
+    
+def opcoes_conexao_postgres(config: dict) -> list[dict]:
+    """Monta opções de conexão priorizando DSN e com fallback para parâmetros explícitos."""
+    opcoes: list[dict] = []
+
+    conninfo = config.get("conninfo")
+    if conninfo:
+        opcao_conninfo: dict[str, str | int] = {
+            "conninfo": conninfo,
+            "connect_timeout": 5,
+        }
+        sslmode = config.get("sslmode")
+        if sslmode:
+            opcao_conninfo["sslmode"] = sslmode
+        opcoes.append(opcao_conninfo)
+
+    opcoes.append(
+        {
+            "host": config["host"],
+            "port": config["port"],
+            "dbname": config["database"],
+            "user": config["user"],
+            "password": config["password"],
+            "connect_timeout": 5,
+            **({"sslmode": config["sslmode"]} if config.get("sslmode") else {}),
+        }
+    )
+
+    return opcoes

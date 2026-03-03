@@ -20,9 +20,34 @@ app = FastAPI(
 )
 
 # Configuração de CORS por ENV para permitir múltiplos ambientes (local/homolog/prod).
+def _normalizar_origem(origin: str) -> str:
+    """Normaliza origem removendo aspas e barra final para evitar mismatch no preflight."""
+    return origin.strip().strip('"\'').rstrip("/")
+
+
+def _expandir_aliases_locais(origens: list[str]) -> list[str]:
+    """Expande localhost/127.0.0.1 para reduzir falhas comuns de CORS no desenvolvimento."""
+    expandidas: set[str] = set()
+    for origem in origens:
+        expandidas.add(origem)
+        if "localhost" in origem:
+            expandidas.add(origem.replace("localhost", "127.0.0.1"))
+        if "127.0.0.1" in origem:
+            expandidas.add(origem.replace("127.0.0.1", "localhost"))
+    return sorted(expandidas)
+
+
 cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "*")
-cors_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
-allow_all_origins = cors_origins == ["*"]
+
+cors_origins = [
+    _normalizar_origem(origin)
+    for origin in cors_origins_env.split(",")
+    if _normalizar_origem(origin)
+]
+
+allow_all_origins = "*" in cors_origins
+if not allow_all_origins:
+    cors_origins = _expandir_aliases_locais(cors_origins)
 
 cors_allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
 if allow_all_origins and cors_allow_credentials:

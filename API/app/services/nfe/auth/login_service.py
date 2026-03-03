@@ -33,13 +33,25 @@ class LoginService:
         config = carregar_config_postgres()
 
         self.conn_params = {
-            "host": config["host"],
-            "port": config["port"],
-            "dbname": config["database"],
-            "user": config["user"],
-            "password": config["password"],
             "connect_timeout": 5,
         }
+        
+        
+        if config.get("conninfo"):
+            self.conn_params["conninfo"] = config["conninfo"]
+        else:
+            self.conn_params.update(
+                {
+                    "host": config["host"],
+                    "port": config["port"],
+                    "dbname": config["database"],
+                    "user": config["user"],
+                    "password": config["password"],
+                }
+            )
+
+        if config.get("sslmode"):
+            self.conn_params["sslmode"] = config["sslmode"]
 
     def _hash_senha(self, senha: str, salt: bytes) -> str:
         digest = hashlib.pbkdf2_hmac(

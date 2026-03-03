@@ -60,6 +60,20 @@ const extractApiErrorMessage = (errorData: ApiErrorDetail | null, fallback: stri
   return fallback;
 };
 
+const normalizeSessionCnpj = (value: string | null | undefined): string => {
+  const digits = (value ?? '').replace(/\D/g, '');
+
+  if (digits.length !== 14) {
+    return '';
+  }
+
+  if ([...digits].every((digit) => digit === '0')) {
+    return '';
+  }
+
+  return digits;
+};
+
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 const API_BASE_URL = RAW_API_BASE_URL.endsWith('/api')
   ? RAW_API_BASE_URL
@@ -146,7 +160,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       id: String(resolvedId),
       name: displayName,
       email: data.email,
-      emitente_cnpj: data.cnpj,
+      emitente_cnpj: normalizeSessionCnpj(data.cnpj),
       avatar: undefined,
     };
 
@@ -210,7 +224,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         id: String(resolvedId),
         name: displayName,
         email: data.email,
-        emitente_cnpj: data.cnpj,
+        emitente_cnpj: normalizeSessionCnpj(data.cnpj),
         avatar: undefined,
       };
 

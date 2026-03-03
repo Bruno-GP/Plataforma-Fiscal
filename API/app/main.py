@@ -38,6 +38,7 @@ def _expandir_aliases_locais(origens: list[str]) -> list[str]:
 
 
 cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "*")
+cors_origin_regex_env = os.getenv("CORS_ALLOW_ORIGIN_REGEX", "").strip()
 
 cors_origins = [
     _normalizar_origem(origin)
@@ -48,6 +49,14 @@ cors_origins = [
 allow_all_origins = "*" in cors_origins
 if not allow_all_origins:
     cors_origins = _expandir_aliases_locais(cors_origins)
+    
+# Regex padrão para ambiente local: evita 400 no preflight quando a porta do front muda.
+# Pode ser sobrescrito por CORS_ALLOW_ORIGIN_REGEX.
+default_local_origin_regex = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+cors_origin_regex = (
+    cors_origin_regex_env
+    or (default_local_origin_regex if not allow_all_origins else None)
+)
 
 cors_allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
 if allow_all_origins and cors_allow_credentials:
@@ -56,6 +65,7 @@ if allow_all_origins and cors_allow_credentials:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins if cors_origins else ["*"],
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],

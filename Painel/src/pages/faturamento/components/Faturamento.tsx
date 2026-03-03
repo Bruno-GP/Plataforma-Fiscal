@@ -12,13 +12,18 @@ import { FaturamentoRankingCard, type RankingEntry } from './FaturamentoRankingC
 import { FaturamentoStats } from './FaturamentoStats';
 import { monthLabels } from '../utils/utils';
 
+const hasValidEmitenteCnpj = (value: string | undefined) => {
+  const digits = (value ?? '').replace(/\D/g, '');
+  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
+};
+
 export default function Faturamento() {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedYear, setSelectedYear] = useState('2025');
   
   const { user } = useAuth();
   const emitenteCnpj = user?.emitente_cnpj;
-  const hasEmitenteCnpj = Boolean(emitenteCnpj);
+  const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
   
   const monthNumber = Number.parseInt(selectedMonth, 10);
   const year = Number.parseInt(selectedYear, 10);

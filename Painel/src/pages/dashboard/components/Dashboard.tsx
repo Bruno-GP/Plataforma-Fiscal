@@ -19,7 +19,14 @@ const formatCurrency = (value: number) =>
     style: 'currency',
     currency: 'BRL',
   }).format(value);
+
 const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+
+const hasValidEmitenteCnpj = (value: string | undefined) => {
+  const digits = (value ?? '').replace(/\D/g, '');
+  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
+};
+
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -29,7 +36,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
 
   const emitenteCnpj = user?.emitente_cnpj;
-  const hasEmitenteCnpj = Boolean(emitenteCnpj);
+  const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
 
   const monthNumber = Number.parseInt(selectedMonth, 10);
   const year = Number.parseInt(selectedYear, 10);

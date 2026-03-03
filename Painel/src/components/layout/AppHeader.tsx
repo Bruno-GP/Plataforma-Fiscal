@@ -7,15 +7,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { NavLink } from '@/components/NavLink';
 
-const menuItems = [
+const menuItemsBase = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Faturamento', url: '/faturamento', icon: Receipt },
-  { title: 'Importação XML', url: '/importacao-xml', icon: FileUp },
-  { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit },
   // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
   // { title: 'Clientes', url: '/clientes', icon: Users },
   // { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ]
+
+const menuItemImportacaoXml = { title: 'Importação XML', url: '/importacao-xml', icon: FileUp };
+const menuItemImportacaoSped = { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit };
 
 export function AppHeader() {
   const { user, logout } = useAuth();
@@ -23,6 +24,10 @@ export function AppHeader() {
   const location = useLocation();
   const nomeExibicao = user?.name?.trim() || 'Empresa';
   const hasUnreadUpdateLog = hasUnreadUpdates();
+
+  const menuItems = user?.tem_sped
+    ? [...menuItemsBase, menuItemImportacaoSped]
+    : [...menuItemsBase, menuItemImportacaoXml];
 
   const handleLogout = () => {
     logout();

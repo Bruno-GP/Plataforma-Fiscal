@@ -5,8 +5,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { consultarPendenciasXmlImportados } from '@/services/nfe';
 
 import { AppHeader } from './AppHeader';
-// import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-// import { AppSidebar } from './AppSidebar';
 // import { ChatWidget } from '@/components/chat/ChatWidget';
 
 interface MainLayoutProps {
@@ -20,7 +18,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   useEffect(() => {
     const carregarPendencias = async () => {
-      if (!user?.emitente_cnpj) {
+      if (!user?.emitente_cnpj || user.tem_sped) {
         setTotalPendentes(0);
         return;
       }
@@ -34,7 +32,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     };
 
     void carregarPendencias();
-  }, [location.pathname, user?.emitente_cnpj]);
+  }, [location.pathname, user?.emitente_cnpj, user?.tem_sped]);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -44,7 +42,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     <div className="min-h-screen w-full bg-background">
       <AppHeader />
 
-      {totalPendentes > 0 && (
+      {totalPendentes > 0 && !user?.tem_sped && (
         <div className="border-b border-amber-200 bg-amber-50">
           <div className="mx-auto flex min-h-11 max-w-[1700px] items-center gap-2 px-4 py-2 text-sm text-amber-900 md:px-8">
             <span>

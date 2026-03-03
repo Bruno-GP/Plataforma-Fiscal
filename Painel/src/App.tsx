@@ -3,8 +3,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
+
+import { AuthProvider, useAuth } from "@/contexts/AuthContext"
 import { ChatProvider } from "@/contexts/ChatContext";
+
 import { MainLayout } from "@/components/layout/MainLayout";
 
 import Login from "./pages/Login";
@@ -20,6 +22,20 @@ import ImportacaoSPED from "./pages/ImportacaoSPED";
 
 // QueryClient centraliza cache e invalidação de chamadas HTTP da aplicação.
 const queryClient = new QueryClient();
+
+const ImportacaoFiscalRoute = ({ tipo }: { tipo: 'xml' | 'sped' }) => {
+  const { user } = useAuth();
+
+  if (tipo === 'xml' && user?.tem_sped) {
+    return <Navigate to="/importacao-sped" replace />;
+  }
+
+  if (tipo === 'sped' && !user?.tem_sped) {
+    return <Navigate to="/importacao-xml" replace />;
+  }
+
+  return tipo === 'xml' ? <ImportacaoXML /> : <ImportacaoSPED />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -75,7 +91,7 @@ const App = () => (
                 path="/importacao-xml"
                 element={
                   <MainLayout>
-                    <ImportacaoXML />
+                    <ImportacaoFiscalRoute tipo="xml" />
                   </MainLayout>
                 }
               />
@@ -83,7 +99,7 @@ const App = () => (
                 path="/importacao-sped"
                 element={
                   <MainLayout>
-                    <ImportacaoSPED />
+                    <ImportacaoFiscalRoute tipo="sped" />
                   </MainLayout>
                 }
               />

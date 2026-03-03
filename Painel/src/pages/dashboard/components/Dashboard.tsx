@@ -11,6 +11,7 @@ import { DashboardStatCard } from './DashboardStatCard';
 
 import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
 import { useAuth } from '@/contexts/AuthContext'
+import { fetchSpedKpis } from '@/services/sped';
 // import { useChat } from '@/contexts/ChatContext';
 import { monthLabels } from '../../faturamento/utils/utils';
 
@@ -37,27 +38,28 @@ export default function Dashboard() {
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
+  const usaSped = Boolean(user?.tem_sped);
 
   const monthNumber = Number.parseInt(selectedMonth, 10);
   const year = Number.parseInt(selectedYear, 10);
 
   const yearsQuery = useQuery({
-    queryKey: ['nfe-kpis-years', emitenteCnpj],
-    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+    queryKey: ['kpis-years', usaSped ? 'sped' : 'xml', emitenteCnpj],
+    queryFn: () => (usaSped ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }) : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
   const kpisQuery = useQuery({
-    queryKey: ['nfe-kpis', emitenteCnpj, year],
-    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year }),
+    queryKey: ['kpis', usaSped ? 'sped' : 'xml', emitenteCnpj, year],
+    queryFn: () => (usaSped ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year }) : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year })),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
   const previousYearQuery = useQuery({
-    queryKey: ['nfe-kpis', emitenteCnpj, year - 1],
-    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 }),
+    queryKey: ['kpis', usaSped ? 'sped' : 'xml', emitenteCnpj, year - 1],
+    queryFn: () => (usaSped ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 }) : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 })),
     enabled: hasEmitenteCnpj && year > 2000,
     staleTime: 5 * 60 * 1000,
   });

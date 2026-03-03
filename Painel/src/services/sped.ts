@@ -85,3 +85,52 @@ export const processarSpedsImportados = async (cnpjEmitente: string): Promise<Pr
 
   return response.json() as Promise<ProcessamentoSpedResponse>;
 };
+
+export interface SpedKpiItem {
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  emitente_cnpj?: string | null;
+  kpis: {
+    total_vendas?: number | string | null;
+    quantidade_notas?: number | null;
+    ticket_medio?: number | string | null;
+    maior_nota?: number | string | null;
+    menor_nota?: number | string | null;
+    total_icms?: number | string | null;
+    total_ipi?: number | string | null;
+    total_pis?: number | string | null;
+    total_cofins?: number | string | null;
+    top_clientes?: Array<Record<string, unknown>> | null;
+    top_produtos?: Array<Record<string, unknown>> | null;
+    top_cidades?: Array<Record<string, unknown>> | null;
+  };
+}
+
+export interface ConsultaSpedKpiResponse {
+  status: string;
+  total: number;
+  resultados: SpedKpiItem[];
+}
+
+export const fetchSpedKpis = async (params: { emitente_cnpj?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; offset?: number } = {}): Promise<ConsultaSpedKpiResponse> => {
+  const searchParams = new URLSearchParams();
+  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+
+  if (digits.length === 14) {
+    searchParams.set('emitente_cnpj', digits);
+  }
+
+  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
+  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
+  if (params.limite) searchParams.set('limite', String(params.limite));
+  if (params.offset) searchParams.set('offset', String(params.offset));
+
+  const response = await fetch(`${API_BASE_URL}/sped/kpis?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar KPIs do SPED.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar KPIs do SPED.');
+  }
+
+  return response.json() as Promise<ConsultaSpedKpiResponse>;
+};

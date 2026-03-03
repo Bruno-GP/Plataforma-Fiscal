@@ -1,5 +1,6 @@
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 
+from app.models.nfe.schemas import ConsultaKPIResponse
 from app.models.sped.schemas import (
   ImportacaoSpedArquivoResultado,
   ImportacaoSpedPendenciasResponse,
@@ -11,9 +12,18 @@ from app.models.sped.schemas import (
 )
 from app.services.sped.sped_importacao_service import SpedImportacaoService
 from app.services.sped.sped_process_service import ProcessarSpedFiscalService
+from app.services.company_profile_service import CompanyProfileService
+from app.services.sped.sped_consulta_service import SpedConsultaService
 
 router = APIRouter()
 sped_router = APIRouter(prefix="/sped", tags=["SPED Fiscal"])
+
+def _validar_empresa_sped(cnpj: str):
+  if not CompanyProfileService().empresa_tem_sped(cnpj):
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Esta empresa está configurada para XML e não para SPED Fiscal.",
+    )
 
 @sped_router.post("/processar", response_model=ProcessarSpedFiscalResponse)
 def processar_sped_fiscal(request: ProcessarSpedFiscalRequest):
@@ -24,6 +34,8 @@ async def importar_sped(
   arquivos: list[UploadFile] = File(...),
   cnpj_empresa_origem: str = Query(..., min_length=14, max_length=20),
 ):
+  _validar_empresa_sped(cnpj_empresa_origem)
+  
   if len(arquivos) > 500:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
@@ -67,6 +79,7 @@ async def importar_sped(
 
 @sped_router.get("/pendencias", response_model=ImportacaoSpedPendenciasResponse)
 def consultar_pendencias_sped(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
+  _validar_empresa_sped(cnpj_empresa_origem)
   service = SpedImportacaoService()
   total_pendentes = service.contar_pendentes(cnpj_emitente)
 
@@ -80,6 +93,7 @@ def consultar_pendencias_sped(cnpj_emitente: str = Query(..., min_length=14, max
 
 @sped_router.post("/processar-importados", response_model=ProcessarSpedImportadosResponse)
 def processar_sped_importados(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
+  _validar_empresa_sped(cnpj_empresa_origem)
   service = SpedImportacaoService()
 
   try:
@@ -114,7 +128,24 @@ def processar_sped_importados(cnpj_emitente: str = Query(..., min_length=14, max
     banco_sped=config["database"],
   )
 
+@sped_router.get("/kpis", response_model=ConsultaKPIResponse)
+def consultar_kpis_sped(
+  emitente_cnpj: str = Query(..., min_length=14, max_length=20),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=100),
+  offset: int = Query(default=0),
+):
+  _validar_empresa_sped(emitente_cnpj)
 
-router.include_router(sped_router)
+  resultados = SpedConsultaService().listar_kpis(
+    emitente_cnpj=emitente_cnpj,
+    periodo_ano=periodo_ano,
+    periodo_mes=periodo_mes,
+    limite=limite,
+    offset=offset,
+  )
+
+  return ConsultaKPIResponse(status="ok", total=len(resultados), resultados=resultados)
 
 router.include_router(sped_router)

@@ -13,6 +13,7 @@ export default function CadastroEmpresaInterno() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [cnpj, setCnpj] = useState('');
+  const [temSped, setTemSped] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const { toast } = useToast();
@@ -23,7 +24,7 @@ export default function CadastroEmpresaInterno() {
     setIsLoading(true);
 
     try {
-      const result = await register(empresaNome, email, password, cnpj, false);
+      const result = await register(empresaNome, email, password, cnpj, temSped, false);
 
       if (result.ok) {
         toast({
@@ -84,6 +85,18 @@ export default function CadastroEmpresaInterno() {
                 maxLength={18}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="temSped">Origem fiscal</Label>
+              <select
+                id="temSped"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={temSped ? 'sped' : 'xml'}
+                onChange={(e) => setTemSped(e.target.value === 'sped')}
+              >
+                <option value="xml">Empresa usa XML</option>
+                <option value="sped">Empresa usa SPED Fiscal</option>
+              </select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email do login</Label>

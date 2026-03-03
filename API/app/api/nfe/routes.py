@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, HTTPException, status, UploadFile, File
 
 from app.services.nfe.process_nfe import ProcessarNFeService
 from app.services.nfe.nfe_consulta_service import NFeConsultaService
+from app.services.company_profile_service import CompanyProfileService
 from app.services.nfe.xml_importacao_service import XMLImportacaoService
 from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
@@ -20,6 +21,13 @@ router = APIRouter()
 
 nfe_router = APIRouter(prefix="/nfe", tags=["NFe"])
 
+def _validar_empresa_xml(cnpj: str):
+  if CompanyProfileService().empresa_tem_sped(cnpj):
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Esta empresa está configurada para SPED Fiscal e não para XML.",
+    )
+
 # -------------------------
 # Processamento
 # -------------------------
@@ -35,6 +43,8 @@ async def importar_xml(
   arquivos: list[UploadFile] = File(...),
   cnpj_empresa_origem: str = Query(..., min_length=14, max_length=20),
 ):
+  _validar_empresa_xml(cnpj_empresa_origem)
+  
   if len(arquivos) > 10000:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
@@ -79,6 +89,7 @@ async def importar_xml(
 """Informa quantos XMLs já importados ainda não foram processados."""
 @nfe_router.get("/xml/pendencias", response_model=ImportacaoXMLPendenciasResponse)
 def consultar_pendencias_xml(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
+  _validar_empresa_xml(cnpj_emitente)
   service_importacao = XMLImportacaoService()
   total_pendentes = service_importacao.contar_xmls_pendentes(cnpj_emitente)
 
@@ -92,6 +103,7 @@ def consultar_pendencias_xml(cnpj_emitente: str = Query(..., min_length=14, max_
 """Executa processamento do staging e marca XMLs como processados em caso de sucesso."""  
 @nfe_router.post("/xml/processar-importados", response_model=ProcessarNFeResponse)
 def processar_xmls_importados(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
+  _validar_empresa_xml(cnpj_emitente)
   service_importacao = XMLImportacaoService()
   xmls_importados = service_importacao.listar_xmls_importados_nao_processados(cnpj_emitente)
 
@@ -137,6 +149,8 @@ def consultar_kpis(
             status_code=400,
             detail="Informe um emitente_cnpj válido.",
         )
+       
+    _validar_empresa_xml(emitente_resolvido)    
 
     resultados = service.listar_kpis(
         emitente_cnpj=emitente_resolvido,

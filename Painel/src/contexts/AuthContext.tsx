@@ -6,6 +6,7 @@ interface User {
   email: string;
   emitente_cnpj: string;
   avatar?: string;
+  tem_sped?: boolean;
 }
 
 interface StoredUserLegacy {
@@ -15,6 +16,7 @@ interface StoredUserLegacy {
   emitente_cnpj?: string;
   cnpj?: string;
   avatar?: string;
+  tem_sped?: boolean;
 }
 
 interface AuthResult {
@@ -26,7 +28,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
-  register: (empresaNome: string, email: string, password: string, cnpj: string, autoLogin?: boolean) => Promise<AuthResult>;
+  register: (empresaNome: string, email: string, password: string, cnpj: string, temSped: boolean, autoLogin?: boolean) => Promise<AuthResult>;
   logout: () => void;
 }
 
@@ -37,6 +39,7 @@ interface LoginResponse {
   cnpj: string;
   email: string;
   empresa_nome: string;
+  tem_sped?: boolean;
 }
 
 interface ApiErrorDetail {
@@ -110,6 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email: parsed.email,
       emitente_cnpj: emitenteCnpj,
       avatar: parsed.avatar,
+      tem_sped: Boolean(parsed.tem_sped),
     };
   });
 
@@ -162,6 +166,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email: data.email,
       emitente_cnpj: normalizeSessionCnpj(data.cnpj),
       avatar: undefined,
+      tem_sped: Boolean(data.tem_sped),
     };
 
     setUser(nextUser);
@@ -174,6 +179,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     email: string,
     password: string,
     cnpj: string,
+    temSped: boolean,
     autoLogin = true,
   ): Promise<AuthResult> => {
     const empresaNomeNormalizado = empresaNome.trim();
@@ -204,6 +210,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: emailNormalizado,
         senha: senhaInformada,
         cnpj: cnpjNormalizado,
+        tem_sped: temSped,
       }),
     });
 
@@ -226,6 +233,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: data.email,
         emitente_cnpj: normalizeSessionCnpj(data.cnpj),
         avatar: undefined,
+        tem_sped: Boolean(data.tem_sped),
       };
 
       setUser(nextUser);

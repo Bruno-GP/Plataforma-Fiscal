@@ -5,6 +5,7 @@ class LoginCadastroRequest(BaseModel):
     email: str = Field(..., description="E-mail do usuário")
     senha: str = Field(..., min_length=8, description="Senha de acesso")
     cnpj: str = Field(..., description="CNPJ vinculado ao cadastro da empresa")
+    tem_sped: bool = Field(default=False, description="Define se empresa usa SPED Fiscal")
 
 class LoginCadastroResponse(BaseModel):
     status: str
@@ -25,3 +26,4 @@ class LoginResponse(BaseModel):
     cnpj: str
     email: str
     empresa_nome: str
+    tem_sped: bool

@@ -1,4 +1,4 @@
-import { BellRing, FileDigit, FileUp, LayoutDashboard, Receipt } from 'lucide-react';
+import { FileDigit, FileUp, LayoutDashboard, LogOut, Receipt } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { hasUnreadUpdates } from '../../contexts/updates';

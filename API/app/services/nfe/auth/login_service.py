@@ -7,7 +7,7 @@ from contextlib import contextmanager
 
 import psycopg
 
-from app.services.nfe.postres_config import carregar_config_postgres, opcoes_conexao_postgres
+from app.services.nfe.postres_config import carregar_config_postgres
 from app.services.nfe.empresa_service import normalizar_cnpj
 
 logger = logging.getLogger("LoginService")
@@ -32,31 +32,27 @@ class LoginResult:
 class LoginService:
     def __init__(self) -> None:
         config = carregar_config_postgres()
+
+        self.conn_params = {
+            "connect_timeout": 5,
+        }
         
-        self.conn_opcoes = opcoes_conexao_postgres(config)
-
-    @contextmanager
-    def _conectar(self):
-        ultimo_erro: psycopg.OperationalError | None = None
-
-        for indice, conn_params in enumerate(self.conn_opcoes, start=1):
-            try:
-                logger.debug("Tentando conexão PostgreSQL (tentativa %s)", indice)
-                with psycopg.connect(**conn_params) as conn:
-                    yield conn
-                    return
-            except psycopg.OperationalError as exc:
-                ultimo_erro = exc
-                logger.warning(
-                    "Falha ao conectar ao PostgreSQL na tentativa %s: %s",
-                    indice,
-                    str(exc),
-                )
-
-        if ultimo_erro:
-            raise ultimo_erro
         
-        raise psycopg.OperationalError("Não foi possível inicializar conexão PostgreSQL.")
+        if config.get("conninfo"):
+            self.conn_params["conninfo"] = config["conninfo"]
+        else:
+            self.conn_params.update(
+                {
+                    "host": config["host"],
+                    "port": config["port"],
+                    "dbname": config["database"],
+                    "user": config["user"],
+                    "password": config["password"],
+                }
+            )
+
+        if config.get("sslmode"):
+            self.conn_params["sslmode"] = config["sslmode"]
 
     def _hash_senha(self, senha: str, salt: bytes) -> str:
         digest = hashlib.pbkdf2_hmac(
@@ -94,7 +90,7 @@ class LoginService:
         email_normalizado = email.lower()
         logger.debug("Iniciando registro de login para %s", email_normalizado)
 
-        with self._conectar() as conn:
+        with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """

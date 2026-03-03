@@ -2,7 +2,6 @@ import os
 
 from urllib.parse import parse_qs, unquote, urlparse
 
-
 def _first_non_empty(*keys: str, default: str | None = None) -> str | None:
     for key in keys:
         value = os.environ.get(key)

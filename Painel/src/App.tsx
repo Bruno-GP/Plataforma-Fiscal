@@ -19,6 +19,7 @@ import CadastroEmpresa from "./pages/CadastroEmpresa";
 import ImportacaoXML from "./pages/ImportacaoXML";
 import Atualizacoes from "./pages/Atualizacoes";
 import ImportacaoSPED from "./pages/ImportacaoSPED";
+import AnaliseFiscal from "./pages/AnaliseFiscal";
 
 // QueryClient centraliza cache e invalidação de chamadas HTTP da aplicação.
 const queryClient = new QueryClient();
@@ -35,6 +36,16 @@ const ImportacaoFiscalRoute = ({ tipo }: { tipo: 'xml' | 'sped' }) => {
   }
 
   return tipo === 'xml' ? <ImportacaoXML /> : <ImportacaoSPED />;
+};
+
+const AnaliseFiscalRoute = () => {
+  const { user } = useAuth();
+
+  if (!user?.tem_sped) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <AnaliseFiscal />;
 };
 
 const App = () => (
@@ -100,6 +111,14 @@ const App = () => (
                 element={
                   <MainLayout>
                     <ImportacaoFiscalRoute tipo="sped" />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/analise-fiscal"
+                element={
+                  <MainLayout>
+                    <AnaliseFiscalRoute />
                   </MainLayout>
                 }
               />

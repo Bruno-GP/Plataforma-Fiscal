@@ -28,8 +28,15 @@ const hasValidEmitenteCnpj = (value: string | undefined) => {
   return digits.length === 14 && ![...digits].every((digit) => digit === '0');
 };
 
+interface DashboardProps {
+  title?: string;
+  subtitle?: string;
+}
 
-export default function Dashboard() {
+export default function Dashboard({ 
+  title = 'Dashboard', 
+  subtitle = 'Visão geral do seu negócio' 
+}: DashboardProps) {
   const { user } = useAuth();
   // const { toggleChat, sendMessage, isOpen } = useChat();
 
@@ -393,8 +400,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <DashboardHeader
-        title="Dashboard"
-        subtitle="Visão geral do seu negócio"
+        title={title}
+        subtitle={subtitle}
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
         availableYears={availableYears}

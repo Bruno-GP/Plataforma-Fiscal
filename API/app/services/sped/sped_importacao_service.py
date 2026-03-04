@@ -309,26 +309,11 @@ class SpedImportacaoService:
           saldo_credor_transportar = self._to_decimal(partes[14] if len(partes) > 14 else None)
           debitos_especiais = self._to_decimal(partes[15] if len(partes) > 15 else None)
           
-          cur.execute(
+          cur.execute (
             """
             INSERT INTO sped_apuracao_icms (
               empresa_cnpj,
-              periodo_ano,            
-            UPDATE sped_apuracao_icms
-            SET
-              total_debitos = %s,
-              ajustes_debitos = %s,
-              total_creditos = %s,
-              ajustes_creditos = %s,
-              saldo_apurado = %s,
-              valor_icms_recolher = %s,
-              saldo_credor_transportar = %s,
-              debitos_especiais = %s,
-              atualizado_em = CURRENT_TIMESTAMP
-            WHERE empresa_cnpj = %s
-              AND periodo_ano = %s
-              AND periodo_mes = %s
-            """,
+              periodo_ano,
               periodo_mes,
               total_debitos,
               ajustes_debitos,
@@ -342,39 +327,35 @@ class SpedImportacaoService:
               periodo_ano,
               periodo_mes,
             ),
-          
-          if cur.rowcount == 0:
-            cur.execute(
-              """
-              INSERT INTO sped_apuracao_icms (
-                empresa_cnpj,
-                periodo_ano,
-                periodo_mes,
-                total_debitos,
-                ajustes_debitos,
-                total_creditos,
-                ajustes_creditos,
-                saldo_apurado,
-                valor_icms_recolher,
-                saldo_credor_transportar,
-                debitos_especiais
-              )
-              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-              """,
-              (
-                cnpj_emitente,
-                periodo_ano,
-                periodo_mes,
-                total_debitos,
-                ajustes_debitos,
-                total_creditos,
-                ajustes_creditos,
-                saldo_apurado,
-                valor_icms_recolher,
-                saldo_credor_transportar,
-                debitos_especiais,
-              ),
+            
             )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (empresa_cnpj, periodo_ano, periodo_mes)
+            DO UPDATE SET
+              total_debitos = EXCLUDED.total_debitos,
+              ajustes_debitos = EXCLUDED.ajustes_debitos,
+              total_creditos = EXCLUDED.total_creditos,
+              ajustes_creditos = EXCLUDED.ajustes_creditos,
+              saldo_apurado = EXCLUDED.saldo_apurado,
+              valor_icms_recolher = EXCLUDED.valor_icms_recolher,
+              saldo_credor_transportar = EXCLUDED.saldo_credor_transportar,
+              debitos_especiais = EXCLUDED.debitos_especiais,
+              atualizado_em = CURRENT_TIMESTAMP
+            """,
+            (
+              cnpj_emitente,
+              periodo_ano,
+              periodo_mes,
+              total_debitos,
+              ajustes_debitos,
+              total_creditos,
+              ajustes_creditos,
+              saldo_apurado,
+              valor_icms_recolher,
+              saldo_credor_transportar,
+              debitos_especiais,
+            ),
+          )
           
           continue
 

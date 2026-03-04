@@ -322,13 +322,9 @@ class SpedImportacaoService:
               saldo_apurado,
               valor_icms_recolher,
               saldo_credor_transportar,
-              debitos_especiais,
-              cnpj_emitente,
-              periodo_ano,
-              periodo_mes,
-            ),
-            
+              debitos_especiais
             )
+            
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (empresa_cnpj, periodo_ano, periodo_mes)
             DO UPDATE SET

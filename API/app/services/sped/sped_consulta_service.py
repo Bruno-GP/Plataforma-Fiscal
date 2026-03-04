@@ -54,7 +54,7 @@ class SpedConsultaService:
             0::numeric AS menor_nota,
             icms_valor_debitado,
             ipi_valor
-      FROM public.kpis_sped_fiscal
+      FROM public.sped_kpis_sped_fiscal
       WHERE {where_clause}
       ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
       LIMIT %s OFFSET %s;
@@ -107,8 +107,8 @@ class SpedConsultaService:
       """
       SELECT COALESCE(p.nome, 'Cliente não identificado') AS cliente,
               SUM(d.valor_total) AS valor_total
-      FROM public.documentos_fiscais d
-      LEFT JOIN public.participantes p ON p.id = d.participante_id
+      FROM public.sped_documentos_fiscais d
+      LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
       WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s
@@ -126,8 +126,8 @@ class SpedConsultaService:
       """
       SELECT COALESCE(p.municipio, 'Cidade não identificada') AS cidade,
       SUM(d.valor_total) AS valor_total
-      FROM public.documentos_fiscais d
-      LEFT JOIN public.participantes p ON p.id = d.participante_id
+      FROM public.sped_documentos_fiscais d
+      LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
       WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s
@@ -145,9 +145,9 @@ class SpedConsultaService:
       """
       SELECT COALESCE(pr.descricao, 'Produto não identificado') AS produto,
       SUM(i.valor_total) AS valor_total
-      FROM public.documentos_fiscais d
-      JOIN public.documento_itens i ON i.documento_id = d.id
-      LEFT JOIN public.produtos pr ON pr.id = i.produto_id
+      FROM public.sped_documentos_fiscais d
+      JOIN public.sped_documento_itens i ON i.documento_id = d.id
+      LEFT JOIN public.sped_produtos pr ON pr.id = i.produto_id
       WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s

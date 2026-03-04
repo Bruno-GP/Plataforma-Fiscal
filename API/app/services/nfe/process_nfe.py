@@ -74,7 +74,7 @@ class ProcessarNFeService:
 
         request = ProcessarNFeRequest(
             origem="upload_xml",
-            pasta_xml="xml_importados",
+            pasta_xml="nfe_xml_importados",
             periodo=None,
         )
 

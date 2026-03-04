@@ -207,7 +207,7 @@ class SpedImportacaoService:
     with conn.cursor() as cur:
       cur.execute(
         """
-        INSERT INTO empresas (cnpj, razao_social)
+        INSERT INTO sped_empresas (cnpj, razao_social)
         VALUES (%s, %s)
         ON CONFLICT (cnpj) DO NOTHING
         """,
@@ -251,7 +251,7 @@ class SpedImportacaoService:
 
           cur.execute(
             """
-            INSERT INTO documentos_fiscais (
+            INSERT INTO sped_documentos_fiscais (
               empresa_cnpj,
               participante_id,
               modelo,
@@ -296,7 +296,7 @@ class SpedImportacaoService:
 
           cur.execute(
             """
-            INSERT INTO documento_itens (
+            INSERT INTO sped_documento_itens (
               documento_id,
               produto_id,
               numero_item,
@@ -336,13 +336,13 @@ class SpedImportacaoService:
     nome, cnpj_cpf, municipio = participantes.get(codigo, ("Participante não identificado", None, None))
     cur.execute(
       """
-      INSERT INTO participantes (empresa_cnpj, codigo, nome, cnpj_cpf, municipio)
+      INSERT INTO sped_participantes (empresa_cnpj, codigo, nome, cnpj_cpf, municipio)
       VALUES (%s, %s, %s, %s, %s)
       ON CONFLICT (empresa_cnpj, codigo)
       DO UPDATE SET
         nome = EXCLUDED.nome,
-        cnpj_cpf = COALESCE(EXCLUDED.cnpj_cpf, participantes.cnpj_cpf),
-        municipio = COALESCE(EXCLUDED.municipio, participantes.municipio)
+        cnpj_cpf = COALESCE(EXCLUDED.cnpj_cpf, sped_participantes.cnpj_cpf),
+        municipio = COALESCE(EXCLUDED.municipio, sped_participantes.municipio)
       RETURNING id
       """,
       (cnpj_emitente, codigo, nome, cnpj_cpf, municipio),
@@ -367,14 +367,14 @@ class SpedImportacaoService:
     descricao, ncm, unidade, tipo_item = produtos.get(codigo_item, ("Produto não identificado", None, None, None))
     cur.execute(
       """
-      INSERT INTO produtos (empresa_cnpj, codigo, descricao, ncm, unidade, tipo_item)
+      INSERT INTO sped_produtos (empresa_cnpj, codigo, descricao, ncm, unidade, tipo_item)
       VALUES (%s, %s, %s, %s, %s, %s)
       ON CONFLICT (empresa_cnpj, codigo)
       DO UPDATE SET
         descricao = EXCLUDED.descricao,
-        ncm = COALESCE(EXCLUDED.ncm, produtos.ncm),
-        unidade = COALESCE(EXCLUDED.unidade, produtos.unidade),
-        tipo_item = COALESCE(EXCLUDED.tipo_item, produtos.tipo_item)
+        ncm = COALESCE(EXCLUDED.ncm, sped_produtos.ncm),
+        unidade = COALESCE(EXCLUDED.unidade, sped_produtos.unidade),
+        tipo_item = COALESCE(EXCLUDED.tipo_item, sped_produtos.tipo_item)
       RETURNING id
       """,
       (cnpj_emitente, codigo_item, descricao, ncm, unidade, tipo_item),
@@ -398,7 +398,7 @@ class SpedImportacaoService:
           COALESCE(SUM(valor_frete), 0) AS valor_total_frete,
           COALESCE(SUM(valor_desconto), 0) AS valor_total_descontos,
           CASE WHEN COUNT(*) > 0 THEN COALESCE(SUM(valor_total), 0) / COUNT(*) ELSE 0 END AS ticket_medio
-        FROM documentos_fiscais
+        FROM sped_documentos_fiscais
         WHERE regexp_replace(empresa_cnpj, '\\D', '', 'g') = %s
           AND data_emissao IS NOT NULL
         GROUP BY 1, 2
@@ -411,8 +411,8 @@ class SpedImportacaoService:
         cur.execute(
           """
           SELECT COUNT(*)
-          FROM documento_itens i
-          JOIN documentos_fiscais d ON d.id = i.documento_id
+          FROM sped_documento_itens i
+          JOIN sped_documentos_fiscais d ON d.id = i.documento_id
           WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
             AND EXTRACT(YEAR FROM d.data_emissao) = %s
             AND EXTRACT(MONTH FROM d.data_emissao) = %s
@@ -423,7 +423,7 @@ class SpedImportacaoService:
 
         cur.execute(
           """
-          INSERT INTO kpis_sped_fiscal (
+          INSERT INTO sped_kpis_fiscal (
             processamento_id,
             cnpj_emitente,
             periodo_ano,
@@ -489,7 +489,7 @@ class SpedImportacaoService:
     with conn.cursor() as cur:
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS empresas (
+        CREATE TABLE IF NOT EXISTS sped_empresas (
           cnpj CHAR(14) PRIMARY KEY,
           razao_social VARCHAR(255)
         )
@@ -497,7 +497,7 @@ class SpedImportacaoService:
       )
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS participantes (
+        CREATE TABLE IF NOT EXISTS sped_participantes (
           id SERIAL PRIMARY KEY,
           empresa_cnpj CHAR(14),
           codigo VARCHAR(60),
@@ -511,12 +511,12 @@ class SpedImportacaoService:
       cur.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS ux_participantes_empresa_codigo
-        ON participantes (empresa_cnpj, codigo)
+        ON sped_participantes (empresa_cnpj, codigo)
         """
       )
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS produtos (
+        CREATE TABLE IF NOT EXISTS sped_produtos (
           id SERIAL PRIMARY KEY,
           empresa_cnpj CHAR(14),
           codigo VARCHAR(60),
@@ -531,12 +531,12 @@ class SpedImportacaoService:
       cur.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS ux_produtos_empresa_codigo
-        ON produtos (empresa_cnpj, codigo)
+        ON sped_produtos (empresa_cnpj, codigo)
         """
       )
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS documentos_fiscais (
+        CREATE TABLE IF NOT EXISTS sped_documentos_fiscais (
           id SERIAL PRIMARY KEY,
           empresa_cnpj CHAR(14),
           participante_id INT,
@@ -557,7 +557,7 @@ class SpedImportacaoService:
       )
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS documento_itens (
+        CREATE TABLE IF NOT EXISTS sped_documento_itens (
           id SERIAL PRIMARY KEY,
           documento_id INT,
           produto_id INT,
@@ -572,7 +572,7 @@ class SpedImportacaoService:
       )
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS kpis_sped_fiscal (
+        CREATE TABLE IF NOT EXISTS sped_kpis_fiscal (
           id SERIAL PRIMARY KEY,
           processamento_id INTEGER NOT NULL,
           cnpj_emitente VARCHAR(14) NOT NULL,

@@ -72,7 +72,7 @@ class XMLImportacaoService:
           cur.execute(
             """
             SELECT id
-            FROM xml_importados
+            FROM nfe_xml_importados
             WHERE cnpj_emitente = %s
               AND hash_arquivo = %s
             LIMIT 1
@@ -94,7 +94,7 @@ class XMLImportacaoService:
 
           cur.execute(
             """
-            INSERT INTO xml_importados (
+            INSERT INTO nfe_xml_importados (
               cnpj_emitente,
               nome_arquivo,
               hash_arquivo,
@@ -123,7 +123,7 @@ class XMLImportacaoService:
     with conn.cursor() as cur:
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS xml_importados (
+        CREATE TABLE IF NOT EXISTS nfe_xml_importados (
           id BIGSERIAL PRIMARY KEY,
           cnpj_emitente VARCHAR(20) NOT NULL,
           nome_arquivo TEXT NOT NULL,
@@ -137,8 +137,8 @@ class XMLImportacaoService:
         """
       )
       
-      cur.execute("ALTER TABLE xml_importados ADD COLUMN IF NOT EXISTS conteudo_xml BYTEA")
-      cur.execute("ALTER TABLE xml_importados ADD COLUMN IF NOT EXISTS processado_em TIMESTAMPTZ")
+      cur.execute("ALTER TABLE nfe_xml_importados ADD COLUMN IF NOT EXISTS conteudo_xml BYTEA")
+      cur.execute("ALTER TABLE nfe_xml_importados ADD COLUMN IF NOT EXISTS processado_em TIMESTAMPTZ")
 
   def listar_xmls_importados_nao_processados(self, cnpj_emitente: str) -> list[tuple[int, str, bytes]]:
     with psycopg.connect(
@@ -154,7 +154,7 @@ class XMLImportacaoService:
         cur.execute(
           """
           SELECT id, nome_arquivo, conteudo_xml
-          FROM xml_importados
+          FROM nfe_xml_importados
           WHERE cnpj_emitente = %s
             AND processado_em IS NULL
           ORDER BY id ASC
@@ -179,7 +179,7 @@ class XMLImportacaoService:
       with conn.cursor() as cur:
         cur.execute(
           """
-          UPDATE xml_importados
+          UPDATE nfe_xml_importados
           SET processado_em = NOW()
           WHERE id = ANY(%s)
           """,
@@ -201,7 +201,7 @@ class XMLImportacaoService:
         cur.execute(
           """
           SELECT COUNT(*)
-          FROM xml_importados
+          FROM nfe_xml_importados
           WHERE cnpj_emitente = %s
             AND processado_em IS NULL
           """,

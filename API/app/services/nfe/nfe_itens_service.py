@@ -51,8 +51,8 @@ class NFeItensService:
                 n.id,
                 p.empresa_id,
                 p.cnpj_emitente
-            FROM public.notas AS n
-            JOIN public.processamentos AS p
+            FROM public.nfe_notas AS n
+            JOIN public.nfe_processamentos AS p
               ON p.id = n.processamento_id
             WHERE n.numero_nf = %s
               AND n.emitente_cnpj = %s
@@ -61,7 +61,7 @@ class NFeItensService:
         """
 
         sql_insert_item = """
-            INSERT INTO public.itens (
+            INSERT INTO public.nfe_itens (
                 nota_id,
                 empresa_id,
                 cnpj,
@@ -80,7 +80,7 @@ class NFeItensService:
                 %s
             WHERE NOT EXISTS (
                 SELECT 1
-                FROM public.itens
+                FROM public.nfe_itens
                 WHERE nota_id = %s
                   AND item_numero = %s
                   AND produto_codigo = %s

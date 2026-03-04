@@ -73,7 +73,7 @@ class NFeConsultaService:
         cur.execute(
           """
           SELECT cnpj
-          FROM public.login
+          FROM public.nfe_login
           WHERE email = %s;
           """,
           (email_normalizado,),
@@ -107,10 +107,10 @@ class NFeConsultaService:
     return """
       EXISTS (
         SELECT 1
-        FROM public.notas AS n
-        JOIN public.itens AS i
+        FROM public.nfe_notas AS n
+        JOIN public.nfe_itens AS i
           ON i.nota_id = n.id
-        JOIN public.cfops AS c
+        JOIN public.nfe_cfops AS c
           ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
              = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
         WHERE n.processamento_id = k.processamento_id
@@ -149,7 +149,7 @@ class NFeConsultaService:
       SELECT
         periodo_ano,
         periodo_mes
-      FROM public.kpis AS k
+      FROM public.nfe_kpis AS k
       {where_clause}
       ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
       LIMIT 1;
@@ -192,7 +192,7 @@ class NFeConsultaService:
       SELECT
         periodo_ano,
         periodo_mes
-      FROM public.kpis AS k
+      FROM public.nfe_kpis AS k
       {where_clause}
       ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
       LIMIT %s;
@@ -247,8 +247,8 @@ class NFeConsultaService:
         k.top_clientes,
         k.top_produtos,
         k.top_cidades
-      FROM public.kpis AS k
-      LEFT JOIN public.processamentos AS p
+      FROM public.nfe_kpis AS k
+      LEFT JOIN public.nfe_processamentos AS p
         ON p.id = k.processamento_id
       {where_clause}
       ORDER BY k.periodo_ano DESC, k.periodo_mes DESC, k.id DESC
@@ -279,19 +279,6 @@ class NFeConsultaService:
       top_clientes=row[12] or [],
       top_produtos=row[13] or [],
       top_cidades=row[14] or [],
-    )
-
-  def _calcular_variacao_percentual(
-    self,
-    atual: Decimal,
-    anterior: Decimal,
-  ) -> Optional[Decimal]:
-    if anterior == 0:
-      if atual == 0:
-        return Decimal("0.00")
-      return None
-    return ((atual - anterior) / anterior * Decimal("100")).quantize(
-      Decimal("0.01")
     )
 
   def _calcular_variacao_percentual(
@@ -361,7 +348,7 @@ class NFeConsultaService:
         k.top_clientes,
         k.top_produtos,
         k.top_cidades
-      FROM public.kpis AS k
+      FROM public.nfe_kpis AS k
       {where_clause}
       ORDER BY
         k.emitente_cnpj,

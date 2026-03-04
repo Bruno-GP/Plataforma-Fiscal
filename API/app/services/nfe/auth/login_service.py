@@ -86,7 +86,7 @@ class LoginService:
     def _ensure_tem_sped_column(self, cur) -> None:
         cur.execute(
             """
-            ALTER TABLE public.empresas
+            ALTER TABLE public.nfe_empresas
             ADD COLUMN IF NOT EXISTS tem_sped BOOLEAN NOT NULL DEFAULT FALSE;
             """
         )
@@ -105,7 +105,7 @@ class LoginService:
                 cur.execute(
                     """
                     SELECT id, cnpj, nome
-                    FROM public.empresas
+                    FROM public.nfe_empresas
                     WHERE cnpj = %s;
                     """,
                     (cnpj_normalizado,),
@@ -120,7 +120,7 @@ class LoginService:
                     
                     cur.execute(
                         """
-                        INSERT INTO public.empresas (cnpj, nome, tem_sped)
+                        INSERT INTO public.nfe_empresas (cnpj, nome, tem_sped)
                         VALUES (%s, %s, %s)
                         RETURNING id, cnpj, nome;
                         """,
@@ -131,7 +131,7 @@ class LoginService:
                     
                     cur.execute(
                         """
-                        UPDATE public.empresas
+                        UPDATE public.nfe_empresas
                         SET nome = %s,
                             tem_sped = %s
                         WHERE id = %s;
@@ -142,7 +142,7 @@ class LoginService:
                 cur.execute(
                     """
                     SELECT id
-                    FROM public.login
+                    FROM public.nfe_login
                     WHERE email = %s;
                     """,
                     (email_normalizado,),
@@ -161,7 +161,7 @@ class LoginService:
 
                 cur.execute(
                     """
-                    INSERT INTO public.login (empresa_id, cnpj, email, senha)
+                    INSERT INTO public.nfe_login (empresa_id, cnpj, email, senha)
                     VALUES (%s, %s, %s, %s)
                     RETURNING id;
                     """,
@@ -205,8 +205,8 @@ class LoginService:
                            login.senha,
                            empresas.nome,
                            COALESCE(empresas.tem_sped, false)
-                    FROM public.login
-                    JOIN public.empresas ON empresas.id = login.empresa_id
+                    FROM public.nfe_login AS login
+                    JOIN public.nfe_empresas AS empresas ON empresas.id = login.empresa_id
                     WHERE login.email = %s;
                     """,
                     (email_normalizado,),

@@ -19,7 +19,7 @@ class CompanyProfileService:
   def _ensure_tem_sped_column(self, cur) -> None:
     cur.execute(
       """
-      ALTER TABLE public.empresas
+      ALTER TABLE public.nfe_empresas
       ADD COLUMN IF NOT EXISTS tem_sped BOOLEAN NOT NULL DEFAULT FALSE;
       """
     )
@@ -36,7 +36,7 @@ class CompanyProfileService:
         cur.execute(
           """
           SELECT COALESCE(tem_sped, false)
-          FROM public.empresas
+          FROM public.nfe_empresas
           WHERE regexp_replace(cnpj, '\\D', '', 'g') = %s
           LIMIT 1;
           """,

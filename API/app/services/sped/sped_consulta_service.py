@@ -7,7 +7,6 @@ from app.models.nfe.schemas import NFeKPI, NFeKPIConsulta
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.sped.postgres_config import carregar_config_postgres_sped
 
-
 class SpedConsultaService:
   def __init__(self) -> None:
     config = carregar_config_postgres_sped()
@@ -54,7 +53,7 @@ class SpedConsultaService:
             0::numeric AS menor_nota,
             icms_valor_debitado,
             ipi_valor
-      FROM public.sped_kpis_sped_fiscal
+      FROM public.sped_kpis_fiscal
       WHERE {where_clause}
       ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
       LIMIT %s OFFSET %s;
@@ -106,7 +105,7 @@ class SpedConsultaService:
       cur,
       """
       SELECT COALESCE(p.nome, 'Cliente não identificado') AS cliente,
-              SUM(d.valor_total) AS valor_total
+      SUM(d.valor_total) AS valor_total
       FROM public.sped_documentos_fiscais d
       LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
       WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s

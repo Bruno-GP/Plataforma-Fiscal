@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Iterable
 
@@ -140,6 +142,7 @@ class SpedImportacaoService:
       password=self.config["password"],
     ) as conn:
       self._garantir_tabela(conn)
+      self._garantir_tabelas_analiticas(conn)
 
       with conn.cursor() as cur:
         cur.execute(
@@ -161,6 +164,12 @@ class SpedImportacaoService:
         contador_registros.update(registros)
         total_linhas += linhas
         ids_processados.append(sped_id)
+        self._carregar_sped_em_tabelas(conn, cnpj_normalizado, conteudo)
+
+      if ids_processados:
+        self._atualizar_kpis(conn, cnpj_normalizado, ids_processados)
+
+      conn.commit()
 
     return contador_registros, total_linhas, ids_processados
 
@@ -185,6 +194,275 @@ class SpedImportacaoService:
           (ids_sped,),
         )
       conn.commit()
+      
+  def _carregar_sped_em_tabelas(self, conn: psycopg.Connection, cnpj_emitente: str, conteudo: bytes) -> None:
+    linhas = conteudo.decode("latin-1", errors="ignore").splitlines()
+
+    participantes: dict[str, tuple[str, str | None, str | None]] = {}
+    produtos: dict[str, tuple[str, str | None, str | None, str | None]] = {}
+    participante_ids: dict[str, int] = {}
+    produto_ids: dict[str, int] = {}
+    documento_id_atual: int | None = None
+
+    with conn.cursor() as cur:
+      cur.execute(
+        """
+        INSERT INTO empresas (cnpj, razao_social)
+        VALUES (%s, %s)
+        ON CONFLICT (cnpj) DO NOTHING
+        """,
+        (cnpj_emitente, "Empresa SPED"),
+      )
+
+      for linha in linhas:
+        partes = linha.strip().split("|")
+        if len(partes) < 2 or not partes[1]:
+          continue
+
+        registro = partes[1]
+
+        if registro == "0150":
+          codigo = (partes[2] if len(partes) > 2 else "").strip()
+          if not codigo:
+            continue
+          nome = (partes[3] if len(partes) > 3 else "").strip() or "Participante não identificado"
+          cnpj_cpf = self._normalizar_documento((partes[5] if len(partes) > 5 else "").strip())
+          municipio = (partes[8] if len(partes) > 8 else "").strip() or None
+          participantes[codigo] = (nome, cnpj_cpf, municipio)
+          continue
+
+        if registro == "0200":
+          codigo_item = (partes[2] if len(partes) > 2 else "").strip()
+          if not codigo_item:
+            continue
+          descricao = (partes[3] if len(partes) > 3 else "").strip() or "Produto não identificado"
+          unidade = (partes[6] if len(partes) > 6 else "").strip() or None
+          tipo_item = (partes[7] if len(partes) > 7 else "").strip() or None
+          ncm = (partes[8] if len(partes) > 8 else "").strip() or None
+          produtos[codigo_item] = (descricao, ncm, unidade, tipo_item)
+          continue
+
+        if registro == "C100":
+          cod_part = (partes[4] if len(partes) > 4 else "").strip()
+          participante_id = self._upsert_participante(cur, participante_ids, participantes, cnpj_emitente, cod_part)
+
+          data_emissao = self._to_date(partes[10] if len(partes) > 10 else None)
+          data_movimentacao = self._to_date(partes[11] if len(partes) > 11 else None)
+
+          cur.execute(
+            """
+            INSERT INTO documentos_fiscais (
+              empresa_cnpj,
+              participante_id,
+              modelo,
+              serie,
+              numero,
+              chave_acesso,
+              tipo_operacao,
+              data_emissao,
+              data_movimentacao,
+              valor_total,
+              valor_produtos,
+              valor_frete,
+              valor_desconto,
+              situacao
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+              cnpj_emitente,
+              participante_id,
+              self._to_int(partes[5] if len(partes) > 5 else None),
+              (partes[7] if len(partes) > 7 else None) or None,
+              self._to_int(partes[8] if len(partes) > 8 else None),
+              (partes[9] if len(partes) > 9 else None) or None,
+              "saida" if (partes[2] if len(partes) > 2 else "") == "1" else "entrada",
+              data_emissao,
+              data_movimentacao,
+              self._to_decimal(partes[12] if len(partes) > 12 else None),
+              self._to_decimal(partes[16] if len(partes) > 16 else None),
+              self._to_decimal(partes[18] if len(partes) > 18 else None),
+              self._to_decimal(partes[14] if len(partes) > 14 else None),
+              "normal",
+            ),
+          )
+          documento_id_atual = int(cur.fetchone()[0])
+          continue
+
+        if registro == "C170" and documento_id_atual:
+          codigo_item = (partes[3] if len(partes) > 3 else "").strip()
+          produto_id = self._upsert_produto(cur, produto_ids, produtos, cnpj_emitente, codigo_item)
+
+          cur.execute(
+            """
+            INSERT INTO documento_itens (
+              documento_id,
+              produto_id,
+              numero_item,
+              cfop,
+              quantidade,
+              valor_unitario,
+              valor_total,
+              desconto
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+              documento_id_atual,
+              produto_id,
+              self._to_int(partes[2] if len(partes) > 2 else None),
+              (partes[11] if len(partes) > 11 else None) or None,
+              self._to_decimal(partes[5] if len(partes) > 5 else None),
+              self._to_decimal(partes[6] if len(partes) > 6 else None),
+              self._to_decimal(partes[7] if len(partes) > 7 else None),
+              self._to_decimal(partes[8] if len(partes) > 8 else None),
+            ),
+          )
+
+  def _upsert_participante(
+    self,
+    cur,
+    cache_ids: dict[str, int],
+    participantes: dict[str, tuple[str, str | None, str | None]],
+    cnpj_emitente: str,
+    codigo: str,
+  ) -> int | None:
+    if not codigo:
+      return None
+    if codigo in cache_ids:
+      return cache_ids[codigo]
+
+    nome, cnpj_cpf, municipio = participantes.get(codigo, ("Participante não identificado", None, None))
+    cur.execute(
+      """
+      INSERT INTO participantes (empresa_cnpj, codigo, nome, cnpj_cpf, municipio)
+      VALUES (%s, %s, %s, %s, %s)
+      ON CONFLICT (empresa_cnpj, codigo)
+      DO UPDATE SET
+        nome = EXCLUDED.nome,
+        cnpj_cpf = COALESCE(EXCLUDED.cnpj_cpf, participantes.cnpj_cpf),
+        municipio = COALESCE(EXCLUDED.municipio, participantes.municipio)
+      RETURNING id
+      """,
+      (cnpj_emitente, codigo, nome, cnpj_cpf, municipio),
+    )
+    participante_id = int(cur.fetchone()[0])
+    cache_ids[codigo] = participante_id
+    return participante_id
+
+  def _upsert_produto(
+    self,
+    cur,
+    cache_ids: dict[str, int],
+    produtos: dict[str, tuple[str, str | None, str | None, str | None]],
+    cnpj_emitente: str,
+    codigo_item: str,
+  ) -> int | None:
+    if not codigo_item:
+      return None
+    if codigo_item in cache_ids:
+      return cache_ids[codigo_item]
+
+    descricao, ncm, unidade, tipo_item = produtos.get(codigo_item, ("Produto não identificado", None, None, None))
+    cur.execute(
+      """
+      INSERT INTO produtos (empresa_cnpj, codigo, descricao, ncm, unidade, tipo_item)
+      VALUES (%s, %s, %s, %s, %s, %s)
+      ON CONFLICT (empresa_cnpj, codigo)
+      DO UPDATE SET
+        descricao = EXCLUDED.descricao,
+        ncm = COALESCE(EXCLUDED.ncm, produtos.ncm),
+        unidade = COALESCE(EXCLUDED.unidade, produtos.unidade),
+        tipo_item = COALESCE(EXCLUDED.tipo_item, produtos.tipo_item)
+      RETURNING id
+      """,
+      (cnpj_emitente, codigo_item, descricao, ncm, unidade, tipo_item),
+    )
+    produto_id = int(cur.fetchone()[0])
+    cache_ids[codigo_item] = produto_id
+    return produto_id
+
+  def _atualizar_kpis(self, conn: psycopg.Connection, cnpj_emitente: str, ids_sped: list[int]) -> None:
+    processamento_id = max(ids_sped)
+    with conn.cursor() as cur:
+      cur.execute(
+        """
+        SELECT
+          EXTRACT(YEAR FROM data_emissao)::int AS ano,
+          EXTRACT(MONTH FROM data_emissao)::int AS mes,
+          COUNT(*) AS total_documentos,
+          COALESCE(SUM(valor_total), 0) AS valor_total,
+          COALESCE(SUM(CASE WHEN tipo_operacao = 'saida' THEN valor_total ELSE 0 END), 0) AS valor_total_saidas,
+          COALESCE(SUM(valor_produtos), 0) AS valor_total_produtos,
+          COALESCE(SUM(valor_frete), 0) AS valor_total_frete,
+          COALESCE(SUM(valor_desconto), 0) AS valor_total_descontos,
+          CASE WHEN COUNT(*) > 0 THEN COALESCE(SUM(valor_total), 0) / COUNT(*) ELSE 0 END AS ticket_medio
+        FROM documentos_fiscais
+        WHERE regexp_replace(empresa_cnpj, '\\D', '', 'g') = %s
+          AND data_emissao IS NOT NULL
+        GROUP BY 1, 2
+        """,
+        (cnpj_emitente,),
+      )
+      periodos = cur.fetchall()
+
+      for ano, mes, total_documentos, valor_total, valor_total_saidas, valor_total_produtos, valor_total_frete, valor_total_descontos, ticket_medio in periodos:
+        cur.execute(
+          """
+          SELECT COUNT(*)
+          FROM documento_itens i
+          JOIN documentos_fiscais d ON d.id = i.documento_id
+          WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+            AND EXTRACT(YEAR FROM d.data_emissao) = %s
+            AND EXTRACT(MONTH FROM d.data_emissao) = %s
+          """,
+          (cnpj_emitente, ano, mes),
+        )
+        total_itens = int(cur.fetchone()[0] or 0)
+
+        cur.execute(
+          """
+          INSERT INTO kpis_sped_fiscal (
+            processamento_id,
+            cnpj_emitente,
+            periodo_ano,
+            periodo_mes,
+            total_documentos,
+            total_itens,
+            valor_total_saidas,
+            valor_total_produtos,
+            valor_total_frete,
+            valor_total_descontos,
+            ticket_medio
+          )
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          ON CONFLICT (cnpj_emitente, periodo_ano, periodo_mes)
+          DO UPDATE SET
+            processamento_id = EXCLUDED.processamento_id,
+            total_documentos = EXCLUDED.total_documentos,
+            total_itens = EXCLUDED.total_itens,
+            valor_total_saidas = EXCLUDED.valor_total_saidas,
+            valor_total_produtos = EXCLUDED.valor_total_produtos,
+            valor_total_frete = EXCLUDED.valor_total_frete,
+            valor_total_descontos = EXCLUDED.valor_total_descontos,
+            ticket_medio = EXCLUDED.ticket_medio,
+            data_calculo = CURRENT_TIMESTAMP
+          """,
+          (
+            processamento_id,
+            cnpj_emitente,
+            int(ano),
+            int(mes),
+            int(total_documentos or 0),
+            total_itens,
+            valor_total_saidas,
+            valor_total_produtos,
+            valor_total_frete,
+            valor_total_descontos,
+            ticket_medio,
+          ),
+        )
 
   def _garantir_tabela(self, conn: psycopg.Connection) -> None:
     with conn.cursor() as cur:
@@ -206,6 +484,102 @@ class SpedImportacaoService:
 
       cur.execute("ALTER TABLE sped_importados ADD COLUMN IF NOT EXISTS conteudo_txt BYTEA")
       cur.execute("ALTER TABLE sped_importados ADD COLUMN IF NOT EXISTS processado_em TIMESTAMPTZ")
+      
+  def _garantir_tabelas_analiticas(self, conn: psycopg.Connection) -> None:
+    with conn.cursor() as cur:
+      cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS empresas (
+          cnpj CHAR(14) PRIMARY KEY,
+          razao_social VARCHAR(255)
+        )
+        """
+      )
+      cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS participantes (
+          id SERIAL PRIMARY KEY,
+          empresa_cnpj CHAR(14),
+          codigo VARCHAR(60),
+          nome VARCHAR(255),
+          cnpj_cpf VARCHAR(14),
+          municipio VARCHAR(100),
+          UNIQUE (empresa_cnpj, codigo)
+        )
+        """
+      )
+      cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS produtos (
+          id SERIAL PRIMARY KEY,
+          empresa_cnpj CHAR(14),
+          codigo VARCHAR(60),
+          descricao VARCHAR(255),
+          ncm VARCHAR(10),
+          unidade VARCHAR(10),
+          tipo_item VARCHAR(10),
+          UNIQUE (empresa_cnpj, codigo)
+        )
+        """
+      )
+      cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS documentos_fiscais (
+          id SERIAL PRIMARY KEY,
+          empresa_cnpj CHAR(14),
+          participante_id INT,
+          modelo INT,
+          serie VARCHAR(10),
+          numero INT,
+          chave_acesso VARCHAR(44),
+          tipo_operacao VARCHAR(10),
+          data_emissao DATE,
+          data_movimentacao DATE,
+          valor_total NUMERIC(15,2),
+          valor_produtos NUMERIC(15,2),
+          valor_frete NUMERIC(15,2),
+          valor_desconto NUMERIC(15,2),
+          situacao VARCHAR(20)
+        )
+        """
+      )
+      cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS documento_itens (
+          id SERIAL PRIMARY KEY,
+          documento_id INT,
+          produto_id INT,
+          numero_item INT,
+          cfop VARCHAR(4),
+          quantidade NUMERIC(15,4),
+          valor_unitario NUMERIC(15,6),
+          valor_total NUMERIC(15,2),
+          desconto NUMERIC(15,2)
+        )
+        """
+      )
+      cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS kpis_sped_fiscal (
+          id SERIAL PRIMARY KEY,
+          processamento_id INTEGER NOT NULL,
+          cnpj_emitente VARCHAR(14) NOT NULL,
+          periodo_ano INTEGER NOT NULL,
+          periodo_mes INTEGER NOT NULL,
+          total_documentos INTEGER DEFAULT 0,
+          total_itens INTEGER DEFAULT 0,
+          valor_total_saidas NUMERIC(15,2) DEFAULT 0,
+          valor_total_produtos NUMERIC(15,2) DEFAULT 0,
+          valor_total_frete NUMERIC(15,2) DEFAULT 0,
+          valor_total_descontos NUMERIC(15,2) DEFAULT 0,
+          icms_valor_debitado NUMERIC(15,2) DEFAULT 0,
+          ipi_valor NUMERIC(15,2) DEFAULT 0,
+          ticket_medio NUMERIC(15,2) DEFAULT 0,
+          data_calculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (cnpj_emitente, periodo_ano, periodo_mes)
+        )
+        """
+      )
 
   def _normalizar_cnpj(self, cnpj: str | None) -> str | None:
     if not cnpj:
@@ -216,3 +590,46 @@ class SpedImportacaoService:
       return digits
 
     return None
+  
+  def _normalizar_documento(self, value: str | None) -> str | None:
+    if not value:
+      return None
+    digits = "".join(ch for ch in value if ch.isdigit())
+    return digits or None
+
+  def _to_int(self, value: str | None) -> int | None:
+    if not value:
+      return None
+    value = value.strip()
+    if not value:
+      return None
+    try:
+      return int(value)
+    except ValueError:
+      return None
+
+  def _to_decimal(self, value: str | None) -> Decimal:
+    if not value:
+      return Decimal("0")
+
+    normalizado = value.strip().replace(".", "").replace(",", ".")
+    if not normalizado:
+      return Decimal("0")
+
+    try:
+      return Decimal(normalizado)
+    except InvalidOperation:
+      return Decimal("0")
+
+  def _to_date(self, value: str | None):
+    if not value:
+      return None
+
+    bruto = value.strip()
+    if len(bruto) != 8:
+      return None
+
+    try:
+      return datetime.strptime(bruto, "%d%m%Y").date()
+    except ValueError:
+      return None

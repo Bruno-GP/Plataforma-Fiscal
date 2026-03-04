@@ -6,7 +6,7 @@ def resumir_registros_sped(arquivo_sped: str) -> tuple[Counter, int]:
   if not caminho.exists() or not caminho.is_file():
     raise FileNotFoundError(f"Arquivo SPED não encontrado: {arquivo_sped}")
   
-    return resumir_registros_sped_bytes(caminho.read_bytes())
+  return resumir_registros_sped_bytes(caminho.read_bytes())
 
 def resumir_registros_sped_bytes(conteudo: bytes) -> tuple[Counter, int]:
   linhas = conteudo.decode("latin-1", errors="ignore").splitlines()

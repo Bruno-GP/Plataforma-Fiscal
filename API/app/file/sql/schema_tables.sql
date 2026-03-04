@@ -41,6 +41,7 @@ CREATE TABLE participantes (
     uf CHAR(2),
     municipio VARCHAR(100),
     tipo VARCHAR(20) -- cliente | fornecedor | ambos
+    UNIQUE (empresa_cnpj, codigo)
 );
 
 -- =========================================
@@ -54,6 +55,7 @@ CREATE TABLE produtos (
     ncm VARCHAR(10),
     unidade VARCHAR(10),
     tipo_item VARCHAR(10)
+    UNIQUE (empresa_cnpj, codigo)
 );
 
 -- =========================================

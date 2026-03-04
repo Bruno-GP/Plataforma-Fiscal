@@ -510,6 +510,12 @@ class SpedImportacaoService:
       )
       cur.execute(
         """
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_participantes_empresa_codigo
+        ON participantes (empresa_cnpj, codigo)
+        """
+      )
+      cur.execute(
+        """
         CREATE TABLE IF NOT EXISTS produtos (
           id SERIAL PRIMARY KEY,
           empresa_cnpj CHAR(14),
@@ -520,6 +526,12 @@ class SpedImportacaoService:
           tipo_item VARCHAR(10),
           UNIQUE (empresa_cnpj, codigo)
         )
+        """
+      )
+      cur.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_produtos_empresa_codigo
+        ON produtos (empresa_cnpj, codigo)
         """
       )
       cur.execute(

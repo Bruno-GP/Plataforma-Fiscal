@@ -311,6 +311,24 @@ class SpedImportacaoService:
           
           cur.execute (
             """
+            WITH updated AS (
+              UPDATE sped_apuracao_icms
+              SET
+                total_debitos = %s,
+                ajustes_debitos = %s,
+                total_creditos = %s,
+                ajustes_creditos = %s,
+                saldo_apurado = %s,
+                valor_icms_recolher = %s,
+                saldo_credor_transportar = %s,
+                debitos_especiais = %s,
+                atualizado_em = CURRENT_TIMESTAMP
+              WHERE empresa_cnpj = %s
+                AND periodo_ano = %s
+                AND periodo_mes = %s
+              RETURNING id
+            )
+            
             INSERT INTO sped_apuracao_icms (
               empresa_cnpj,
               periodo_ano,
@@ -325,20 +343,21 @@ class SpedImportacaoService:
               debitos_especiais
             )
             
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (empresa_cnpj, periodo_ano, periodo_mes)
-            DO UPDATE SET
-              total_debitos = EXCLUDED.total_debitos,
-              ajustes_debitos = EXCLUDED.ajustes_debitos,
-              total_creditos = EXCLUDED.total_creditos,
-              ajustes_creditos = EXCLUDED.ajustes_creditos,
-              saldo_apurado = EXCLUDED.saldo_apurado,
-              valor_icms_recolher = EXCLUDED.valor_icms_recolher,
-              saldo_credor_transportar = EXCLUDED.saldo_credor_transportar,
-              debitos_especiais = EXCLUDED.debitos_especiais,
-              atualizado_em = CURRENT_TIMESTAMP
+            SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            WHERE NOT EXISTS (SELECT 1 FROM updated)
             """,
             (
+              total_debitos,
+              ajustes_debitos,
+              total_creditos,
+              ajustes_creditos,
+              saldo_apurado,
+              valor_icms_recolher,
+              saldo_credor_transportar,
+              debitos_especiais,
+              cnpj_emitente,
+              periodo_ano,
+              periodo_mes,
               cnpj_emitente,
               periodo_ano,
               periodo_mes,

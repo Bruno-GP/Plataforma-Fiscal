@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FileText, FileUp, Upload, Database } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +27,7 @@ const MAX_SPED_FILES = 500;
 export default function ImportacaoSPED() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const [selectedFiles, setSelectedFiles] = useState<SpedFileItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
@@ -119,6 +121,12 @@ export default function ImportacaoSPED() {
     try {
       const response = await processarSpedsImportados(user.emitente_cnpj);
       setProcessamento(response);
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['kpis'] }),
+        queryClient.invalidateQueries({ queryKey: ['kpis-years'] }),
+      ]);
+
       await carregarPendencias();
 
       toast({

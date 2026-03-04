@@ -203,6 +203,8 @@ class SpedImportacaoService:
     participante_ids: dict[str, int] = {}
     produto_ids: dict[str, int] = {}
     documento_id_atual: int | None = None
+    periodo_ano: int | None = None
+    periodo_mes: int | None = None
 
     with conn.cursor() as cur:
       cur.execute(
@@ -288,6 +290,58 @@ class SpedImportacaoService:
             ),
           )
           documento_id_atual = int(cur.fetchone()[0])
+          continue
+        
+        if registro == "E100":
+          data_inicio = self._to_date(partes[2] if len(partes) > 2 else None)
+          if data_inicio:
+            periodo_ano = int(data_inicio.year)
+            periodo_mes = int(data_inicio.month)
+          continue
+
+        if registro == "E110" and periodo_ano and periodo_mes:
+          cur.execute(
+            """
+            INSERT INTO sped_apuracao_icms (
+              empresa_cnpj,
+              periodo_ano,
+              periodo_mes,
+              total_debitos,
+              ajustes_debitos,
+              total_creditos,
+              ajustes_creditos,
+              saldo_apurado,
+              valor_icms_recolher,
+              saldo_credor_transportar,
+              debitos_especiais
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (empresa_cnpj, periodo_ano, periodo_mes)
+            DO UPDATE SET
+              total_debitos = EXCLUDED.total_debitos,
+              ajustes_debitos = EXCLUDED.ajustes_debitos,
+              total_creditos = EXCLUDED.total_creditos,
+              ajustes_creditos = EXCLUDED.ajustes_creditos,
+              saldo_apurado = EXCLUDED.saldo_apurado,
+              valor_icms_recolher = EXCLUDED.valor_icms_recolher,
+              saldo_credor_transportar = EXCLUDED.saldo_credor_transportar,
+              debitos_especiais = EXCLUDED.debitos_especiais,
+              atualizado_em = CURRENT_TIMESTAMP
+            """,
+            (
+              cnpj_emitente,
+              periodo_ano,
+              periodo_mes,
+              self._to_decimal(partes[2] if len(partes) > 2 else None),
+              self._to_decimal(partes[3] if len(partes) > 3 else None),
+              self._to_decimal(partes[6] if len(partes) > 6 else None),
+              self._to_decimal(partes[7] if len(partes) > 7 else None),
+              self._to_decimal(partes[11] if len(partes) > 11 else None),
+              self._to_decimal(partes[13] if len(partes) > 13 else None),
+              self._to_decimal(partes[14] if len(partes) > 14 else None),
+              self._to_decimal(partes[15] if len(partes) > 15 else None),
+            ),
+          )
           continue
 
         if registro == "C170" and documento_id_atual:
@@ -410,6 +464,20 @@ class SpedImportacaoService:
       for ano, mes, total_documentos, valor_total, valor_total_saidas, valor_total_produtos, valor_total_frete, valor_total_descontos, ticket_medio in periodos:
         cur.execute(
           """
+          SELECT COALESCE(total_debitos, 0)
+          FROM sped_apuracao_icms
+          WHERE regexp_replace(empresa_cnpj, '\\D', '', 'g') = %s
+            AND periodo_ano = %s
+            AND periodo_mes = %s
+          LIMIT 1
+          """,
+          (cnpj_emitente, ano, mes),
+        )
+        row_icms = cur.fetchone()
+        valor_icms_debitado = row_icms[0] if row_icms else Decimal("0")
+        
+        cur.execute(
+          """
           SELECT COUNT(*)
           FROM sped_documento_itens i
           JOIN sped_documentos_fiscais d ON d.id = i.documento_id
@@ -434,9 +502,10 @@ class SpedImportacaoService:
             valor_total_produtos,
             valor_total_frete,
             valor_total_descontos,
+            icms_valor_debitado,
             ticket_medio
           )
-          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
           ON CONFLICT (cnpj_emitente, periodo_ano, periodo_mes)
           DO UPDATE SET
             processamento_id = EXCLUDED.processamento_id,
@@ -446,6 +515,7 @@ class SpedImportacaoService:
             valor_total_produtos = EXCLUDED.valor_total_produtos,
             valor_total_frete = EXCLUDED.valor_total_frete,
             valor_total_descontos = EXCLUDED.valor_total_descontos,
+            icms_valor_debitado = EXCLUDED.icms_valor_debitado,
             ticket_medio = EXCLUDED.ticket_medio,
             data_calculo = CURRENT_TIMESTAMP
           """,
@@ -460,6 +530,7 @@ class SpedImportacaoService:
             valor_total_produtos,
             valor_total_frete,
             valor_total_descontos,
+            valor_icms_debitado,
             ticket_medio,
           ),
         )
@@ -589,6 +660,27 @@ class SpedImportacaoService:
           ticket_medio NUMERIC(15,2) DEFAULT 0,
           data_calculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           UNIQUE (cnpj_emitente, periodo_ano, periodo_mes)
+        )
+        """
+      )
+      
+      cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sped_apuracao_icms (
+          id SERIAL PRIMARY KEY,
+          empresa_cnpj CHAR(14) NOT NULL,
+          periodo_ano INTEGER NOT NULL,
+          periodo_mes INTEGER NOT NULL,
+          total_debitos NUMERIC(15,2) DEFAULT 0,
+          ajustes_debitos NUMERIC(15,2) DEFAULT 0,
+          total_creditos NUMERIC(15,2) DEFAULT 0,
+          ajustes_creditos NUMERIC(15,2) DEFAULT 0,
+          saldo_apurado NUMERIC(15,2) DEFAULT 0,
+          valor_icms_recolher NUMERIC(15,2) DEFAULT 0,
+          saldo_credor_transportar NUMERIC(15,2) DEFAULT 0,
+          debitos_especiais NUMERIC(15,2) DEFAULT 0,
+          atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (empresa_cnpj, periodo_ano, periodo_mes)
         )
         """
       )

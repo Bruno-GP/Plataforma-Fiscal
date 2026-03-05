@@ -9,6 +9,7 @@ from app.models.sped.schemas import (
   ProcessarSpedFiscalResponse,
   ProcessarSpedImportadosResponse,
   RegistroSpedResumo,
+  AnaliseComprasResponse,
 )
 from app.services.sped.sped_importacao_service import SpedImportacaoService
 from app.services.sped.sped_process_service import ProcessarSpedFiscalService
@@ -75,7 +76,24 @@ async def importar_sped(
     erros=sum(1 for item in resultados if item.status == "erro"),
     resultados=resultados,
   )
+  
+@sped_router.get("/analise/compras", response_model=AnaliseComprasResponse)
+def consultar_analise_compras_sped(
+  emitente_cnpj: str = Query(..., min_length=14, max_length=20),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=5, ge=1, le=20),
+):
+  _validar_empresa_sped(emitente_cnpj)
 
+  resultado = SpedConsultaService().analisar_compras(
+    emitente_cnpj=emitente_cnpj,
+    periodo_ano=periodo_ano,
+    periodo_mes=periodo_mes,
+    limite=limite,
+  )
+
+  return AnaliseComprasResponse(status="ok", **resultado)
 
 @sped_router.get("/pendencias", response_model=ImportacaoSpedPendenciasResponse)
 def consultar_pendencias_sped(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):

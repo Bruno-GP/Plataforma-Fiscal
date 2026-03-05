@@ -134,3 +134,49 @@ export const fetchSpedKpis = async (params: { emitente_cnpj?: string; periodo_an
 
   return response.json() as Promise<ConsultaSpedKpiResponse>;
 };
+
+export interface RankingFornecedorCompra {
+  fornecedor: string;
+  valor_total: number | string;
+  quantidade_documentos: number;
+}
+
+export interface RankingProdutoCompra {
+  produto: string;
+  valor_total: number | string;
+  quantidade_total: number | string;
+}
+
+export interface AnaliseComprasResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  total_comprado: number | string;
+  top_fornecedores_valor: RankingFornecedorCompra[];
+  top_fornecedores_quantidade: RankingFornecedorCompra[];
+  top_produtos_valor: RankingProdutoCompra[];
+  top_produtos_quantidade: RankingProdutoCompra[];
+}
+
+export const fetchSpedAnaliseCompras = async (params: { emitente_cnpj?: string; periodo_ano?: number; periodo_mes?: number; limite?: number } = {}): Promise<AnaliseComprasResponse> => {
+  const searchParams = new URLSearchParams();
+  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+
+  if (digits.length === 14) {
+    searchParams.set('emitente_cnpj', digits);
+  }
+
+  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
+  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
+  if (params.limite) searchParams.set('limite', String(params.limite));
+
+  const response = await fetch(`${API_BASE_URL}/sped/analise/compras?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de compras.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar análise de compras.');
+  }
+
+  return response.json() as Promise<AnaliseComprasResponse>;
+};

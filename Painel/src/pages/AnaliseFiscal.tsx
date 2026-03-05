@@ -164,7 +164,7 @@ export default function AnaliseFiscal() {
       accentClass: 'border-l-emerald-500',
     },
     {
-      title: 'Itens Comprados (Top 5 produtos)',
+      title: 'Quantidade Comprada',
       value: currentItemCount.toFixed(2),
       description: formatPercent(safePercentage(currentItemCount, previousItemCount)),
       icon: Package,
@@ -172,7 +172,7 @@ export default function AnaliseFiscal() {
       accentClass: 'border-l-amber-400',
     },
     {
-      title: 'Ticket Médio por Documento',
+      title: 'Ticket Médio por Compra',
       value: formatCurrency(currentTicketMedio),
       description: formatPercent(safePercentage(currentTicketMedio, previousTicketMedio)),
       icon: Box,

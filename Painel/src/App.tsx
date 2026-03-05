@@ -10,7 +10,7 @@ import { ChatProvider } from "@/contexts/ChatContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 
 import Login from "./pages/Login";
-import Dashboard from "./pages/dashboard/components/Dashboard";
+import Dashboard from "./pages/dashboard/Dashboard";
 import Faturamento from "./pages/faturamento/components/Faturamento";
 import Clientes from "./pages/Clientes";
 import Configuracoes from "./pages/Configuracoes";

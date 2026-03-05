@@ -5,15 +5,15 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 // import { Button } from '@/components/ui/button';
 
-import { DashboardHeader } from './DashboardHeader';
-import { DashboardRankingCard } from './DashboardRankingCard';
-import { DashboardStatCard } from './DashboardStatCard';
+import { Header } from '../components/Header';
+import { RankingCard } from '../components/RankingCard';
+import { StatCard } from '../components/StatCard';
 
 import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
 import { useAuth } from '@/contexts/AuthContext'
 import { fetchSpedKpis } from '@/services/sped';
 // import { useChat } from '@/contexts/ChatContext';
-import { monthLabels } from '../../faturamento/utils/utils';
+import { monthLabels } from '../faturamento/utils/utils';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {

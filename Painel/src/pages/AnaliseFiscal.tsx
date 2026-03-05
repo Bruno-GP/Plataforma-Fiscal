@@ -182,7 +182,7 @@ export default function AnaliseFiscal() {
   ] as const;
 
   if (!user?.tem_sped) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/analise-vendas" replace />;
   }
 
   const isLoading = analiseComprasQuery.isLoading || previousAnaliseComprasQuery.isLoading;

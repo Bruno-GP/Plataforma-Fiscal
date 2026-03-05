@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { NavLink } from '@/components/NavLink';
 
 const menuItemsBase = [
-  { title: 'Analise de Vendas', url: '/dashboard', icon: LayoutDashboard },
+  { title: 'Análise de Vendas', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Faturamento', url: '/faturamento', icon: Receipt },
   // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
   // { title: 'Clientes', url: '/clientes', icon: Users },

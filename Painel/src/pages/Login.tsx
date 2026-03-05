@@ -30,7 +30,7 @@ export default function Login() {
           title: 'Login realizado!',
           description: 'Bem-vindo ao painel de gestão.',
         });
-        navigate('/dashboard');
+        navigate('/analise-vendas');
         return;
       }
       toast({

@@ -42,7 +42,7 @@ const AnaliseFiscalRoute = () => {
   const { user } = useAuth();
 
   if (!user?.tem_sped) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/analise-vendas" replace />;
   }
 
   return <AnaliseFiscal />;
@@ -67,13 +67,14 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/interno/cadastro-empresa" element={<CadastroEmpresa />} />
               <Route
-                path="/dashboard"
+                path="/analise-vendas"
                 element={
                   <MainLayout>
                     <Dashboard />
                   </MainLayout>
                 }
               />
+              <Route path="/dashboard" element={<Navigate to="/analise-vendas" replace />} />
               <Route
                 path="/faturamento"
                 element={
@@ -130,7 +131,7 @@ const App = () => (
                   </MainLayout>
                 }
               /> */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<Navigate to="/analise-vendas" replace />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

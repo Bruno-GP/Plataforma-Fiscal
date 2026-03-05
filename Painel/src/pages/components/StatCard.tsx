@@ -2,16 +2,17 @@ import type { LucideIcon } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-interface DashboardStatCardProps {
+interface StatCardProps {
   title: string;
   value: string;
   description: string;
   icon: LucideIcon;
-  trend: 'up' | 'down' | 'neutral';
+  trend: string;
   isLoading: boolean;
+  accentClass?: string;
 }
 
-export function DashboardStatCard({
+export function StatCard({
   title,
   value,
   description,
@@ -19,7 +20,7 @@ export function DashboardStatCard({
   trend,
   isLoading,
   accentClass = 'border-l-slate-700',
-}: DashboardStatCardProps) {
+}: StatCardProps) {
   return (
     <Card
       className={`rounded-2xl border-l-4 border-slate-800/70 bg-gradient-to-br from-slate-950/80 via-slate-900/85 to-slate-950/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_45px_-30px_rgba(0,0,0,0.9)] backdrop-blur ${accentClass}`}

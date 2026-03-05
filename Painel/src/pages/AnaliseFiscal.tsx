@@ -11,9 +11,9 @@ import { parseDecimal } from '@/services/nfe';
 import { fetchSpedAnaliseCompras, fetchSpedKpis, type AnaliseComprasResponse } from '@/services/sped';
 
 import { formatCurrency, monthLabels } from '@/pages/faturamento/utils/utils';
-import { DashboardHeader } from '@/pages/dashboard/components/DashboardHeader';
-import { DashboardRankingCard } from '@/pages/dashboard/components/DashboardRankingCard';
-import { DashboardStatCard } from '@/pages/dashboard/components/DashboardStatCard';
+import { Header } from '@/pages/components/Header';
+import { RankingCard } from '@/pages/components/RankingCard';
+import { StatCard } from '@/pages/components/StatCard';
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
   const digits = (value ?? '').replace(/\D/g, '');
@@ -190,7 +190,7 @@ export default function AnaliseFiscal() {
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
+      <Header
         title="Análise Fiscal de Compras"
         subtitle="Visão inicial com total comprado e Top 5 por fornecedor e produto."
         selectedMonth={selectedMonth}
@@ -216,12 +216,12 @@ export default function AnaliseFiscal() {
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <DashboardStatCard key={stat.title} {...stat} isLoading={isLoading} />
+          <StatCard key={stat.title} {...stat} isLoading={isLoading} />
         ))}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <DashboardRankingCard
+        <RankingCard
           title="Top Fornecedores"
           description="Fornecedores com maior valor de compras no período"
           items={(data?.top_fornecedores_valor ?? []).map((row, index) => {
@@ -243,7 +243,7 @@ export default function AnaliseFiscal() {
           totalValue={formatCurrency(currentTotalComprado)}
         />
 
-        <DashboardRankingCard
+        <RankingCard
           title="Top Produtos por Valor"
           description="Produtos com maior valor de compra no período"
           items={(data?.top_produtos_valor ?? []).map((row, index) => {
@@ -265,7 +265,7 @@ export default function AnaliseFiscal() {
           totalValue={formatCurrency(currentTotalComprado)}
         />
 
-        <DashboardRankingCard
+        <RankingCard
           title="Top Produtos por Quantidade"
           description="Produtos mais comprados no período"
           items={(data?.top_produtos_quantidade ?? []).map((row, index) => {

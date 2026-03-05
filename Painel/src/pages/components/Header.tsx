@@ -1,6 +1,6 @@
-import { MonthYearFilter } from '../../filters/MothYearFilter';
+import { MonthYearFilter } from '../filters/MothYearFilter';
 
-interface DashboardHeaderProps {
+interface HeaderProps {
   title: string;
   subtitle: string;
 
@@ -12,7 +12,7 @@ interface DashboardHeaderProps {
   onYearChange: (value: string) => void;
 }
 
-export function DashboardHeader({ 
+export function Header({ 
   title, 
   subtitle,
   selectedMonth,
@@ -21,7 +21,7 @@ export function DashboardHeader({
   monthLabels,
   onMonthChange,
   onYearChange,
- }: DashboardHeaderProps) {
+ }: HeaderProps) {
   return (
     <div className="flex items-center justify-between">
       <div>

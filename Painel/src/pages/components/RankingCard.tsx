@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 
-interface DashboardRankingItem {
+interface RankingItem {
   key: string;
   title: string;
   subtitle: string;
@@ -12,17 +12,17 @@ interface DashboardRankingItem {
   percent: number | null;
 }
 
-interface DashboardRankingCardProps {
+interface RankingCardProps {
   title: string;
   description: string;
-  items: DashboardRankingItem[];
+  items: RankingItem[];
   isLoading: boolean;
   loadingMessage: string;
   emptyMessage: string;
   totalValue: string;
 }
 
-export function DashboardRankingCard({
+export function RankingCard({
   title,
   description,
   items,
@@ -30,7 +30,7 @@ export function DashboardRankingCard({
   loadingMessage,
   emptyMessage,
   totalValue
-}: DashboardRankingCardProps) {
+}: RankingCardProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   useEffect(() => {

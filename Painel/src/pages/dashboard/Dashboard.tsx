@@ -399,7 +399,7 @@ export default function Dashboard({
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
+      <Header
         title={title}
         subtitle={subtitle}
         selectedMonth={selectedMonth}
@@ -426,12 +426,12 @@ export default function Dashboard({
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <DashboardStatCard key={stat.title} {...stat} isLoading={isLoading} />
+          <StatCard key={stat.title} {...stat} isLoading={isLoading} />
         ))}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <DashboardRankingCard
+        <RankingCard
           title="Top Clientes"
           description="Clientes com maior faturamento no último período"
           items={topClientesItems}
@@ -440,7 +440,7 @@ export default function Dashboard({
           emptyMessage="Nenhum cliente registrado."
           totalValue={formatCurrency(totalFaturamento)}
         />
-        <DashboardRankingCard
+        <RankingCard
           title="Top Produtos"
           description="Itens com maior faturamento no último período"
           items={topProdutosItems}
@@ -449,7 +449,7 @@ export default function Dashboard({
           emptyMessage="Nenhum produto registrado."
           totalValue={formatCurrency(totalFaturamento)}
         />
-        <DashboardRankingCard
+        <RankingCard
           title="Top Cidades"
           description="Cidades com maior faturamento no último período"
           items={topCidadesItems}

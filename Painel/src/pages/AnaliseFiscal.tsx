@@ -1,20 +1,55 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Box, Package, ShoppingCart, Truck } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { useAuth } from '@/contexts/AuthContext';
 
 import { parseDecimal } from '@/services/nfe';
-import { fetchSpedAnaliseCompras, fetchSpedKpis } from '@/services/sped';
+import { fetchSpedAnaliseCompras, fetchSpedKpis, type AnaliseComprasResponse } from '@/services/sped';
+
 import { formatCurrency, monthLabels } from '@/pages/faturamento/utils/utils';
+import { DashboardHeader } from '@/pages/dashboard/components/DashboardHeader';
+import { DashboardRankingCard } from '@/pages/dashboard/components/DashboardRankingCard';
+import { DashboardStatCard } from '@/pages/dashboard/components/DashboardStatCard';
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
   const digits = (value ?? '').replace(/\D/g, '');
   return digits.length === 14 && ![...digits].every((digit) => digit === '0');
 };
+
+const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+
+const resolvePeriodDescription = (year: number, month: string) => {
+  if (month === 'all') {
+    return `Acumulado em ${year}`;
+  }
+
+  const monthNumber = Number.parseInt(month, 10);
+  return `${monthLabels[monthNumber - 1]} de ${year}`;
+};
+
+const resolvePreviousPeriod = (year: number, month: string) => {
+  if (month === 'all') {
+    return { periodo_ano: year - 1, periodo_mes: undefined as number | undefined };
+  }
+
+  const monthNumber = Number.parseInt(month, 10);
+
+  if (monthNumber > 1) {
+    return { periodo_ano: year, periodo_mes: monthNumber - 1 };
+  }
+
+  return { periodo_ano: year - 1, periodo_mes: 12 };
+};
+
+const calculateDocumentCount = (data?: AnaliseComprasResponse) =>
+  (data?.top_fornecedores_quantidade ?? []).reduce((acc, row) => acc + (row.quantidade_documentos ?? 0), 0);
+
+const calculateItemCount = (data?: AnaliseComprasResponse) =>
+  (data?.top_produtos_quantidade ?? []).reduce((acc, row) => acc + parseDecimal(row.quantidade_total ?? 0), 0);
 
 export default function AnaliseFiscal() {
   const { user } = useAuth();
@@ -37,13 +72,32 @@ export default function AnaliseFiscal() {
 
   const analiseComprasQuery = useQuery({
     queryKey: ['analise-fiscal-compras', emitenteCnpj, yearNumber, selectedMonth],
-    queryFn: () => fetchSpedAnaliseCompras({
-      emitente_cnpj: emitenteCnpj,
-      periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-      periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-      limite: 5,
-    }),
+    queryFn: () =>
+      fetchSpedAnaliseCompras({
+        emitente_cnpj: emitenteCnpj,
+        periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+        periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+        limite: 5,
+      }),
     enabled: hasEmitenteCnpj,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const previousPeriod = useMemo(
+    () => resolvePreviousPeriod(yearNumber, selectedMonth),
+    [selectedMonth, yearNumber],
+  );
+
+  const previousAnaliseComprasQuery = useQuery({
+    queryKey: ['analise-fiscal-compras-previous', emitenteCnpj, previousPeriod.periodo_ano, previousPeriod.periodo_mes],
+    queryFn: () =>
+      fetchSpedAnaliseCompras({
+        emitente_cnpj: emitenteCnpj,
+        periodo_ano: previousPeriod.periodo_ano,
+        periodo_mes: previousPeriod.periodo_mes,
+        limite: 5,
+      }),
+    enabled: hasEmitenteCnpj && previousPeriod.periodo_ano > 2000,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -71,167 +125,169 @@ export default function AnaliseFiscal() {
     }
   }, [selectedYear, yearOptions]);
 
+  const availableYears = yearOptions.length ? yearOptions : [yearNumber];
+
   const data = analiseComprasQuery.data;
 
-  const periodoDescricao = selectedMonth === 'all'
-    ? `Acumulado em ${selectedYear}`
-    : `${monthLabels[monthNumber - 1]} de ${selectedYear}`;
+  const previousData = previousAnaliseComprasQuery.data;
+
+  const currentTotalComprado = parseDecimal(data?.total_comprado ?? 0);
+  const previousTotalComprado = parseDecimal(previousData?.total_comprado ?? 0);
+
+  const currentDocCount = calculateDocumentCount(data);
+  const previousDocCount = calculateDocumentCount(previousData);
+
+  const currentItemCount = calculateItemCount(data);
+  const previousItemCount = calculateItemCount(previousData);
+
+  const currentTicketMedio = currentDocCount ? currentTotalComprado / currentDocCount : 0;
+  const previousTicketMedio = previousDocCount ? previousTotalComprado / previousDocCount : 0;
+
+  const safePercentage = (current: number, previous: number) =>
+    previous ? ((current - previous) / previous) * 100 : 0;
+
+  const stats = [
+    {
+      title: `Total Comprado (${resolvePeriodDescription(yearNumber, selectedMonth)})`,
+      value: formatCurrency(currentTotalComprado),
+      description: formatPercent(safePercentage(currentTotalComprado, previousTotalComprado)),
+      icon: ShoppingCart,
+      trend: currentTotalComprado >= previousTotalComprado ? 'up' : 'down',
+      accentClass: 'border-l-sky-500',
+    },
+    {
+      title: 'Documentos de Compra (Top 5 fornecedores)',
+      value: currentDocCount.toString(),
+      description: formatPercent(safePercentage(currentDocCount, previousDocCount)),
+      icon: Truck,
+      trend: currentDocCount >= previousDocCount ? 'up' : 'down',
+      accentClass: 'border-l-emerald-500',
+    },
+    {
+      title: 'Itens Comprados (Top 5 produtos)',
+      value: currentItemCount.toFixed(2),
+      description: formatPercent(safePercentage(currentItemCount, previousItemCount)),
+      icon: Package,
+      trend: currentItemCount >= previousItemCount ? 'up' : 'down',
+      accentClass: 'border-l-amber-400',
+    },
+    {
+      title: 'Ticket Médio por Documento',
+      value: formatCurrency(currentTicketMedio),
+      description: formatPercent(safePercentage(currentTicketMedio, previousTicketMedio)),
+      icon: Box,
+      trend: currentTicketMedio >= previousTicketMedio ? 'up' : 'down',
+      accentClass: 'border-l-violet-500',
+    },
+  ] as const;
 
   if (!user?.tem_sped) {
     return <Navigate to="/dashboard" replace />;
   }
 
+  const isLoading = analiseComprasQuery.isLoading || previousAnaliseComprasQuery.isLoading;
+  const hasError = analiseComprasQuery.isError || previousAnaliseComprasQuery.isError;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-lg border bg-card p-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Análise Fiscal de Compras</h1>
-          <p className="text-sm text-muted-foreground">
-            Visão inicial com total comprado e Top 5 por fornecedor e produto.
-          </p>
-        </div>
+      <DashboardHeader
+        title="Análise Fiscal de Compras"
+        subtitle="Visão inicial com total comprado e Top 5 por fornecedor e produto."
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+        availableYears={availableYears}
+        monthLabels={monthLabels}
+        onMonthChange={setSelectedMonth}
+        onYearChange={setSelectedYear}
+      />
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm text-muted-foreground">
-            Ano
-            <select
-              className="mt-1 w-full rounded-md border bg-background p-2 text-foreground"
-              value={selectedYear}
-              onChange={(event) => setSelectedYear(event.target.value)}
-            >
-              {(yearOptions.length ? yearOptions : [yearNumber]).map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm text-muted-foreground">
-            Mês
-            <select
-              className="mt-1 w-full rounded-md border bg-background p-2 text-foreground"
-              value={selectedMonth}
-              onChange={(event) => setSelectedMonth(event.target.value)}
-            >
-              <option value="all">Todos</option>
-              {monthLabels.map((label, index) => (
-                <option key={label} value={index + 1}>{label}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-
-      {analiseComprasQuery.isError && (
+      {hasError && (
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar análise de compras</AlertTitle>
           <AlertDescription>
             {analiseComprasQuery.error instanceof Error
               ? analiseComprasQuery.error.message
-              : 'Não foi possível consultar os dados de compras no momento.'}
+              : previousAnaliseComprasQuery.error instanceof Error
+                ? previousAnaliseComprasQuery.error.message
+                : 'Não foi possível consultar os dados de compras no momento.'}
           </AlertDescription>
         </Alert>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Total Comprado</CardTitle>
-          <CardDescription>{periodoDescricao}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold">
-            {analiseComprasQuery.isLoading ? 'Carregando...' : formatCurrency(parseDecimal(data?.total_comprado ?? 0))}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <DashboardStatCard key={stat.title} {...stat} isLoading={isLoading} />
+        ))}
+      </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <RankingFornecedorCard
-          title="Top 5 fornecedores por valor"
-          isLoading={analiseComprasQuery.isLoading}
-          rows={data?.top_fornecedores_valor ?? []}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <DashboardRankingCard
+          title="Top Fornecedores"
+          description="Fornecedores com maior valor de compras no período"
+          items={(data?.top_fornecedores_valor ?? []).map((row, index) => {
+            const valorTotal = parseDecimal(row.valor_total);
+            const percentual = currentTotalComprado ? (valorTotal / currentTotalComprado) * 100 : null;
+
+            return {
+              key: `${row.fornecedor}-${index}`,
+              title: row.fornecedor,
+              subtitle: `${row.quantidade_documentos} documentos`,
+              value: formatCurrency(valorTotal),
+              rawValue: valorTotal,
+              percent: percentual,
+            };
+          })}
+          isLoading={isLoading}
+          loadingMessage="Carregando ranking de fornecedores..."
+          emptyMessage="Sem dados para o período selecionado."
+          totalValue={formatCurrency(currentTotalComprado)}
         />
-        <RankingFornecedorCard
-          title="Top 5 fornecedores por quantidade de documentos"
-          isLoading={analiseComprasQuery.isLoading}
-          rows={data?.top_fornecedores_quantidade ?? []}
+
+        <DashboardRankingCard
+          title="Top Produtos por Valor"
+          description="Produtos com maior valor de compra no período"
+          items={(data?.top_produtos_valor ?? []).map((row, index) => {
+            const valorTotal = parseDecimal(row.valor_total);
+            const percentual = currentTotalComprado ? (valorTotal / currentTotalComprado) * 100 : null;
+
+            return {
+              key: `${row.produto}-${index}`,
+              title: row.produto,
+              subtitle: `Qtd. ${parseDecimal(row.quantidade_total).toFixed(2)}`,
+              value: formatCurrency(valorTotal),
+              rawValue: valorTotal,
+              percent: percentual,
+            };
+          })}
+          isLoading={isLoading}
+          loadingMessage="Carregando ranking de produtos..."
+          emptyMessage="Sem dados para o período selecionado."
+          totalValue={formatCurrency(currentTotalComprado)}
         />
-        <RankingProdutoCard
-          title="Top 5 produtos por valor"
-          isLoading={analiseComprasQuery.isLoading}
-          rows={data?.top_produtos_valor ?? []}
-        />
-        <RankingProdutoCard
-          title="Top 5 produtos por quantidade"
-          isLoading={analiseComprasQuery.isLoading}
-          rows={data?.top_produtos_quantidade ?? []}
+
+        <DashboardRankingCard
+          title="Top Produtos por Quantidade"
+          description="Produtos mais comprados no período"
+          items={(data?.top_produtos_quantidade ?? []).map((row, index) => {
+            const quantidade = parseDecimal(row.quantidade_total);
+            const percentual = currentItemCount ? (quantidade / currentItemCount) * 100 : null;
+            const valorTotal = parseDecimal(row.valor_total);
+
+            return {
+              key: `${row.produto}-${index}-quantidade`,
+              title: row.produto,
+              subtitle: `${quantidade.toFixed(2)} itens comprados`,
+              value: formatCurrency(valorTotal),
+              rawValue: valorTotal,
+              percent: percentual,
+            };
+          })}
+          isLoading={isLoading}
+          loadingMessage="Carregando ranking de produtos por quantidade..."
+          emptyMessage="Sem dados para o período selecionado."
+          totalValue={formatCurrency(currentTotalComprado)}
         />
       </div>
     </div>
-  );
-}
-
-function RankingFornecedorCard({
-  title,
-  isLoading,
-  rows,
-}: {
-  title: string;
-  isLoading: boolean;
-  rows: Array<{ fornecedor: string; valor_total: number | string; quantidade_documentos: number }>;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Carregando ranking...</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sem dados para o período selecionado.</p>
-        ) : rows.map((row, index) => (
-          <div key={`${row.fornecedor}-${index}`} className="flex items-center justify-between rounded border p-3">
-            <div>
-              <p className="font-medium">{row.fornecedor}</p>
-              <p className="text-xs text-muted-foreground">{row.quantidade_documentos} documentos</p>
-            </div>
-            <p className="font-semibold">{formatCurrency(parseDecimal(row.valor_total))}</p>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function RankingProdutoCard({
-  title,
-  isLoading,
-  rows,
-}: {
-  title: string;
-  isLoading: boolean;
-  rows: Array<{ produto: string; valor_total: number | string; quantidade_total: number | string }>;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Carregando ranking...</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sem dados para o período selecionado.</p>
-        ) : rows.map((row, index) => (
-          <div key={`${row.produto}-${index}`} className="flex items-center justify-between rounded border p-3">
-            <div>
-              <p className="font-medium">{row.produto}</p>
-              <p className="text-xs text-muted-foreground">Qtd. {parseDecimal(row.quantidade_total).toFixed(2)}</p>
-            </div>
-            <p className="font-semibold">{formatCurrency(parseDecimal(row.valor_total))}</p>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Users, Receipt, Percent, Sparkles } from 'lucide-react';
+import { TrendingUp, Users, Receipt, Percent } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -22,6 +22,86 @@ const formatCurrency = (value: number) =>
   }).format(value);
 
 const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+
+const ufToRegion: Record<string, string> = {
+  AC: 'Norte',
+  AL: 'Nordeste',
+  AP: 'Norte',
+  AM: 'Norte',
+  BA: 'Nordeste',
+  CE: 'Nordeste',
+  DF: 'Centro-Oeste',
+  ES: 'Sudeste',
+  GO: 'Centro-Oeste',
+  MA: 'Nordeste',
+  MT: 'Centro-Oeste',
+  MS: 'Centro-Oeste',
+  MG: 'Sudeste',
+  PA: 'Norte',
+  PB: 'Nordeste',
+  PR: 'Sul',
+  PE: 'Nordeste',
+  PI: 'Nordeste',
+  RJ: 'Sudeste',
+  RN: 'Nordeste',
+  RS: 'Sul',
+  RO: 'Norte',
+  RR: 'Norte',
+  SC: 'Sul',
+  SP: 'Sudeste',
+  SE: 'Nordeste',
+  TO: 'Norte',
+};
+
+const extractUfFromCity = (cityLabel?: string) => {
+  if (!cityLabel) {
+    return null;
+  }
+
+  const normalized = cityLabel.toUpperCase();
+  const match = normalized.match(/(?:-|\/|\(|\s)([A-Z]{2})(?:\)|$)/);
+
+  if (!match) {
+    return null;
+  }
+
+  const uf = match[1];
+  return ufToRegion[uf] ? uf : null;
+};
+
+
+const regionMapAreas: Array<{ regiao: string; path: string; labelX: number; labelY: number }> = [
+  {
+    regiao: 'Norte',
+    path: 'M48 42 L116 18 L196 36 L182 92 L126 112 L74 94 Z',
+    labelX: 128,
+    labelY: 60,
+  },
+  {
+    regiao: 'Nordeste',
+    path: 'M196 36 L254 48 L280 94 L244 138 L196 122 L182 92 Z',
+    labelX: 238,
+    labelY: 92,
+  },
+  {
+    regiao: 'Centro-Oeste',
+    path: 'M74 94 L126 112 L148 178 L104 212 L62 170 Z',
+    labelX: 108,
+    labelY: 154,
+  },
+  {
+    regiao: 'Sudeste',
+    path: 'M148 178 L208 162 L236 204 L198 236 L154 224 Z',
+    labelX: 193,
+    labelY: 201,
+  },
+  {
+    regiao: 'Sul',
+    path: 'M154 224 L198 236 L186 292 L146 312 L124 266 Z',
+    labelX: 162,
+    labelY: 270,
+  },
+];
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
   const digits = (value ?? '').replace(/\D/g, '');
@@ -301,9 +381,18 @@ export default function Dashboard({
   const totalFaturamento = isAllMonths
     ? aggregatedData.totals.totalSales
     : parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
-  const topClientes = isAllMonths ? aggregatedTopClientes : (latestKpi?.kpis.top_clientes ?? []);
-  const topProdutos = isAllMonths ? aggregatedTopProdutos : (latestKpi?.kpis.top_produtos ?? []);
-  const topCidades = isAllMonths ? aggregatedTopCidades : (latestKpi?.kpis.top_cidades ?? []);
+  const topClientes = useMemo(
+    () => (isAllMonths ? aggregatedTopClientes : (latestKpi?.kpis.top_clientes ?? [])),
+    [aggregatedTopClientes, isAllMonths, latestKpi?.kpis.top_clientes],
+  );
+  const topProdutos = useMemo(
+    () => (isAllMonths ? aggregatedTopProdutos : (latestKpi?.kpis.top_produtos ?? [])),
+    [aggregatedTopProdutos, isAllMonths, latestKpi?.kpis.top_produtos],
+  );
+  const topCidades = useMemo(
+    () => (isAllMonths ? aggregatedTopCidades : (latestKpi?.kpis.top_cidades ?? [])),
+    [aggregatedTopCidades, isAllMonths, latestKpi?.kpis.top_cidades],
+  );
 
   const resolvePercentual = (percentual?: number | string, valorTotal?: number | string) => {
     if (percentual !== undefined && percentual !== null) {
@@ -371,6 +460,63 @@ export default function Dashboard({
       percent: percentual,
     };
   });
+
+  const vendasPorRegiao = useMemo(() => {
+    const regiaoMap = new Map<string, number>([
+      ['Norte', 0],
+      ['Nordeste', 0],
+      ['Centro-Oeste', 0],
+      ['Sudeste', 0],
+      ['Sul', 0],
+      ['Não identificado', 0],
+    ]);
+
+    topCidades.forEach((cidade) => {
+      const valor = parseDecimal(cidade.valor_total ?? 0);
+      const uf = extractUfFromCity(cidade.cidade);
+      const regiao = uf ? ufToRegion[uf] : 'Não identificado';
+      regiaoMap.set(regiao, (regiaoMap.get(regiao) ?? 0) + valor);
+    });
+
+    const totalRegional = [...regiaoMap.values()].reduce((acc, current) => acc + current, 0);
+
+    return [...regiaoMap.entries()]
+      .map(([regiao, valor]) => ({
+        regiao,
+        valor,
+        percentual: totalRegional > 0 ? (valor / totalRegional) * 100 : 0,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [topCidades]);
+
+  const dadosRegiaoMapa = useMemo(() => {
+    const mapa = new Map(vendasPorRegiao.map((item) => [item.regiao, item]));
+    return regionMapAreas.map((area) => {
+      const valorRegiao = mapa.get(area.regiao);
+      return {
+        ...area,
+        valor: valorRegiao?.valor ?? 0,
+        percentual: valorRegiao?.percentual ?? 0,
+      };
+    });
+  }, [vendasPorRegiao]);
+
+  const maiorPercentualRegiao = useMemo(
+    () => Math.max(...dadosRegiaoMapa.map((item) => item.percentual), 0),
+    [dadosRegiaoMapa],
+  );
+
+  const getRegionFill = (percentual: number) => {
+    if (percentual <= 0) {
+      return 'hsl(var(--muted))';
+    }
+
+    const intensidade = maiorPercentualRegiao > 0 ? percentual / maiorPercentualRegiao : 0;
+    const alpha = 0.25 + intensidade * 0.75;
+    return `hsl(var(--primary) / ${Math.min(alpha, 1).toFixed(2)})`;
+  };
+
+  const naoIdentificado = vendasPorRegiao.find((item) => item.regiao === 'Não identificado');
 
   const yearOptions = useMemo(() => {
     const resultados = yearsQuery.data?.resultados ?? [];
@@ -459,6 +605,62 @@ export default function Dashboard({
           totalValue={formatCurrency(totalFaturamento)}
         />
       </div>
+
+      <section className="rounded-xl border bg-background p-4 md:p-6">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-foreground">Mapa de vendas por região</h2>
+          <p className="text-sm text-muted-foreground">
+            Intensidade do mapa representa a participação de faturamento por região.
+          </p>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+          <div className="overflow-hidden rounded-lg border bg-muted/20 p-2">
+            <svg viewBox="0 0 320 340" className="h-auto w-full" role="img" aria-label="Mapa das regiões do Brasil">
+              {dadosRegiaoMapa.map((area) => (
+                <g key={area.regiao}>
+                  <path
+                    d={area.path}
+                    fill={getRegionFill(area.percentual)}
+                    stroke="hsl(var(--border))"
+                    strokeWidth="2"
+                  >
+                    <title>
+                      {`${area.regiao}: ${formatCurrency(area.valor)} (${area.percentual.toFixed(1)}%)`}
+                    </title>
+                  </path>
+                  <text
+                    x={area.labelX}
+                    y={area.labelY}
+                    textAnchor="middle"
+                    className="fill-foreground text-[10px] font-medium"
+                  >
+                    {area.regiao}
+                  </text>
+                </g>
+              ))}
+            </svg>
+          </div>
+
+          <div className="space-y-3">
+            {vendasPorRegiao.filter((item) => item.regiao !== 'Não identificado').map((item) => (
+              <div key={item.regiao} className="rounded-md border bg-background p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{item.regiao}</span>
+                  <span className="text-muted-foreground">{item.percentual.toFixed(1)}%</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{formatCurrency(item.valor)}</p>
+              </div>
+            ))}
+
+            {naoIdentificado && naoIdentificado.valor > 0 && (
+              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                Não identificado: {formatCurrency(naoIdentificado.valor)} ({naoIdentificado.percentual.toFixed(1)}%)
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -7,6 +7,10 @@ from app.models.nfe.schemas import NFeKPI, NFeKPIConsulta
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.sped.postgres_config import carregar_config_postgres_sped
 
+def _parece_codigo_municipio(valor: object) -> bool:
+  codigo = "".join(ch for ch in str(valor or "") if ch.isdigit())
+  return len(codigo) in {6, 7}
+
 def _normalizar_nome_cidade(valor: object) -> str:
   cidade = str(valor or "").strip()
   if not cidade:
@@ -14,6 +18,9 @@ def _normalizar_nome_cidade(valor: object) -> str:
 
   cidade_upper = cidade.upper()
   if len(cidade_upper) == 2 and cidade_upper.isalpha():
+    return "Cidade não identificada"
+  
+  if _parece_codigo_municipio(cidade):
     return "Cidade não identificada"
 
   for separador in ("/", "-"):
@@ -128,6 +135,7 @@ class SpedConsultaService:
       FROM public.sped_documentos_fiscais d
       LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
       WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+        AND d.tipo_operacao = 'saida'
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s
       GROUP BY 1
@@ -139,23 +147,57 @@ class SpedConsultaService:
     )
 
   def _top_cidades(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:
-    cidades = self._safe_top_query(
-      cur,
-      """
-      SELECT COALESCE(NULLIF(TRIM(p.uf), ''), p.municipio, 'Cidade não identificada') AS cidade,
+    sql_cidades_nfe = """
+      SELECT COALESCE(
+        NULLIF(TRIM(n.destinatario_cidade), ''),
+        NULLIF(TRIM(p.municipio), ''),
+        NULLIF(TRIM(p.uf), ''),
+        'Cidade não identificada'
+      ) AS cidade,
       SUM(d.valor_total) AS valor_total
       FROM public.sped_documentos_fiscais d
       LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+      LEFT JOIN LATERAL (
+        SELECT nn.destinatario_cidade
+        FROM public.nfe_notas nn
+        WHERE regexp_replace(nn.emitente_cnpj, '\\D', '', 'g') = regexp_replace(d.empresa_cnpj, '\\D', '', 'g')
+          AND regexp_replace(COALESCE(nn.destinatario_documento, ''), '\\D', '', 'g') = regexp_replace(COALESCE(p.cnpj_cpf, ''), '\\D', '', 'g')
+          AND NULLIF(TRIM(nn.destinatario_cidade), '') IS NOT NULL
+        ORDER BY nn.data_emissao DESC
+        LIMIT 1
+      ) n ON TRUE
       WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+        AND d.tipo_operacao = 'saida'
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s
       GROUP BY 1
       ORDER BY 2 DESC
       LIMIT 5;
-      """,
-      (cnpj, ano, mes),
-      "cidade",
-    )
+    """
+
+    sql_cidades_sped = """
+      SELECT COALESCE(
+        NULLIF(TRIM(p.municipio), ''),
+        NULLIF(TRIM(p.uf), ''),
+        'Cidade não identificada'
+      ) AS cidade,
+      SUM(d.valor_total) AS valor_total
+      FROM public.sped_documentos_fiscais d
+      LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+      WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+        AND d.tipo_operacao = 'saida'
+        AND EXTRACT(YEAR FROM d.data_emissao) = %s
+        AND EXTRACT(MONTH FROM d.data_emissao) = %s
+      GROUP BY 1
+      ORDER BY 2 DESC
+      LIMIT 5;
+    """
+
+    try:
+      cur.execute(sql_cidades_nfe, (cnpj, ano, mes))
+      cidades = [{"cidade": nome, "valor_total": valor or Decimal("0.00")} for nome, valor in cur.fetchall()]
+    except psycopg.errors.UndefinedTable:
+      cidades = self._safe_top_query(cur, sql_cidades_sped, (cnpj, ano, mes), "cidade")
     
     cidades_agrupadas: dict[str, Decimal] = {}
     for item in cidades:

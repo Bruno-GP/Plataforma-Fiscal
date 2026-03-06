@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Users, Receipt, Percent, MapPin  } from 'lucide-react';
+import { TrendingUp, Users, Receipt, Percent  } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -22,6 +22,39 @@ const formatCurrency = (value: number) =>
   }).format(value);
 
 const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+
+const BRAZIL_STATES_GEOJSON_URL =
+  'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson';
+
+const stateNameToUf: Record<string, string> = {
+  acre: 'AC',
+  alagoas: 'AL',
+  amapa: 'AP',
+  amazonas: 'AM',
+  bahia: 'BA',
+  ceara: 'CE',
+  'distrito federal': 'DF',
+  'espirito santo': 'ES',
+  goias: 'GO',
+  maranhao: 'MA',
+  'mato grosso': 'MT',
+  'mato grosso do sul': 'MS',
+  'minas gerais': 'MG',
+  para: 'PA',
+  paraiba: 'PB',
+  parana: 'PR',
+  pernambuco: 'PE',
+  piaui: 'PI',
+  'rio de janeiro': 'RJ',
+  'rio grande do norte': 'RN',
+  'rio grande do sul': 'RS',
+  rondonia: 'RO',
+  roraima: 'RR',
+  'santa catarina': 'SC',
+  'sao paulo': 'SP',
+  sergipe: 'SE',
+  tocantins: 'TO',
+};
 
 const ufToRegion: Record<string, string> = {
   AC: 'Norte',
@@ -73,58 +106,36 @@ const extractUfFromCity = (cityLabel?: string) => {
 type GeoJsonFeature = {
   type: 'Feature';
   properties: {
-    regiao: string;
+    name?: string;
+    sigla?: string;
   };
   geometry: {
-    type: 'Polygon';
-    coordinates: number[][][];
+    type: 'Polygon' | 'MultiPolygon';
+    coordinates: number[][][] | number[][][][];
   };
 };
 
-const brasilRegioesGeoJson: { type: 'FeatureCollection'; features: GeoJsonFeature[] } = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: { regiao: 'Norte' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[[10, 12], [38, 8], [50, 24], [35, 38], [12, 32], [10, 12]]],
-      },
-    },
-    {
-      type: 'Feature',
-      properties: { regiao: 'Nordeste' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[[50, 24], [78, 16], [90, 36], [70, 50], [52, 42], [50, 24]]],
-      },
-    },
-    {
-      type: 'Feature',
-      properties: { regiao: 'Centro-Oeste' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[[28, 38], [52, 42], [60, 58], [40, 66], [24, 54], [28, 38]]],
-      },
-    },
-    {
-      type: 'Feature',
-      properties: { regiao: 'Sudeste' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[[52, 42], [70, 50], [74, 66], [56, 72], [44, 62], [52, 42]]],
-      },
-    },
-    {
-      type: 'Feature',
-      properties: { regiao: 'Sul' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[[44, 62], [56, 72], [52, 92], [38, 90], [34, 72], [44, 62]]],
-      },
-    },
-  ],
+const normalizeLabel = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+
+
+type GeoJsonFeatureCollection = {
+  type: 'FeatureCollection';
+  features: GeoJsonFeature[];
+};
+
+const getFeatureRings = (feature: GeoJsonFeature) => {
+  if (feature.geometry.type === 'Polygon') {
+    return [feature.geometry.coordinates[0]];
+  }
+
+  return feature.geometry.coordinates
+    .map((polygon) => polygon[0])
+    .filter((ring) => ring.length > 0);
 };
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
@@ -173,6 +184,18 @@ export default function Dashboard({
     queryFn: () => (usaSped ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 }) : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 })),
     enabled: hasEmitenteCnpj && year > 2000,
     staleTime: 5 * 60 * 1000,
+  });
+
+  const brazilMapQuery = useQuery<GeoJsonFeatureCollection>({
+    queryKey: ['brazil-states-geojson'],
+    queryFn: async () => {
+      const response = await fetch(BRAZIL_STATES_GEOJSON_URL);
+      if (!response.ok) {
+        throw new Error('Não foi possível carregar o GeoJSON do Brasil.');
+      }
+      return response.json();
+    },
+    staleTime: 24 * 60 * 60 * 1000,
   });
 
   const isAllMonths = selectedMonth === 'all';
@@ -513,30 +536,136 @@ export default function Dashboard({
       .sort((a, b) => b.valor - a.valor);
   }, [topCidades]);
 
-  const dadosRegiaoMapa = useMemo(() => {
-    const mapa = new Map(vendasPorRegiao.map((item) => [item.regiao, item]));
+  const geoJsonPorEstado = useMemo(() => {
+    const data = brazilMapQuery.data;
+    if (!data?.features?.length) {
+      return [];
+    }
 
-    return brasilRegioesGeoJson.features
+    const salesByState = new Map<string, number>();
+
+    topCidades.forEach((cidade) => {
+      const valor = parseDecimal(cidade.valor_total ?? 0);
+      const uf = extractUfFromCity(cidade.cidade);
+      if (!uf) {
+        return;
+      }
+      salesByState.set(uf, (salesByState.get(uf) ?? 0) + valor);
+    });
+
+    const projectedFeatures = data.features
       .map((feature) => {
-        const regiao = feature.properties.regiao;
-        const valorRegiao = mapa.get(regiao);
-        const pontos = feature.geometry.coordinates[0];
-        const [centroidX, centroidY] = pontos.reduce(
-          (acc, [x, y]) => [acc[0] + x, acc[1] + y],
+        const stateName = normalizeLabel(feature.properties.name ?? '');
+        const uf = feature.properties.sigla ?? stateNameToUf[stateName];
+
+        if (!uf || !ufToRegion[uf]) {
+          return null;
+        }
+
+        const rings = getFeatureRings(feature);
+        if (!rings.length) {
+          return null;
+        }
+
+        return {
+          uf,
+          regiao: ufToRegion[uf],
+          rings,
+          valor: salesByState.get(uf) ?? 0,
+        };
+      })
+      .filter((item): item is { uf: string; regiao: string; rings: number[][][]; valor: number } => Boolean(item));
+
+    const bounds = projectedFeatures.reduce(
+      (acc, item) => {
+        item.rings.forEach((ring) => {
+          ring.forEach(([lon, lat]) => {
+            acc.minLon = Math.min(acc.minLon, lon);
+            acc.maxLon = Math.max(acc.maxLon, lon);
+            acc.minLat = Math.min(acc.minLat, lat);
+            acc.maxLat = Math.max(acc.maxLat, lat);
+          });
+        });
+        return acc;
+      },
+      {
+        minLon: Number.POSITIVE_INFINITY,
+        maxLon: Number.NEGATIVE_INFINITY,
+        minLat: Number.POSITIVE_INFINITY,
+        maxLat: Number.NEGATIVE_INFINITY,
+      },
+    );
+
+    if (!Number.isFinite(bounds.minLon) || !Number.isFinite(bounds.minLat)) {
+      return [];
+    }
+
+    const padding = 3;
+    const width = 100;
+    const height = 100;
+    const lonSpan = Math.max(bounds.maxLon - bounds.minLon, 1);
+    const latSpan = Math.max(bounds.maxLat - bounds.minLat, 1);
+    const scale = Math.min((width - padding * 2) / lonSpan, (height - padding * 2) / latSpan);
+    const projectedWidth = lonSpan * scale;
+    const projectedHeight = latSpan * scale;
+    const offsetX = (width - projectedWidth) / 2;
+    const offsetY = (height - projectedHeight) / 2;
+
+    const totalMapSales = projectedFeatures.reduce((acc, item) => acc + item.valor, 0);
+
+    return projectedFeatures.map((item) => {
+      const projectedRings = item.rings.map((ring) =>
+        ring.map(([lon, lat]) => [
+          offsetX + (lon - bounds.minLon) * scale,
+          offsetY + (bounds.maxLat - lat) * scale,
+        ]),
+      );
+
+      const centroid = projectedRings
+        .flat()
+        .reduce(
+          (acc, [x, y], _, arr) => {
+            acc[0] += x / arr.length;
+            acc[1] += y / arr.length;
+            return acc;
+          },
           [0, 0],
         );
 
-        return {
-          regiao,
-          feature,
-          valor: valorRegiao?.valor ?? 0,
-          percentual: valorRegiao?.percentual ?? 0,
-          centroidX: centroidX / pontos.length,
-          centroidY: centroidY / pontos.length,
-        };
-      })
+      return {
+        ...item,
+        projectedRings,
+        centroidX: centroid[0],
+        centroidY: centroid[1],
+        percentual: totalMapSales > 0 ? (item.valor / totalMapSales) * 100 : 0,
+      };
+    });
+  }, [brazilMapQuery.data, topCidades]);
+
+  const dadosRegiaoMapa = useMemo(() => {
+    const regionTotals = new Map<string, number>([
+      ['Norte', 0],
+      ['Nordeste', 0],
+      ['Centro-Oeste', 0],
+      ['Sudeste', 0],
+      ['Sul', 0],
+    ]);
+
+    geoJsonPorEstado.forEach((estado) => {
+      regionTotals.set(estado.regiao, (regionTotals.get(estado.regiao) ?? 0) + estado.valor);
+    });
+
+    const totalRegional = [...regionTotals.values()].reduce((acc, current) => acc + current, 0);
+
+    return [...regionTotals.entries()]
+      .map(([regiao, valor]) => ({
+        regiao,
+        valor,
+        percentual: totalRegional > 0 ? (valor / totalRegional) * 100 : 0,
+      }))
+
       .sort((a, b) => b.percentual - a.percentual);
-  }, [vendasPorRegiao]);
+  }, [geoJsonPorEstado]);
 
   const maiorPercentualRegiao = useMemo(
     () => Math.max(...dadosRegiaoMapa.map((item) => item.percentual), 0),
@@ -554,6 +683,7 @@ export default function Dashboard({
   };
 
   const naoIdentificado = vendasPorRegiao.find((item) => item.regiao === 'Não identificado');
+  const isMapLoading = brazilMapQuery.isLoading;
 
   const yearOptions = useMemo(() => {
     const resultados = yearsQuery.data?.resultados ?? [];
@@ -647,7 +777,7 @@ export default function Dashboard({
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-foreground">Mapa de vendas por região</h2>
           <p className="text-sm text-muted-foreground">
-            Intensidade no GeoJSON representa a participação de faturamento por região.
+            Intensidade no GeoJSON geográfico real representa a participação de faturamento por estado e região.
           </p>
         </div>
 
@@ -658,43 +788,45 @@ export default function Dashboard({
               Brasil • Visão de vendas por região
             </div>
 
-            <svg
-              viewBox="0 0 100 100"
-              className="absolute inset-0 z-10 h-full w-full"
-              role="img"
-              aria-label="Mapa GeoJSON das regiões brasileiras com participação de vendas"
-            >
-              {dadosRegiaoMapa.map((area) => {
-                const pontos = area.feature.geometry.coordinates[0]
-                  .map(([x, y]) => `${x},${y}`)
-                  .join(' ');
-
-                return (
-                  <g key={area.regiao}>
-                    <polygon
-                      points={pontos}
-                      fill={getRegionHeat(area.percentual)}
-                      stroke="hsl(var(--border))"
-                      strokeWidth={0.8}
-                    >
-                      <title>
-                        {`${area.regiao}: ${formatCurrency(area.valor)} (${area.percentual.toFixed(1)}%)`}
-                      </title>
-                    </polygon>
+            {isMapLoading ? (
+              <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-muted-foreground">
+                Carregando mapa geográfico do Brasil...
+              </div>
+            ) : (
+              <svg
+                viewBox="0 0 100 100"
+                className="absolute inset-0 z-10 h-full w-full"
+                role="img"
+                aria-label="Mapa GeoJSON dos estados brasileiros com participação de vendas"
+              >
+                {geoJsonPorEstado.map((estado) => (
+                  <g key={estado.uf}>
+                    {estado.projectedRings.map((ring, index) => (
+                      <polygon
+                        key={`${estado.uf}-${index}`}
+                        points={ring.map(([x, y]) => `${x},${y}`).join(' ')}
+                        fill={getRegionHeat(estado.percentual)}
+                        stroke="hsl(var(--border))"
+                        strokeWidth={0.25}
+                      >
+                        <title>
+                          {`${estado.uf} (${estado.regiao}): ${formatCurrency(estado.valor)} (${estado.percentual.toFixed(1)}%)`}
+                        </title>
+                      </polygon>
+                    ))}
                     <text
-                      x={area.centroidX}
-                      y={area.centroidY}
+                      x={estado.centroidX}
+                      y={estado.centroidY}
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      fontSize="3"
+                      fontSize="1.6"
                       className="fill-foreground"
                     >
-                      {`${area.regiao} ${area.percentual.toFixed(1)}%`}
+                      {estado.uf}
                     </text>
-                  </g>
-                );
-              })}
-            </svg>
+                ))}
+              </svg>
+            )}
 
             <div className="absolute bottom-3 right-3 z-20 rounded-md border bg-background/95 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
               Tons mais fortes = maior participação
@@ -702,7 +834,7 @@ export default function Dashboard({
           </div>
 
           <div className="space-y-3">
-            {vendasPorRegiao.filter((item) => item.regiao !== 'Não identificado').map((item) => (
+            {dadosRegiaoMapa.map((item) => (
               <div key={item.regiao} className="rounded-md border bg-background p-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{item.regiao}</span>

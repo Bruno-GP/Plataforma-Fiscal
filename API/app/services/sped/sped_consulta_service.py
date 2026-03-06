@@ -148,6 +148,7 @@ class SpedConsultaService:
   def _top_cidades(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:
     sql_cidades_sped = """
       SELECT COALESCE(
+        NULLIF(TRIM(p.municipio_nome), ''),
         NULLIF(TRIM(p.municipio), ''),
         NULLIF(TRIM(p.uf), ''),
         'Cidade não identificada'

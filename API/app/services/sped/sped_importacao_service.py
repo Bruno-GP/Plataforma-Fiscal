@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
+import json
 from typing import Iterable
+from urllib.error import URLError
+from urllib.request import urlopen
 
 import psycopg
 
@@ -22,6 +25,7 @@ class SpedImportacaoResultado:
 class SpedImportacaoService:
   def __init__(self):
     self.config = carregar_config_postgres_sped()
+    self._cache_municipios: dict[str, str | None] = {}
 
   def importar_arquivos(
     self,
@@ -198,7 +202,7 @@ class SpedImportacaoService:
   def _carregar_sped_em_tabelas(self, conn: psycopg.Connection, cnpj_emitente: str, conteudo: bytes) -> None:
     linhas = conteudo.decode("latin-1", errors="ignore").splitlines()
 
-    participantes: dict[str, tuple[str, str | None, str | None, str | None]] = {}
+    participantes: dict[str, tuple[str, str | None, str | None, str | None, str | None]] = {}
     produtos: dict[str, tuple[str, str | None, str | None, str | None]] = {}
     participante_ids: dict[str, int] = {}
     produto_ids: dict[str, int] = {}
@@ -231,8 +235,9 @@ class SpedImportacaoService:
           cnpj_cpf = self._normalizar_documento((partes[5] if len(partes) > 5 else "").strip())
           codigo_municipio = (partes[8] if len(partes) > 8 else "").strip()
           municipio = codigo_municipio or None
+          municipio_nome = self._obter_nome_municipio(codigo_municipio)
           uf = self._extrair_uf_de_cod_municipio(codigo_municipio)
-          participantes[codigo] = (nome, cnpj_cpf, municipio, uf)
+          participantes[codigo] = (nome, cnpj_cpf, municipio, uf, municipio_nome)
           continue
 
         if registro == "0200":
@@ -410,7 +415,7 @@ class SpedImportacaoService:
     self,
     cur,
     cache_ids: dict[str, int],
-    participantes: dict[str, tuple[str, str | None, str | None, str | None]],
+    participantes: dict[str, tuple[str, str | None, str | None, str | None, str | None]],
     cnpj_emitente: str,
     codigo: str,
   ) -> int | None:
@@ -419,20 +424,21 @@ class SpedImportacaoService:
     if codigo in cache_ids:
       return cache_ids[codigo]
 
-    nome, cnpj_cpf, municipio, uf = participantes.get(codigo, ("Participante não identificado", None, None, None))
+    nome, cnpj_cpf, municipio, municipio_nome, uf = participantes.get(codigo, ("Participante não identificado", None, None, None, None))
     cur.execute(
       """
-      INSERT INTO sped_participantes (empresa_cnpj, codigo, nome, cnpj_cpf, municipio, uf)
-      VALUES (%s, %s, %s, %s, %s, %s)
+      INSERT INTO sped_participantes (empresa_cnpj, codigo, nome, cnpj_cpf, municipio, municipio_nome, uf)
+      VALUES (%s, %s, %s, %s, %s, %s, %s)
       ON CONFLICT (empresa_cnpj, codigo)
       DO UPDATE SET
         nome = EXCLUDED.nome,
         cnpj_cpf = COALESCE(EXCLUDED.cnpj_cpf, sped_participantes.cnpj_cpf),
         municipio = COALESCE(EXCLUDED.municipio, sped_participantes.municipio),
+        municipio_nome = COALESCE(EXCLUDED.municipio_nome, sped_participantes.municipio_nome),
         uf = COALESCE(EXCLUDED.uf, sped_participantes.uf)
       RETURNING id
       """,
-      (cnpj_emitente, codigo, nome, cnpj_cpf, municipio, uf),
+      (cnpj_emitente, codigo, nome, cnpj_cpf, municipio, municipio_nome, uf)
     )
     participante_id = int(cur.fetchone()[0])
     cache_ids[codigo] = participante_id
@@ -608,6 +614,7 @@ class SpedImportacaoService:
           nome VARCHAR(255),
           cnpj_cpf VARCHAR(14),
           municipio VARCHAR(100),
+          municipio_nome VARCHAR(120),
           uf CHAR(2),
           UNIQUE (empresa_cnpj, codigo)
         )
@@ -620,6 +627,7 @@ class SpedImportacaoService:
         """
       )
       cur.execute("ALTER TABLE sped_participantes ADD COLUMN IF NOT EXISTS uf CHAR(2)")
+      cur.execute("ALTER TABLE sped_participantes ADD COLUMN IF NOT EXISTS municipio_nome VARCHAR(120)")
       cur.execute(
         """
         CREATE TABLE IF NOT EXISTS sped_produtos (
@@ -785,6 +793,28 @@ class SpedImportacaoService:
     }
 
     return uf_por_codigo.get(codigo_numerico[:2])
+  
+  def _obter_nome_municipio(self, codigo_municipio: str | None) -> str | None:
+    codigo_numerico = "".join(ch for ch in str(codigo_municipio or "") if ch.isdigit())
+    if len(codigo_numerico) not in {6, 7}:
+      return None
+
+    if codigo_numerico in self._cache_municipios:
+      return self._cache_municipios[codigo_numerico]
+
+    try:
+      with urlopen(
+        f"https://servicodados.ibge.gov.br/api/v1/localidades/municipios/{codigo_numerico}",
+        timeout=2,
+      ) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    except (URLError, TimeoutError, json.JSONDecodeError, ValueError):
+      self._cache_municipios[codigo_numerico] = None
+      return None
+
+    nome_municipio = str(payload.get("nome") or "").strip() or None
+    self._cache_municipios[codigo_numerico] = nome_municipio
+    return nome_municipio
 
   def _to_int(self, value: str | None) -> int | None:
     if not value:

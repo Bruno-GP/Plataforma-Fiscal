@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS SPED_participantes (
     cnpj_cpf      VARCHAR(14),
     uf            CHAR(2),
     municipio     VARCHAR(100),
+    municipio_nome VARCHAR(120),
     tipo          VARCHAR(20)
 );
 

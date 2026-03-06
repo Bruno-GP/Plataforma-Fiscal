@@ -139,42 +139,13 @@ class SpedConsultaService:
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s
       GROUP BY 1
-      ORDER BY 2 DESC
-      LIMIT 5;
+      ORDER BY 2 DESC;
       """,
       (cnpj, ano, mes),
       "cliente",
     )
 
   def _top_cidades(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:
-    sql_cidades_nfe = """
-      SELECT COALESCE(
-        NULLIF(TRIM(n.destinatario_cidade), ''),
-        NULLIF(TRIM(p.municipio), ''),
-        NULLIF(TRIM(p.uf), ''),
-        'Cidade não identificada'
-      ) AS cidade,
-      SUM(d.valor_total) AS valor_total
-      FROM public.sped_documentos_fiscais d
-      LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
-      LEFT JOIN LATERAL (
-        SELECT nn.destinatario_cidade
-        FROM public.nfe_notas nn
-        WHERE regexp_replace(nn.emitente_cnpj, '\\D', '', 'g') = regexp_replace(d.empresa_cnpj, '\\D', '', 'g')
-          AND regexp_replace(COALESCE(nn.destinatario_documento, ''), '\\D', '', 'g') = regexp_replace(COALESCE(p.cnpj_cpf, ''), '\\D', '', 'g')
-          AND NULLIF(TRIM(nn.destinatario_cidade), '') IS NOT NULL
-        ORDER BY nn.data_emissao DESC
-        LIMIT 1
-      ) n ON TRUE
-      WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
-        AND d.tipo_operacao = 'saida'
-        AND EXTRACT(YEAR FROM d.data_emissao) = %s
-        AND EXTRACT(MONTH FROM d.data_emissao) = %s
-      GROUP BY 1
-      ORDER BY 2 DESC
-      LIMIT 5;
-    """
-
     sql_cidades_sped = """
       SELECT COALESCE(
         NULLIF(TRIM(p.municipio), ''),
@@ -189,15 +160,10 @@ class SpedConsultaService:
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s
       GROUP BY 1
-      ORDER BY 2 DESC
-      LIMIT 5;
+      ORDER BY 2 DESC;
     """
 
-    try:
-      cur.execute(sql_cidades_nfe, (cnpj, ano, mes))
-      cidades = [{"cidade": nome, "valor_total": valor or Decimal("0.00")} for nome, valor in cur.fetchall()]
-    except psycopg.errors.UndefinedTable:
-      cidades = self._safe_top_query(cur, sql_cidades_sped, (cnpj, ano, mes), "cidade")
+    cidades = self._safe_top_query(cur, sql_cidades_sped, (cnpj, ano, mes), "cidade")
     
     cidades_agrupadas: dict[str, Decimal] = {}
     for item in cidades:

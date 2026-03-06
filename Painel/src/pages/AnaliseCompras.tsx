@@ -64,14 +64,14 @@ export default function AnaliseFiscal() {
   const yearNumber = Number.parseInt(selectedYear, 10);
 
   const yearsQuery = useQuery({
-    queryKey: ['analise-fiscal-years', emitenteCnpj],
+    queryKey: ['analise-years', emitenteCnpj],
     queryFn: () => fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
   const analiseComprasQuery = useQuery({
-    queryKey: ['analise-fiscal-compras', emitenteCnpj, yearNumber, selectedMonth],
+    queryKey: ['analise-compras', emitenteCnpj, yearNumber, selectedMonth],
     queryFn: () =>
       fetchSpedAnaliseCompras({
         emitente_cnpj: emitenteCnpj,
@@ -89,7 +89,7 @@ export default function AnaliseFiscal() {
   );
 
   const previousAnaliseComprasQuery = useQuery({
-    queryKey: ['analise-fiscal-compras-previous', emitenteCnpj, previousPeriod.periodo_ano, previousPeriod.periodo_mes],
+    queryKey: ['analise-compras-previous', emitenteCnpj, previousPeriod.periodo_ano, previousPeriod.periodo_mes],
     queryFn: () =>
       fetchSpedAnaliseCompras({
         emitente_cnpj: emitenteCnpj,

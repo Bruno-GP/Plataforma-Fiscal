@@ -17,7 +17,7 @@ const menuItemsBase = [
 
 const menuItemImportacaoXml = { title: 'Importação XML', url: '/importacao-xml', icon: FileUp };
 const menuItemImportacaoSped = { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit };
-const menuItemAnaliseFiscal = { title: 'Análise Fiscal', url: '/analise-fiscal', icon: FileSearch };
+const menuItemAnaliseFiscal = { title: 'Análise Fiscal', url: '/analise-compras', icon: FileSearch };
 
 export function AppHeader() {
   const { user, logout } = useAuth();

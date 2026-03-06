@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Users, Receipt, Percent } from 'lucide-react';
+import { TrendingUp, Users, Receipt, Percent, MapPin  } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -70,38 +70,13 @@ const extractUfFromCity = (cityLabel?: string) => {
 };
 
 
-const regionMapAreas: Array<{ regiao: string; path: string; labelX: number; labelY: number }> = [
-  {
-    regiao: 'Norte',
-    path: 'M48 42 L116 18 L196 36 L182 92 L126 112 L74 94 Z',
-    labelX: 128,
-    labelY: 60,
-  },
-  {
-    regiao: 'Nordeste',
-    path: 'M196 36 L254 48 L280 94 L244 138 L196 122 L182 92 Z',
-    labelX: 238,
-    labelY: 92,
-  },
-  {
-    regiao: 'Centro-Oeste',
-    path: 'M74 94 L126 112 L148 178 L104 212 L62 170 Z',
-    labelX: 108,
-    labelY: 154,
-  },
-  {
-    regiao: 'Sudeste',
-    path: 'M148 178 L208 162 L236 204 L198 236 L154 224 Z',
-    labelX: 193,
-    labelY: 201,
-  },
-  {
-    regiao: 'Sul',
-    path: 'M154 224 L198 236 L186 292 L146 312 L124 266 Z',
-    labelX: 162,
-    labelY: 270,
-  },
-];
+const regionAnchors: Record<string, { x: number; y: number }> = {
+  Norte: { x: 28, y: 24 },
+  Nordeste: { x: 72, y: 28 },
+  'Centro-Oeste': { x: 44, y: 50 },
+  Sudeste: { x: 66, y: 60 },
+  Sul: { x: 56, y: 80 },
+};
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
   const digits = (value ?? '').replace(/\D/g, '');
@@ -491,14 +466,18 @@ export default function Dashboard({
 
   const dadosRegiaoMapa = useMemo(() => {
     const mapa = new Map(vendasPorRegiao.map((item) => [item.regiao, item]));
-    return regionMapAreas.map((area) => {
-      const valorRegiao = mapa.get(area.regiao);
-      return {
-        ...area,
-        valor: valorRegiao?.valor ?? 0,
-        percentual: valorRegiao?.percentual ?? 0,
-      };
-    });
+
+    return Object.entries(regionAnchors)
+      .map(([regiao, anchor]) => {
+        const valorRegiao = mapa.get(regiao);
+        return {
+          regiao,
+          ...anchor,
+          valor: valorRegiao?.valor ?? 0,
+          percentual: valorRegiao?.percentual ?? 0,
+        };
+      })
+      .sort((a, b) => b.percentual - a.percentual);
   }, [vendasPorRegiao]);
 
   const maiorPercentualRegiao = useMemo(
@@ -506,13 +485,13 @@ export default function Dashboard({
     [dadosRegiaoMapa],
   );
 
-  const getRegionFill = (percentual: number) => {
+  const getRegionHeat = (percentual: number) => {
     if (percentual <= 0) {
-      return 'hsl(var(--muted))';
+      return 'hsl(var(--muted) / 0.5)';
     }
 
     const intensidade = maiorPercentualRegiao > 0 ? percentual / maiorPercentualRegiao : 0;
-    const alpha = 0.25 + intensidade * 0.75;
+    const alpha = 0.2 + intensidade * 0.7;
     return `hsl(var(--primary) / ${Math.min(alpha, 1).toFixed(2)})`;
   };
 
@@ -615,31 +594,35 @@ export default function Dashboard({
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-          <div className="overflow-hidden rounded-lg border bg-muted/20 p-2">
-            <svg viewBox="0 0 320 340" className="h-auto w-full" role="img" aria-label="Mapa das regiões do Brasil">
-              {dadosRegiaoMapa.map((area) => (
-                <g key={area.regiao}>
-                  <path
-                    d={area.path}
-                    fill={getRegionFill(area.percentual)}
-                    stroke="hsl(var(--border))"
-                    strokeWidth="2"
-                  >
-                    <title>
-                      {`${area.regiao}: ${formatCurrency(area.valor)} (${area.percentual.toFixed(1)}%)`}
-                    </title>
-                  </path>
-                  <text
-                    x={area.labelX}
-                    y={area.labelY}
-                    textAnchor="middle"
-                    className="fill-foreground text-[10px] font-medium"
-                  >
-                    {area.regiao}
-                  </text>
-                </g>
-              ))}
-            </svg>
+          <div className="relative h-[420px] overflow-hidden rounded-lg border bg-slate-100 dark:bg-slate-950">
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.20)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.20)_1px,transparent_1px)] bg-[size:32px_32px]" />
+            <div className="absolute left-4 top-4 z-20 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
+              Brasil • Visão de vendas por região
+            </div>
+
+            {dadosRegiaoMapa.map((area) => (
+              <div
+                key={area.regiao}
+                className="group absolute -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${area.x}%`, top: `${area.y}%` }}
+                role="img"
+                aria-label={`${area.regiao}: ${formatCurrency(area.valor)} (${area.percentual.toFixed(1)}%)`}
+              >
+                <div
+                  className="absolute -inset-6 rounded-full blur-xl transition-all duration-200 group-hover:scale-110"
+                  style={{ backgroundColor: getRegionHeat(area.percentual) }}
+                />
+                <div className="relative flex items-center gap-2 rounded-full border border-white/50 bg-background/90 px-3 py-1.5 text-xs shadow-lg">
+                  <MapPin className="h-3.5 w-3.5 text-primary" />
+                  <span className="font-medium">{area.regiao}</span>
+                  <span className="text-muted-foreground">{area.percentual.toFixed(1)}%</span>
+                </div>
+              </div>
+            ))}
+
+            <div className="absolute bottom-3 right-3 z-20 rounded-md border bg-background/95 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
+              Tons mais fortes = maior participação
+            </div>
           </div>
 
           <div className="space-y-3">

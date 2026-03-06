@@ -70,12 +70,61 @@ const extractUfFromCity = (cityLabel?: string) => {
 };
 
 
-const regionAnchors: Record<string, { x: number; y: number }> = {
-  Norte: { x: 28, y: 24 },
-  Nordeste: { x: 72, y: 28 },
-  'Centro-Oeste': { x: 44, y: 50 },
-  Sudeste: { x: 66, y: 60 },
-  Sul: { x: 56, y: 80 },
+type GeoJsonFeature = {
+  type: 'Feature';
+  properties: {
+    regiao: string;
+  };
+  geometry: {
+    type: 'Polygon';
+    coordinates: number[][][];
+  };
+};
+
+const brasilRegioesGeoJson: { type: 'FeatureCollection'; features: GeoJsonFeature[] } = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: { regiao: 'Norte' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[[10, 12], [38, 8], [50, 24], [35, 38], [12, 32], [10, 12]]],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: { regiao: 'Nordeste' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[[50, 24], [78, 16], [90, 36], [70, 50], [52, 42], [50, 24]]],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: { regiao: 'Centro-Oeste' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[[28, 38], [52, 42], [60, 58], [40, 66], [24, 54], [28, 38]]],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: { regiao: 'Sudeste' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[[52, 42], [70, 50], [74, 66], [56, 72], [44, 62], [52, 42]]],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: { regiao: 'Sul' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[[44, 62], [56, 72], [52, 92], [38, 90], [34, 72], [44, 62]]],
+      },
+    },
+  ],
 };
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
@@ -467,14 +516,23 @@ export default function Dashboard({
   const dadosRegiaoMapa = useMemo(() => {
     const mapa = new Map(vendasPorRegiao.map((item) => [item.regiao, item]));
 
-    return Object.entries(regionAnchors)
-      .map(([regiao, anchor]) => {
+    return brasilRegioesGeoJson.features
+      .map((feature) => {
+        const regiao = feature.properties.regiao;
         const valorRegiao = mapa.get(regiao);
+        const pontos = feature.geometry.coordinates[0];
+        const [centroidX, centroidY] = pontos.reduce(
+          (acc, [x, y]) => [acc[0] + x, acc[1] + y],
+          [0, 0],
+        );
+
         return {
           regiao,
-          ...anchor,
+          feature,
           valor: valorRegiao?.valor ?? 0,
           percentual: valorRegiao?.percentual ?? 0,
+          centroidX: centroidX / pontos.length,
+          centroidY: centroidY / pontos.length,
         };
       })
       .sort((a, b) => b.percentual - a.percentual);
@@ -589,7 +647,7 @@ export default function Dashboard({
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-foreground">Mapa de vendas por região</h2>
           <p className="text-sm text-muted-foreground">
-            Intensidade do mapa representa a participação de faturamento por região.
+            Intensidade no GeoJSON representa a participação de faturamento por região.
           </p>
         </div>
 
@@ -600,25 +658,43 @@ export default function Dashboard({
               Brasil • Visão de vendas por região
             </div>
 
-            {dadosRegiaoMapa.map((area) => (
-              <div
-                key={area.regiao}
-                className="group absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${area.x}%`, top: `${area.y}%` }}
-                role="img"
-                aria-label={`${area.regiao}: ${formatCurrency(area.valor)} (${area.percentual.toFixed(1)}%)`}
-              >
-                <div
-                  className="absolute -inset-6 rounded-full blur-xl transition-all duration-200 group-hover:scale-110"
-                  style={{ backgroundColor: getRegionHeat(area.percentual) }}
-                />
-                <div className="relative flex items-center gap-2 rounded-full border border-white/50 bg-background/90 px-3 py-1.5 text-xs shadow-lg">
-                  <MapPin className="h-3.5 w-3.5 text-primary" />
-                  <span className="font-medium">{area.regiao}</span>
-                  <span className="text-muted-foreground">{area.percentual.toFixed(1)}%</span>
-                </div>
-              </div>
-            ))}
+            <svg
+              viewBox="0 0 100 100"
+              className="absolute inset-0 z-10 h-full w-full"
+              role="img"
+              aria-label="Mapa GeoJSON das regiões brasileiras com participação de vendas"
+            >
+              {dadosRegiaoMapa.map((area) => {
+                const pontos = area.feature.geometry.coordinates[0]
+                  .map(([x, y]) => `${x},${y}`)
+                  .join(' ');
+
+                return (
+                  <g key={area.regiao}>
+                    <polygon
+                      points={pontos}
+                      fill={getRegionHeat(area.percentual)}
+                      stroke="hsl(var(--border))"
+                      strokeWidth={0.8}
+                    >
+                      <title>
+                        {`${area.regiao}: ${formatCurrency(area.valor)} (${area.percentual.toFixed(1)}%)`}
+                      </title>
+                    </polygon>
+                    <text
+                      x={area.centroidX}
+                      y={area.centroidY}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize="3"
+                      className="fill-foreground"
+                    >
+                      {`${area.regiao} ${area.percentual.toFixed(1)}%`}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
 
             <div className="absolute bottom-3 right-3 z-20 rounded-md border bg-background/95 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
               Tons mais fortes = maior participação

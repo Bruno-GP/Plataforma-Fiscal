@@ -6,9 +6,8 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 import json
+from pathlib import Path
 from typing import Iterable
-from urllib.error import URLError
-from urllib.request import urlopen
 
 import psycopg
 
@@ -26,6 +25,7 @@ class SpedImportacaoService:
   def __init__(self):
     self.config = carregar_config_postgres_sped()
     self._cache_municipios: dict[str, str | None] = {}
+    self._municipios_por_codigo = self._carregar_municipios_locais()
 
   def importar_arquivos(
     self,
@@ -235,7 +235,7 @@ class SpedImportacaoService:
           cnpj_cpf = self._normalizar_documento((partes[5] if len(partes) > 5 else "").strip())
           codigo_municipio = (partes[8] if len(partes) > 8 else "").strip()
           municipio = codigo_municipio or None
-          municipio_nome = self._obter_nome_municipio(codigo_municipio)
+          municipio_nome = self._obter_nome_municipio(codigo_municipio) or "Cidade não identificada"
           uf = self._extrair_uf_de_cod_municipio(codigo_municipio)
           participantes[codigo] = (nome, cnpj_cpf, municipio, municipio_nome, uf)
           continue
@@ -798,23 +798,39 @@ class SpedImportacaoService:
     codigo_numerico = "".join(ch for ch in str(codigo_municipio or "") if ch.isdigit())
     if len(codigo_numerico) not in {6, 7}:
       return None
+    
+    self._carregar_base_municipios_ibge()
 
     if codigo_numerico in self._cache_municipios:
       return self._cache_municipios[codigo_numerico]
 
-    try:
-      with urlopen(
-        f"https://servicodados.ibge.gov.br/api/v1/localidades/municipios/{codigo_numerico}",
-        timeout=2,
-      ) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    except (URLError, TimeoutError, json.JSONDecodeError, ValueError):
-      self._cache_municipios[codigo_numerico] = None
-      return None
-
-    nome_municipio = str(payload.get("nome") or "").strip() or None
+    nome_municipio = self._municipios_por_codigo.get(codigo_numerico)
     self._cache_municipios[codigo_numerico] = nome_municipio
     return nome_municipio
+  
+  def _carregar_municipios_locais(self) -> dict[str, str]:
+    caminho_municipios = Path(__file__).resolve().parent.parent / "Municipios" / "municipios.json"
+
+    try:
+      with caminho_municipios.open(encoding="utf-8") as arquivo:
+        payload = json.load(arquivo)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+      return {}
+
+    if not isinstance(payload, list):
+      return {}
+
+    municipios: dict[str, str] = {}
+    for item in payload:
+      if not isinstance(item, dict):
+        continue
+
+      codigo = "".join(ch for ch in str(item.get("id") or "") if ch.isdigit())
+      nome = str(item.get("nome") or "").strip()
+      if len(codigo) in {6, 7} and nome:
+        municipios[codigo] = nome
+
+    return municipios
 
   def _to_int(self, value: str | None) -> int | None:
     if not value:

@@ -824,6 +824,7 @@ export default function Dashboard({
                     >
                       {estado.uf}
                     </text>
+                  </g>
                 ))}
               </svg>
             )}

@@ -180,6 +180,9 @@ CREATE TABLE IF NOT EXISTS SPED_participantes (
     tipo          VARCHAR(20)
 );
 
+ALTER TABLE SPED_participantes
+ADD COLUMN municipio_nome VARCHAR(120);
+
 CREATE TABLE IF NOT EXISTS SPED_produtos (
     id            SERIAL PRIMARY KEY,
     empresa_cnpj  CHAR(14) REFERENCES SPED_empresas(cnpj),

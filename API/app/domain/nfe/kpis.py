@@ -72,8 +72,11 @@ class KPICalculator:
         cidades = defaultdict(Decimal)
         for n in notas:
             cidade = (n.destinatario_cidade or "").strip()
+            uf = (n.destinatario_uf or "").strip().upper()
             if not cidade:
                 cidade = "Cidade não identificada"
+            elif uf and len(uf) == 2:
+                cidade = f"{cidade} - {uf}"
             cidades[cidade] += n.valor_total_nf
 
         return KPIsRelatorio(

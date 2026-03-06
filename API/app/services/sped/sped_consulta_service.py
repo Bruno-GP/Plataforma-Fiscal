@@ -29,7 +29,7 @@ def _normalizar_nome_cidade(valor: object) -> str:
       if len(partes) >= 2:
         ultimo = partes[-1].upper()
         if len(ultimo) == 2 and ultimo.isalpha():
-          return partes[0]
+          return f"{partes[0]} - {ultimo}"
 
   return cidade
 
@@ -147,11 +147,16 @@ class SpedConsultaService:
 
   def _top_cidades(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:
     sql_cidades_sped = """
-      SELECT COALESCE(
-        NULLIF(TRIM(p.municipio_nome), ''),
-        NULLIF(TRIM(p.municipio), ''),
-        NULLIF(TRIM(p.uf), ''),
-        'Cidade não identificada'
+      SELECT CONCAT(
+        COALESCE(
+          NULLIF(TRIM(p.municipio_nome), ''),
+          NULLIF(TRIM(p.municipio), ''),
+          'Cidade não identificada'
+        ),
+        CASE
+          WHEN NULLIF(TRIM(p.uf), '') IS NOT NULL THEN CONCAT(' - ', UPPER(TRIM(p.uf)))
+          ELSE ''
+        END
       ) AS cidade,
       SUM(d.valor_total) AS valor_total
       FROM public.sped_documentos_fiscais d

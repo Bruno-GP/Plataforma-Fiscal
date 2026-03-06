@@ -172,6 +172,8 @@ class SpedImportacaoService:
 
       if ids_processados:
         self._atualizar_kpis(conn, cnpj_normalizado, ids_processados)
+        
+      self._atualizar_nomes_municipios_participantes(conn, cnpj_normalizado)
 
       conn.commit()
 
@@ -475,6 +477,42 @@ class SpedImportacaoService:
     produto_id = int(cur.fetchone()[0])
     cache_ids[codigo_item] = produto_id
     return produto_id
+  
+  def _atualizar_nomes_municipios_participantes(self, conn: psycopg.Connection, cnpj_emitente: str) -> None:
+    self._carregar_base_municipios_ibge()
+
+    with conn.cursor() as cur:
+      cur.execute(
+        """
+        SELECT id, municipio
+        FROM sped_participantes
+        WHERE empresa_cnpj = %s
+          AND municipio IS NOT NULL
+          AND (
+            municipio_nome IS NULL
+            OR NULLIF(TRIM(municipio_nome), '') IS NULL
+            OR TRIM(municipio_nome) = 'Cidade não identificada'
+          )
+        """,
+        (cnpj_emitente,),
+      )
+      rows = cur.fetchall()
+
+      atualizacoes: list[tuple[str, int]] = []
+      for participante_id, codigo_municipio in rows:
+        nome_municipio = self._obter_nome_municipio(str(codigo_municipio or ""))
+        if nome_municipio:
+          atualizacoes.append((nome_municipio, int(participante_id)))
+
+      if atualizacoes:
+        cur.executemany(
+          """
+          UPDATE sped_participantes
+          SET municipio_nome = %s
+          WHERE id = %s
+          """,
+          atualizacoes,
+        )
 
   def _atualizar_kpis(self, conn: psycopg.Connection, cnpj_emitente: str, ids_sped: list[int]) -> None:
     processamento_id = max(ids_sped)
@@ -807,6 +845,12 @@ class SpedImportacaoService:
     nome_municipio = self._municipios_por_codigo.get(codigo_numerico)
     self._cache_municipios[codigo_numerico] = nome_municipio
     return nome_municipio
+  
+  def _carregar_base_municipios_ibge(self) -> None:
+    if self._municipios_por_codigo:
+      return
+
+    self._municipios_por_codigo = self._carregar_municipios_locais()
   
   def _carregar_municipios_locais(self) -> dict[str, str]:
     caminho_municipios = Path(__file__).resolve().parent.parent / "Municipios" / "municipios.json"

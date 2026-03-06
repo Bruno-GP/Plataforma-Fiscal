@@ -237,7 +237,7 @@ class SpedImportacaoService:
           municipio = codigo_municipio or None
           municipio_nome = self._obter_nome_municipio(codigo_municipio)
           uf = self._extrair_uf_de_cod_municipio(codigo_municipio)
-          participantes[codigo] = (nome, cnpj_cpf, municipio, uf, municipio_nome)
+          participantes[codigo] = (nome, cnpj_cpf, municipio, municipio_nome, uf)
           continue
 
         if registro == "0200":

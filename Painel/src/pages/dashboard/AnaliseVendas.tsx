@@ -91,7 +91,10 @@ const extractUfFromCity = (cityLabel?: string) => {
     return null;
   }
 
-  const normalized = cityLabel.toUpperCase();
+  const normalized = cityLabel.toUpperCase().trim();
+  if (/^[A-Z]{2}$/.test(normalized)) {
+    return ufToRegion[normalized] ? normalized : null;
+  }
   const match = normalized.match(/(?:-|\/|\(|\s)([A-Z]{2})(?:\)|$)/);
 
   if (!match) {

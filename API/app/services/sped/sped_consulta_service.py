@@ -7,6 +7,25 @@ from app.models.nfe.schemas import NFeKPI, NFeKPIConsulta
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.sped.postgres_config import carregar_config_postgres_sped
 
+def _normalizar_nome_cidade(valor: object) -> str:
+  cidade = str(valor or "").strip()
+  if not cidade:
+    return "Cidade não identificada"
+
+  cidade_upper = cidade.upper()
+  if len(cidade_upper) == 2 and cidade_upper.isalpha():
+    return "Cidade não identificada"
+
+  for separador in ("/", "-"):
+    if separador in cidade:
+      partes = [p.strip() for p in cidade.split(separador) if p.strip()]
+      if len(partes) >= 2:
+        ultimo = partes[-1].upper()
+        if len(ultimo) == 2 and ultimo.isalpha():
+          return partes[0]
+
+  return cidade
+
 class SpedConsultaService:
   def __init__(self) -> None:
     config = carregar_config_postgres_sped()
@@ -120,10 +139,10 @@ class SpedConsultaService:
     )
 
   def _top_cidades(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:
-    return self._safe_top_query(
+    cidades = self._safe_top_query(
       cur,
       """
-      SELECT COALESCE(p.municipio, 'Cidade não identificada') AS cidade,
+      SELECT COALESCE(NULLIF(TRIM(p.uf), ''), p.municipio, 'Cidade não identificada') AS cidade,
       SUM(d.valor_total) AS valor_total
       FROM public.sped_documentos_fiscais d
       LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
@@ -137,6 +156,24 @@ class SpedConsultaService:
       (cnpj, ano, mes),
       "cidade",
     )
+    
+    cidades_agrupadas: dict[str, Decimal] = {}
+    for item in cidades:
+      if not isinstance(item, dict):
+        continue
+
+      cidade = _normalizar_nome_cidade(item.get("cidade"))
+      valor_total = item.get("valor_total") or Decimal("0.00")
+      cidades_agrupadas[cidade] = cidades_agrupadas.get(cidade, Decimal("0.00")) + Decimal(valor_total)
+
+    return [
+      {"cidade": cidade, "valor_total": valor_total}
+      for cidade, valor_total in sorted(
+        cidades_agrupadas.items(),
+        key=lambda x: x[1],
+        reverse=True,
+      )[:5]
+    ]
 
   def _top_produtos(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:
     return self._safe_top_query(

@@ -12,7 +12,6 @@ from app.services.nfe.postres_config import carregar_config_postgres
 logger = logging.getLogger("KPICalculator")
 logger.setLevel(logging.INFO)
 
-
 def _serializar_decimais(valor):
     if isinstance(valor, Decimal):
         return str(valor)
@@ -72,7 +71,10 @@ class KPICalculator:
 
         cidades = defaultdict(Decimal)
         for n in notas:
-            cidades[n.destinatario_cidade] += n.valor_total_nf
+            cidade = (n.destinatario_cidade or "").strip()
+            if not cidade:
+                cidade = "Cidade não identificada"
+            cidades[cidade] += n.valor_total_nf
 
         return KPIsRelatorio(
             total_vendas=total_vendas,

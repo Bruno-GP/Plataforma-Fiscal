@@ -198,7 +198,7 @@ class SpedImportacaoService:
   def _carregar_sped_em_tabelas(self, conn: psycopg.Connection, cnpj_emitente: str, conteudo: bytes) -> None:
     linhas = conteudo.decode("latin-1", errors="ignore").splitlines()
 
-    participantes: dict[str, tuple[str, str | None, str | None]] = {}
+    participantes: dict[str, tuple[str, str | None, str | None, str | None]] = {}
     produtos: dict[str, tuple[str, str | None, str | None, str | None]] = {}
     participante_ids: dict[str, int] = {}
     produto_ids: dict[str, int] = {}
@@ -229,8 +229,10 @@ class SpedImportacaoService:
             continue
           nome = (partes[3] if len(partes) > 3 else "").strip() or "Participante não identificado"
           cnpj_cpf = self._normalizar_documento((partes[5] if len(partes) > 5 else "").strip())
-          municipio = (partes[8] if len(partes) > 8 else "").strip() or None
-          participantes[codigo] = (nome, cnpj_cpf, municipio)
+          codigo_municipio = (partes[8] if len(partes) > 8 else "").strip()
+          municipio = codigo_municipio or None
+          uf = self._extrair_uf_de_cod_municipio(codigo_municipio)
+          participantes[codigo] = (nome, cnpj_cpf, municipio, uf)
           continue
 
         if registro == "0200":
@@ -408,7 +410,7 @@ class SpedImportacaoService:
     self,
     cur,
     cache_ids: dict[str, int],
-    participantes: dict[str, tuple[str, str | None, str | None]],
+    participantes: dict[str, tuple[str, str | None, str | None, str | None]],
     cnpj_emitente: str,
     codigo: str,
   ) -> int | None:
@@ -417,19 +419,20 @@ class SpedImportacaoService:
     if codigo in cache_ids:
       return cache_ids[codigo]
 
-    nome, cnpj_cpf, municipio = participantes.get(codigo, ("Participante não identificado", None, None))
+    nome, cnpj_cpf, municipio, uf = participantes.get(codigo, ("Participante não identificado", None, None, None))
     cur.execute(
       """
-      INSERT INTO sped_participantes (empresa_cnpj, codigo, nome, cnpj_cpf, municipio)
-      VALUES (%s, %s, %s, %s, %s)
+      INSERT INTO sped_participantes (empresa_cnpj, codigo, nome, cnpj_cpf, municipio, uf)
+      VALUES (%s, %s, %s, %s, %s, %s)
       ON CONFLICT (empresa_cnpj, codigo)
       DO UPDATE SET
         nome = EXCLUDED.nome,
         cnpj_cpf = COALESCE(EXCLUDED.cnpj_cpf, sped_participantes.cnpj_cpf),
-        municipio = COALESCE(EXCLUDED.municipio, sped_participantes.municipio)
+        municipio = COALESCE(EXCLUDED.municipio, sped_participantes.municipio),
+        uf = COALESCE(EXCLUDED.uf, sped_participantes.uf)
       RETURNING id
       """,
-      (cnpj_emitente, codigo, nome, cnpj_cpf, municipio),
+      (cnpj_emitente, codigo, nome, cnpj_cpf, municipio, uf),
     )
     participante_id = int(cur.fetchone()[0])
     cache_ids[codigo] = participante_id
@@ -605,6 +608,7 @@ class SpedImportacaoService:
           nome VARCHAR(255),
           cnpj_cpf VARCHAR(14),
           municipio VARCHAR(100),
+          uf CHAR(2),
           UNIQUE (empresa_cnpj, codigo)
         )
         """
@@ -615,6 +619,7 @@ class SpedImportacaoService:
         ON sped_participantes (empresa_cnpj, codigo)
         """
       )
+      cur.execute("ALTER TABLE sped_participantes ADD COLUMN IF NOT EXISTS uf CHAR(2)")
       cur.execute(
         """
         CREATE TABLE IF NOT EXISTS sped_produtos (
@@ -740,6 +745,46 @@ class SpedImportacaoService:
       return None
     digits = "".join(ch for ch in value if ch.isdigit())
     return digits or None
+  
+  def _extrair_uf_de_cod_municipio(self, codigo_municipio: str | None) -> str | None:
+    if not codigo_municipio:
+      return None
+
+    codigo_numerico = "".join(ch for ch in codigo_municipio if ch.isdigit())
+    if len(codigo_numerico) < 2:
+      return None
+
+    uf_por_codigo: dict[str, str] = {
+      "11": "RO",
+      "12": "AC",
+      "13": "AM",
+      "14": "RR",
+      "15": "PA",
+      "16": "AP",
+      "17": "TO",
+      "21": "MA",
+      "22": "PI",
+      "23": "CE",
+      "24": "RN",
+      "25": "PB",
+      "26": "PE",
+      "27": "AL",
+      "28": "SE",
+      "29": "BA",
+      "31": "MG",
+      "32": "ES",
+      "33": "RJ",
+      "35": "SP",
+      "41": "PR",
+      "42": "SC",
+      "43": "RS",
+      "50": "MS",
+      "51": "MT",
+      "52": "GO",
+      "53": "DF",
+    }
+
+    return uf_por_codigo.get(codigo_numerico[:2])
 
   def _to_int(self, value: str | None) -> int | None:
     if not value:

@@ -278,7 +278,7 @@ class NFeConsultaService:
       total_cofins=row[11] or 0,
       top_clientes=row[12] or [],
       top_produtos=row[13] or [],
-      top_cidades=row[14] or [],
+      top_cidades=self._normalizar_top_cidades(row[14]),  
     )
 
   def _calcular_variacao_percentual(
@@ -293,6 +293,29 @@ class NFeConsultaService:
     return ((atual - anterior) / anterior * Decimal("100")).quantize(
       Decimal("0.01")
     )
+    
+  def _normalizar_top_cidades(
+    self,
+    top_cidades: list[dict] | None,
+  ) -> list[dict]:
+    if not top_cidades:
+      return []
+
+    cidades_normalizadas: list[dict] = []
+    for item in top_cidades:
+      if not isinstance(item, dict):
+        continue
+
+      cidade = (item.get("cidade") or item.get("municipio") or "").strip()
+      if not cidade:
+        cidade = "Cidade não identificada"
+
+      cidades_normalizadas.append({
+        **item,
+        "cidade": cidade,
+      })
+
+    return cidades_normalizadas
 
   def listar_kpis(
     self,
@@ -393,7 +416,7 @@ class NFeConsultaService:
               total_cofins=row[13] or 0,
               top_clientes=row[14] or [],
               top_produtos=row[15] or [],
-              top_cidades=row[16] or [],
+              top_cidades=self._normalizar_top_cidades(row[16]),
             ),
           )
         )

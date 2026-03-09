@@ -829,6 +829,22 @@ export default function Dashboard({
     return `hsl(var(--primary) / ${Math.min(alpha, 1).toFixed(2)})`;
   };
 
+  const getCityHeat = (percentual: number) => {
+    if (percentual <= 0) {
+      return 'hsl(var(--muted) / 0.35)';
+    }
+
+    const maxPercentualCidade = Math.max(
+      ...topCidadesItems.map((item) => item.percent ?? 0),
+      0,
+    );
+
+    const intensidade = maxPercentualCidade > 0 ? percentual / maxPercentualCidade : 0;
+    const alpha = 0.2 + intensidade * 0.75;
+
+    return `hsl(var(--primary) / ${Math.min(alpha, 1).toFixed(2)})`;
+  };
+
   const naoIdentificado = vendasPorRegiao.find((item) => item.regiao === 'Não identificado');
   const isMapLoading = brazilMapQuery.isLoading;
   const isCityView = mapViewMode === 'cidade';
@@ -933,15 +949,26 @@ export default function Dashboard({
               : 'Intensidade no GeoJSON geográfico real representa a participação de faturamento por estado e região.'}
           </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setMapViewMode((prev) => (prev === 'regiao' ? 'cidade' : 'regiao'))}
-            className="border-[#0E1525]/30 bg-[#0E1525] text-white transition-all duration-300 hover:border-[#0E1525] hover:bg-[#0E1525]/90 hover:text-white"
-          >
-            {isCityView ? 'Por Região' : 'Por Cidade'}
-          </Button>
+          <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setMapViewMode('regiao')}
+              className={`rounded-md px-3 transition-all duration-200 ${!isCityView ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground' : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'}`}
+            >
+              Por Região
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setMapViewMode('cidade')}
+              className={`rounded-md px-3 transition-all duration-200 ${isCityView ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground' : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'}`}
+            >
+              Por Cidade
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
@@ -980,7 +1007,7 @@ export default function Dashboard({
                           <polygon
                             key={`${estado.uf}-${index}`}
                             points={ring.map(([x, y]) => `${x},${y}`).join(' ')}
-                            fill={getRegionHeat(estado.percentual)}
+                            fill={isCityView ? 'hsl(var(--muted) / 0.25)' : getRegionHeat(estado.percentual)}
                             stroke="hsl(var(--border))"
                             strokeWidth={0.25}
                           >
@@ -1025,6 +1052,23 @@ export default function Dashboard({
                       </g>
                     );
                   })}
+
+                  {isCityView && cidadeMarkerData.map((cidade) => (
+                    <g key={`marker-${cidade.key}`}>
+                      <circle
+                        cx={cidade.x}
+                        cy={cidade.y}
+                        r={cidade.radius}
+                        fill={getCityHeat(cidade.percentual)}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={0.12}
+                      >
+                        <title>
+                          {`${cidade.nome} - ${cidade.uf}: ${cidade.percentual.toFixed(1)}% (${formatCurrency(cidade.valor)})`}
+                        </title>
+                      </circle>
+                    </g>
+                  ))}
                 </g>
               </svg>
             )}
@@ -1041,6 +1085,16 @@ export default function Dashboard({
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="font-medium">{item.title}</span>
                     <span className="text-muted-foreground">{item.percent?.toFixed(1) ?? '0.0'}%</span>
+                  </div>
+
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.min(item.percent ?? 0, 100)}%`,
+                        backgroundColor: getCityHeat(item.percent ?? 0),
+                      }}
+                    />
                   </div>
                   <p className="text-sm text-muted-foreground">{item.value}</p>
                 </div>

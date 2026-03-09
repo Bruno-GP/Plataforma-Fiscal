@@ -63,7 +63,7 @@ export default function Clientes() {
   const totalPercentual = filteredClientes.reduce((sum, client) => sum + parseDecimal(client.percentual ?? 0), 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 py-6">
       <div>
         <h1 className="text-3xl font-bold">Clientes</h1>
         <p className="text-muted-foreground">Gerencie sua base de clientes</p>

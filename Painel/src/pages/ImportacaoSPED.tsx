@@ -145,7 +145,7 @@ export default function ImportacaoSPED() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 py-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Importações SPED Fiscal</h1>
         <p className="text-muted-foreground">Tela dedicada para importar arquivos TXT do SPED no banco e executar o processamento.</p>

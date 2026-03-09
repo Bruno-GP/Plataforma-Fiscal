@@ -234,7 +234,7 @@ export default function AnaliseFiscal() {
   const hasError = analiseComprasQuery.isError || previousAnaliseComprasQuery.isError;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 py-6">
       <Header
         title="Análise de Compras"
         subtitle="Visão analitica das compras"

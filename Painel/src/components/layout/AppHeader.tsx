@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { NavLink } from '@/components/NavLink';
 
 const menuItemsBase = [
-  { title: 'Análise de Vendas', url: '/dashboard', icon: LayoutDashboard },
+  { title: 'Análise de Vendas', url: '/analise-vendas', icon: LayoutDashboard },
   { title: 'Faturamento', url: '/faturamento', icon: Receipt },
   // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
   // { title: 'Clientes', url: '/clientes', icon: Users },
@@ -17,7 +17,7 @@ const menuItemsBase = [
 
 const menuItemImportacaoXml = { title: 'Importação XML', url: '/importacao-xml', icon: FileUp };
 const menuItemImportacaoSped = { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit };
-const menuItemAnaliseFiscal = { title: 'Análise Fiscal', url: '/analise-compras', icon: FileSearch };
+const menuItemAnaliseFiscal = { title: 'Análise de Compras', url: '/analise-compras', icon: FileSearch };
 
 export function AppHeader() {
   const { user, logout } = useAuth();

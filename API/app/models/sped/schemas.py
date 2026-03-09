@@ -65,3 +65,18 @@ class AnaliseComprasResponse(BaseModel):
   top_fornecedores_quantidade: list[RankingFornecedorCompra] = Field(default_factory=list)
   top_produtos_valor: list[RankingProdutoCompra] = Field(default_factory=list)
   top_produtos_quantidade: list[RankingProdutoCompra] = Field(default_factory=list)
+  
+class RankingClienteSped(BaseModel):
+  cliente: str
+  valor_total: Decimal = Decimal("0.00")
+  percentual: Decimal = Decimal("0.00")
+
+class ConsultaClientesSpedResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  total_clientes: int = 0
+  total_vendas: Decimal = Decimal("0.00")
+  ticket_medio: Decimal = Decimal("0.00")
+  resultados: list[RankingClienteSped] = Field(default_factory=list)

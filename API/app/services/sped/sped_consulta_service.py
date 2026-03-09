@@ -216,6 +216,105 @@ class SpedConsultaService:
     except psycopg.errors.UndefinedTable:
       return []
     
+  def listar_clientes(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: int = 200,
+    offset: int = 0,
+  ) -> dict:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    filtros = ["regexp_replace(d.empresa_cnpj, \'\\D\', \'\', \'g\') = %s", "d.tipo_operacao = 'saida'"]
+    params: list[object] = [cnpj]
+
+    if periodo_ano:
+      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
+      params.append(periodo_ano)
+    if periodo_mes:
+      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
+      params.append(periodo_mes)
+
+    where_clause = " AND ".join(filtros)
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        total_vendas = self._safe_scalar_query(
+          cur,
+          f"""
+          SELECT COALESCE(SUM(d.valor_total), 0)
+          FROM public.sped_documentos_fiscais d
+          WHERE {where_clause}
+          """,
+          tuple(params),
+        )
+
+        ticket_medio = self._safe_scalar_query(
+          cur,
+          f"""
+          SELECT COALESCE(AVG(d.valor_total), 0)
+          FROM public.sped_documentos_fiscais d
+          WHERE {where_clause}
+          """,
+          tuple(params),
+        )
+
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(NULLIF(TRIM(p.nome), ''), 'Cliente não identificado') AS cliente,
+            COALESCE(SUM(d.valor_total), 0) AS valor_total
+          FROM public.sped_documentos_fiscais d
+          LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+          LIMIT %s OFFSET %s
+          """,
+          tuple([*params, limite, offset]),
+        )
+
+        clientes_rows = cur.fetchall()
+
+        total_clientes = self._safe_scalar_query(
+          cur,
+          f"""
+          SELECT COUNT(*)
+          FROM (
+            SELECT 1
+            FROM public.sped_documentos_fiscais d
+            LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+            WHERE {where_clause}
+            GROUP BY COALESCE(NULLIF(TRIM(p.nome), ''), 'Cliente não identificado')
+          ) clientes
+          """,
+          tuple(params),
+        )
+
+    total_vendas_decimal = Decimal(total_vendas or 0)
+    resultados = []
+    for cliente, valor_total in clientes_rows:
+      valor_total_decimal = Decimal(valor_total or 0)
+      percentual = Decimal("0.00")
+      if total_vendas_decimal > 0:
+        percentual = (valor_total_decimal / total_vendas_decimal) * Decimal("100")
+
+      resultados.append({
+        "cliente": cliente,
+        "valor_total": valor_total_decimal,
+        "percentual": percentual,
+      })
+
+    return {
+      "emitente_cnpj": cnpj,
+      "periodo_ano": periodo_ano,
+      "periodo_mes": periodo_mes,
+      "total_clientes": int(total_clientes or 0),
+      "total_vendas": total_vendas_decimal,
+      "ticket_medio": Decimal(ticket_medio or 0),
+      "resultados": resultados,
+    }
+    
   def analisar_compras(
     self,
     emitente_cnpj: str,

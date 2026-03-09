@@ -74,14 +74,11 @@ const App = () => (
                   </MainLayout>
                 }
               />
-              <Route path="/dashboard" element={<Navigate to="/analise-vendas" replace />} />
-              <Route
-                path="/faturamento"
+              <Route 
+                path="/analise-vendas" 
                 element={
-                  <MainLayout>
-                    <Faturamento />
-                  </MainLayout>
-                }
+                  <Navigate to="/analise-vendas" replace />
+                } 
               />
               {/* <Route
                 path="/clientes"

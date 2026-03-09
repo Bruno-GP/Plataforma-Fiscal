@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Users, Receipt, Percent  } from 'lucide-react';
+import { TrendingDown, TrendingUp, Users, Percent  } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -8,6 +8,7 @@ import { Header } from '../components/Header';
 import { RankingCard } from '../components/RankingCard';
 import { StatCard } from '../components/StatCard';
 import { SalesRegionCityMap } from '../components/SalesRegionCityMap';
+import { FaturamentoEvolucaoChart } from '../faturamento/components/FaturamentoEvolucaoChart';
 
 import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
 import { useAuth } from '@/contexts/AuthContext'
@@ -227,8 +228,8 @@ export default function Dashboard({
     const totalSalesChange = previousTotals.totalSales
       ? ((totals.totalSales - previousTotals.totalSales) / previousTotals.totalSales) * 100
       : 0;
-    const totalNotesChange = previousTotals.totalNotes
-      ? ((totals.totalNotes - previousTotals.totalNotes) / previousTotals.totalNotes) * 100
+    const comparativoAnualSalesChange = previousTotals.totalSales
+      ? ((totals.totalSales - previousTotals.totalSales) / previousTotals.totalSales) * 100
       : 0;
     const ticketMedio = totals.totalNotes ? totals.totalSales / totals.totalNotes : 0;
     const previousTicketMedio = previousTotals.totalNotes
@@ -251,11 +252,13 @@ export default function Dashboard({
         accentClass: 'border-l-sky-500',
       },
       {
-        title: 'Notas Emitidas',
-        value: totals.totalNotes.toString(),
-        description: formatPercent(totalNotesChange),
-        icon: Receipt,
-        trend: totalNotesChange >= 0 ? 'up' : 'down',
+        title: 'Comparativo anual',
+        value: `${comparativoAnualSalesChange >= 0 ? '+' : ''}${comparativoAnualSalesChange.toFixed(1)}%`,
+        description: isAllMonths
+          ? `vs. mesmo período de ${year - 1}`
+          : `vs. ${String(latestKpi?.periodo_mes ?? 1).padStart(2, '0')}/${year - 1}`,
+        icon: comparativoAnualSalesChange >= 0 ? TrendingUp : TrendingDown,
+        trend: comparativoAnualSalesChange >= 0 ? 'up' : 'down',
         accentClass: 'border-l-emerald-500',
       },
       {
@@ -275,7 +278,30 @@ export default function Dashboard({
         accentClass: 'border-l-violet-500',
       },
     ];
-    }, [aggregatedData.totals, faturamentoPeriodo, isAllMonths, latestKpi, previousPeriodKpi, previousYearQuery.data]);
+  }, [aggregatedData.totals, faturamentoPeriodo, isAllMonths, latestKpi, previousPeriodKpi, previousYearQuery.data, year]);
+
+  const salesEvolutionData = useMemo(() => {
+    return [...filteredResultados]
+      .filter((item) => item.periodo_mes)
+      .sort((a, b) => (a.periodo_mes ?? 0) - (b.periodo_mes ?? 0))
+      .map((item, index) => {
+        const monthIndex = (item.periodo_mes ?? index + 1) - 1;
+        return {
+          month: monthLabels[monthIndex] ?? `Mês ${item.periodo_mes ?? index + 1}`,
+          faturamento: parseDecimal(item.kpis.total_vendas ?? 0),
+        };
+      });
+  }, [filteredResultados]);
+
+  const selectedMonthLabel = selectedMonth === 'all' ? null : monthLabels[monthNumber - 1];
+  const chartMessage = kpisQuery.isLoading
+    ? 'Carregando dados...'
+    : kpisQuery.isError
+      ? 'Não foi possível carregar o gráfico.'
+      : selectedMonthLabel
+        ? `Nenhum dado disponível para ${selectedMonthLabel} de ${selectedYear}.`
+        : `Nenhum dado disponível para ${selectedYear}.`;
+  const hasChartData = salesEvolutionData.length > 0;
 
   const aggregatedTopClientes = useMemo(() => {
     return [...aggregatedData.topClientesMap.entries()]
@@ -468,6 +494,17 @@ export default function Dashboard({
           totalValue={formatCurrency(totalFaturamento)}
         />
       </div>
+
+      <FaturamentoEvolucaoChart
+        billingData={salesEvolutionData}
+        hasChartData={hasChartData}
+        chartMessage={chartMessage}
+        selectedMonthLabel={selectedMonthLabel}
+        selectedYear={selectedYear}
+        title="Evolução das Vendas"
+        descriptionPrefix="Vendas"
+        metricLabel="Vendas"
+      />
 
       <SalesRegionCityMap
         topCidadesItems={topCidadesItems}

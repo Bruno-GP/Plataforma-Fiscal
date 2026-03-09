@@ -30,15 +30,22 @@ const formatCurrency = (value: number) =>
     currency: 'BRL',
   }).format(value);
 
+const hasValidEmitenteCnpj = (value: string | undefined) => {
+  const digits = (value ?? '').replace(/\D/g, '');
+  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
+};
+
 export default function Clientes() {
   const [search, setSearch] = useState('');
   const { user } = useAuth();
   
   const emitenteCnpj = user?.emitente_cnpj;
+  const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
 
   const kpisQuery = useQuery({
     queryKey: ['nfe-kpis-clientes', emitenteCnpj],
     queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 12 }),
+    enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -60,7 +67,9 @@ export default function Clientes() {
   );
   const totalClientes = topClientes.length;
   const totalReceita = parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
-  const totalPercentual = filteredClientes.reduce((sum, client) => sum + parseDecimal(client.percentual ?? 0), 0);
+  const faturamentoMedioPorCliente = totalClientes ? totalReceita / totalClientes : 0;
+  const ticketMedioPorCliente = parseDecimal(latestKpi?.kpis.ticket_medio ?? 0);
+  const topCliente = topClientes[0];
 
   return (
     <div className="space-y-6 py-6">
@@ -83,37 +92,51 @@ export default function Clientes() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Clientes no ranking
+              Faturamento por Cliente
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {kpisQuery.isLoading ? 'Carregando...' : totalClientes}
+              {kpisQuery.isLoading ? 'Carregando...' : formatCurrency(faturamentoMedioPorCliente)}
             </div>
+
+            <p className="text-xs text-muted-foreground">Média de faturamento por cliente no período</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Receita total do período
+              Top Clientes (Ranking)
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">
-              {kpisQuery.isLoading ? 'Carregando...' : formatCurrency(totalReceita)}
+              {kpisQuery.isLoading
+                ? 'Carregando...'
+                : topCliente?.cliente ?? 'Sem dados de ranking'}
             </div>
+
+            <p className="text-xs text-muted-foreground">
+              {kpisQuery.isLoading
+                ? 'Carregando...'
+                : topCliente
+                  ? formatCurrency(parseDecimal(topCliente.valor_total ?? 0))
+                  : '--'}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Participação filtrada
+              Ticket Médio por Cliente
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {kpisQuery.isLoading ? 'Carregando...' : `${totalPercentual.toFixed(1)}%`}
+              {kpisQuery.isLoading ? 'Carregando...' : formatCurrency(ticketMedioPorCliente)}
             </div>
+
+            <p className="text-xs text-muted-foreground">Ticket médio de vendas no período</p>
           </CardContent>
         </Card>
       </div>
@@ -142,8 +165,6 @@ export default function Clientes() {
             <TableHeader>
               <TableRow>
                 <TableHead>Cliente</TableHead>
-                <TableHead>Contato</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Receita Total</TableHead>
                 <TableHead>Participação</TableHead>
                 <TableHead className="w-12"></TableHead>

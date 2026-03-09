@@ -11,7 +11,6 @@ import { MainLayout } from "@/components/layout/MainLayout";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/AnaliseVendas";
-import Faturamento from "./pages/faturamento/components/Faturamento";
 import Clientes from "./pages/Clientes";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
@@ -81,14 +80,6 @@ const App = () => (
                 } 
               />
               {/* <Route
-                path="/clientes"
-                element={
-                  <MainLayout>
-                    <Clientes />
-                  </MainLayout>
-                }
-              />
-              <Route
                 path="/configuracoes"
                 element={
                   <MainLayout>
@@ -117,6 +108,14 @@ const App = () => (
                 element={
                   <MainLayout>
                     <AnaliseComprasRoute />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/clientes"
+                element={
+                  <MainLayout>
+                    <Clientes />
                   </MainLayout>
                 }
               />

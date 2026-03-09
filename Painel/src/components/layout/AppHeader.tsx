@@ -1,4 +1,4 @@
-import { FileDigit, FileSearch, FileUp, LayoutDashboard, LogOut } from 'lucide-react';
+import { FileDigit, FileSearch, FileUp, LayoutDashboard, LogOut, Users } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { hasUnreadUpdates } from '../../contexts/updates';
@@ -9,8 +9,8 @@ import { NavLink } from '@/components/NavLink';
 
 const menuItemsBase = [
   { title: 'Análise de Vendas', url: '/analise-vendas', icon: LayoutDashboard },
+  { title: 'Clientes', url: '/clientes', icon: Users },
   // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
-  // { title: 'Clientes', url: '/clientes', icon: Users },
   // { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ]
 

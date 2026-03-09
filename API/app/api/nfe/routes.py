@@ -149,8 +149,6 @@ def consultar_kpis(
             status_code=400,
             detail="Informe um emitente_cnpj válido.",
         )
-       
-    _validar_empresa_xml(emitente_resolvido)    
 
     resultados = service.listar_kpis(
         emitente_cnpj=emitente_resolvido,

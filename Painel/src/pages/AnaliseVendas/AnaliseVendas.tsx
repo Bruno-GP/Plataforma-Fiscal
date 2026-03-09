@@ -8,7 +8,7 @@ import { Header } from '../components/Header';
 import { RankingCard } from '../components/RankingCard';
 import { StatCard } from '../components/StatCard';
 import { SalesRegionCityMap } from '../components/SalesRegionCityMap';
-import { FaturamentoEvolucaoChart } from '../faturamento/components/FaturamentoEvolucaoChart';
+import { EvolucaoChart } from '../components/EvolucaoChart';
 
 import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
 import { useAuth } from '@/contexts/AuthContext'
@@ -495,7 +495,7 @@ export default function Dashboard({
         />
       </div>
 
-      <FaturamentoEvolucaoChart
+      <EvolucaoChart
         billingData={salesEvolutionData}
         hasChartData={hasChartData}
         chartMessage={chartMessage}

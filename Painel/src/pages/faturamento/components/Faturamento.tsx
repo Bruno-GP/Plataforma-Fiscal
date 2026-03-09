@@ -7,7 +7,7 @@ import { fetchSpedKpis } from '@/services/sped';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
 
-import { FaturamentoEvolucaoChart } from './FaturamentoEvolucaoChart';
+import { FaturamentoEvolucaoChart } from '../../components/EvolucaoChart';
 import { FaturamentoHeader } from './FaturamentoHeader';
 import { FaturamentoRankingCard, type RankingEntry } from './FaturamentoRankingCard';
 import { FaturamentoStats } from './FaturamentoStats';

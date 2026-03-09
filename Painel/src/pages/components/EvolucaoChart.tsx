@@ -2,37 +2,47 @@ import { Line, LineChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, X
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { formatCurrency } from '../utils/utils';
-
 interface BillingDataPoint {
   month: string;
   faturamento: number;
 }
 
-interface FaturamentoEvolucaoChartProps {
+interface EvolucaoChartProps {
   billingData: BillingDataPoint[];
   hasChartData: boolean;
   chartMessage: string;
   selectedMonthLabel: string | null;
   selectedYear: string;
+  title?: string;
+  descriptionPrefix?: string;
+  metricLabel?: string;
 }
 
-export function FaturamentoEvolucaoChart({
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+
+export function EvolucaoChart({
   billingData,
   hasChartData,
   chartMessage,
   selectedMonthLabel,
   selectedYear,
-}: FaturamentoEvolucaoChartProps) {
+  title = 'Evolução do Faturamento',
+  descriptionPrefix = 'Faturamento',
+  metricLabel = 'Faturamento',
+}: EvolucaoChartProps) {
   return (
     <div className="grid gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>Evolução do Faturamento</CardTitle>
+          <CardTitle>{title}</CardTitle>
           <CardDescription>
             {selectedMonthLabel
-              ? `Faturamento de ${selectedMonthLabel} em ${selectedYear}`
-              : `Faturamento mensal ao longo de ${selectedYear}`}
+              ? `${descriptionPrefix} de ${selectedMonthLabel} em ${selectedYear}`
+              : `${descriptionPrefix} mensal ao longo de ${selectedYear}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -52,7 +62,7 @@ export function FaturamentoEvolucaoChart({
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
-                    formatter={(value: number) => [formatCurrency(value), 'Faturamento']}
+                    formatter={(value: number) => [formatCurrency(value), metricLabel]}
                     contentStyle={{
                       backgroundColor: 'hsl(var(--background))',
                       border: '1px solid hsl(var(--border))',
@@ -67,7 +77,7 @@ export function FaturamentoEvolucaoChart({
                     strokeWidth={2}
                     dot={{ fill: 'hsl(var(--primary))' }}
                     connectNulls={false}
-                    name="Faturamento"
+                    name={metricLabel}
                   />
                 </LineChart>
               </ResponsiveContainer>

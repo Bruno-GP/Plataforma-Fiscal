@@ -3,7 +3,7 @@ import { TrendingUp, Users, Receipt, Percent  } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-// import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 
 import { Header } from '../components/Header';
 import { RankingCard } from '../components/RankingCard';
@@ -160,6 +160,7 @@ export default function Dashboard({
 
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [mapViewMode, setMapViewMode] = useState<'regiao' | 'cidade'>('regiao');
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
@@ -556,7 +557,7 @@ export default function Dashboard({
       salesByState.set(uf, (salesByState.get(uf) ?? 0) + valor);
     });
 
-    const projectedFeatures = data.features
+    return data.features
       .map((feature) => {
         const stateName = normalizeLabel(feature.properties.name ?? '');
         const uf = feature.properties.sigla ?? stateNameToUf[stateName];
@@ -578,8 +579,22 @@ export default function Dashboard({
         };
       })
       .filter((item): item is { uf: string; regiao: string; rings: number[][][]; valor: number } => Boolean(item));
+  }, [brazilMapQuery.data, topCidades]);
 
-    const bounds = projectedFeatures.reduce(
+  const estadoFocoCidade = useMemo(() => {
+    if (mapViewMode !== 'cidade' || !geoJsonPorEstado.length) {
+      return null;
+    }
+
+    return [...geoJsonPorEstado].sort((a, b) => b.valor - a.valor)[0]?.uf ?? null;
+  }, [geoJsonPorEstado, mapViewMode]);
+
+  const geoJsonProjetado = useMemo(() => {
+    if (!geoJsonPorEstado.length) {
+      return [];
+    }
+
+    const boundsTotal = geoJsonPorEstado.reduce(
       (acc, item) => {
         item.rings.forEach((ring) => {
           ring.forEach(([lon, lat]) => {
@@ -599,6 +614,41 @@ export default function Dashboard({
       },
     );
 
+    let bounds = boundsTotal;
+
+    if (mapViewMode === 'cidade' && estadoFocoCidade) {
+      const estadoFoco = geoJsonPorEstado.find((item) => item.uf === estadoFocoCidade);
+      if (estadoFoco) {
+        const focusBounds = estadoFoco.rings.reduce(
+          (acc, ring) => {
+            ring.forEach(([lon, lat]) => {
+              acc.minLon = Math.min(acc.minLon, lon);
+              acc.maxLon = Math.max(acc.maxLon, lon);
+              acc.minLat = Math.min(acc.minLat, lat);
+              acc.maxLat = Math.max(acc.maxLat, lat);
+            });
+            return acc;
+          },
+          {
+            minLon: Number.POSITIVE_INFINITY,
+            maxLon: Number.NEGATIVE_INFINITY,
+            minLat: Number.POSITIVE_INFINITY,
+            maxLat: Number.NEGATIVE_INFINITY,
+          },
+        );
+
+        const lonPadding = Math.max((focusBounds.maxLon - focusBounds.minLon) * 0.2, 0.8);
+        const latPadding = Math.max((focusBounds.maxLat - focusBounds.minLat) * 0.2, 0.8);
+
+        bounds = {
+          minLon: focusBounds.minLon - lonPadding,
+          maxLon: focusBounds.maxLon + lonPadding,
+          minLat: focusBounds.minLat - latPadding,
+          maxLat: focusBounds.maxLat + latPadding,
+        };
+      }
+    }
+
     if (!Number.isFinite(bounds.minLon) || !Number.isFinite(bounds.minLat)) {
       return [];
     }
@@ -614,9 +664,9 @@ export default function Dashboard({
     const offsetX = (width - projectedWidth) / 2;
     const offsetY = (height - projectedHeight) / 2;
 
-    const totalMapSales = projectedFeatures.reduce((acc, item) => acc + item.valor, 0);
+    const totalMapSales = geoJsonPorEstado.reduce((acc, item) => acc + item.valor, 0);
 
-    return projectedFeatures.map((item) => {
+    return geoJsonPorEstado.map((item) => {
       const projectedRings = item.rings.map((ring) =>
         ring.map(([lon, lat]) => [
           offsetX + (lon - bounds.minLon) * scale,
@@ -643,7 +693,7 @@ export default function Dashboard({
         percentual: totalMapSales > 0 ? (item.valor / totalMapSales) * 100 : 0,
       };
     });
-  }, [brazilMapQuery.data, topCidades]);
+  }, [estadoFocoCidade, geoJsonPorEstado, mapViewMode]);
 
   const dadosRegiaoMapa = useMemo(() => {
     const regionTotals = new Map<string, number>([
@@ -654,7 +704,7 @@ export default function Dashboard({
       ['Sul', 0],
     ]);
 
-    geoJsonPorEstado.forEach((estado) => {
+    geoJsonProjetado.forEach((estado) => {
       regionTotals.set(estado.regiao, (regionTotals.get(estado.regiao) ?? 0) + estado.valor);
     });
 
@@ -668,7 +718,7 @@ export default function Dashboard({
       }))
 
       .sort((a, b) => b.percentual - a.percentual);
-  }, [geoJsonPorEstado]);
+  }, [geoJsonProjetado]);
 
   const maiorPercentualRegiao = useMemo(
     () => Math.max(...dadosRegiaoMapa.map((item) => item.percentual), 0),
@@ -687,6 +737,7 @@ export default function Dashboard({
 
   const naoIdentificado = vendasPorRegiao.find((item) => item.regiao === 'Não identificado');
   const isMapLoading = brazilMapQuery.isLoading;
+  const isCityView = mapViewMode === 'cidade';
 
   const yearOptions = useMemo(() => {
     const resultados = yearsQuery.data?.resultados ?? [];
@@ -777,11 +828,25 @@ export default function Dashboard({
       </div>
 
       <section className="rounded-xl border bg-background p-4 md:p-6">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-foreground">Mapa de vendas por região</h2>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">
+              {isCityView ? 'Mapa de vendas por cidade' : 'Mapa de vendas por região'}
+            </h2>
           <p className="text-sm text-muted-foreground">
-            Intensidade no GeoJSON geográfico real representa a participação de faturamento por estado e região.
+            {isCityView
+              ? 'Visualização focada no estado com maior faturamento, exibindo as cidades com seus respectivos valores.'
+              : 'Intensidade no GeoJSON geográfico real representa a participação de faturamento por estado e região.'}
           </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setMapViewMode((prev) => (prev === 'regiao' ? 'cidade' : 'regiao'))}
+          >
+            {isCityView ? 'Por Região' : 'Por Cidade'}
+          </Button>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
@@ -800,9 +865,11 @@ export default function Dashboard({
                 viewBox="0 0 100 100"
                 className="absolute inset-0 z-10 h-full w-full"
                 role="img"
-                aria-label="Mapa GeoJSON dos estados brasileiros com participação de vendas"
+                aria-label={isCityView
+                  ? 'Mapa GeoJSON dos estados brasileiros com foco em vendas por cidade'
+                  : 'Mapa GeoJSON dos estados brasileiros com participação de vendas'}
               >
-                {geoJsonPorEstado.map((estado) => (
+                {geoJsonProjetado.map((estado) => (
                   <g key={estado.uf}>
                     {estado.projectedRings.map((ring, index) => (
                       <polygon
@@ -817,16 +884,18 @@ export default function Dashboard({
                         </title>
                       </polygon>
                     ))}
-                    <text
-                      x={estado.centroidX}
-                      y={estado.centroidY}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize="1.6"
-                      className="fill-foreground"
-                    >
-                      {estado.uf}
-                    </text>
+                    {!isCityView && (
+                      <text
+                        x={estado.centroidX}
+                        y={estado.centroidY}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize="1.6"
+                        className="fill-foreground"
+                      >
+                        {estado.uf}
+                      </text>
+                    )}
                   </g>
                 ))}
               </svg>
@@ -838,17 +907,26 @@ export default function Dashboard({
           </div>
 
           <div className="space-y-3">
-            {dadosRegiaoMapa.map((item) => (
-              <div key={item.regiao} className="rounded-md border bg-background p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{item.regiao}</span>
-                  <span className="text-muted-foreground">{item.percentual.toFixed(1)}%</span>
+            {isCityView
+              ? topCidadesItems.map((item) => (
+                <div key={item.key} className="rounded-md border bg-background p-3">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium">{item.title}</span>
+                    <span className="text-muted-foreground">{item.percent?.toFixed(1) ?? '0.0'}%</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{item.value}</p>
+              ))
+              : dadosRegiaoMapa.map((item) => (
+                <div key={item.regiao} className="rounded-md border bg-background p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{item.regiao}</span>
+                    <span className="text-muted-foreground">{item.percentual.toFixed(1)}%</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{formatCurrency(item.valor)}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">{formatCurrency(item.valor)}</p>
-              </div>
-            ))}
+              ))
 
-            {naoIdentificado && naoIdentificado.valor > 0 && (
+            {!isCityView && naoIdentificado && naoIdentificado.valor > 0 && (
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
                 Não identificado: {formatCurrency(naoIdentificado.valor)} ({naoIdentificado.percentual.toFixed(1)}%)
               </div>

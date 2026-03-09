@@ -191,8 +191,8 @@ export default function AnaliseFiscal() {
   return (
     <div className="space-y-6">
       <Header
-        title="Análise Fiscal de Compras"
-        subtitle="Visão inicial com total comprado e Top 5 por fornecedor e produto."
+        title="Análise de Compras"
+        subtitle="Visão analitica das compras"
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
         availableYears={availableYears}

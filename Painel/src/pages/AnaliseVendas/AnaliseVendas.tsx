@@ -853,7 +853,7 @@ export default function Dashboard({
           <div className="relative h-[420px] overflow-hidden rounded-lg border bg-slate-100 dark:bg-slate-950">
             <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.20)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.20)_1px,transparent_1px)] bg-[size:32px_32px]" />
             <div className="absolute left-4 top-4 z-20 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
-              Brasil • Visão de vendas por região
+              {isCityView ? 'Brasil • Visão de vendas por cidade' : 'Brasil • Visão de vendas por região'}
             </div>
 
             {isMapLoading ? (
@@ -915,6 +915,7 @@ export default function Dashboard({
                     <span className="text-muted-foreground">{item.percent?.toFixed(1) ?? '0.0'}%</span>
                   </div>
                   <p className="text-sm text-muted-foreground">{item.value}</p>
+                </div>
               ))
               : dadosRegiaoMapa.map((item) => (
                 <div key={item.regiao} className="rounded-md border bg-background p-3">
@@ -924,7 +925,7 @@ export default function Dashboard({
                   </div>
                   <p className="text-sm text-muted-foreground">{formatCurrency(item.valor)}</p>
                 </div>
-              ))
+              ))}
 
             {!isCityView && naoIdentificado && naoIdentificado.valor > 0 && (
               <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">

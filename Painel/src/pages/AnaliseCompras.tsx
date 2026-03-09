@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { Box, Package, ShoppingCart, Truck } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
@@ -10,10 +10,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { parseDecimal } from '@/services/nfe';
 import { fetchSpedAnaliseCompras, fetchSpedKpis, type AnaliseComprasResponse } from '@/services/sped';
 
-import { formatCurrency, monthLabels } from '@/pages/faturamento/utils/utils';
+import { formatCurrency, monthLabels } from '@/services/utils';
 import { Header } from '@/pages/components/Header';
 import { RankingCard } from '@/pages/components/RankingCard';
 import { StatCard } from '@/pages/components/StatCard';
+import { EvolucaoChart } from '@/pages/components/EvolucaoChart';
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
   const digits = (value ?? '').replace(/\D/g, '');
@@ -101,6 +102,24 @@ export default function AnaliseFiscal() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const monthlyComprasQueries = useQueries({
+    queries: Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      return {
+        queryKey: ['analise-compras-mensal', emitenteCnpj, yearNumber, month],
+        queryFn: () =>
+          fetchSpedAnaliseCompras({
+            emitente_cnpj: emitenteCnpj,
+            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+            periodo_mes: month,
+            limite: 5,
+          }),
+        enabled: hasEmitenteCnpj && !Number.isNaN(yearNumber),
+        staleTime: 5 * 60 * 1000,
+      };
+    }),
+  });
+
   const yearOptions = useMemo(() => {
     const resultados = yearsQuery.data?.resultados ?? [];
     const years = new Set<number>();
@@ -180,6 +199,32 @@ export default function AnaliseFiscal() {
       accentClass: 'border-l-violet-500',
     },
   ] as const;
+
+  const comprasEvolutionData = useMemo(() => {
+    const itens = monthlyComprasQueries
+      .map((query, index) => ({
+        month: index + 1,
+        total: parseDecimal(query.data?.total_comprado ?? 0),
+      }))
+      .filter((item) => (selectedMonth === 'all' ? true : item.month === monthNumber));
+
+    return itens.map((item) => ({
+      month: monthLabels[item.month - 1] ?? `Mês ${item.month}`,
+      faturamento: item.total,
+    }));
+  }, [monthNumber, monthlyComprasQueries, selectedMonth]);
+
+  const selectedMonthLabel = selectedMonth === 'all' ? null : monthLabels[monthNumber - 1];
+  const hasChartData = comprasEvolutionData.some((item) => item.faturamento > 0);
+  const isMonthlyComprasLoading = monthlyComprasQueries.some((query) => query.isLoading);
+  const hasMonthlyComprasError = monthlyComprasQueries.some((query) => query.isError);
+  const chartMessage = isMonthlyComprasLoading
+    ? 'Carregando dados...'
+    : hasMonthlyComprasError
+      ? 'Não foi possível carregar o gráfico.'
+      : selectedMonthLabel
+        ? `Nenhum dado disponível para ${selectedMonthLabel} de ${selectedYear}.`
+        : `Nenhum dado disponível para ${selectedYear}.`;
 
   if (!user?.tem_sped) {
     return <Navigate to="/analise-vendas" replace />;
@@ -288,6 +333,17 @@ export default function AnaliseFiscal() {
           totalValue={formatCurrency(currentTotalComprado)}
         />
       </div>
+
+      <EvolucaoChart
+        billingData={comprasEvolutionData}
+        hasChartData={hasChartData}
+        chartMessage={chartMessage}
+        selectedMonthLabel={selectedMonthLabel}
+        selectedYear={selectedYear}
+        title="Evolução das compras"
+        descriptionPrefix="Compras"
+        metricLabel="Compras"
+      />
     </div>
   );
 }

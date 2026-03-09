@@ -14,7 +14,7 @@ import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/serv
 import { useAuth } from '@/contexts/AuthContext'
 import { fetchSpedKpis } from '@/services/sped';
 // import { useChat } from '@/contexts/ChatContext';
-import { monthLabels } from './faturamento/utils/utils';
+import { monthLabels } from '../services/utils';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {

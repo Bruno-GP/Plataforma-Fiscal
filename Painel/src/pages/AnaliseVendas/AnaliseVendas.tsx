@@ -105,6 +105,15 @@ const extractUfFromCity = (cityLabel?: string) => {
   return ufToRegion[uf] ? uf : null;
 };
 
+const extractCityName = (cityLabel?: string) => {
+  if (!cityLabel) {
+    return 'Cidade não identificada';
+  }
+
+  return cityLabel
+    .replace(/\s*[-/()]\s*[A-Z]{2}\)?\s*$/u, '')
+    .trim();
+};
 
 type GeoJsonFeature = {
   type: 'Feature';
@@ -695,6 +704,60 @@ export default function Dashboard({
     });
   }, [estadoFocoCidade, geoJsonPorEstado, mapViewMode]);
 
+  const focoProjetado = useMemo(() => {
+    if (mapViewMode !== 'cidade' || !estadoFocoCidade || !geoJsonProjetado.length) {
+      return null;
+    }
+
+    const estado = geoJsonProjetado.find((item) => item.uf === estadoFocoCidade);
+    if (!estado) {
+      return null;
+    }
+
+    return {
+      x: estado.centroidX,
+      y: estado.centroidY,
+      uf: estado.uf,
+    };
+  }, [estadoFocoCidade, geoJsonProjetado, mapViewMode]);
+
+  const cidadesPorEstado = useMemo(() => {
+    const agrupado = new Map<string, { nome: string; valor: number; percentual: number | null }[]>();
+
+    topCidadesItems.forEach((cidade) => {
+      const uf = extractUfFromCity(cidade.title);
+      if (!uf) {
+        return;
+      }
+
+      const cidades = agrupado.get(uf) ?? [];
+      cidades.push({
+        nome: extractCityName(cidade.title),
+        valor: cidade.rawValue,
+        percentual: cidade.percent,
+      });
+      agrupado.set(uf, cidades);
+    });
+
+    return agrupado;
+  }, [topCidadesItems]);
+
+  const mapTransitionStyle = useMemo(() => {
+    if (mapViewMode !== 'cidade' || !focoProjetado) {
+      return {
+        transform: 'translate(0px, 0px) scale(1)',
+      };
+    }
+
+    const scale = 1.65;
+    const translateX = 50 - focoProjetado.x;
+    const translateY = 50 - focoProjetado.y;
+
+    return {
+      transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+    };
+  }, [focoProjetado, mapViewMode]);
+
   const dadosRegiaoMapa = useMemo(() => {
     const regionTotals = new Map<string, number>([
       ['Norte', 0],
@@ -844,6 +907,7 @@ export default function Dashboard({
             variant="outline"
             size="sm"
             onClick={() => setMapViewMode((prev) => (prev === 'regiao' ? 'cidade' : 'regiao'))}
+            className="border-primary/40 transition-all duration-300 hover:border-primary hover:bg-primary hover:text-primary-foreground"
           >
             {isCityView ? 'Por Região' : 'Por Cidade'}
           </Button>
@@ -869,35 +933,68 @@ export default function Dashboard({
                   ? 'Mapa GeoJSON dos estados brasileiros com foco em vendas por cidade'
                   : 'Mapa GeoJSON dos estados brasileiros com participação de vendas'}
               >
-                {geoJsonProjetado.map((estado) => (
-                  <g key={estado.uf}>
-                    {estado.projectedRings.map((ring, index) => (
-                      <polygon
-                        key={`${estado.uf}-${index}`}
-                        points={ring.map(([x, y]) => `${x},${y}`).join(' ')}
-                        fill={getRegionHeat(estado.percentual)}
-                        stroke="hsl(var(--border))"
-                        strokeWidth={0.25}
-                      >
-                        <title>
-                          {`${estado.uf} (${estado.regiao}): ${formatCurrency(estado.valor)} (${estado.percentual.toFixed(1)}%)`}
-                        </title>
-                      </polygon>
-                    ))}
-                    {!isCityView && (
-                      <text
-                        x={estado.centroidX}
-                        y={estado.centroidY}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        fontSize="1.6"
-                        className="fill-foreground"
-                      >
-                        {estado.uf}
-                      </text>
-                    )}
-                  </g>
-                ))}
+                <g
+                  style={{
+                    ...mapTransitionStyle,
+                    transformOrigin: '50px 50px',
+                    transition: 'transform 550ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                >
+                  {geoJsonProjetado.map((estado) => {
+                    const cidadesEstado = cidadesPorEstado.get(estado.uf) ?? [];
+
+                    return (
+                      <g key={estado.uf}>
+                        {estado.projectedRings.map((ring, index) => (
+                          <polygon
+                            key={`${estado.uf}-${index}`}
+                            points={ring.map(([x, y]) => `${x},${y}`).join(' ')}
+                            fill={getRegionHeat(estado.percentual)}
+                            stroke="hsl(var(--border))"
+                            strokeWidth={0.25}
+                          >
+                            <title>
+                              {`${estado.uf} (${estado.regiao}): ${formatCurrency(estado.valor)} (${estado.percentual.toFixed(1)}%)`}
+                            </title>
+                          </polygon>
+                        ))}
+                        {!isCityView && (
+                          <text
+                            x={estado.centroidX}
+                            y={estado.centroidY}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fontSize="1.6"
+                            className="fill-foreground"
+                          >
+                            {estado.uf}
+                          </text>
+                        )}
+
+                        {isCityView && cidadesEstado.length > 0 && (
+                          <text
+                            x={estado.centroidX}
+                            y={estado.centroidY - 1.6}
+                            textAnchor="middle"
+                            className="fill-foreground"
+                            fontSize="1.25"
+                            fontWeight="600"
+                          >
+                            {cidadesEstado.slice(0, 2).map((cidade, index) => (
+                              <tspan
+                                key={`${estado.uf}-${cidade.nome}`}
+                                x={estado.centroidX}
+                                dy={index === 0 ? 0 : 1.6}
+                              >
+                                {cidade.nome}
+                              </tspan>
+                            ))}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+                </g>
               </svg>
             )}
 

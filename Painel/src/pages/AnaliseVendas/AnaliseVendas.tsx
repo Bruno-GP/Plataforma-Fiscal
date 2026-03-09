@@ -27,7 +27,7 @@ const BRAZIL_STATES_GEOJSON_URL =
   'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson';
 
 const IBGE_CITIES_GEOJSON_URL = (uf: string) =>
-  `https://servicodados.ibge.gov.br/api/v3/malhas/estados/${uf}/municipios?formato=application/vnd.geo+json&qualidade=minima`;
+  `${import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? 'http://localhost:8000'}/api/geo/municipios/${uf}`;
 
 const stateNameToUf: Record<string, string> = {
   acre: 'AC',
@@ -627,7 +627,7 @@ export default function Dashboard({
 
       const response = await fetch(IBGE_CITIES_GEOJSON_URL(estadoFocoCidade));
       if (!response.ok) {
-        throw new Error('Não foi possível carregar o GeoJSON de cidades.');
+        return { type: 'FeatureCollection', features: [] };
       }
       return response.json();
     },

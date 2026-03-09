@@ -704,7 +704,7 @@ export default function Dashboard({
     });
   }, [estadoFocoCidade, geoJsonPorEstado, mapViewMode]);
 
-  const focoProjetado = useMemo(() => {
+    const focoProjetado = useMemo(() => {
     if (mapViewMode !== 'cidade' || !estadoFocoCidade || !geoJsonProjetado.length) {
       return null;
     }
@@ -722,7 +722,7 @@ export default function Dashboard({
   }, [estadoFocoCidade, geoJsonProjetado, mapViewMode]);
 
   const cidadesPorEstado = useMemo(() => {
-    const agrupado = new Map<string, { nome: string; valor: number; percentual: number | null }[]>();
+    const agrupado = new Map<string, { key: string; nome: string; valor: number; percentual: number }[]>();
 
     topCidadesItems.forEach((cidade) => {
       const uf = extractUfFromCity(cidade.title);
@@ -732,9 +732,10 @@ export default function Dashboard({
 
       const cidades = agrupado.get(uf) ?? [];
       cidades.push({
+        key: cidade.key,
         nome: extractCityName(cidade.title),
         valor: cidade.rawValue,
-        percentual: cidade.percent,
+        percentual: cidade.percent ?? 0,
       });
       agrupado.set(uf, cidades);
     });
@@ -757,6 +758,36 @@ export default function Dashboard({
       transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
     };
   }, [focoProjetado, mapViewMode]);
+
+  const cidadeMarkerData = useMemo(() => {
+    const maxPercentualCidade = Math.max(
+      ...topCidadesItems.map((item) => item.percent ?? 0),
+      0,
+    );
+
+    return geoJsonProjetado.flatMap((estado) => {
+      const cidadesEstado = cidadesPorEstado.get(estado.uf) ?? [];
+
+      return cidadesEstado.map((cidade, index) => {
+        const angle = (index / Math.max(cidadesEstado.length, 1)) * Math.PI * 2;
+        const distance = 0.9 + index * 0.35;
+        const x = estado.centroidX + Math.cos(angle) * distance;
+        const y = estado.centroidY + Math.sin(angle) * distance;
+        const intensidade = maxPercentualCidade > 0 ? cidade.percentual / maxPercentualCidade : 0;
+        const alpha = 0.25 + intensidade * 0.75;
+        const radius = 0.25 + intensidade * 0.55;
+
+        return {
+          ...cidade,
+          uf: estado.uf,
+          x,
+          y,
+          radius,
+          color: `hsl(var(--primary) / ${Math.min(alpha, 1).toFixed(2)})`,
+        };
+      });
+    });
+  }, [cidadesPorEstado, geoJsonProjetado, topCidadesItems]);
 
   const dadosRegiaoMapa = useMemo(() => {
     const regionTotals = new Map<string, number>([
@@ -907,7 +938,7 @@ export default function Dashboard({
             variant="outline"
             size="sm"
             onClick={() => setMapViewMode((prev) => (prev === 'regiao' ? 'cidade' : 'regiao'))}
-            className="border-primary/40 transition-all duration-300 hover:border-primary hover:bg-primary hover:text-primary-foreground"
+            className="border-[#0E1525]/30 bg-[#0E1525] text-white transition-all duration-300 hover:border-[#0E1525] hover:bg-[#0E1525]/90 hover:text-white"
           >
             {isCityView ? 'Por Região' : 'Por Cidade'}
           </Button>

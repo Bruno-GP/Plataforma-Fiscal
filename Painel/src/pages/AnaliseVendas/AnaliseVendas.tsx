@@ -26,6 +26,9 @@ const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixe
 const BRAZIL_STATES_GEOJSON_URL =
   'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson';
 
+const IBGE_CITIES_GEOJSON_URL = (uf: string) =>
+  `https://servicodados.ibge.gov.br/api/v3/malhas/estados/${uf}/municipios?formato=application/vnd.geo+json&qualidade=minima`;
+
 const stateNameToUf: Record<string, string> = {
   acre: 'AC',
   alagoas: 'AL',
@@ -127,6 +130,18 @@ type GeoJsonFeature = {
   };
 };
 
+type CityGeoJsonFeature = {
+  type: 'Feature';
+  properties: {
+    nome?: string;
+    name?: string;
+  };
+  geometry: {
+    type: 'Polygon' | 'MultiPolygon';
+    coordinates: number[][][] | number[][][][];
+  };
+};
+
 const normalizeLabel = (value: string) =>
   value
     .normalize('NFD')
@@ -138,6 +153,11 @@ const normalizeLabel = (value: string) =>
 type GeoJsonFeatureCollection = {
   type: 'FeatureCollection';
   features: GeoJsonFeature[];
+};
+
+type CityGeoJsonFeatureCollection = {
+  type: 'FeatureCollection';
+  features: CityGeoJsonFeature[];
 };
 
 const getFeatureRings = (feature: GeoJsonFeature) => {
@@ -598,9 +618,26 @@ export default function Dashboard({
     return [...geoJsonPorEstado].sort((a, b) => b.valor - a.valor)[0]?.uf ?? null;
   }, [geoJsonPorEstado, mapViewMode]);
 
-  const geoJsonProjetado = useMemo(() => {
+  const cidadesGeoJsonQuery = useQuery<CityGeoJsonFeatureCollection>({
+    queryKey: ['ibge-cities-geojson', estadoFocoCidade],
+    queryFn: async () => {
+      if (!estadoFocoCidade) {
+        throw new Error('UF foco não disponível para carregar cidades.');
+      }
+
+      const response = await fetch(IBGE_CITIES_GEOJSON_URL(estadoFocoCidade));
+      if (!response.ok) {
+        throw new Error('Não foi possível carregar o GeoJSON de cidades.');
+      }
+      return response.json();
+    },
+    enabled: mapViewMode === 'cidade' && Boolean(estadoFocoCidade),
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+
+  const projectionConfig = useMemo(() => {
     if (!geoJsonPorEstado.length) {
-      return [];
+      return null;
     }
 
     const boundsTotal = geoJsonPorEstado.reduce(
@@ -659,7 +696,7 @@ export default function Dashboard({
     }
 
     if (!Number.isFinite(bounds.minLon) || !Number.isFinite(bounds.minLat)) {
-      return [];
+      return null;
     }
 
     const padding = 3;
@@ -670,16 +707,27 @@ export default function Dashboard({
     const scale = Math.min((width - padding * 2) / lonSpan, (height - padding * 2) / latSpan);
     const projectedWidth = lonSpan * scale;
     const projectedHeight = latSpan * scale;
-    const offsetX = (width - projectedWidth) / 2;
-    const offsetY = (height - projectedHeight) / 2;
+
+    return {
+      bounds,
+      scale,
+      offsetX: (width - projectedWidth) / 2,
+      offsetY: (height - projectedHeight) / 2,
+    };
+  }, [estadoFocoCidade, geoJsonPorEstado, mapViewMode]);
+
+  const geoJsonProjetado = useMemo(() => {
+    if (!projectionConfig) {
+      return [];
+    }
 
     const totalMapSales = geoJsonPorEstado.reduce((acc, item) => acc + item.valor, 0);
 
     return geoJsonPorEstado.map((item) => {
       const projectedRings = item.rings.map((ring) =>
         ring.map(([lon, lat]) => [
-          offsetX + (lon - bounds.minLon) * scale,
-          offsetY + (bounds.maxLat - lat) * scale,
+          projectionConfig.offsetX + (lon - projectionConfig.bounds.minLon) * projectionConfig.scale,
+          projectionConfig.offsetY + (projectionConfig.bounds.maxLat - lat) * projectionConfig.scale,
         ]),
       );
 
@@ -702,7 +750,7 @@ export default function Dashboard({
         percentual: totalMapSales > 0 ? (item.valor / totalMapSales) * 100 : 0,
       };
     });
-  }, [estadoFocoCidade, geoJsonPorEstado, mapViewMode]);
+  }, [geoJsonPorEstado, projectionConfig]);
 
     const focoProjetado = useMemo(() => {
     if (mapViewMode !== 'cidade' || !estadoFocoCidade || !geoJsonProjetado.length) {
@@ -789,6 +837,40 @@ export default function Dashboard({
     });
   }, [cidadesPorEstado, geoJsonProjetado, topCidadesItems]);
 
+  const cityGeoJsonProjetado = useMemo(() => {
+    if (mapViewMode !== 'cidade' || !projectionConfig || !cidadesGeoJsonQuery.data?.features?.length) {
+      return [];
+    }
+
+    const topCitySalesByName = new Map<string, number>();
+    topCidadesItems.forEach((cidade) => {
+      topCitySalesByName.set(normalizeLabel(extractCityName(cidade.title)), cidade.rawValue);
+    });
+
+    return cidadesGeoJsonQuery.data.features
+      .map((feature) => {
+        const rings = getFeatureRings(feature as GeoJsonFeature);
+        if (!rings.length) {
+          return null;
+        }
+
+        const cityName = feature.properties.nome ?? feature.properties.name ?? 'Cidade não identificada';
+
+        return {
+          name: cityName,
+          value: topCitySalesByName.get(normalizeLabel(cityName)) ?? 0,
+          projectedRings: rings.map((ring) =>
+            ring.map(([lon, lat]) => [
+              projectionConfig.offsetX + (lon - projectionConfig.bounds.minLon) * projectionConfig.scale,
+              projectionConfig.offsetY + (projectionConfig.bounds.maxLat - lat) * projectionConfig.scale,
+            ]),
+          ),
+        };
+      })
+      .filter((item): item is { name: string; value: number; projectedRings: number[][][] } => Boolean(item));
+  }, [cidadesGeoJsonQuery.data, mapViewMode, projectionConfig, topCidadesItems]);
+
+
   const dadosRegiaoMapa = useMemo(() => {
     const regionTotals = new Map<string, number>([
       ['Norte', 0],
@@ -846,8 +928,8 @@ export default function Dashboard({
   };
 
   const naoIdentificado = vendasPorRegiao.find((item) => item.regiao === 'Não identificado');
-  const isMapLoading = brazilMapQuery.isLoading;
   const isCityView = mapViewMode === 'cidade';
+  const isMapLoading = brazilMapQuery.isLoading || (isCityView && cidadesGeoJsonQuery.isLoading);
 
   const yearOptions = useMemo(() => {
     const resultados = yearsQuery.data?.resultados ?? [];
@@ -998,6 +1080,22 @@ export default function Dashboard({
                     transition: 'transform 550ms cubic-bezier(0.22, 1, 0.36, 1)',
                   }}
                 >
+                  {isCityView && cityGeoJsonProjetado.map((cidade) => (
+                    <g key={`cidade-shape-${cidade.name}`}>
+                      {cidade.projectedRings.map((ring, index) => (
+                        <polygon
+                          key={`cidade-${cidade.name}-${index}`}
+                          points={ring.map(([x, y]) => `${x},${y}`).join(' ')}
+                          fill={cidade.value > 0 ? getCityHeat((cidade.value / Math.max(totalFaturamento, 1)) * 100) : 'hsl(var(--muted) / 0.18)'}
+                          stroke="hsl(var(--border) / 0.45)"
+                          strokeWidth={0.08}
+                        >
+                          <title>{`${cidade.name}: ${formatCurrency(cidade.value)}`}</title>
+                        </polygon>
+                      ))}
+                    </g>
+                  ))}
+
                   {geoJsonProjetado.map((estado) => {
                     const cidadesEstado = cidadesPorEstado.get(estado.uf) ?? [];
 

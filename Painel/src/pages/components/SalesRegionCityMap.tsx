@@ -201,6 +201,16 @@ export function SalesRegionCityMap({
 
     const totalRegional = Math.max(totalFaturamento, 0);
 
+    const totalMapeado = [...regiaoMap.values()].reduce((acc, valor) => acc + valor, 0);
+    const complementoNaoIdentificado = Math.max(totalRegional - totalMapeado, 0);
+
+    if (complementoNaoIdentificado > 0) {
+      regiaoMap.set(
+        'Não identificado',
+        (regiaoMap.get('Não identificado') ?? 0) + complementoNaoIdentificado,
+      );
+    }
+
     return [...regiaoMap.entries()]
       .map(([regiao, valor]) => ({
         regiao,
@@ -524,28 +534,18 @@ export function SalesRegionCityMap({
   );
 
   const dadosRegiaoMapa = useMemo(() => {
-    const regionTotals = new Map<string, number>([
-      ['Norte', 0],
-      ['Nordeste', 0],
-      ['Centro-Oeste', 0],
-      ['Sudeste', 0],
-      ['Sul', 0],
-    ]);
+    const ordemRegioes = ['Norte', 'Nordeste', 'Centro-Oeste', 'Sudeste', 'Sul', 'Não identificado'];
 
-    geoJsonProjetado.forEach((estado) => {
-      regionTotals.set(estado.regiao, (regionTotals.get(estado.regiao) ?? 0) + estado.valor);
-    });
-
-    const totalRegional = Math.max(totalFaturamento, 0);
-
-    return [...regionTotals.entries()]
-      .map(([regiao, valor]) => ({
+    const dadosOrdenados = ordemRegioes
+      .map((regiao) => vendasPorRegiao.find((item) => item.regiao === regiao) ?? {
         regiao,
-        valor,
-        percentual: totalRegional > 0 ? (valor / totalRegional) * 100 : 0,
-      }))
-      .sort((a, b) => b.percentual - a.percentual);
-  }, [geoJsonProjetado, totalFaturamento]);
+        valor: 0,
+        percentual: 0,
+      })
+      .filter((item) => item.valor > 0 || item.regiao !== 'Não identificado');
+
+    return dadosOrdenados.sort((a, b) => b.percentual - a.percentual);
+  }, [vendasPorRegiao]);
 
   const maiorPercentualRegiao = useMemo(
     () => Math.max(...dadosRegiaoMapa.map((item) => item.percentual), 0),
@@ -569,7 +569,6 @@ export function SalesRegionCityMap({
     return `hsl(var(--primary) / ${Math.min(alpha, 1).toFixed(2)})`;
   };
 
-  const naoIdentificado = vendasPorRegiao.find((item) => item.regiao === 'Não identificado');
   const isCityView = mapViewMode === 'cidade';
   const isMapLoading = brazilMapQuery.isLoading || (isCityView && cidadesGeoJsonQuery.isLoading);
 
@@ -796,12 +795,6 @@ export function SalesRegionCityMap({
               <p className="text-sm text-muted-foreground">
                 {formatCurrency(selectedCityData.value)} • {selectedCityData.percentual.toFixed(1)}% do total
               </p>
-            </div>
-          )}
-
-          {!isCityView && naoIdentificado && naoIdentificado.valor > 0 && (
-            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              Não identificado: {formatCurrency(naoIdentificado.valor)} ({naoIdentificado.percentual.toFixed(1)}%)
             </div>
           )}
         </div>

@@ -324,6 +324,12 @@ export default function Dashboard({
       .slice(0, 5);
   }, [aggregatedData.topCidadesMap]);
 
+  const aggregatedCidadesMapa = useMemo(() => {
+    return [...aggregatedData.topCidadesMap.entries()]
+      .map(([cidade, valor_total]) => ({ cidade, valor_total }))
+      .sort((a, b) => b.valor_total - a.valor_total);
+  }, [aggregatedData.topCidadesMap]);
+
   const totalFaturamento = isAllMonths
     ? aggregatedData.totals.totalSales
     : parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
@@ -338,6 +344,11 @@ export default function Dashboard({
   const topCidades = useMemo(
     () => (isAllMonths ? aggregatedTopCidades : (latestKpi?.kpis.top_cidades ?? [])),
     [aggregatedTopCidades, isAllMonths, latestKpi?.kpis.top_cidades],
+  );
+
+  const cidadesMapa = useMemo(
+    () => (isAllMonths ? aggregatedCidadesMapa : (latestKpi?.kpis.top_cidades ?? [])),
+    [aggregatedCidadesMapa, isAllMonths, latestKpi?.kpis.top_cidades],
   );
 
   const resolvePercentual = (percentual?: number | string, valorTotal?: number | string) => {
@@ -391,6 +402,23 @@ export default function Dashboard({
   });
 
   const topCidadesItems = topCidades.map((cidade, index) => {
+    const percentual = resolvePercentual(cidade.percentual, cidade.valor_total);
+    const valorTotal = parseDecimal(cidade.valor_total ?? 0);
+
+    return {
+      key: `${cidade.cidade}-${index}`,
+      title: cidade.cidade ?? 'Cidade não identificada',
+      subtitle:
+        percentual !== null
+          ? `${percentual.toFixed(1)}% do faturamento`
+          : 'Participação não informada',
+      value: formatCurrency(valorTotal),
+      rawValue: valorTotal,
+      percent: percentual,
+    };
+  });
+
+  const cidadesMapaItems = cidadesMapa.map((cidade, index) => {
     const percentual = resolvePercentual(cidade.percentual, cidade.valor_total);
     const valorTotal = parseDecimal(cidade.valor_total ?? 0);
 
@@ -507,7 +535,7 @@ export default function Dashboard({
       />
 
       <SalesRegionCityMap
-        topCidadesItems={topCidadesItems}
+        topCidadesItems={cidadesMapaItems}
         totalFaturamento={totalFaturamento}
         formatCurrency={formatCurrency}
       />

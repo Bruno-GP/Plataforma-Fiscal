@@ -455,26 +455,51 @@ export function SalesRegionCityMap({
 
         const cityName = feature.properties.nome ?? feature.properties.name ?? 'Cidade não identificada';
 
+        const projectedRings = rings.map((ring) =>
+          ring.map(([lon, lat]) => [
+            projectionConfig.offsetX + (lon - projectionConfig.bounds.minLon) * projectionConfig.scale,
+            projectionConfig.offsetY + (projectionConfig.bounds.maxLat - lat) * projectionConfig.scale,
+          ]),
+        );
+
+        const centroid = projectedRings.flat().reduce(
+          (acc, [x, y], _, arr) => {
+            acc[0] += x / arr.length;
+            acc[1] += y / arr.length;
+            return acc;
+          },
+          [0, 0],
+        );
+
         return {
           name: cityName,
           value: topCitySalesByName.get(normalizeLabel(cityName)) ?? 0,
           percentual: totalFaturamento > 0
             ? ((topCitySalesByName.get(normalizeLabel(cityName)) ?? 0) / totalFaturamento) * 100
             : 0,
-          projectedRings: rings.map((ring) =>
-            ring.map(([lon, lat]) => [
-              projectionConfig.offsetX + (lon - projectionConfig.bounds.minLon) * projectionConfig.scale,
-              projectionConfig.offsetY + (projectionConfig.bounds.maxLat - lat) * projectionConfig.scale,
-            ]),
-          ),
+          centroidX: centroid[0],
+          centroidY: centroid[1],
+          projectedRings,
         };
       })
-      .filter((item): item is { name: string; value: number; percentual: number; projectedRings: number[][][] } => Boolean(item));
+      .filter((item): item is {
+        name: string;
+        value: number;
+        percentual: number;
+        centroidX: number;
+        centroidY: number;
+        projectedRings: number[][][];
+      } => Boolean(item));
   }, [cidadesGeoJsonQuery.data, mapViewMode, projectionConfig, topCidadesItems, totalFaturamento]);
 
   const cidadesComVendasOrdenadas = useMemo(
     () => [...cityGeoJsonProjetado].filter((city) => city.value > 0).sort((a, b) => b.value - a.value),
     [cityGeoJsonProjetado],
+  );
+
+  const cityLabelData = useMemo(
+    () => cidadesComVendasOrdenadas.slice(0, 12),
+    [cidadesComVendasOrdenadas],
   );
 
   useEffect(() => {
@@ -687,6 +712,25 @@ export function SalesRegionCityMap({
                       </polygon>
                     ))}
                   </g>
+                ))}
+
+                {isCityView && cityLabelData.map((cidade) => (
+                  <text
+                    key={`cidade-label-${cidade.name}`}
+                    x={cidade.centroidX}
+                    y={cidade.centroidY}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="white"
+                    stroke="hsl(var(--foreground) / 0.55)"
+                    strokeWidth={0.08}
+                    paintOrder="stroke"
+                    fontSize="1.05"
+                    fontWeight="600"
+                    className="pointer-events-none"
+                  >
+                    {cidade.name}
+                  </text>
                 ))}
 
                 {isCityView && cidadeMarkerData.map((cidade) => (

@@ -199,7 +199,7 @@ export function SalesRegionCityMap({
       regiaoMap.set(regiao, (regiaoMap.get(regiao) ?? 0) + cidade.valor_total);
     });
 
-    const totalRegional = [...regiaoMap.values()].reduce((acc, current) => acc + current, 0);
+    const totalRegional = Math.max(totalFaturamento, 0);
 
     return [...regiaoMap.entries()]
       .map(([regiao, valor]) => ({
@@ -208,7 +208,7 @@ export function SalesRegionCityMap({
         percentual: totalRegional > 0 ? (valor / totalRegional) * 100 : 0,
       }))
       .sort((a, b) => b.valor - a.valor);
-  }, [topCidades]);
+  }, [topCidades, totalFaturamento]);
 
   const geoJsonPorEstado = useMemo(() => {
     const data = brazilMapQuery.data;
@@ -341,7 +341,7 @@ export function SalesRegionCityMap({
   const geoJsonProjetado = useMemo(() => {
     if (!projectionConfig) return [];
 
-    const totalMapSales = geoJsonPorEstado.reduce((acc, item) => acc + item.valor, 0);
+    const totalMapSales = Math.max(totalFaturamento, 0);
 
     return geoJsonPorEstado.map((item) => {
       const projectedRings = item.rings.map((ring) =>
@@ -368,7 +368,7 @@ export function SalesRegionCityMap({
         percentual: totalMapSales > 0 ? (item.valor / totalMapSales) * 100 : 0,
       };
     });
-  }, [geoJsonPorEstado, projectionConfig]);
+  }, [geoJsonPorEstado, projectionConfig, totalFaturamento]);
 
   const focoProjetado = useMemo(() => {
     if (mapViewMode !== 'cidade' || !estadoFocoCidade || !geoJsonProjetado.length) return null;
@@ -536,7 +536,7 @@ export function SalesRegionCityMap({
       regionTotals.set(estado.regiao, (regionTotals.get(estado.regiao) ?? 0) + estado.valor);
     });
 
-    const totalRegional = [...regionTotals.values()].reduce((acc, current) => acc + current, 0);
+    const totalRegional = Math.max(totalFaturamento, 0);
 
     return [...regionTotals.entries()]
       .map(([regiao, valor]) => ({
@@ -545,7 +545,7 @@ export function SalesRegionCityMap({
         percentual: totalRegional > 0 ? (valor / totalRegional) * 100 : 0,
       }))
       .sort((a, b) => b.percentual - a.percentual);
-  }, [geoJsonProjetado]);
+  }, [geoJsonProjetado, totalFaturamento]);
 
   const maiorPercentualRegiao = useMemo(
     () => Math.max(...dadosRegiaoMapa.map((item) => item.percentual), 0),

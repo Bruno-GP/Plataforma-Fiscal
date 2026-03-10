@@ -41,7 +41,7 @@ class NFeNotasService:
     def obter_cfops_venda(self, conn) -> set[str]:
         sql = """
             SELECT c.codigo
-            FROM public.nfe_cfops AS c
+            FROM public.notas_cfops AS c
             WHERE LEFT(
                     regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g'),
                     1
@@ -92,14 +92,14 @@ class NFeNotasService:
 
         sql = """
             WITH atualizacao AS (
-                UPDATE public.nfe_notas
+                UPDATE public.notas
                 SET processamento_id = %s
                 WHERE numero_nf = %s
                   AND emitente_cnpj = %s
                   AND data_emissao = %s
                 RETURNING id
             )
-            INSERT INTO public.nfe_notas (
+            INSERT INTO public.notas (
                 processamento_id,
                 numero_nf,
                 emitente_cnpj,
@@ -189,12 +189,12 @@ class NFeNotasService:
         )
 
         sql = """
-            DELETE FROM public.nfe_notas AS n
+            DELETE FROM public.notas AS n
             WHERE n.processamento_id = %s
               AND NOT EXISTS (
                 SELECT 1
-                FROM public.nfe_itens AS i
-                JOIN public.nfe_cfops AS c
+                FROM public.notas_itens AS i
+                JOIN public.notas_cfops AS c
                   ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
                      = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
                 WHERE i.nota_id = n.id

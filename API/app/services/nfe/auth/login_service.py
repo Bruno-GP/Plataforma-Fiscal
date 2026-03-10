@@ -142,7 +142,7 @@ class LoginService:
                 cur.execute(
                     """
                     SELECT id
-                    FROM public.nfe_login
+                    FROM public.login
                     WHERE email = %s;
                     """,
                     (email_normalizado,),
@@ -161,7 +161,7 @@ class LoginService:
 
                 cur.execute(
                     """
-                    INSERT INTO public.nfe_login (empresa_id, cnpj, email, senha)
+                    INSERT INTO public.login (empresa_id, cnpj, email, senha)
                     VALUES (%s, %s, %s, %s)
                     RETURNING id;
                     """,
@@ -205,7 +205,7 @@ class LoginService:
                            login.senha,
                            empresas.nome,
                            COALESCE(empresas.tem_sped, false)
-                    FROM public.nfe_login AS login
+                    FROM public.login AS login
                     JOIN public.empresas AS empresas ON empresas.id = login.empresa_id
                     WHERE login.email = %s;
                     """,

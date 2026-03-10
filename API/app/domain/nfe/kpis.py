@@ -116,7 +116,7 @@ class KPICalculator:
         conn: psycopg.Connection | None = None
     ) -> int:
         sql = """
-            INSERT INTO public.nfe_kpis (
+            INSERT INTO public.notas_kpis (
                 processamento_id,
                 emitente_cnpj,
                 periodo_ano,

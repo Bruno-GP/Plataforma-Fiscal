@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
@@ -164,6 +164,7 @@ export function SalesRegionCityMap({
   formatCurrency,
 }: SalesRegionCityMapProps) {
   const [mapViewMode, setMapViewMode] = useState<'regiao' | 'cidade'>('regiao');
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
 
   const brazilMapQuery = useQuery<GeoJsonFeatureCollection>({
     queryKey: ['brazil-states-geojson'],
@@ -457,6 +458,9 @@ export function SalesRegionCityMap({
         return {
           name: cityName,
           value: topCitySalesByName.get(normalizeLabel(cityName)) ?? 0,
+          percentual: totalFaturamento > 0
+            ? ((topCitySalesByName.get(normalizeLabel(cityName)) ?? 0) / totalFaturamento) * 100
+            : 0,
           projectedRings: rings.map((ring) =>
             ring.map(([lon, lat]) => [
               projectionConfig.offsetX + (lon - projectionConfig.bounds.minLon) * projectionConfig.scale,
@@ -465,8 +469,34 @@ export function SalesRegionCityMap({
           ),
         };
       })
-      .filter((item): item is { name: string; value: number; projectedRings: number[][][] } => Boolean(item));
-  }, [cidadesGeoJsonQuery.data, mapViewMode, projectionConfig, topCidadesItems]);
+      .filter((item): item is { name: string; value: number; percentual: number; projectedRings: number[][][] } => Boolean(item));
+  }, [cidadesGeoJsonQuery.data, mapViewMode, projectionConfig, topCidadesItems, totalFaturamento]);
+
+  const cidadesComVendasOrdenadas = useMemo(
+    () => [...cityGeoJsonProjetado].filter((city) => city.value > 0).sort((a, b) => b.value - a.value),
+    [cityGeoJsonProjetado],
+  );
+
+  useEffect(() => {
+    if (mapViewMode !== 'cidade') {
+      setSelectedCity(null);
+      return;
+    }
+
+    if (!cidadesComVendasOrdenadas.length) {
+      setSelectedCity(null);
+      return;
+    }
+
+    if (!selectedCity || !cidadesComVendasOrdenadas.some((city) => city.name === selectedCity)) {
+      setSelectedCity(cidadesComVendasOrdenadas[0].name);
+    }
+  }, [cidadesComVendasOrdenadas, mapViewMode, selectedCity]);
+
+  const selectedCityData = useMemo(
+    () => cityGeoJsonProjetado.find((cidade) => cidade.name === selectedCity) ?? null,
+    [cityGeoJsonProjetado, selectedCity],
+  );
 
   const dadosRegiaoMapa = useMemo(() => {
     const regionTotals = new Map<string, number>([
@@ -580,23 +610,9 @@ export function SalesRegionCityMap({
                   transition: 'transform 550ms cubic-bezier(0.22, 1, 0.36, 1)',
                 }}
               >
-                {isCityView && cityGeoJsonProjetado.map((cidade) => (
-                  <g key={`cidade-shape-${cidade.name}`}>
-                    {cidade.projectedRings.map((ring, index) => (
-                      <polygon
-                        key={`cidade-${cidade.name}-${index}`}
-                        points={ring.map(([x, y]) => `${x},${y}`).join(' ')}
-                        fill={cidade.value > 0 ? getCityHeat((cidade.value / Math.max(totalFaturamento, 1)) * 100) : 'hsl(var(--muted) / 0.18)'}
-                        stroke="hsl(var(--border) / 0.45)"
-                        strokeWidth={0.08}
-                      >
-                        <title>{`${cidade.name}: ${formatCurrency(cidade.value)}`}</title>
-                      </polygon>
-                    ))}
-                  </g>
-                ))}
 
                 {geoJsonProjetado.map((estado) => {
+                  const isFocusedState = estado.uf === estadoFocoCidade;
                   const cidadesEstado = cidadesPorEstado.get(estado.uf) ?? [];
 
                   return (
@@ -605,9 +621,13 @@ export function SalesRegionCityMap({
                         <polygon
                           key={`${estado.uf}-${index}`}
                           points={ring.map(([x, y]) => `${x},${y}`).join(' ')}
-                          fill={isCityView ? 'hsl(var(--muted) / 0.25)' : getRegionHeat(estado.percentual)}
-                          stroke="hsl(var(--border))"
-                          strokeWidth={0.25}
+                          fill={isCityView
+                            ? isFocusedState
+                              ? 'hsl(var(--muted) / 0.1)'
+                              : 'transparent'
+                            : getRegionHeat(estado.percentual)}
+                          stroke={isCityView && !isFocusedState ? 'hsl(var(--border) / 0.45)' : 'hsl(var(--border))'}
+                          strokeWidth={isCityView && !isFocusedState ? 0.14 : 0.25}
                         >
                           <title>
                             {`${estado.uf} (${estado.regiao}): ${formatCurrency(estado.valor)} (${estado.percentual.toFixed(1)}%)`}
@@ -650,6 +670,24 @@ export function SalesRegionCityMap({
                     </g>
                   );
                 })}
+
+                {isCityView && cityGeoJsonProjetado.map((cidade) => (
+                  <g key={`cidade-shape-${cidade.name}`}>
+                    {cidade.projectedRings.map((ring, index) => (
+                      <polygon
+                        key={`cidade-${cidade.name}-${index}`}
+                        points={ring.map(([x, y]) => `${x},${y}`).join(' ')}
+                        fill={cidade.value > 0 ? getCityHeat((cidade.value / Math.max(totalFaturamento, 1)) * 100) : 'hsl(var(--muted) / 0.08)'}
+                        stroke={selectedCity === cidade.name ? 'hsl(var(--primary))' : 'hsl(var(--border) / 0.65)'}
+                        strokeWidth={selectedCity === cidade.name ? 0.3 : 0.12}
+                        className="cursor-pointer transition-all duration-200"
+                        onClick={() => setSelectedCity(cidade.name)}
+                      >
+                        <title>{`${cidade.name}: ${formatCurrency(cidade.value)}`}</title>
+                      </polygon>
+                    ))}
+                  </g>
+                ))}
 
                 {isCityView && cidadeMarkerData.map((cidade) => (
                   <g key={`marker-${cidade.key}`}>
@@ -706,6 +744,16 @@ export function SalesRegionCityMap({
                 <p className="text-sm text-muted-foreground">{formatCurrency(item.valor)}</p>
               </div>
             ))}
+
+          {isCityView && selectedCityData && (
+            <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Cidade selecionada no mapa</p>
+              <p className="text-sm font-semibold text-foreground">{selectedCityData.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {formatCurrency(selectedCityData.value)} • {selectedCityData.percentual.toFixed(1)}% do total
+              </p>
+            </div>
+          )}
 
           {!isCityView && naoIdentificado && naoIdentificado.valor > 0 && (
             <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">

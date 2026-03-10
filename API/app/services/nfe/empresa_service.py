@@ -58,7 +58,7 @@ class EmpresaService:
                     #logger.debug("Cursor criado")
 
                     sql_insert = """
-                        INSERT INTO public.nfe_empresas (cnpj, nome)
+                        INSERT INTO public.empresas (cnpj, nome)
                         VALUES (%s, %s)
                         ON CONFLICT (cnpj)
                         DO UPDATE SET nome = EXCLUDED.nome
@@ -83,7 +83,7 @@ class EmpresaService:
 
                     sql_select = """
                         SELECT id
-                        FROM public.nfe_empresas
+                        FROM public.empresas
                         WHERE cnpj = %s;
                     """
 

@@ -73,7 +73,7 @@ class NFeConsultaService:
         cur.execute(
           """
           SELECT cnpj
-          FROM public.nfe_login
+          FROM public.login
           WHERE email = %s;
           """,
           (email_normalizado,),

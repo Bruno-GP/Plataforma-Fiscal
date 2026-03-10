@@ -4,15 +4,15 @@ CREATE DATABASE Fiscal;
 -- BLOCO NFE
 -- =========================================================
 
-CREATE TABLE IF NOT EXISTS NFE_empresas (
+CREATE TABLE IF NOT EXISTS empresas (
     id       BIGSERIAL PRIMARY KEY,
     cnpj     VARCHAR(20) NOT NULL UNIQUE,
     nome     VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS NFE_processamentos (
+CREATE TABLE IF NOT EXISTS Notas_processamentos (
     id                   BIGSERIAL PRIMARY KEY,
-    empresa_id           BIGINT REFERENCES NFE_empresas(id) ON DELETE SET NULL,
+    empresa_id           BIGINT REFERENCES empresas(id) ON DELETE SET NULL,
     origem               TEXT,
     pasta_xml            TEXT,
     periodo_solicitado   TEXT,
@@ -28,9 +28,9 @@ CREATE TABLE IF NOT EXISTS NFE_processamentos (
     data_processamento   TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS NFE_notas (
+CREATE TABLE IF NOT EXISTS Notas (
     id                      BIGSERIAL PRIMARY KEY,
-    processamento_id        BIGINT REFERENCES NFE_processamentos(id) ON DELETE SET NULL,
+    processamento_id        BIGINT REFERENCES Notas_processamentos(id) ON DELETE SET NULL,
     numero_nf               VARCHAR(50) NOT NULL,
     emitente_cnpj           VARCHAR(20) NOT NULL,
     modelo                  VARCHAR(5),
@@ -52,11 +52,11 @@ CREATE TABLE IF NOT EXISTS NFE_notas (
     atualizado_em           TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS NFE_itens (
+CREATE TABLE IF NOT EXISTS Notas_itens (
     id              BIGSERIAL PRIMARY KEY,
-    nota_id         BIGINT NOT NULL REFERENCES NFE_notas(id) ON DELETE CASCADE,
-    empresa_id      BIGINT REFERENCES NFE_empresas(id) ON DELETE SET NULL,
-    cnpj            VARCHAR(20) REFERENCES NFE_empresas(cnpj) ON DELETE SET NULL,
+    nota_id         BIGINT NOT NULL REFERENCES Notas(id) ON DELETE CASCADE,
+    empresa_id      BIGINT REFERENCES empresas(id) ON DELETE SET NULL,
+    cnpj            VARCHAR(20) REFERENCES empresas(cnpj) ON DELETE SET NULL,
     item_numero     INT,
     produto_codigo  VARCHAR(120),
     descricao       VARCHAR(255),
@@ -71,23 +71,23 @@ CREATE TABLE IF NOT EXISTS NFE_itens (
     icms_valor      NUMERIC(18,2)
 );
 
-CREATE TABLE IF NOT EXISTS NFE_cfops (
+CREATE TABLE IF NOT EXISTS Notas_cfops (
     id         BIGSERIAL PRIMARY KEY,
     codigo     VARCHAR(10) NOT NULL UNIQUE,
     descricao  VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS NFE_processamento_erros (
+CREATE TABLE IF NOT EXISTS Notas_processamento_erros (
     id                BIGSERIAL PRIMARY KEY,
-    processamento_id  BIGINT NOT NULL REFERENCES NFE_processamentos(id) ON DELETE CASCADE,
+    processamento_id  BIGINT NOT NULL REFERENCES Notas_processamentos(id) ON DELETE CASCADE,
     codigo            VARCHAR(50) NOT NULL,
     mensagem          TEXT NOT NULL,
     detalhe           TEXT
 );
 
-CREATE TABLE IF NOT EXISTS NFE_kpis (
+CREATE TABLE IF NOT EXISTS Notas_kpis (
     id                BIGSERIAL PRIMARY KEY,
-    processamento_id  BIGINT NOT NULL REFERENCES NFE_processamentos(id) ON DELETE CASCADE,
+    processamento_id  BIGINT NOT NULL REFERENCES Notas_processamentos(id) ON DELETE CASCADE,
     emitente_cnpj     VARCHAR(14),
     periodo_ano       INTEGER,
     periodo_mes       INTEGER,
@@ -105,16 +105,16 @@ CREATE TABLE IF NOT EXISTS NFE_kpis (
     top_cidades       JSONB DEFAULT '[]'::jsonb
 );
 
-CREATE TABLE IF NOT EXISTS NFE_login (
+CREATE TABLE IF NOT EXISTS login (
     id          BIGSERIAL PRIMARY KEY,
-    empresa_id  BIGINT NOT NULL REFERENCES NFE_empresas(id) ON DELETE CASCADE,
+    empresa_id  BIGINT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
     cnpj        VARCHAR(20) NOT NULL,
     email       VARCHAR(255) NOT NULL UNIQUE,
     senha       VARCHAR(255) NOT NULL,
     criado_em   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS NFE_xml_importados (
+CREATE TABLE IF NOT EXISTS Notas_xml_importados (
     id              BIGSERIAL PRIMARY KEY,
     cnpj_emitente   VARCHAR(20) NOT NULL,
     nome_arquivo    TEXT NOT NULL,
@@ -124,21 +124,21 @@ CREATE TABLE IF NOT EXISTS NFE_xml_importados (
     UNIQUE (cnpj_emitente, hash_arquivo)
 );
 
-CREATE INDEX IF NOT EXISTS idx_NFE_processamentos_empresa ON NFE_processamentos (empresa_id);
-CREATE INDEX IF NOT EXISTS idx_NFE_notas_emitente_data ON NFE_notas (emitente_cnpj, data_emissao);
-CREATE INDEX IF NOT EXISTS idx_NFE_notas_numero_emitente ON NFE_notas (numero_nf, emitente_cnpj);
-CREATE INDEX IF NOT EXISTS idx_NFE_cfops_codigo ON NFE_cfops (codigo);
-CREATE INDEX IF NOT EXISTS idx_NFE_itens_nota ON NFE_itens (nota_id);
-CREATE INDEX IF NOT EXISTS idx_NFE_itens_produto ON NFE_itens (produto_codigo);
-CREATE INDEX IF NOT EXISTS idx_NFE_itens_empresa ON NFE_itens (empresa_id);
-CREATE INDEX IF NOT EXISTS idx_NFE_itens_cnpj ON NFE_itens (cnpj);
-CREATE INDEX IF NOT EXISTS idx_NFE_proc_erros_proc ON NFE_processamento_erros (processamento_id);
-CREATE INDEX IF NOT EXISTS idx_NFE_kpis_proc ON NFE_kpis (processamento_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_NFE_kpis_periodo ON NFE_kpis (emitente_cnpj, periodo_ano, periodo_mes);
-CREATE INDEX IF NOT EXISTS idx_NFE_login_empresa ON NFE_login (empresa_id);
-CREATE INDEX IF NOT EXISTS idx_NFE_login_cnpj ON NFE_login (cnpj);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_NFE_login_email_lower ON NFE_login (LOWER(email));
-CREATE INDEX IF NOT EXISTS idx_NFE_xml_importados_cnpj ON NFE_xml_importados (cnpj_emitente);
+CREATE INDEX IF NOT EXISTS idx_Notas_processamentos_empresa ON Notas_processamentos (empresa_id);
+CREATE INDEX IF NOT EXISTS idx_Notas_emitente_data ON Notas (emitente_cnpj, data_emissao);
+CREATE INDEX IF NOT EXISTS idx_Notas_numero_emitente ON Notas (numero_nf, emitente_cnpj);
+CREATE INDEX IF NOT EXISTS idx_Notas_cfops_codigo ON Notas_cfops (codigo);
+CREATE INDEX IF NOT EXISTS idx_Notas_itens_nota ON Notas_itens (nota_id);
+CREATE INDEX IF NOT EXISTS idx_Notas_itens_produto ON Notas_itens (produto_codigo);
+CREATE INDEX IF NOT EXISTS idx_Notas_itens_empresa ON Notas_itens (empresa_id);
+CREATE INDEX IF NOT EXISTS idx_Notas_itens_cnpj ON Notas_itens (cnpj);
+CREATE INDEX IF NOT EXISTS idx_NFE_proc_erros_proc ON Notas_processamento_erros (processamento_id);
+CREATE INDEX IF NOT EXISTS idx_Notas_kpis_proc ON Notas_kpis (processamento_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_Notas_kpis_periodo ON Notas_kpis (emitente_cnpj, periodo_ano, periodo_mes);
+CREATE INDEX IF NOT EXISTS idx_login_empresa ON login (empresa_id);
+CREATE INDEX IF NOT EXISTS idx_login_cnpj ON login (cnpj);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_login_email_lower ON login (LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_Notas_xml_importados_cnpj ON Notas_xml_importados (cnpj_emitente);
 
 
 -- =========================================================

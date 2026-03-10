@@ -3,6 +3,7 @@ import { Search, MoreHorizontal } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { fetchNfeKpis, parseDecimal } from '@/services/nfe';
+import { fetchSpedKpis } from '@/services/sped';
 import { useAuth } from '@/contexts/AuthContext';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,13 +39,17 @@ const hasValidEmitenteCnpj = (value: string | undefined) => {
 export default function Clientes() {
   const [search, setSearch] = useState('');
   const { user } = useAuth();
+  const usaSped = Boolean(user?.tem_sped);
   
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
 
   const kpisQuery = useQuery({
-    queryKey: ['nfe-kpis-clientes', emitenteCnpj],
-    queryFn: () => fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 12 }),
+    queryKey: ['kpis-clientes', usaSped ? 'sped' : 'xml', emitenteCnpj],
+    queryFn: () =>
+      usaSped
+        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 12 })
+        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 12 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });

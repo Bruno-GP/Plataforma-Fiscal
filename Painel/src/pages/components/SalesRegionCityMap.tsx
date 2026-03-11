@@ -2,6 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const BRAZIL_STATES_GEOJSON_URL =
   'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson';
@@ -67,6 +75,36 @@ const ufToRegion: Record<string, string> = {
   SP: 'Sudeste',
   SE: 'Nordeste',
   TO: 'Norte',
+};
+
+const ufToStateName: Record<string, string> = {
+  AC: 'Acre',
+  AL: 'Alagoas',
+  AP: 'Amapá',
+  AM: 'Amazonas',
+  BA: 'Bahia',
+  CE: 'Ceará',
+  DF: 'Distrito Federal',
+  ES: 'Espírito Santo',
+  GO: 'Goiás',
+  MA: 'Maranhão',
+  MT: 'Mato Grosso',
+  MS: 'Mato Grosso do Sul',
+  MG: 'Minas Gerais',
+  PA: 'Pará',
+  PB: 'Paraíba',
+  PR: 'Paraná',
+  PE: 'Pernambuco',
+  PI: 'Piauí',
+  RJ: 'Rio de Janeiro',
+  RN: 'Rio Grande do Norte',
+  RS: 'Rio Grande do Sul',
+  RO: 'Rondônia',
+  RR: 'Roraima',
+  SC: 'Santa Catarina',
+  SP: 'São Paulo',
+  SE: 'Sergipe',
+  TO: 'Tocantins',
 };
 
 const extractUfFromCity = (cityLabel?: string) => {
@@ -165,6 +203,8 @@ export function SalesRegionCityMap({
 }: SalesRegionCityMapProps) {
   const [mapViewMode, setMapViewMode] = useState<'regiao' | 'cidade'>('regiao');
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedStateUf, setSelectedStateUf] = useState<string | null>(null);
+  const [isStatePickerOpen, setIsStatePickerOpen] = useState(false);
 
   const brazilMapQuery = useQuery<GeoJsonFeatureCollection>({
     queryKey: ['brazil-states-geojson'],
@@ -252,8 +292,50 @@ export function SalesRegionCityMap({
 
   const estadoFocoCidade = useMemo(() => {
     if (mapViewMode !== 'cidade' || !geoJsonPorEstado.length) return null;
+
+    if (selectedStateUf) {
+      const estadoSelecionado = geoJsonPorEstado.find((item) => item.uf === selectedStateUf);
+      if (estadoSelecionado) return estadoSelecionado.uf;
+    }
+
     return [...geoJsonPorEstado].sort((a, b) => b.valor - a.valor)[0]?.uf ?? null;
-  }, [geoJsonPorEstado, mapViewMode]);
+  }, [geoJsonPorEstado, mapViewMode, selectedStateUf]);
+
+  const estadosComVendas = useMemo(
+    () => geoJsonPorEstado.filter((estado) => estado.valor > 0).sort((a, b) => b.valor - a.valor),
+    [geoJsonPorEstado],
+  );
+
+  useEffect(() => {
+    if (!estadosComVendas.length) {
+      setSelectedStateUf(null);
+      return;
+    }
+
+    if (!selectedStateUf || !estadosComVendas.some((estado) => estado.uf === selectedStateUf)) {
+      setSelectedStateUf(estadosComVendas[0].uf);
+    }
+  }, [estadosComVendas, selectedStateUf]);
+
+  const handleCityViewClick = () => {
+    const shouldAskState = estadosComVendas.length > 1;
+    if (shouldAskState) {
+      setIsStatePickerOpen(true);
+      return;
+    }
+
+    if (estadosComVendas.length === 1) {
+      setSelectedStateUf(estadosComVendas[0].uf);
+    }
+
+    setMapViewMode('cidade');
+  };
+
+  const handleStateSelection = (uf: string) => {
+    setSelectedStateUf(uf);
+    setMapViewMode('cidade');
+    setIsStatePickerOpen(false);
+  };
 
   const cidadesGeoJsonQuery = useQuery<CityGeoJsonFeatureCollection>({
     queryKey: ['ibge-cities-geojson', estadoFocoCidade],
@@ -604,13 +686,45 @@ export function SalesRegionCityMap({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => setMapViewMode('cidade')}
+            onClick={handleCityViewClick}
             className={`rounded-md px-3 transition-all duration-200 ${isCityView ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground' : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'}`}
           >
             Por Cidade
           </Button>
         </div>
       </div>
+
+      <Dialog open={isStatePickerOpen} onOpenChange={setIsStatePickerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Selecione o estado</DialogTitle>
+            <DialogDescription>
+              Encontramos vendas em mais de um estado. Escolha qual estado deseja analisar por cidade.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-2">
+            {estadosComVendas.map((estado) => (
+              <Button
+                key={estado.uf}
+                type="button"
+                variant={selectedStateUf === estado.uf ? 'default' : 'outline'}
+                className="justify-between"
+                onClick={() => handleStateSelection(estado.uf)}
+              >
+                <span>{ufToStateName[estado.uf] ?? estado.uf}</span>
+                <span className="text-xs opacity-80">{estado.uf}</span>
+              </Button>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setIsStatePickerOpen(false)}>
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
         <div className="relative h-[420px] overflow-hidden rounded-lg border bg-slate-100 dark:bg-slate-950">
@@ -736,7 +850,7 @@ export function SalesRegionCityMap({
                     {cidade.name}
                   </text>
                 ))}
-                
+
               </g>
             </svg>
           )}

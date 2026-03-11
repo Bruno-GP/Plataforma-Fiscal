@@ -9,6 +9,7 @@ import { RankingCard } from './components/RankingCard';
 import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
 import { EvolucaoChart } from './components/EvolucaoChart';
+import { AbcAnalysisSection } from './components/abcAnalysisSection';
 
 import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
 import { useAuth } from '@/contexts/AuthContext'
@@ -502,6 +503,7 @@ export default function Dashboard({
           loadingMessage="Carregando ranking..."
           emptyMessage="Nenhum cliente registrado."
           totalValue={formatCurrency(totalFaturamento)}
+          showAbcReport={false}
         />
         <RankingCard
           title="Top Produtos"
@@ -511,6 +513,7 @@ export default function Dashboard({
           loadingMessage="Carregando ranking..."
           emptyMessage="Nenhum produto registrado."
           totalValue={formatCurrency(totalFaturamento)}
+          showAbcReport={false}
         />
         <RankingCard
           title="Top Cidades"
@@ -520,6 +523,7 @@ export default function Dashboard({
           loadingMessage="Carregando ranking..."
           emptyMessage="Nenhuma cidade registrada."
           totalValue={formatCurrency(totalFaturamento)}
+          showAbcReport={false}
         />
       </div>
 
@@ -538,6 +542,47 @@ export default function Dashboard({
         topCidadesItems={cidadesMapaItems}
         totalFaturamento={totalFaturamento}
         formatCurrency={formatCurrency}
+      />
+
+       <AbcAnalysisSection
+        options={[
+          {
+            id: 'clientes',
+            label: 'Clientes',
+            title: 'Relatório ABC de Clientes',
+            description: 'Distribuição dos clientes por relevância no período selecionado',
+            items: topClientesItems.map((item) => ({
+              key: item.key,
+              label: item.title,
+              value: item.rawValue,
+              formattedValue: item.value,
+            })),
+          },
+          {
+            id: 'produtos',
+            label: 'Produtos',
+            title: 'Relatório ABC de Produtos',
+            description: 'Distribuição dos produtos por relevância no período selecionado',
+            items: topProdutosItems.map((item) => ({
+              key: item.key,
+              label: item.title,
+              value: item.rawValue,
+              formattedValue: item.value,
+            })),
+          },
+          {
+            id: 'cidades',
+            label: 'Cidades',
+            title: 'Relatório ABC de Cidades',
+            description: 'Distribuição das cidades por relevância no período selecionado',
+            items: topCidadesItems.map((item) => ({
+              key: item.key,
+              label: item.title,
+              value: item.rawValue,
+              formattedValue: item.value,
+            })),
+          },
+        ]}
       />
     </div>
   );

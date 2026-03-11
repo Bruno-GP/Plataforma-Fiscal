@@ -112,13 +112,14 @@ const App = () => (
                 }
               />
               <Route
-                path="/clientes"
+                path="/analise-clientes"
                 element={
                   <MainLayout>
                     <Clientes />
                   </MainLayout>
                 }
               />
+              <Route path="/clientes" element={<Navigate to="/analise-clientes" replace />} />
               {/* <Route
                 path="/atualizacoes"
                 element={

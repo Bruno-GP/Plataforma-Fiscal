@@ -9,7 +9,7 @@ import { NavLink } from '@/components/NavLink';
 
 const menuItemsBase = [
   { title: 'Análise de Vendas', url: '/analise-vendas', icon: LayoutDashboard },
-  { title: 'Clientes', url: '/clientes', icon: Users },
+  { title: 'Análise de Clientes', url: '/analise-clientes', icon: Users },
   // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
   // { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ]

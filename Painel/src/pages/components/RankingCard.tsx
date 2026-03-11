@@ -20,6 +20,7 @@ interface RankingCardProps {
   loadingMessage: string;
   emptyMessage: string;
   totalValue: string;
+  listClassName?: string;
 }
 
 export function RankingCard({
@@ -29,7 +30,8 @@ export function RankingCard({
   isLoading,
   loadingMessage,
   emptyMessage,
-  totalValue
+  totalValue,
+  listClassName
 }: RankingCardProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
@@ -87,48 +89,50 @@ export function RankingCard({
                   </span>
                 </div>
               </div>
-              {items.map((item) => {
-                const isSelected = item.key === selectedItem?.key;
-                const isMuted = hasSelection && !isSelected;
+              <div className={listClassName}>
+                {items.map((item) => {
+                  const isSelected = item.key === selectedItem?.key;
+                  const isMuted = hasSelection && !isSelected;
 
-                return (
-                  <button
-                    type="button"
-                    key={item.key}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedKey(item.key);
-                    }}
-                    className={`flex w-full items-center justify-between gap-3 border-b border-slate-800/70 pb-2 text-left transition-colors duration-300 last:border-0 ${
-                      isMuted ? 'text-slate-500' : 'hover:text-foreground/90'
-                    }`}
-                  >
-                    <div>
-                      <p
-                        className={`font-medium transition-colors duration-300 ${
+                  return (
+                    <button
+                      type="button"
+                      key={item.key}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedKey(item.key);
+                      }}
+                      className={`flex w-full items-center justify-between gap-3 border-b border-slate-800/70 pb-2 text-left transition-colors duration-300 last:border-0 ${
+                        isMuted ? 'text-slate-500' : 'hover:text-foreground/90'
+                      }`}
+                    >
+                      <div>
+                        <p
+                          className={`font-medium transition-colors duration-300 ${
+                            isSelected || !hasSelection ? 'text-foreground' : ''
+                          } ${isMuted ? 'text-slate-400' : ''}`}
+                        >
+                          {item.title}
+                        </p>
+                        <p
+                          className={`text-sm transition-colors duration-300 ${
+                            isMuted ? 'text-slate-500' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {item.subtitle}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-sm font-medium transition-colors duration-300 ${
                           isSelected || !hasSelection ? 'text-foreground' : ''
                         } ${isMuted ? 'text-slate-400' : ''}`}
                       >
-                        {item.title}
-                      </p>
-                      <p
-                        className={`text-sm transition-colors duration-300 ${
-                          isMuted ? 'text-slate-500' : 'text-muted-foreground'
-                        }`}
-                      >
-                        {item.subtitle}
-                      </p>
-                    </div>
-                    <span
-                      className={`text-sm font-medium transition-colors duration-300 ${
-                        isSelected || !hasSelection ? 'text-foreground' : ''
-                      } ${isMuted ? 'text-slate-400' : ''}`}
-                    >
-                      {item.value}
-                    </span>
-                  </button>
-                );
-              })}
+                        {item.value}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">{emptyMessage}</p>

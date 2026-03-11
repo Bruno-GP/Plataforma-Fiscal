@@ -1,33 +1,23 @@
-import { useState, useMemo } from "react";
-import { Search } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from 'react';
+import { Percent, TrendingUp, Users } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
-import { fetchNfeKpis, parseDecimal } from "@/services/nfe";
-import { fetchSpedKpis } from "@/services/sped";
-import { useAuth } from "@/contexts/AuthContext";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchNfeKpis, parseDecimal } from '@/services/nfe';
+import { fetchSpedKpis } from '@/services/sped';
+
+import { RankingCard } from './components/RankingCard';
+import { StatCard } from './components/StatCard';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   }).format(value);
+
+const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
   const digits = (value ?? "").replace(/\D/g, "");
@@ -64,12 +54,6 @@ export default function Clientes() {
     })[0];
   }, [kpisQuery.data]);
 
-  const topClientes = latestKpi?.kpis.top_clientes ?? [];
-  const filteredClientes = topClientes
-    .filter((client) =>
-      (client.cliente ?? "").toLowerCase().includes(search.toLowerCase()),
-    )
-    .slice(0, 10);
   const totalReceita = parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
   const totalImpostos =
     parseDecimal(latestKpi?.kpis.total_icms ?? 0) +
@@ -80,7 +64,64 @@ export default function Clientes() {
     totalReceita > 0
       ? ((totalReceita - totalImpostos) / totalReceita) * 100
       : 0;
-  const ticketMedioPorCliente = parseDecimal(latestKpi?.kpis.ticket_medio ?? 0);
+  
+  const topClientes = latestKpi?.kpis.top_clientes ?? [];
+  const filteredClientes = useMemo(
+    () =>
+      topClientes.filter((client) =>
+        (client.cliente ?? '').toLowerCase().includes(search.toLowerCase()),
+      ),
+    [search, topClientes],
+  );
+
+  const topClientesItems = filteredClientes.map((cliente, index) => {
+    const valorTotal = parseDecimal(cliente.valor_total ?? 0);
+    const percentual =
+      cliente.percentual !== undefined && cliente.percentual !== null
+        ? parseDecimal(cliente.percentual)
+        : totalReceita > 0
+          ? (valorTotal / totalReceita) * 100
+          : null;
+
+    return {
+      key: `${cliente.cliente}-${index}`,
+      title: cliente.cliente ?? 'Cliente não identificado',
+      subtitle:
+        percentual !== null
+          ? `${percentual.toFixed(1)}% do faturamento`
+          : 'Participação não informada',
+      value: formatCurrency(valorTotal),
+      rawValue: valorTotal,
+      percent: percentual,
+    };
+  });
+
+  const stats = [
+    {
+      title: 'Faturamento por Cliente',
+      value: formatCurrency(totalReceita),
+      description: 'Total no último período',
+      icon: TrendingUp,
+      trend: 'up',
+      accentClass: 'border-l-sky-500',
+    },
+    {
+      title: 'Total de Clientes no Ranking',
+      value: String(topClientes.length),
+      description: `${filteredClientes.length} após filtro`,
+      icon: Users,
+      trend: 'up',
+      accentClass: 'border-l-amber-400',
+    },
+    {
+      title: 'Margem',
+      value: `${margem.toFixed(1)}%`,
+      description: formatPercent(margem),
+      icon: Percent,
+      trend: margem >= 0 ? 'up' : 'down',
+      accentClass: 'border-l-violet-500',
+    },
+  ] as const;
 
   return (
     <div className="space-y-6 py-6">
@@ -100,134 +141,31 @@ export default function Clientes() {
         </Alert>
       )}
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Faturamento por Cliente
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {kpisQuery.isLoading
-                ? "Carregando..."
-                : formatCurrency(totalReceita)}
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Faturamento total no período
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Ticket Médio
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {kpisQuery.isLoading
-                ? "Carregando..."
-                : formatCurrency(ticketMedioPorCliente)}
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Ticket médio de vendas no período
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Margem
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {kpisQuery.isLoading ? "Carregando..." : `${margem.toFixed(1)}%`}
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Margem estimada sobre o faturamento
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {stats.map((stat) => (
+          <StatCard key={stat.title} {...stat} isLoading={kpisQuery.isLoading} />
+        ))}
       </div>
 
-      {/* Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Ranking de cliente</CardTitle>
-              <CardDescription>
-                Top 10 clientes por participação no faturamento
-              </CardDescription>
-            </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar clientes..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="max-h-[420px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead className="text-right">Faturamento</TableHead>
-                  <TableHead>Participação</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {kpisQuery.isLoading ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={3}
-                      className="py-8 text-center text-sm text-muted-foreground"
-                    >
-                      Carregando clientes...
-                    </TableCell>
-                  </TableRow>
-                ) : filteredClientes.length ? (
-                  filteredClientes.map((client, index) => (
-                    <TableRow key={`${client.cliente}-${index}`}>
-                      <TableCell className="font-medium">
-                        {client.cliente ?? "Cliente não identificado"}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(parseDecimal(client.valor_total ?? 0))}
-                      </TableCell>
-                      <TableCell>
-                        {totalReceita > 0
-                          ? `${((parseDecimal(client.valor_total ?? 0) / totalReceita) * 100).toFixed(1)}% do faturamento`
-                          : "--"}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={3}
-                      className="py-8 text-center text-sm text-muted-foreground"
-                    >
-                      Nenhum cliente encontrado.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-3">
+        <Input
+          placeholder="Buscar clientes..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="max-w-sm"
+        />
+
+        <RankingCard
+          title="Ranking de Clientes"
+          description="Lista de clientes por participação no faturamento"
+          items={topClientesItems}
+          isLoading={kpisQuery.isLoading}
+          loadingMessage="Carregando clientes..."
+          emptyMessage="Nenhum cliente encontrado."
+          totalValue={formatCurrency(totalReceita)}
+          listClassName="max-h-[420px] overflow-y-auto pr-1"
+        />
+      </div>
     </div>
   );
 }

@@ -422,33 +422,6 @@ export function SalesRegionCityMap({
     return { transform: `translate(${translateX}px, ${translateY}px) scale(${scale})` };
   }, [focoProjetado, mapViewMode]);
 
-  const cidadeMarkerData = useMemo(() => {
-    const maxPercentualCidade = Math.max(...topCidadesItems.map((item) => item.percent ?? 0), 0);
-
-    return geoJsonProjetado.flatMap((estado) => {
-      const cidadesEstado = cidadesPorEstado.get(estado.uf) ?? [];
-
-      return cidadesEstado.map((cidade, index) => {
-        const angle = (index / Math.max(cidadesEstado.length, 1)) * Math.PI * 2;
-        const distance = 0.9 + index * 0.35;
-        const x = estado.centroidX + Math.cos(angle) * distance;
-        const y = estado.centroidY + Math.sin(angle) * distance;
-        const intensidade = maxPercentualCidade > 0 ? cidade.percentual / maxPercentualCidade : 0;
-        const alpha = 0.25 + intensidade * 0.75;
-        const radius = 0.25 + intensidade * 0.55;
-
-        return {
-          ...cidade,
-          uf: estado.uf,
-          x,
-          y,
-          radius,
-          color: `hsl(var(--primary) / ${Math.min(alpha, 1).toFixed(2)})`,
-        };
-      });
-    });
-  }, [cidadesPorEstado, geoJsonProjetado, topCidadesItems]);
-
   const cityGeoJsonProjetado = useMemo(() => {
     if (mapViewMode !== 'cidade' || !projectionConfig || !cidadesGeoJsonQuery.data?.features?.length) {
       return [];
@@ -763,23 +736,7 @@ export function SalesRegionCityMap({
                     {cidade.name}
                   </text>
                 ))}
-
-                {isCityView && cidadeMarkerData.map((cidade) => (
-                  <g key={`marker-${cidade.key}`}>
-                    <circle
-                      cx={cidade.x}
-                      cy={cidade.y}
-                      r={cidade.radius}
-                      fill={getCityHeat(cidade.percentual)}
-                      stroke="hsl(var(--background))"
-                      strokeWidth={0.12}
-                    >
-                      <title>
-                        {`${cidade.nome} - ${cidade.uf}: ${cidade.percentual.toFixed(1)}% (${formatCurrency(cidade.valor)})`}
-                      </title>
-                    </circle>
-                  </g>
-                ))}
+                
               </g>
             </svg>
           )}

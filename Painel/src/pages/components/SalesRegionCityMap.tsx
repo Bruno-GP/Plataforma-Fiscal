@@ -511,6 +511,9 @@ export function SalesRegionCityMap({
 
     const topCitySalesByName = new Map<string, number>();
     topCidadesItems.forEach((cidade) => {
+      const ufCidade = extractUfFromCity(cidade.title);
+      if (!ufCidade || ufCidade !== estadoFocoCidade) return;
+
       topCitySalesByName.set(normalizeLabel(extractCityName(cidade.title)), cidade.rawValue);
     });
 
@@ -561,6 +564,13 @@ export function SalesRegionCityMap({
   const cidadesComVendasOrdenadas = useMemo(
     () => [...cityGeoJsonProjetado].filter((city) => city.value > 0).sort((a, b) => b.value - a.value),
     [cityGeoJsonProjetado],
+  );
+
+  const topCidadesDoEstadoSelecionado = useMemo(
+    () => topCidadesItems
+      .filter((item) => extractUfFromCity(item.title) === estadoFocoCidade)
+      .sort((a, b) => b.rawValue - a.rawValue),
+    [estadoFocoCidade, topCidadesItems],
   );
 
   const cityLabelData = useMemo(
@@ -862,7 +872,7 @@ export function SalesRegionCityMap({
 
         <div className="space-y-3">
           {isCityView
-            ? topCidadesItems.map((item) => (
+            ? topCidadesDoEstadoSelecionado.map((item) => (
               <div key={item.key} className="rounded-md border bg-background p-3">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="font-medium">{item.title}</span>

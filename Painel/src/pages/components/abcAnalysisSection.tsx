@@ -29,7 +29,7 @@ interface AbcAnalysisSectionProps {
 export function AbcAnalysisSection({
   options,
   title = 'Relatório ABC',
-  description = 'Analise a classificação ABC no final da página e alterne entre os grupos.',
+  description = '',
 }: AbcAnalysisSectionProps) {
   const [selectedId, setSelectedId] = useState(options[0]?.id ?? '');
 

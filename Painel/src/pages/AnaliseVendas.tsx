@@ -504,6 +504,7 @@ export default function Dashboard({
           emptyMessage="Nenhum cliente registrado."
           totalValue={formatCurrency(totalFaturamento)}
           showAbcReport={false}
+          showAbcClassification={false}
         />
         <RankingCard
           title="Top Produtos"
@@ -514,6 +515,7 @@ export default function Dashboard({
           emptyMessage="Nenhum produto registrado."
           totalValue={formatCurrency(totalFaturamento)}
           showAbcReport={false}
+          showAbcClassification={false}
         />
         <RankingCard
           title="Top Cidades"
@@ -524,6 +526,7 @@ export default function Dashboard({
           emptyMessage="Nenhuma cidade registrada."
           totalValue={formatCurrency(totalFaturamento)}
           showAbcReport={false}
+          showAbcClassification={false}
         />
       </div>
 

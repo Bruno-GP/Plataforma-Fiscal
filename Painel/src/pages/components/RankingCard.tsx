@@ -27,6 +27,7 @@ interface RankingCardProps {
   totalValue: string;
   listClassName?: string;
   showAbcReport?: boolean;
+  showAbcClassification?: boolean;
 }
 
 export function RankingCard({
@@ -39,13 +40,17 @@ export function RankingCard({
   totalValue,
   listClassName,
   showAbcReport = true,
+  showAbcClassification = true
 }: RankingCardProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
-  const abcCurveMap = useMemo(
-    () => calculateAbcCurve(items.map((item) => ({ key: item.key, value: item.rawValue }))),
-    [items],
-  );
+  const abcCurveMap = useMemo(() => {
+    if (!showAbcClassification) {
+      return new Map();
+    }
+
+    return calculateAbcCurve(items.map((item) => ({ key: item.key, value: item.rawValue })));
+  }, [items, showAbcClassification]);
 
   useEffect(() => {
     if (!items.length) {
@@ -106,7 +111,7 @@ export function RankingCard({
                   const isSelected = item.key === selectedItem?.key;
                   const isMuted = hasSelection && !isSelected;
 
-                  const abcData = abcCurveMap.get(item.key);
+                  const abcData = showAbcClassification ? abcCurveMap.get(item.key) : null;
 
                   const abcBadgeClassName = abcData?.abcClass === 'A'
                     ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300'

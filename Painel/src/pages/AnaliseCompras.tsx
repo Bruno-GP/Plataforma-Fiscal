@@ -286,6 +286,8 @@ export default function AnaliseFiscal() {
           loadingMessage="Carregando ranking de fornecedores..."
           emptyMessage="Sem dados para o período selecionado."
           totalValue={formatCurrency(currentTotalComprado)}
+          showAbcReport={false}
+          showAbcClassification={false}
         />
 
         <RankingCard
@@ -308,6 +310,8 @@ export default function AnaliseFiscal() {
           loadingMessage="Carregando ranking de produtos..."
           emptyMessage="Sem dados para o período selecionado."
           totalValue={formatCurrency(currentTotalComprado)}
+          showAbcReport={false}
+          showAbcClassification={false}
         />
 
         <RankingCard
@@ -331,6 +335,8 @@ export default function AnaliseFiscal() {
           loadingMessage="Carregando ranking de produtos por quantidade..."
           emptyMessage="Sem dados para o período selecionado."
           totalValue={formatCurrency(currentTotalComprado)}
+          showAbcReport={false}
+          showAbcClassification={false}
         />
       </div>
 

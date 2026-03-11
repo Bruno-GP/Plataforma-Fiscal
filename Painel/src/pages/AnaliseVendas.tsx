@@ -547,7 +547,7 @@ export default function Dashboard({
         formatCurrency={formatCurrency}
       />
 
-       <AbcAnalysisSection
+       {/* <AbcAnalysisSection
         options={[
           {
             id: 'clientes',
@@ -586,7 +586,7 @@ export default function Dashboard({
             })),
           },
         ]}
-      />
+      /> */}
     </div>
   );
 }

@@ -254,6 +254,8 @@ const latestKpi = sortedResultados;
           emptyMessage="Nenhum cliente encontrado."
           totalValue={formatCurrency(totalReceita)}
           listClassName="max-h-[420px] overflow-y-auto pr-1"
+          showAbcReport={false}
+          showAbcClassification={false}
         />
       </div>
     </div>

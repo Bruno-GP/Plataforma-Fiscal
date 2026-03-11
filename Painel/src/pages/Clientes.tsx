@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Percent, TrendingUp, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchNfeKpis, parseDecimal } from '@/services/nfe';
 import { fetchSpedKpis } from '@/services/sped';
+import { monthLabels } from '@/services/utils';
 
+import { Header } from './components/Header';
 import { RankingCard } from './components/RankingCard';
 import { StatCard } from './components/StatCard';
 
@@ -26,6 +28,8 @@ const hasValidEmitenteCnpj = (value: string | undefined) => {
 
 export default function Clientes() {
   const [search, setSearch] = useState("");
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [selectedMonth, setSelectedMonth] = useState('all');
   const { user } = useAuth();
   const usaSped = Boolean(user?.tem_sped);
   
@@ -36,13 +40,13 @@ export default function Clientes() {
     queryKey: ["kpis-clientes", usaSped ? "sped" : "xml", emitenteCnpj],
     queryFn: () =>
       usaSped
-        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 12 })
-        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 12 }),
+        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
+        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
-  const latestKpi = useMemo(() => {
+  const sortedResultados = useMemo(() => {
     const resultados = kpisQuery.data?.resultados ?? [];
     return [...resultados].sort((a, b) => {
       const anoA = a.periodo_ano ?? 0;
@@ -54,18 +58,101 @@ export default function Clientes() {
     })[0];
   }, [kpisQuery.data]);
 
-  const totalReceita = parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
+const latestKpi = sortedResultados;
+
+  const availableYears = useMemo(() => {
+    const resultados = kpisQuery.data?.resultados ?? [];
+    const years = new Set<number>();
+
+    resultados.forEach((item) => {
+      if (item.periodo_ano) {
+        years.add(item.periodo_ano);
+      }
+    });
+
+    return [...years].sort((a, b) => b - a);
+  }, [kpisQuery.data]);
+
+  useEffect(() => {
+    if (!availableYears.length) {
+      return;
+    }
+
+    const parsedYear = Number.parseInt(selectedYear, 10);
+    if (!availableYears.includes(parsedYear)) {
+      setSelectedYear(String(availableYears[0]));
+    }
+  }, [availableYears, selectedYear]);
+
+  const safeYear = availableYears.length
+    ? Number.parseInt(selectedYear, 10)
+    : (latestKpi?.periodo_ano ?? new Date().getFullYear());
+
+  const selectedPeriodKpis = useMemo(() => {
+    const resultados = kpisQuery.data?.resultados ?? [];
+    const filteredByYear = resultados.filter((item) => item.periodo_ano === safeYear);
+
+    if (selectedMonth !== 'all') {
+      const selectedMonthNumber = Number.parseInt(selectedMonth, 10);
+      return filteredByYear.find((item) => item.periodo_mes === selectedMonthNumber)?.kpis;
+    }
+
+    if (!filteredByYear.length) {
+      return undefined;
+    }
+
+    const topClientesMap = new Map<string, number>();
+
+    const aggregated = filteredByYear.reduce(
+      (acc, item) => {
+        const kpi = item.kpis;
+        acc.total_vendas += parseDecimal(kpi.total_vendas ?? 0);
+        acc.total_icms += parseDecimal(kpi.total_icms ?? 0);
+        acc.total_ipi += parseDecimal(kpi.total_ipi ?? 0);
+        acc.total_pis += parseDecimal(kpi.total_pis ?? 0);
+        acc.total_cofins += parseDecimal(kpi.total_cofins ?? 0);
+
+        (kpi.top_clientes ?? []).forEach((cliente) => {
+          const name = cliente.cliente ?? 'Cliente não identificado';
+          const value = parseDecimal(cliente.valor_total ?? 0);
+          topClientesMap.set(name, (topClientesMap.get(name) ?? 0) + value);
+        });
+
+        return acc;
+      },
+      {
+        total_vendas: 0,
+        total_icms: 0,
+        total_ipi: 0,
+        total_pis: 0,
+        total_cofins: 0,
+      },
+    );
+
+    const topClientes = [...topClientesMap.entries()]
+      .sort(([, valorA], [, valorB]) => valorB - valorA)
+      .slice(0, 10)
+      .map(([cliente, valor_total]) => ({ cliente, valor_total, percentual: undefined }));
+
+    return {
+      ...aggregated,
+      top_clientes: topClientes,
+    };
+  }, [kpisQuery.data, safeYear, selectedMonth]);
+
+  const totalReceita = parseDecimal(selectedPeriodKpis?.total_vendas ?? 0);
+
   const totalImpostos =
-    parseDecimal(latestKpi?.kpis.total_icms ?? 0) +
-    parseDecimal(latestKpi?.kpis.total_ipi ?? 0) +
-    parseDecimal(latestKpi?.kpis.total_pis ?? 0) +
-    parseDecimal(latestKpi?.kpis.total_cofins ?? 0);
+    parseDecimal(selectedPeriodKpis?.total_icms ?? 0) +
+    parseDecimal(selectedPeriodKpis?.total_ipi ?? 0) +
+    parseDecimal(selectedPeriodKpis?.total_pis ?? 0) +
+    parseDecimal(selectedPeriodKpis?.total_cofins ?? 0);
   const margem =
     totalReceita > 0
       ? ((totalReceita - totalImpostos) / totalReceita) * 100
       : 0;
   
-  const topClientes = latestKpi?.kpis.top_clientes ?? [];
+  const topClientes = useMemo(() => selectedPeriodKpis?.top_clientes ?? [], [selectedPeriodKpis]);
   const filteredClientes = useMemo(
     () =>
       topClientes.filter((client) =>
@@ -125,12 +212,16 @@ export default function Clientes() {
 
   return (
     <div className="space-y-6 py-6">
-      <div>
-        <h1 className="text-3xl font-bold">Análise de Clientes</h1>
-        <p className="text-muted-foreground">
-          Visão consolidada de faturamento e desempenho
-        </p>
-      </div>
+      <Header
+        title="Análise de Clientes"
+        subtitle="Visão consolidada de faturamento e desempenho"
+        selectedMonth={selectedMonth}
+        selectedYear={String(safeYear)}
+        availableYears={availableYears.length ? availableYears : [safeYear]}
+        monthLabels={monthLabels}
+        onMonthChange={setSelectedMonth}
+        onYearChange={setSelectedYear}
+      />
 
       {kpisQuery.isError && (
         <Alert variant="destructive">

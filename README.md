@@ -36,6 +36,7 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe), consolidar 
 ## Sumário
 
 - [Requisitos](#requisitos)
+- [Guia rápido da plataforma (API + Painel)](#guia-rápido-da-plataforma-api--painel)
 - [Instalação e execução](#instalação-e-execução)
 - [Configuração por variáveis de ambiente](#configuração-por-variáveis-de-ambiente)
 - [Preparação do banco de dados](#preparação-do-banco-de-dados)
@@ -67,6 +68,43 @@ API em FastAPI para processar XMLs de Nota Fiscal eletrônica (NFe), consolidar 
 - PostgreSQL (necessário para persistência e consultas de KPIs)
 
 ---
+
+## Guia rápido da plataforma (API + Painel)
+
+Se você quer subir todo o ambiente local com o mínimo de passos:
+
+1. **Prepare o banco PostgreSQL** e aplique os scripts de schema em `API/app/file/sql/`.
+2. **Suba a API**:
+
+  ```bash
+  pip install -r API/app/requirements.txt
+  cd API
+  python -m uvicorn app.main:app --reload
+  ```
+
+3. **Suba o painel em outro terminal**:
+
+  ```bash
+  cd Painel
+  yarn install
+  yarn dev
+  ```
+
+4. **Configure a conexão do painel com a API** em `Painel/.env`:
+
+  ```bash
+  VITE_API_URL=http://localhost:8000
+  ```
+
+5. **Acesse os serviços**:
+  - API: `http://localhost:8000`
+  - Swagger: `http://localhost:8000/docs`
+  - Painel: `http://localhost:5173`
+
+> O painel normaliza `VITE_API_URL` e aceita o valor com ou sem o sufixo `/api`.
+
+---
+
 
 ## Instalação e execução
 

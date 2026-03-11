@@ -10,11 +10,12 @@ export interface AbcResultItem {
   abcClass: AbcClass;
   cumulativePercent: number;
   participationPercent: number;
+  value: number;
 }
 
 const sanitizeValue = (value: number) => (Number.isFinite(value) && value > 0 ? value : 0);
 
-export const calculateAbcCurve = (items: AbcInputItem[]): Map<string, AbcResultItem> => {
+export const calculateAbcCurveList = (items: AbcInputItem[]): AbcResultItem[] => {
   const sortedItems = [...items]
     .map((item) => ({ ...item, value: sanitizeValue(item.value) }))
     .filter((item) => item.value > 0)
@@ -23,31 +24,30 @@ export const calculateAbcCurve = (items: AbcInputItem[]): Map<string, AbcResultI
   const totalValue = sortedItems.reduce((acc, item) => acc + item.value, 0);
 
   if (!totalValue) {
-    return new Map();
+    return [];
   }
 
   let cumulativePercent = 0;
 
-  return new Map(
-    sortedItems.map((item, index) => {
-      const participationPercent = (item.value / totalValue) * 100;
-      cumulativePercent += participationPercent;
+  return sortedItems.map((item, index) => {
+    const participationPercent = (item.value / totalValue) * 100;
+    cumulativePercent += participationPercent;
 
-      const abcClass: AbcClass = cumulativePercent <= 80 || index === 0
-        ? 'A'
-        : cumulativePercent <= 95
-          ? 'B'
-          : 'C';
+    const abcClass: AbcClass = cumulativePercent <= 80 || index === 0
+      ? 'A'
+      : cumulativePercent <= 95
+        ? 'B'
+        : 'C';
 
-      return [
-        item.key,
-        {
-          key: item.key,
-          abcClass,
-          cumulativePercent,
-          participationPercent,
-        },
-      ];
-    }),
-  );
+    return {
+      key: item.key,
+      abcClass,
+      cumulativePercent,
+      participationPercent,
+      value: item.value,
+    };
+  });
 };
+
+export const calculateAbcCurve = (items: AbcInputItem[]): Map<string, AbcResultItem> =>
+  new Map(calculateAbcCurveList(items).map((item) => [item.key, item]));

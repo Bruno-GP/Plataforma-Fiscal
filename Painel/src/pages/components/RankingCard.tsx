@@ -6,6 +6,8 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { calculateAbcCurve } from '@/services/analysisABC';
 
+import { AbcAnalysisReport } from '@/pages/components/abcAnalysisReport';
+
 interface RankingItem {
   key: string;
   title: string;
@@ -24,6 +26,7 @@ interface RankingCardProps {
   emptyMessage: string;
   totalValue: string;
   listClassName?: string;
+  showAbcReport?: boolean;
 }
 
 export function RankingCard({
@@ -34,7 +37,8 @@ export function RankingCard({
   loadingMessage,
   emptyMessage,
   totalValue,
-  listClassName
+  listClassName,
+  showAbcReport = true,
 }: RankingCardProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
@@ -160,6 +164,19 @@ export function RankingCard({
                   );
                 })}
               </div>
+
+              {showAbcReport && (
+                <AbcAnalysisReport
+                  title="Relatório ABC"
+                  description="Distribuição dos itens por relevância no período"
+                  items={items.map((item) => ({
+                    key: item.key,
+                    label: item.title,
+                    value: item.rawValue,
+                    formattedValue: item.value,
+                  }))}
+                />
+              )}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">{emptyMessage}</p>

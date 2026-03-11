@@ -186,7 +186,7 @@ class SpedConsultaService:
         cidades_agrupadas.items(),
         key=lambda x: x[1],
         reverse=True,
-      )[:5]
+      )
     ]
 
   def _top_produtos(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:

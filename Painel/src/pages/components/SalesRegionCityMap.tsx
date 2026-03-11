@@ -871,6 +871,16 @@ export function SalesRegionCityMap({
         </div>
 
         <div className="space-y-3">
+          {isCityView && selectedCityData && (
+            <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Cidade selecionada no mapa</p>
+              <p className="text-sm font-semibold text-foreground">{selectedCityData.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {formatCurrency(selectedCityData.value)} • {selectedCityData.percentual.toFixed(1)}% do total
+              </p>
+            </div>
+          )}
+
           {isCityView
             ? topCidadesDoEstadoSelecionado.map((item) => (
               <div key={item.key} className="rounded-md border bg-background p-3">
@@ -900,16 +910,6 @@ export function SalesRegionCityMap({
                 <p className="text-sm text-muted-foreground">{formatCurrency(item.valor)}</p>
               </div>
             ))}
-
-          {isCityView && selectedCityData && (
-            <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Cidade selecionada no mapa</p>
-              <p className="text-sm font-semibold text-foreground">{selectedCityData.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {formatCurrency(selectedCityData.value)} • {selectedCityData.percentual.toFixed(1)}% do total
-              </p>
-            </div>
-          )}
 
           {!isCityView && (diagnosticoRegioes.totalOutrasLocalidades > 0 || diagnosticoRegioes.totalSemUf > 0) && (
             <div className="rounded-md border border-amber-300/40 bg-amber-500/5 p-3">

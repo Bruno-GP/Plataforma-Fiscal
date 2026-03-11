@@ -190,6 +190,7 @@ export function SalesRegionCityMap({
       ['Centro-Oeste', 0],
       ['Sudeste', 0],
       ['Sul', 0],
+      ['Outras localidades', 0],
       ['Não identificado', 0],
     ]);
 
@@ -202,12 +203,12 @@ export function SalesRegionCityMap({
     const totalRegional = Math.max(totalFaturamento, 0);
 
     const totalMapeado = [...regiaoMap.values()].reduce((acc, valor) => acc + valor, 0);
-    const complementoNaoIdentificado = Math.max(totalRegional - totalMapeado, 0);
+    const complementoOutrasLocalidades = Math.max(totalRegional - totalMapeado, 0);
 
-    if (complementoNaoIdentificado > 0) {
+    if (complementoOutrasLocalidades > 0) {
       regiaoMap.set(
-        'Não identificado',
-        (regiaoMap.get('Não identificado') ?? 0) + complementoNaoIdentificado,
+        'Outras localidades',
+        (regiaoMap.get('Outras localidades') ?? 0) + complementoOutrasLocalidades,
       );
     }
 
@@ -534,7 +535,15 @@ export function SalesRegionCityMap({
   );
 
   const dadosRegiaoMapa = useMemo(() => {
-    const ordemRegioes = ['Norte', 'Nordeste', 'Centro-Oeste', 'Sudeste', 'Sul', 'Não identificado'];
+    const ordemRegioes = [
+      'Norte',
+      'Nordeste',
+      'Centro-Oeste',
+      'Sudeste',
+      'Sul',
+      'Outras localidades',
+      'Não identificado',
+    ];
 
     const dadosOrdenados = ordemRegioes
       .map((regiao) => vendasPorRegiao.find((item) => item.regiao === regiao) ?? {
@@ -546,6 +555,29 @@ export function SalesRegionCityMap({
 
     return dadosOrdenados.sort((a, b) => b.percentual - a.percentual);
   }, [vendasPorRegiao]);
+
+  const diagnosticoRegioes = useMemo(() => {
+    const totalTopCidades = topCidadesItems.reduce((acc, item) => acc + item.rawValue, 0);
+
+    const cidadesSemUf = topCidadesItems
+      .filter((item) => !extractUfFromCity(item.title))
+      .map((item) => ({
+        key: item.key,
+        title: item.title,
+        rawValue: item.rawValue,
+      }))
+      .sort((a, b) => b.rawValue - a.rawValue);
+
+    const totalSemUf = cidadesSemUf.reduce((acc, item) => acc + item.rawValue, 0);
+    const totalOutrasLocalidades = Math.max(totalFaturamento - totalTopCidades, 0);
+
+    return {
+      totalTopCidades,
+      totalOutrasLocalidades,
+      totalSemUf,
+      cidadesSemUf,
+    };
+  }, [topCidadesItems, totalFaturamento]);
 
   const maiorPercentualRegiao = useMemo(
     () => Math.max(...dadosRegiaoMapa.map((item) => item.percentual), 0),
@@ -797,6 +829,38 @@ export function SalesRegionCityMap({
               </p>
             </div>
           )}
+
+          {!isCityView && (diagnosticoRegioes.totalOutrasLocalidades > 0 || diagnosticoRegioes.totalSemUf > 0) && (
+            <div className="rounded-md border border-amber-300/40 bg-amber-500/5 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Como identificar os valores fora do mapa por UF</p>
+
+              {diagnosticoRegioes.totalOutrasLocalidades > 0 && (
+                <p className="mt-1 text-sm text-foreground">
+                  <span className="font-semibold">Outras localidades:</span> {formatCurrency(diagnosticoRegioes.totalOutrasLocalidades)}
+                  {' '}não está detalhado por cidade/UF no payload de top cidades.
+                </p>
+              )}
+
+              {diagnosticoRegioes.totalSemUf > 0 && (
+                <div className="mt-2">
+                  <p className="text-sm text-foreground">
+                    <span className="font-semibold">Não identificado:</span> {formatCurrency(diagnosticoRegioes.totalSemUf)}
+                    {' '}vem de cidades sem UF reconhecível no nome.
+                  </p>
+
+                  <div className="mt-2 space-y-1">
+                    {diagnosticoRegioes.cidadesSemUf.slice(0, 5).map((cidade) => (
+                      <div key={cidade.key} className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span className="truncate">{cidade.title}</span>
+                        <span className="whitespace-nowrap">{formatCurrency(cidade.rawValue)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
         </div>
       </div>
     </section>

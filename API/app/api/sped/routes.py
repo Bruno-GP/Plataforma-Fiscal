@@ -83,7 +83,7 @@ def consultar_clientes_sped(
   emitente_cnpj: str = Query(..., min_length=14, max_length=20),
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
-  limite: int = Query(default=200, ge=1, le=1000),
+  limite: int | None = Query(default=None, ge=1, le=1000),
   offset: int = Query(default=0, ge=0),
 ):
   _validar_empresa_sped(emitente_cnpj)

@@ -221,7 +221,7 @@ class SpedConsultaService:
     emitente_cnpj: str,
     periodo_ano: Optional[int] = None,
     periodo_mes: Optional[int] = None,
-    limite: int = 200,
+    limite: Optional[int] = None,
     offset: int = 0,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
@@ -259,8 +259,7 @@ class SpedConsultaService:
           tuple(params),
         )
 
-        cur.execute(
-          f"""
+        sql_clientes = f"""
           SELECT
             COALESCE(NULLIF(TRIM(p.nome), ''), 'Cliente não identificado') AS cliente,
             COALESCE(SUM(d.valor_total), 0) AS valor_total
@@ -269,10 +268,13 @@ class SpedConsultaService:
           WHERE {where_clause}
           GROUP BY 1
           ORDER BY 2 DESC, 1 ASC
-          LIMIT %s OFFSET %s
-          """,
-          tuple([*params, limite, offset]),
-        )
+        """
+        query_params: list[object] = [*params]
+        if limite is not None:
+          sql_clientes += "\n LIMIT %s OFFSET %s"
+          query_params.extend([limite, offset])
+
+        cur.execute(sql_clientes, tuple(query_params))
 
         clientes_rows = cur.fetchall()
 

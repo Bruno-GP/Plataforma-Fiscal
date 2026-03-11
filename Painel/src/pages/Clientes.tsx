@@ -1,21 +1,19 @@
-import { useState, useMemo } from 'react';
-import { Search, MoreHorizontal } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useMemo } from "react";
+import { Search } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
-import { fetchNfeKpis, parseDecimal } from '@/services/nfe';
-import { fetchSpedKpis } from '@/services/sped';
-import { useAuth } from '@/contexts/AuthContext';
-
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { fetchNfeKpis, parseDecimal } from "@/services/nfe";
+import { fetchSpedKpis } from "@/services/sped";
+import { useAuth } from "@/contexts/AuthContext";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -26,18 +24,18 @@ import {
 } from '@/components/ui/table';
 
 const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
+  new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
   }).format(value);
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? '').replace(/\D/g, '');
-  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
+  const digits = (value ?? "").replace(/\D/g, "");
+  return digits.length === 14 && ![...digits].every((digit) => digit === "0");
 };
 
 export default function Clientes() {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const { user } = useAuth();
   const usaSped = Boolean(user?.tem_sped);
   
@@ -45,7 +43,7 @@ export default function Clientes() {
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
 
   const kpisQuery = useQuery({
-    queryKey: ['kpis-clientes', usaSped ? 'sped' : 'xml', emitenteCnpj],
+    queryKey: ["kpis-clientes", usaSped ? "sped" : "xml", emitenteCnpj],
     queryFn: () =>
       usaSped
         ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 12 })
@@ -67,20 +65,30 @@ export default function Clientes() {
   }, [kpisQuery.data]);
 
   const topClientes = latestKpi?.kpis.top_clientes ?? [];
-  const filteredClientes = topClientes.filter((client) =>
-    (client.cliente ?? '').toLowerCase().includes(search.toLowerCase())
-  );
-  const totalClientes = topClientes.length;
+  const filteredClientes = topClientes
+    .filter((client) =>
+      (client.cliente ?? "").toLowerCase().includes(search.toLowerCase()),
+    )
+    .slice(0, 10);
   const totalReceita = parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
-  const faturamentoMedioPorCliente = totalClientes ? totalReceita / totalClientes : 0;
+  const totalImpostos =
+    parseDecimal(latestKpi?.kpis.total_icms ?? 0) +
+    parseDecimal(latestKpi?.kpis.total_ipi ?? 0) +
+    parseDecimal(latestKpi?.kpis.total_pis ?? 0) +
+    parseDecimal(latestKpi?.kpis.total_cofins ?? 0);
+  const margem =
+    totalReceita > 0
+      ? ((totalReceita - totalImpostos) / totalReceita) * 100
+      : 0;
   const ticketMedioPorCliente = parseDecimal(latestKpi?.kpis.ticket_medio ?? 0);
-  const topCliente = topClientes[0];
 
   return (
     <div className="space-y-6 py-6">
       <div>
-        <h1 className="text-3xl font-bold">Clientes</h1>
-        <p className="text-muted-foreground">Gerencie sua base de clientes</p>
+        <h1 className="text-3xl font-bold">Análise de Clientes</h1>
+        <p className="text-muted-foreground">
+          Visão consolidada de faturamento e desempenho
+        </p>
       </div>
 
       {kpisQuery.isError && (
@@ -102,46 +110,48 @@ export default function Clientes() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {kpisQuery.isLoading ? 'Carregando...' : formatCurrency(faturamentoMedioPorCliente)}
-            </div>
-
-            <p className="text-xs text-muted-foreground">Média de faturamento por cliente no período</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Top Clientes (Ranking)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
               {kpisQuery.isLoading
-                ? 'Carregando...'
-                : topCliente?.cliente ?? 'Sem dados de ranking'}
+                ? "Carregando..."
+                : formatCurrency(totalReceita)}
             </div>
 
             <p className="text-xs text-muted-foreground">
-              {kpisQuery.isLoading
-                ? 'Carregando...'
-                : topCliente
-                  ? formatCurrency(parseDecimal(topCliente.valor_total ?? 0))
-                  : '--'}
+              Faturamento total no período
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Ticket Médio por Cliente
+              Ticket Médio
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {kpisQuery.isLoading ? 'Carregando...' : formatCurrency(ticketMedioPorCliente)}
+              {kpisQuery.isLoading
+                ? "Carregando..."
+                : formatCurrency(ticketMedioPorCliente)}
             </div>
 
-            <p className="text-xs text-muted-foreground">Ticket médio de vendas no período</p>
+            <p className="text-xs text-muted-foreground">
+              Ticket médio de vendas no período
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Margem
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {kpisQuery.isLoading ? "Carregando..." : `${margem.toFixed(1)}%`}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Margem estimada sobre o faturamento
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -151,8 +161,10 @@ export default function Clientes() {
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle>Lista de Clientes</CardTitle>
-              <CardDescription>Visualize e gerencie todos os clientes</CardDescription>
+              <CardTitle>Ranking de cliente</CardTitle>
+              <CardDescription>
+                Top 10 clientes por participação no faturamento
+              </CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -166,59 +178,54 @@ export default function Clientes() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead className="text-right">Receita Total</TableHead>
-                <TableHead>Participação</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {kpisQuery.isLoading ? (
+          <div className="max-h-[420px] overflow-y-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
-                    Carregando clientes...
-                  </TableCell>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="text-right">Faturamento</TableHead>
+                  <TableHead>Participação</TableHead>
                 </TableRow>
-              ) : filteredClientes.length ? (
-                filteredClientes.map((client, index) => (
-                  <TableRow key={`${client.cliente}-${index}`}>
-                    <TableCell className="font-medium">{client.cliente ?? 'Cliente não identificado'}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(parseDecimal(client.valor_total ?? 0))}
-                    </TableCell>
-                    <TableCell>
-                      {client.percentual !== undefined
-                        ? `${parseDecimal(client.percentual).toFixed(1)}%`
-                        : '--'}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Ver detalhes</DropdownMenuItem>
-                          <DropdownMenuItem>Editar</DropdownMenuItem>
-                          <DropdownMenuItem>Histórico</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              </TableHeader>
+              <TableBody>
+                {kpisQuery.isLoading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={3}
+                      className="py-8 text-center text-sm text-muted-foreground"
+                    >
+                      Carregando clientes...
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
-                    Nenhum cliente encontrado.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ) : filteredClientes.length ? (
+                  filteredClientes.map((client, index) => (
+                    <TableRow key={`${client.cliente}-${index}`}>
+                      <TableCell className="font-medium">
+                        {client.cliente ?? "Cliente não identificado"}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(parseDecimal(client.valor_total ?? 0))}
+                      </TableCell>
+                      <TableCell>
+                        {totalReceita > 0
+                          ? `${((parseDecimal(client.valor_total ?? 0) / totalReceita) * 100).toFixed(1)}% do faturamento`
+                          : "--"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={3}
+                      className="py-8 text-center text-sm text-muted-foreground"
+                    >
+                      Nenhum cliente encontrado.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

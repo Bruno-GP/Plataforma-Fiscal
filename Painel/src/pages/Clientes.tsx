@@ -131,7 +131,6 @@ const latestKpi = sortedResultados;
 
     const topClientes = [...topClientesMap.entries()]
       .sort(([, valorA], [, valorB]) => valorB - valorA)
-      .slice(0, 10)
       .map(([cliente, valor_total]) => ({ cliente, valor_total, percentual: undefined }));
 
     return {

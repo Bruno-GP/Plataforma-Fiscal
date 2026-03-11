@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 
+import { Badge } from '@/components/ui/badge';
+import { calculateAbcCurve } from '@/services/analysisABC';
+
 interface RankingItem {
   key: string;
   title: string;
@@ -34,6 +37,11 @@ export function RankingCard({
   listClassName
 }: RankingCardProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  const abcCurveMap = useMemo(
+    () => calculateAbcCurve(items.map((item) => ({ key: item.key, value: item.rawValue }))),
+    [items],
+  );
 
   useEffect(() => {
     if (!items.length) {
@@ -94,6 +102,14 @@ export function RankingCard({
                   const isSelected = item.key === selectedItem?.key;
                   const isMuted = hasSelection && !isSelected;
 
+                  const abcData = abcCurveMap.get(item.key);
+
+                  const abcBadgeClassName = abcData?.abcClass === 'A'
+                    ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300'
+                    : abcData?.abcClass === 'B'
+                      ? 'border-amber-500/40 bg-amber-500/20 text-amber-300'
+                      : 'border-sky-500/40 bg-sky-500/20 text-sky-300';
+
                   return (
                     <button
                       type="button"
@@ -107,19 +123,30 @@ export function RankingCard({
                       }`}
                     >
                       <div>
-                        <p
-                          className={`font-medium transition-colors duration-300 ${
-                            isSelected || !hasSelection ? 'text-foreground' : ''
-                          } ${isMuted ? 'text-slate-400' : ''}`}
-                        >
-                          {item.title}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p
+                            className={`font-medium transition-colors duration-300 ${
+                              isSelected || !hasSelection ? 'text-foreground' : ''
+                            } ${isMuted ? 'text-slate-400' : ''}`}
+                          >
+                            {item.title}
+                          </p>
+                          {abcData && (
+                            <Badge
+                              variant="outline"
+                              className={`h-5 rounded-md px-1.5 py-0 text-[10px] ${abcBadgeClassName}`}
+                            >
+                              Classe {abcData.abcClass}
+                            </Badge>
+                          )}
+                        </div>
                         <p
                           className={`text-sm transition-colors duration-300 ${
                             isMuted ? 'text-slate-500' : 'text-muted-foreground'
                           }`}
                         >
                           {item.subtitle}
+                          {abcData && ` · Acumulado ${abcData.cumulativePercent.toFixed(1)}%`}
                         </p>
                       </div>
                       <span

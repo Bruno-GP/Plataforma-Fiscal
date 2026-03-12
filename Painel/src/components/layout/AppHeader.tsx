@@ -27,7 +27,7 @@ export function AppHeader() {
 
   const menuItems = user?.tem_sped
     ? [...menuItemsBase, menuItemAnaliseFiscal, menuItemImportacaoSped]
-    : [...menuItemsBase, menuItemImportacaoXml];
+    : [...menuItemsBase, menuItemAnaliseFiscal, menuItemImportacaoXml];
 
   const handleLogout = () => {
     logout();

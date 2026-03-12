@@ -37,15 +37,7 @@ const ImportacaoFiscalRoute = ({ tipo }: { tipo: 'xml' | 'sped' }) => {
   return tipo === 'xml' ? <ImportacaoXML /> : <ImportacaoSPED />;
 };
 
-const AnaliseComprasRoute = () => {
-  const { user } = useAuth();
-
-  if (!user?.tem_sped) {
-    return <Navigate to="/analise-vendas" replace />;
-  }
-
-  return <AnaliseCompras />;
-};
+const AnaliseComprasRoute = () => <AnaliseCompras />;
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

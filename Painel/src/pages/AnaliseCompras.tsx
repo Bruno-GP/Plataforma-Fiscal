@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Box, Package, ShoppingCart, Truck } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import { useAuth } from '@/contexts/AuthContext';
 
-import { parseDecimal } from '@/services/nfe';
-import { fetchSpedAnaliseCompras, fetchSpedKpis, type AnaliseComprasResponse } from '@/services/sped';
+import { fetchNfeAnaliseCompras, fetchNfeKpis, parseDecimal, type AnaliseComprasResponse } from '@/services/nfe';
+import { fetchSpedAnaliseCompras, fetchSpedKpis } from '@/services/sped';
 
 import { formatCurrency, monthLabels } from '@/services/utils';
 import { Header } from '@/pages/components/Header';
@@ -65,8 +64,11 @@ export default function AnaliseFiscal() {
   const yearNumber = Number.parseInt(selectedYear, 10);
 
   const yearsQuery = useQuery({
-    queryKey: ['analise-years', emitenteCnpj],
-    queryFn: () => fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+    queryKey: ['analise-years', emitenteCnpj, user?.tem_sped],
+    queryFn: () =>
+      user?.tem_sped
+        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
+        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
@@ -74,12 +76,19 @@ export default function AnaliseFiscal() {
   const analiseComprasQuery = useQuery({
     queryKey: ['analise-compras', emitenteCnpj, yearNumber, selectedMonth],
     queryFn: () =>
-      fetchSpedAnaliseCompras({
-        emitente_cnpj: emitenteCnpj,
-        periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-        periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-        limite: 5,
-      }),
+      user?.tem_sped
+        ? fetchSpedAnaliseCompras({
+            emitente_cnpj: emitenteCnpj,
+            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+            limite: 5,
+          })
+        : fetchNfeAnaliseCompras({
+            emitente_cnpj: emitenteCnpj,
+            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+            limite: 5,
+          }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
@@ -92,12 +101,19 @@ export default function AnaliseFiscal() {
   const previousAnaliseComprasQuery = useQuery({
     queryKey: ['analise-compras-previous', emitenteCnpj, previousPeriod.periodo_ano, previousPeriod.periodo_mes],
     queryFn: () =>
-      fetchSpedAnaliseCompras({
-        emitente_cnpj: emitenteCnpj,
-        periodo_ano: previousPeriod.periodo_ano,
-        periodo_mes: previousPeriod.periodo_mes,
-        limite: 5,
-      }),
+      user?.tem_sped
+        ? fetchSpedAnaliseCompras({
+            emitente_cnpj: emitenteCnpj,
+            periodo_ano: previousPeriod.periodo_ano,
+            periodo_mes: previousPeriod.periodo_mes,
+            limite: 5,
+          })
+        : fetchNfeAnaliseCompras({
+            emitente_cnpj: emitenteCnpj,
+            periodo_ano: previousPeriod.periodo_ano,
+            periodo_mes: previousPeriod.periodo_mes,
+            limite: 5,
+          }),
     enabled: hasEmitenteCnpj && previousPeriod.periodo_ano > 2000,
     staleTime: 5 * 60 * 1000,
   });
@@ -108,12 +124,19 @@ export default function AnaliseFiscal() {
       return {
         queryKey: ['analise-compras-mensal', emitenteCnpj, yearNumber, month],
         queryFn: () =>
-          fetchSpedAnaliseCompras({
-            emitente_cnpj: emitenteCnpj,
-            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-            periodo_mes: month,
-            limite: 5,
-          }),
+          user?.tem_sped
+            ? fetchSpedAnaliseCompras({
+                emitente_cnpj: emitenteCnpj,
+                periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+                periodo_mes: month,
+                limite: 5,
+              })
+            : fetchNfeAnaliseCompras({
+                emitente_cnpj: emitenteCnpj,
+                periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+                periodo_mes: month,
+                limite: 5,
+              }),
         enabled: hasEmitenteCnpj && !Number.isNaN(yearNumber),
         staleTime: 5 * 60 * 1000,
       };
@@ -225,10 +248,6 @@ export default function AnaliseFiscal() {
       : selectedMonthLabel
         ? `Nenhum dado disponível para ${selectedMonthLabel} de ${selectedYear}.`
         : `Nenhum dado disponível para ${selectedYear}.`;
-
-  if (!user?.tem_sped) {
-    return <Navigate to="/analise-vendas" replace />;
-  }
 
   const isLoading = analiseComprasQuery.isLoading || previousAnaliseComprasQuery.isLoading;
   const hasError = analiseComprasQuery.isError || previousAnaliseComprasQuery.isError;

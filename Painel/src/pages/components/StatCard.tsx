@@ -10,6 +10,7 @@ interface StatCardProps {
   trend: string;
   isLoading: boolean;
   accentClass?: string;
+  appendPreviousMonthLabel?: boolean;
 }
 
 export function StatCard({
@@ -20,6 +21,7 @@ export function StatCard({
   trend,
   isLoading,
   accentClass = 'border-l-slate-700',
+  appendPreviousMonthLabel = true,
 }: StatCardProps) {
   return (
     <Card
@@ -40,7 +42,7 @@ export function StatCard({
                 : 'text-slate-400'
           }`}
         >
-          {isLoading ? '--' : `${description} vs mês anterior`}
+          {isLoading ? '--' : appendPreviousMonthLabel ? `${description} vs mês anterior` : description}
         </p>
       </CardContent>
     </Card>

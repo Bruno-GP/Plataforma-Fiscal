@@ -261,6 +261,7 @@ export default function Dashboard({
         icon: comparativoAnualSalesChange >= 0 ? TrendingUp : TrendingDown,
         trend: comparativoAnualSalesChange >= 0 ? 'up' : 'down',
         accentClass: 'border-l-emerald-500',
+        appendPreviousMonthLabel: false,
       },
       {
         title: 'Ticket Médio',

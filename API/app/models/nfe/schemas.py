@@ -274,3 +274,26 @@ class ImportacaoXMLPendenciasResponse(BaseModel):
   cnpj_emitente: str
   total_pendentes: int
   possui_pendentes: bool
+  
+class RankingFornecedorCompra(BaseModel):
+  fornecedor: str
+  valor_total: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+
+
+class RankingProdutoCompra(BaseModel):
+  produto: str
+  valor_total: Decimal = Decimal("0.00")
+  quantidade_total: Decimal = Decimal("0.00")
+
+
+class AnaliseComprasResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  total_comprado: Decimal = Decimal("0.00")
+  top_fornecedores_valor: list[RankingFornecedorCompra] = Field(default_factory=list)
+  top_fornecedores_quantidade: list[RankingFornecedorCompra] = Field(default_factory=list)
+  top_produtos_valor: list[RankingProdutoCompra] = Field(default_factory=list)
+  top_produtos_quantidade: list[RankingProdutoCompra] = Field(default_factory=list)

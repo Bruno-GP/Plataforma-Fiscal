@@ -12,7 +12,9 @@ from app.models.nfe.schemas import (
   ImportacaoXMLArquivoResultado,
   ImportacaoXMLPendenciasResponse,
   ProcessarNFeRequest,
-  ProcessarNFeResponse
+  ProcessarNFeResponse,
+  ProcessarNFeResponse,
+  AnaliseComprasResponse,
 )
 
 router = APIRouter()
@@ -131,38 +133,75 @@ def processar_xmls_importados(cnpj_emitente: str = Query(..., min_length=14, max
 """Consulta KPIs consolidados por filtros de emitente/periodicidade e paginação."""
 @nfe_router.get("/kpis", response_model=ConsultaKPIResponse)
 def consultar_kpis(
-    emitente_cnpj: str | None = Query(default=None),
-    periodo_ano: int | None = Query(default=None),
-    periodo_mes: int | None = Query(default=None),
-    limite: int = Query(default=100),
-    offset: int = Query(default=0),
+  emitente_cnpj: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=100),
+  offset: int = Query(default=0),
 ):
-    service = NFeConsultaService()
+  service = NFeConsultaService()
 
-    emitente_resolvido = service._normalizar_cnpj_filtro(
-        emitente_cnpj,
-        permitir_zerado=False
+  emitente_resolvido = service._normalizar_cnpj_filtro(
+    emitente_cnpj,
+    permitir_zerado=False
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=400,
+      detail="Informe um emitente_cnpj válido.",
     )
 
-    if not emitente_resolvido:
-        raise HTTPException(
-            status_code=400,
-            detail="Informe um emitente_cnpj válido.",
-        )
+  resultados = service.listar_kpis(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=periodo_ano,
+    periodo_mes=periodo_mes,
+    limite=limite,
+    offset=offset,
+  )
 
-    resultados = service.listar_kpis(
-        emitente_cnpj=emitente_resolvido,
-        periodo_ano=periodo_ano,
-        periodo_mes=periodo_mes,
-        limite=limite,
-        offset=offset,
+  return ConsultaKPIResponse(
+    status="ok",
+    total=len(resultados),
+    resultados=resultados,
+  )
+  
+@nfe_router.get("/analise/compras", response_model=AnaliseComprasResponse)
+def consultar_analise_compras_nfe(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=5, ge=1, le=20),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj válido ou um email cadastrado.",
     )
 
-    return ConsultaKPIResponse(
-        status="ok",
-        total=len(resultados),
-        resultados=resultados,
+  try:
+    resultado = service.analisar_compras(
+      emitente_cnpj=emitente_resolvido,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
     )
+    
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  return AnaliseComprasResponse(status="ok", **resultado)
   
 # -------------------------
 # Comparativo mensal de KPIs

@@ -70,15 +70,28 @@ class NFeNotasService:
 
         cfops_venda = self.obter_cfops_venda(conn)
         if not cfops_venda:
-            logger.warning("Nenhum CFOP de venda encontrado para filtrar notas.")
-            return []
+            logger.warning(
+                "Nenhum CFOP de venda encontrado na tabela de referência; "
+                "usando fallback por prefixo (5/6/7)."
+            )
 
         notas_filtradas: list[NotaExtraida] = []
         for nota in notas_list:
-            if any(
-                self._normalizar_cfop(item.cfop) in cfops_venda
-                for item in nota.itens
-            ):
+            tem_cfop_venda = False
+            for item in nota.itens:
+                cfop_normalizado = self._normalizar_cfop(item.cfop)
+                if not cfop_normalizado:
+                    continue
+
+                if cfops_venda:
+                    if cfop_normalizado in cfops_venda:
+                        tem_cfop_venda = True
+                        break
+                elif cfop_normalizado[0] in {"5", "6", "7"}:
+                    tem_cfop_venda = True
+                    break
+
+            if tem_cfop_venda:
                 notas_filtradas.append(nota)
 
         return notas_filtradas
@@ -194,15 +207,23 @@ class NFeNotasService:
               AND NOT EXISTS (
                 SELECT 1
                 FROM public.notas_itens AS i
-                JOIN public.notas_cfops AS c
+                LEFT JOIN public.notas_cfops AS c
                   ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
                      = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
                 WHERE i.nota_id = n.id
-                  AND LEFT(
-                        regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g'),
-                        1
-                      ) IN ('5','6','7')
-                  AND COALESCE(c.descricao, '') ILIKE 'venda%%'
+                  AND (
+                        (
+                          LEFT(
+                            regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g'),
+                            1
+                          ) IN ('5','6','7')
+                          AND COALESCE(c.descricao, '') ILIKE '%%venda%%'
+                        )
+                        OR LEFT(
+                          regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'),
+                          1
+                        ) IN ('5','6','7')
+                      )
               );
         """
 

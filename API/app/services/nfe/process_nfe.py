@@ -20,7 +20,7 @@ from app.domain.nfe.xml_models import XmlNFe
 from app.domain.nfe.extractor import NFeExtractor
 from app.domain.nfe.consolidator import NFeConsolidator
 from app.domain.nfe.kpis import KPICalculator
-from app.services.nfe.empresa_service import EmpresaService
+from app.services.nfe.empresa_service import EmpresaService, normalizar_cnpj
 from app.services.nfe.nfe_notas_service import NFeNotasService
 from app.services.nfe.nfe_itens_service import NFeItensService
 from app.services.nfe.nfe_process_service import NFeProcessamentosService
@@ -40,6 +40,10 @@ class ProcessarNFeService:
         cnpj_emitente: str,
         xmls_importados: list[tuple[int, str, bytes]],
     ) -> tuple[ProcessarNFeResponse, list[int]]:
+        cnpj_emitente_normalizado = normalizar_cnpj(cnpj_emitente)
+        if not cnpj_emitente_normalizado:
+            cnpj_emitente_normalizado = cnpj_emitente
+            
         ids_processados: list[int] = []
         xmls = []
 
@@ -57,9 +61,11 @@ class ProcessarNFeService:
                 continue
 
             nome_emitente = emit.findtext("nfe:xNome", default="", namespaces=NS)
-            cnpj_xml = emit.findtext("nfe:CNPJ", default="", namespaces=NS)
+            cnpj_xml = normalizar_cnpj(
+                emit.findtext("nfe:CNPJ", default="", namespaces=NS)
+            )
 
-            if not cnpj_xml or cnpj_xml != cnpj_emitente:
+            if not cnpj_xml or cnpj_xml != cnpj_emitente_normalizado:
                 continue
 
             xmls.append(

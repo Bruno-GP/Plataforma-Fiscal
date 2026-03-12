@@ -141,6 +141,10 @@ class XMLImportacaoService:
       cur.execute("ALTER TABLE notas_xml_importados ADD COLUMN IF NOT EXISTS processado_em TIMESTAMPTZ")
 
   def listar_xmls_importados_nao_processados(self, cnpj_emitente: str) -> list[tuple[int, str, bytes]]:
+    cnpj_emitente_normalizado = self._normalizar_cnpj(cnpj_emitente)
+    if not cnpj_emitente_normalizado:
+      return []
+    
     with psycopg.connect(
       host=self.config["host"],
       port=self.config["port"],
@@ -159,7 +163,7 @@ class XMLImportacaoService:
             AND processado_em IS NULL
           ORDER BY id ASC
           """,
-          (cnpj_emitente,),
+          (cnpj_emitente_normalizado,),
         )
         rows = cur.fetchall()
 
@@ -188,6 +192,10 @@ class XMLImportacaoService:
       conn.commit()
       
   def contar_xmls_pendentes(self, cnpj_emitente: str) -> int:
+    cnpj_emitente_normalizado = self._normalizar_cnpj(cnpj_emitente)
+    if not cnpj_emitente_normalizado:
+      return 0
+    
     with psycopg.connect(
       host=self.config["host"],
       port=self.config["port"],
@@ -205,7 +213,7 @@ class XMLImportacaoService:
           WHERE cnpj_emitente = %s
             AND processado_em IS NULL
           """,
-          (cnpj_emitente,),
+          (cnpj_emitente_normalizado,),
         )
         row = cur.fetchone()
 

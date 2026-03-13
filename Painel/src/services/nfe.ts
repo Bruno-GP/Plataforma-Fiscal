@@ -313,6 +313,7 @@ export const fetchNfeAnaliseCompras = async (
   if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
   if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
   if (params.limite) searchParams.set('limite', String(params.limite));
+  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
 
   const response = await fetch(`${API_BASE_URL}/nfe/analise/compras?${searchParams.toString()}`);
 

@@ -4,7 +4,7 @@ from app.services.nfe.process_nfe import ProcessarNFeService
 from app.services.nfe.nfe_consulta_service import NFeConsultaService
 from app.services.company_profile_service import CompanyProfileService
 from app.services.nfe.xml_importacao_service import XMLImportacaoService
-from app.services.ai.openai_report_service import OpenAIReportService
+from app.services.AI.openai_report_service import OpenAIReportService
 from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
   ConsultaNFeResponse,

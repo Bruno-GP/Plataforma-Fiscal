@@ -1,4 +1,4 @@
-import { FileDigit, FileSearch, FileUp, LayoutDashboard, LogOut, Users } from 'lucide-react';
+import { FileDigit, FileSearch, FileUp, LayoutDashboard, LogOut, Sparkles, Users } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { hasUnreadUpdates } from '../../contexts/updates';
@@ -17,6 +17,7 @@ const menuItemsBase = [
 const menuItemImportacaoXml = { title: 'Importação XML', url: '/importacao-xml', icon: FileUp };
 const menuItemImportacaoSped = { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit };
 const menuItemAnaliseFiscal = { title: 'Análise de Compras', url: '/analise-compras', icon: FileSearch };
+const menuItemRelatoriosIA = { title: 'Relatórios com IA', url: '/relatorios-ia', icon: Sparkles };
 
 export function AppHeader() {
   const { user, logout } = useAuth();
@@ -26,8 +27,8 @@ export function AppHeader() {
   const hasUnreadUpdateLog = hasUnreadUpdates();
 
   const menuItems = user?.tem_sped
-    ? [...menuItemsBase, menuItemAnaliseFiscal, menuItemImportacaoSped]
-    : [...menuItemsBase, menuItemAnaliseFiscal, menuItemImportacaoXml];
+    ? [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemImportacaoSped]
+    : [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemImportacaoXml];
 
   const handleLogout = () => {
     logout();

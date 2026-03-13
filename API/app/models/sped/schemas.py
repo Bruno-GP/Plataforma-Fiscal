@@ -65,6 +65,7 @@ class AnaliseComprasResponse(BaseModel):
   top_fornecedores_quantidade: list[RankingFornecedorCompra] = Field(default_factory=list)
   top_produtos_valor: list[RankingProdutoCompra] = Field(default_factory=list)
   top_produtos_quantidade: list[RankingProdutoCompra] = Field(default_factory=list)
+  relatorio_ia: str | None = None
   
 class RankingClienteSped(BaseModel):
   cliente: str

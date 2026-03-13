@@ -135,9 +135,17 @@ export interface AnaliseComprasResponse {
   top_fornecedores_quantidade: RankingFornecedorCompra[];
   top_produtos_valor: RankingProdutoCompra[];
   top_produtos_quantidade: RankingProdutoCompra[];
+  relatorio_ia?: string | null;
 }
 
-export const fetchSpedAnaliseCompras = async (params: { emitente_cnpj?: string; periodo_ano?: number; periodo_mes?: number; limite?: number } = {}): Promise<AnaliseComprasResponse> => {
+export const fetchSpedAnaliseCompras = async (params: { 
+    emitente_cnpj?: string; 
+    periodo_ano?: number; 
+    periodo_mes?: number; 
+    limite?: number; 
+    gerar_relatorio_ia?: boolean 
+  } = {}): Promise<AnaliseComprasResponse> => {
+
   const searchParams = new URLSearchParams();
   const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
 
@@ -148,6 +156,7 @@ export const fetchSpedAnaliseCompras = async (params: { emitente_cnpj?: string; 
   if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
   if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
   if (params.limite) searchParams.set('limite', String(params.limite));
+  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
 
   const response = await fetch(`${API_BASE_URL}/sped/analise/compras?${searchParams.toString()}`);
 

@@ -198,8 +198,8 @@ export interface AnaliseComprasResponse {
   top_fornecedores_quantidade: RankingFornecedorCompra[];
   top_produtos_valor: RankingProdutoCompra[];
   top_produtos_quantidade: RankingProdutoCompra[];
+  relatorio_ia?: string | null;
 }
-
 
 export interface ImportacaoXmlArquivoResultado {
   arquivo: string;
@@ -299,7 +299,7 @@ export const processarXmlsImportados = async (cnpjEmitente: string): Promise<Pro
 };
 
 export const fetchNfeAnaliseCompras = async (
-  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number } = {}
+  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean } = {}
 ): Promise<AnaliseComprasResponse> => {
   const searchParams = new URLSearchParams();
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);

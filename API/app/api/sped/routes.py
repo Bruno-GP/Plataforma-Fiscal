@@ -16,6 +16,7 @@ from app.services.sped.sped_importacao_service import SpedImportacaoService
 from app.services.sped.sped_process_service import ProcessarSpedFiscalService
 from app.services.company_profile_service import CompanyProfileService
 from app.services.sped.sped_consulta_service import SpedConsultaService
+from app.services.AI.openai_report_service import OpenAIReportService
 
 router = APIRouter()
 sped_router = APIRouter(prefix="/sped", tags=["SPED Fiscal"])
@@ -104,15 +105,45 @@ def consultar_analise_compras_sped(
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
+  gerar_relatorio_ia: bool = Query(default=False),
 ):
   _validar_empresa_sped(emitente_cnpj)
 
-  resultado = SpedConsultaService().analisar_compras(
-    emitente_cnpj=emitente_cnpj,
-    periodo_ano=periodo_ano,
-    periodo_mes=periodo_mes,
-    limite=limite,
-  )
+  try:
+    resultado = SpedConsultaService().analisar_compras(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+
+    if gerar_relatorio_ia:
+      ia_service = OpenAIReportService()
+      if not ia_service.disponivel():
+        raise HTTPException(
+          status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+          detail=(
+            "Integração com OpenAI indisponível. "
+            "Configure OPENAI_API_KEY no ambiente da API."
+          ),
+        )
+
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(resultado)
+
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  except HTTPException:
+    raise
+
+  except Exception as exc:
+    raise HTTPException(
+      status_code=status.HTTP_502_BAD_GATEWAY,
+      detail=f"Falha ao gerar relatório com IA: {exc}",
+    ) from exc
 
   return AnaliseComprasResponse(status="ok", **resultado)
 

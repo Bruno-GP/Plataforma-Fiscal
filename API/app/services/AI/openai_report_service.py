@@ -1,6 +1,7 @@
 import logging
 import os
 from decimal import Decimal
+from pathlib import Path
 
 from openai import OpenAI
 
@@ -10,6 +11,7 @@ class OpenAIReportService:
   def __init__(self):
     self.api_key = os.getenv("OPENAI_API_KEY")
     self.model = os.getenv("OPENAI_REPORT_MODEL", "gpt-4o-mini")
+    self.system_prompt = self._carregar_prompt_agente()
 
   def disponivel(self) -> bool:
     return bool(self.api_key)
@@ -27,11 +29,7 @@ class OpenAIReportService:
       input=[
         {
           "role": "system",
-          "content": (
-            "Você é um analista fiscal e financeiro sênior. "
-            "Gere um relatório executivo em português do Brasil, objetivo, "
-            "com insights acionáveis e linguagem simples para gestores."
-          ),
+          "content": self.system_prompt,
         },
         {"role": "user", "content": prompt},
       ],
@@ -91,6 +89,24 @@ class OpenAIReportService:
       "Top produtos por valor:\n"
       f"{chr(10).join(linhas_produtos) if linhas_produtos else '- Sem dados'}"
     )
+    
+  def _carregar_prompt_agente(self) -> str:
+    prompt_padrao = (
+      "Você é um analista fiscal e financeiro sênior. "
+      "Gere um relatório executivo em português do Brasil, objetivo, "
+      "com insights acionáveis e linguagem simples para gestores."
+    )
+
+    caminho_prompt = Path(__file__).resolve().parent / "Agents" / "Agente_Relatorio_Executivo.txt"
+    if not caminho_prompt.exists():
+      return prompt_padrao
+
+    try:
+      conteudo = caminho_prompt.read_text(encoding="utf-8").strip()
+      return conteudo or prompt_padrao
+    except Exception as exc:
+      logger.warning("Falha ao carregar prompt do agente em %s: %s", caminho_prompt, exc)
+      return prompt_padrao
 
   def _formatar_decimal(self, valor: Decimal | None) -> str:
     if valor is None:

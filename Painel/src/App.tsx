@@ -19,6 +19,7 @@ import ImportacaoXML from "./pages/ImportacaoXML";
 import Atualizacoes from "./pages/Atualizacoes";
 import ImportacaoSPED from "./pages/ImportacaoSPED";
 import AnaliseCompras from "./pages/AnaliseCompras";
+import RelatoriosIA from "./pages/RelatoriosIA";
 
 // QueryClient centraliza cache e invalidação de chamadas HTTP da aplicação.
 const queryClient = new QueryClient();
@@ -100,6 +101,14 @@ const App = () => (
                 element={
                   <MainLayout>
                     <AnaliseComprasRoute />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/relatorios-ia"
+                element={
+                  <MainLayout>
+                    <RelatoriosIA />
                   </MainLayout>
                 }
               />

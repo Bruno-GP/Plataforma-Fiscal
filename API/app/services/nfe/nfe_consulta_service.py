@@ -587,6 +587,163 @@ class NFeConsultaService:
       "top_produtos_valor": top_produtos_valor,
       "top_produtos_quantidade": top_produtos_quantidade,
     }
+    
+  def analisar_vendas(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: int = 5,
+  ) -> dict:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+    if not cnpj_filtrado:
+      raise ValueError("Informe um emitente_cnpj válido.")
+
+    filtros_docs = [
+      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\D', '', 'g') = %s",
+      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\D', '', 'g'), 1) IN ('5','6','7')",
+    ]
+    parametros: list[object] = [cnpj_filtrado]
+
+    if periodo_ano:
+      filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
+      parametros.append(periodo_ano)
+
+    if periodo_mes:
+      filtros_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
+      parametros.append(periodo_mes)
+
+    where_clause = " AND ".join(filtros_docs)
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          f"""
+          SELECT COALESCE(SUM(i.valor_total), 0) AS total_vendido
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          """,
+          parametros,
+        )
+        total_vendido_row = cur.fetchone()
+        total_vendido = total_vendido_row[0] if total_vendido_row else Decimal("0.00")
+
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado') AS cliente,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total,
+            COUNT(DISTINCT n.id) AS quantidade_documentos
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+          LIMIT %s
+          """,
+          [*parametros, limite],
+        )
+        top_clientes_valor = [
+          {
+            "cliente": cliente,
+            "valor_total": valor_total or Decimal("0.00"),
+            "quantidade_documentos": quantidade_documentos or 0,
+          }
+          for cliente, valor_total, quantidade_documentos in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado') AS cliente,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total,
+            COUNT(DISTINCT n.id) AS quantidade_documentos
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 3 DESC, 2 DESC, 1 ASC
+          LIMIT %s
+          """,
+          [*parametros, limite],
+        )
+        top_clientes_quantidade = [
+          {
+            "cliente": cliente,
+            "valor_total": valor_total or Decimal("0.00"),
+            "quantidade_documentos": quantidade_documentos or 0,
+          }
+          for cliente, valor_total, quantidade_documentos in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto não identificado') AS produto,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total,
+            COALESCE(SUM(i.quantidade), 0) AS quantidade_total
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+          LIMIT %s
+          """,
+          [*parametros, limite],
+        )
+        top_produtos_valor = [
+          {
+            "produto": produto,
+            "valor_total": valor_total or Decimal("0.00"),
+            "quantidade_total": quantidade_total or Decimal("0.00"),
+          }
+          for produto, valor_total, quantidade_total in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto não identificado') AS produto,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total,
+            COALESCE(SUM(i.quantidade), 0) AS quantidade_total
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 3 DESC, 2 DESC, 1 ASC
+          LIMIT %s
+          """,
+          [*parametros, limite],
+        )
+        top_produtos_quantidade = [
+          {
+            "produto": produto,
+            "valor_total": valor_total or Decimal("0.00"),
+            "quantidade_total": quantidade_total or Decimal("0.00"),
+          }
+          for produto, valor_total, quantidade_total in cur.fetchall()
+        ]
+
+    return {
+      "emitente_cnpj": cnpj_filtrado,
+      "periodo_ano": periodo_ano,
+      "periodo_mes": periodo_mes,
+      "total_vendido": total_vendido or Decimal("0.00"),
+      "top_clientes_valor": top_clientes_valor,
+      "top_clientes_quantidade": top_clientes_quantidade,
+      "top_produtos_valor": top_produtos_valor,
+      "top_produtos_quantidade": top_produtos_quantidade,
+    }
+
       
   def comparar_kpis_mensal(
     self,

@@ -324,3 +324,43 @@ export const fetchNfeAnaliseCompras = async (
 
   return response.json() as Promise<AnaliseComprasResponse>;
 };
+
+export interface AnaliseVendasResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  total_vendido: number | string;
+  top_clientes_valor: Array<{ cliente: string; valor_total: number | string; quantidade_documentos: number }>;
+  top_clientes_quantidade: Array<{ cliente: string; valor_total: number | string; quantidade_documentos: number }>;
+  top_produtos_valor: RankingProdutoCompra[];
+  top_produtos_quantidade: RankingProdutoCompra[];
+  relatorio_ia?: string | null;
+}
+
+export const fetchNfeAnaliseVendas = async (
+  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean } = {}
+): Promise<AnaliseVendasResponse> => {
+  const searchParams = new URLSearchParams();
+  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+
+  if (cnpjParam) {
+    searchParams.set('emitente_cnpj', cnpjParam);
+  } else if (params.email) {
+    searchParams.set('email', params.email);
+  }
+
+  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
+  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
+  if (params.limite) searchParams.set('limite', String(params.limite));
+  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
+
+  const response = await fetch(`${API_BASE_URL}/nfe/analise/vendas?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de vendas da NFe.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar análise de vendas da NFe.');
+  }
+
+  return response.json() as Promise<AnaliseVendasResponse>;
+};

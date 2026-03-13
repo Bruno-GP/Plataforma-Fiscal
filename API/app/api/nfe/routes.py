@@ -16,6 +16,7 @@ from app.models.nfe.schemas import (
   ProcessarNFeResponse,
   ProcessarNFeResponse,
   AnaliseComprasResponse,
+  AnaliseVendasResponse
 )
 
 router = APIRouter()
@@ -226,6 +227,66 @@ def consultar_analise_compras_nfe(
     ) from exc
 
   return AnaliseComprasResponse(status="ok", **resultado)
+
+@nfe_router.get("/analise/vendas", response_model=AnaliseVendasResponse)
+def consultar_analise_vendas_nfe(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=5, ge=1, le=20),
+  gerar_relatorio_ia: bool = Query(default=False),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj válido ou um email cadastrado.",
+    )
+
+  try:
+    resultado = service.analisar_vendas(
+      emitente_cnpj=emitente_resolvido,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+
+    if gerar_relatorio_ia:
+      ia_service = OpenAIReportService()
+      if not ia_service.disponivel():
+        raise HTTPException(
+          status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+          detail=(
+            "Integração com OpenAI indisponível. "
+            "Configure OPENAI_API_KEY no ambiente da API."
+          ),
+        )
+
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_vendas(resultado)
+
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  except HTTPException:
+    raise
+
+  except Exception as exc:
+    raise HTTPException(
+      status_code=status.HTTP_502_BAD_GATEWAY,
+      detail=f"Falha ao gerar relatório com IA: {exc}",
+    ) from exc
+
+  return AnaliseVendasResponse(status="ok", **resultado)
   
 # -------------------------
 # Comparativo mensal de KPIs

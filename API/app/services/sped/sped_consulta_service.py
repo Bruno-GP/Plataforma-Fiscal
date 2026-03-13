@@ -425,6 +425,115 @@ class SpedConsultaService:
           "top_produtos_valor": top_produtos_valor,
           "top_produtos_quantidade": top_produtos_quantidade,
         }
+        
+  def analisar_vendas(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: int = 5,
+  ) -> dict:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    filtros = ["regexp_replace(d.empresa_cnpj, '\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
+    params: list[object] = [cnpj]
+
+    if periodo_ano:
+      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
+      params.append(periodo_ano)
+    if periodo_mes:
+      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
+      params.append(periodo_mes)
+
+    where_clause = " AND ".join(filtros)
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        total_vendido = self._safe_scalar_query(
+          cur,
+          f"""
+          SELECT COALESCE(SUM(d.valor_total), 0)
+          FROM public.sped_documentos_fiscais d
+          WHERE {where_clause}
+          """,
+          tuple(params),
+        )
+
+        top_clientes_valor = self._safe_top_cliente_query(
+          cur,
+          f"""
+          SELECT COALESCE(p.nome, 'Cliente não identificado') AS cliente,
+                COALESCE(SUM(d.valor_total), 0) AS valor_total,
+                COUNT(*) AS quantidade_documentos
+          FROM public.sped_documentos_fiscais d
+          LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+
+        top_clientes_quantidade = self._safe_top_cliente_query(
+          cur,
+          f"""
+          SELECT COALESCE(p.nome, 'Cliente não identificado') AS cliente,
+                COALESCE(SUM(d.valor_total), 0) AS valor_total,
+                COUNT(*) AS quantidade_documentos
+          FROM public.sped_documentos_fiscais d
+          LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 3 DESC, 2 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+
+        top_produtos_valor = self._safe_top_produto_query(
+          cur,
+          f"""
+          SELECT COALESCE(pr.descricao, 'Produto não identificado') AS produto,
+                COALESCE(SUM(i.valor_total), 0) AS valor_total,
+                COALESCE(SUM(i.quantidade), 0) AS quantidade_total
+          FROM public.sped_documentos_fiscais d
+          JOIN public.sped_documento_itens i ON i.documento_id = d.id
+          LEFT JOIN public.sped_produtos pr ON pr.id = i.produto_id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+
+        top_produtos_quantidade = self._safe_top_produto_query(
+          cur,
+          f"""
+          SELECT COALESCE(pr.descricao, 'Produto não identificado') AS produto,
+                COALESCE(SUM(i.valor_total), 0) AS valor_total,
+                COALESCE(SUM(i.quantidade), 0) AS quantidade_total
+          FROM public.sped_documentos_fiscais d
+          JOIN public.sped_documento_itens i ON i.documento_id = d.id
+          LEFT JOIN public.sped_produtos pr ON pr.id = i.produto_id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 3 DESC, 2 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+
+        return {
+          "emitente_cnpj": cnpj,
+          "periodo_ano": periodo_ano,
+          "periodo_mes": periodo_mes,
+          "total_vendido": total_vendido,
+          "top_clientes_valor": top_clientes_valor,
+          "top_clientes_quantidade": top_clientes_quantidade,
+          "top_produtos_valor": top_produtos_valor,
+          "top_produtos_quantidade": top_produtos_quantidade,
+        }
 
   def _safe_scalar_query(self, cur, sql: str, params: tuple[object, ...]) -> Decimal:
     try:
@@ -444,6 +553,20 @@ class SpedConsultaService:
           "quantidade_documentos": quantidade_documentos or 0,
         }
         for fornecedor, valor_total, quantidade_documentos in cur.fetchall()
+      ]
+    except psycopg.errors.UndefinedTable:
+      return []
+    
+  def _safe_top_cliente_query(self, cur, sql: str, params: tuple[object, ...]) -> list[dict]:
+    try:
+      cur.execute(sql, params)
+      return [
+        {
+          "cliente": cliente,
+          "valor_total": valor_total or Decimal("0.00"),
+          "quantidade_documentos": quantidade_documentos or 0,
+        }
+        for cliente, valor_total, quantidade_documentos in cur.fetchall()
       ]
     except psycopg.errors.UndefinedTable:
       return []

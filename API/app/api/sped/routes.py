@@ -11,6 +11,7 @@ from app.models.sped.schemas import (
   RegistroSpedResumo,
   AnaliseComprasResponse,
   ConsultaClientesSpedResponse,
+  AnaliseVendasResponse
 )
 from app.services.sped.sped_importacao_service import SpedImportacaoService
 from app.services.sped.sped_process_service import ProcessarSpedFiscalService
@@ -146,6 +147,54 @@ def consultar_analise_compras_sped(
     ) from exc
 
   return AnaliseComprasResponse(status="ok", **resultado)
+
+@sped_router.get("/analise/vendas", response_model=AnaliseVendasResponse)
+def consultar_analise_vendas_sped(
+  emitente_cnpj: str = Query(..., min_length=14, max_length=20),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=5, ge=1, le=20),
+  gerar_relatorio_ia: bool = Query(default=False),
+):
+  _validar_empresa_sped(emitente_cnpj)
+
+  try:
+    resultado = SpedConsultaService().analisar_vendas(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+
+    if gerar_relatorio_ia:
+      ia_service = OpenAIReportService()
+      if not ia_service.disponivel():
+        raise HTTPException(
+          status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+          detail=(
+            "Integração com OpenAI indisponível. "
+            "Configure OPENAI_API_KEY no ambiente da API."
+          ),
+        )
+
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_vendas(resultado)
+
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  except HTTPException:
+    raise
+
+  except Exception as exc:
+    raise HTTPException(
+      status_code=status.HTTP_502_BAD_GATEWAY,
+      detail=f"Falha ao gerar relatório com IA: {exc}",
+    ) from exc
+
+  return AnaliseVendasResponse(status="ok", **resultado)
 
 @sped_router.get("/pendencias", response_model=ImportacaoSpedPendenciasResponse)
 def consultar_pendencias_sped(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):

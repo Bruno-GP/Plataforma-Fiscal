@@ -6,10 +6,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchNfeAnaliseCompras, fetchNfeKpis, parseDecimal } from '@/services/nfe';
-import { fetchSpedAnaliseCompras, fetchSpedKpis } from '@/services/sped';
+import { fetchNfeAnaliseCompras, fetchNfeAnaliseVendas, fetchNfeKpis, parseDecimal } from '@/services/nfe';
+import { fetchSpedAnaliseCompras, fetchSpedAnaliseVendas, fetchSpedKpis } from '@/services/sped';
 import { formatCurrency, monthLabels } from '@/services/utils';
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
@@ -29,7 +31,8 @@ export default function RelatoriosIA() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
-  const [totalComprado, setTotalComprado] = useState(0);
+  const [tipoRelatorio, setTipoRelatorio] = useState<'compras' | 'vendas'>('compras');
+  const [totalPeriodo, setTotalPeriodo] = useState(0);
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
@@ -104,11 +107,13 @@ export default function RelatoriosIA() {
         gerar_relatorio_ia: true,
       };
 
-      const response = usaSped
-        ? await fetchSpedAnaliseCompras(payload)
-        : await fetchNfeAnaliseCompras(payload);
+      const response = tipoRelatorio === 'compras'
+        ? (usaSped ? await fetchSpedAnaliseCompras(payload) : await fetchNfeAnaliseCompras(payload))
+        : (usaSped ? await fetchSpedAnaliseVendas(payload) : await fetchNfeAnaliseVendas(payload));
 
-      setTotalComprado(parseDecimal(response.total_comprado ?? 0));
+      const total = 'total_comprado' in response ? response.total_comprado : response.total_vendido;
+
+      setTotalPeriodo(parseDecimal(total ?? 0));
       setReport(response.relatorio_ia ?? 'A IA não retornou conteúdo para este período.');
     } catch (error) {
       setReport(null);
@@ -123,7 +128,7 @@ export default function RelatoriosIA() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Relatórios com IA</h1>
         <p className="text-muted-foreground">
-          Gere um relatório executivo automático com base nos dados fiscais de compras ({fonteDados}).
+          Gere um relatório executivo automático com base nos dados fiscais de compras ou vendas ({fonteDados}).
         </p>
       </div>
 
@@ -135,6 +140,23 @@ export default function RelatoriosIA() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Tipo de relatório</Label>
+            <RadioGroup
+              value={tipoRelatorio}
+              onValueChange={(value) => setTipoRelatorio(value as 'compras' | 'vendas')}
+              className="flex gap-6"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="compras" id="relatorio-compras" />
+                <Label htmlFor="relatorio-compras">Compras</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="vendas" id="relatorio-vendas" />
+                <Label htmlFor="relatorio-vendas">Vendas</Label>
+              </div>
+            </RadioGroup>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="relatorio-ano">Ano</Label>
@@ -171,7 +193,7 @@ export default function RelatoriosIA() {
 
           <Button onClick={handleGenerate} disabled={isLoading || !hasEmitenteCnpj} className="gap-2">
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {isLoading ? 'Gerando relatório...' : 'Gerar relatório com IA'}
+            {isLoading ? 'Gerando relatório...' : `Gerar relatório de ${tipoRelatorio} com IA`}
           </Button>
         </CardContent>
       </Card>
@@ -187,7 +209,9 @@ export default function RelatoriosIA() {
         <Card>
           <CardHeader>
             <CardTitle>Relatório executivo ({periodoDescricao})</CardTitle>
-            <CardDescription>Total comprado no período: {formatCurrency(totalComprado)}</CardDescription>
+            <CardDescription>
+              Total {tipoRelatorio === 'compras' ? 'comprado' : 'vendido'} no período: {formatCurrency(totalPeriodo)}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-4 text-sm leading-6 text-foreground">

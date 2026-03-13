@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Loader2, Sparkles } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -7,8 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchNfeAnaliseCompras, parseDecimal } from '@/services/nfe';
-import { fetchSpedAnaliseCompras } from '@/services/sped';
+import { fetchNfeAnaliseCompras, fetchNfeKpis, parseDecimal } from '@/services/nfe';
+import { fetchSpedAnaliseCompras, fetchSpedKpis } from '@/services/sped';
 import { formatCurrency, monthLabels } from '@/services/utils';
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
@@ -33,7 +34,45 @@ export default function RelatoriosIA() {
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
 
-  const fonteDados = user?.tem_sped ? 'SPED Fiscal' : 'XML / NFe';
+  const usaSped = Boolean(user?.tem_sped);
+
+  const fonteDados = usaSped ? 'SPED Fiscal' : 'XML / NFe';
+
+  const yearsQuery = useQuery({
+    queryKey: ['kpis-years', usaSped ? 'sped' : 'xml', emitenteCnpj],
+    queryFn: () => (usaSped
+      ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
+      : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })),
+    enabled: hasEmitenteCnpj,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const yearOptions = useMemo(() => {
+    const resultados = yearsQuery.data?.resultados ?? [];
+    const uniqueYears = new Set<number>();
+
+    resultados.forEach((item) => {
+      if (item.periodo_ano) {
+        uniqueYears.add(item.periodo_ano);
+      }
+    });
+
+    return [...uniqueYears].sort((a, b) => b - a);
+  }, [yearsQuery.data]);
+
+  useEffect(() => {
+    if (!yearOptions.length) {
+      return;
+    }
+
+    if (!yearOptions.includes(Number.parseInt(selectedYear, 10))) {
+      setSelectedYear(String(yearOptions[0]));
+    }
+  }, [selectedYear, yearOptions]);
+
+  const availableYears = yearOptions.length
+    ? yearOptions
+    : [new Date().getFullYear()];
 
   const periodoDescricao = useMemo(() => {
     if (selectedMonth === 'all') {
@@ -65,7 +104,7 @@ export default function RelatoriosIA() {
         gerar_relatorio_ia: true,
       };
 
-      const response = user?.tem_sped
+      const response = usaSped
         ? await fetchSpedAnaliseCompras(payload)
         : await fetchNfeAnaliseCompras(payload);
 
@@ -104,7 +143,7 @@ export default function RelatoriosIA() {
                   <SelectValue placeholder="Selecione o ano" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Array.from({ length: 6 }, (_, idx) => new Date().getFullYear() - idx).map((year) => (
+                  {availableYears.map((year) => (
                     <SelectItem key={year} value={String(year)}>
                       {year}
                     </SelectItem>

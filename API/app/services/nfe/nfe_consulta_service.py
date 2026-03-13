@@ -442,10 +442,15 @@ class NFeConsultaService:
       raise ValueError("Informe um emitente_cnpj válido.")
 
     filtros_docs = [
-      "regexp_replace(n.emitente_cnpj, '\\D', '', 'g') = %s",
+      (
+        "("
+        "regexp_replace(COALESCE(n.destinatario_documento, ''), '\\D', '', 'g') = %s "
+        "OR regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s"
+        ")"
+      ),
       "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('1','2','3')",
     ]
-    parametros: list[object] = [cnpj_filtrado]
+    parametros: list[object] = [cnpj_filtrado, cnpj_filtrado]
 
     if periodo_ano:
       filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
@@ -475,7 +480,7 @@ class NFeConsultaService:
         cur.execute(
           f"""
           SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Fornecedor não identificado') AS fornecedor,
+            COALESCE(NULLIF(TRIM(n.emitente_cnpj), ''), 'Fornecedor não identificado') AS fornecedor,
             COALESCE(SUM(i.valor_total), 0) AS valor_total,
             COUNT(DISTINCT n.id) AS quantidade_documentos
           FROM public.notas AS n
@@ -500,7 +505,7 @@ class NFeConsultaService:
         cur.execute(
           f"""
           SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Fornecedor não identificado') AS fornecedor,
+            COALESCE(NULLIF(TRIM(n.emitente_cnpj), ''), 'Fornecedor não identificado') AS fornecedor,
             COALESCE(SUM(i.valor_total), 0) AS valor_total,
             COUNT(DISTINCT n.id) AS quantidade_documentos
           FROM public.notas AS n

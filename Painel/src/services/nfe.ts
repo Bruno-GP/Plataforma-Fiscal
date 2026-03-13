@@ -338,6 +338,30 @@ export interface AnaliseVendasResponse {
   relatorio_ia?: string | null;
 }
 
+export interface AnaliseClientesResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  total_vendido: number | string;
+  total_clientes: number;
+  top_clientes_valor: Array<{
+    cliente: string;
+    valor_total: number | string;
+    quantidade_documentos: number;
+    ticket_medio: number | string;
+    percentual_participacao: number | string;
+  }>;
+  top_clientes_quantidade: Array<{
+    cliente: string;
+    valor_total: number | string;
+    quantidade_documentos: number;
+    ticket_medio: number | string;
+    percentual_participacao: number | string;
+  }>;
+  relatorio_ia?: string | null;
+}
+
 export const fetchNfeAnaliseVendas = async (
   params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean } = {}
 ): Promise<AnaliseVendasResponse> => {
@@ -363,4 +387,31 @@ export const fetchNfeAnaliseVendas = async (
   }
 
   return response.json() as Promise<AnaliseVendasResponse>;
+};
+
+export const fetchNfeAnaliseClientes = async (
+  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean } = {}
+): Promise<AnaliseClientesResponse> => {
+  const searchParams = new URLSearchParams();
+  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+
+  if (cnpjParam) {
+    searchParams.set('emitente_cnpj', cnpjParam);
+  } else if (params.email) {
+    searchParams.set('email', params.email);
+  }
+
+  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
+  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
+  if (params.limite) searchParams.set('limite', String(params.limite));
+  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
+
+  const response = await fetch(`${API_BASE_URL}/nfe/analise/clientes?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de clientes da NFe.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar análise de clientes da NFe.');
+  }
+
+  return response.json() as Promise<AnaliseClientesResponse>;
 };

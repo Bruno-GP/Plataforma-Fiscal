@@ -11,8 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import { useAuth } from '@/contexts/AuthContext';
 
-import { fetchNfeAnaliseCompras, fetchNfeAnaliseVendas, fetchNfeKpis, parseDecimal } from '@/services/nfe';
+import { 
+  fetchNfeAnaliseClientes, 
+  fetchNfeAnaliseCompras, 
+  fetchNfeAnaliseVendas, 
+  fetchNfeKpis, 
+  parseDecimal 
+} from '@/services/nfe';
 import { fetchSpedAnaliseCompras, fetchSpedAnaliseVendas, fetchSpedKpis } from '@/services/sped';
+
 import { formatCurrency, monthLabels } from '@/services/utils';
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
@@ -110,7 +117,9 @@ export default function RelatoriosIA() {
 
       const response = tipoRelatorio === 'compras'
         ? (usaSped ? await fetchSpedAnaliseCompras(payload) : await fetchNfeAnaliseCompras(payload))
-        : (usaSped ? await fetchSpedAnaliseVendas(payload) : await fetchNfeAnaliseVendas(payload));
+        : tipoRelatorio === 'clientes'
+          ? (usaSped ? await fetchSpedAnaliseVendas(payload) : await fetchNfeAnaliseClientes(payload))
+          : (usaSped ? await fetchSpedAnaliseVendas(payload) : await fetchNfeAnaliseVendas(payload));
 
       const total = 'total_comprado' in response ? response.total_comprado : response.total_vendido;
 

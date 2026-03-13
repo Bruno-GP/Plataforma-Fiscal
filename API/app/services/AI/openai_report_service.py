@@ -71,6 +71,34 @@ class OpenAIReportService:
       return "Não foi possível gerar o relatório em linguagem natural para este período."
 
     return texto
+  
+  def gerar_relatorio_clientes(self, analise: dict) -> str:
+    if not self.api_key:
+      raise ValueError("OPENAI_API_KEY não configurada.")
+
+    cliente = OpenAI(api_key=self.api_key)
+
+    prompt = self._montar_prompt_clientes(analise)
+
+    resposta = cliente.responses.create(
+      model=self.model,
+      input=[
+        {
+          "role": "system",
+          "content": self.system_prompt,
+        },
+        {"role": "user", "content": prompt},
+      ],
+      temperature=0.3,
+      max_output_tokens=500,
+    )
+
+    texto = (resposta.output_text or "").strip()
+    if not texto:
+      logger.warning("OpenAI não retornou conteúdo textual no relatório.")
+      return "Não foi possível gerar o relatório em linguagem natural para este período."
+
+    return texto
 
   def _montar_prompt_compras(self, analise: dict) -> str:
     total_comprado = self._formatar_decimal(analise.get("total_comprado"))
@@ -162,6 +190,44 @@ class OpenAIReportService:
       f"{chr(10).join(linhas_clientes) if linhas_clientes else '- Sem dados'}\n\n"
       "Top produtos por valor:\n"
       f"{chr(10).join(linhas_produtos) if linhas_produtos else '- Sem dados'}"
+    )
+    
+  def _montar_prompt_clientes(self, analise: dict) -> str:
+    total_vendido = self._formatar_decimal(analise.get("total_vendido"))
+    total_clientes = analise.get("total_clientes", 0)
+
+    top_clientes_valor = analise.get("top_clientes_valor", [])
+
+    linhas_clientes = [
+      (
+        f"- {item.get('cliente', 'Cliente não identificado')}: "
+        f"R$ {self._formatar_decimal(item.get('valor_total'))} | "
+        f"{item.get('quantidade_documentos', 0)} documentos | "
+        f"ticket médio R$ {self._formatar_decimal(item.get('ticket_medio'))} | "
+        f"participação {self._formatar_decimal(item.get('percentual_participacao'))}%"
+      )
+      for item in top_clientes_valor
+    ]
+
+    periodo_ano = analise.get("periodo_ano")
+    periodo_mes = analise.get("periodo_mes")
+    periodo = (
+      f"{periodo_mes:02d}/{periodo_ano}"
+      if periodo_ano and periodo_mes
+      else "todos os períodos disponíveis"
+    )
+
+    return (
+      "Com base nos dados abaixo, gere um relatório com 3 seções: \n"
+      "1) Resumo executivo (máx. 5 linhas)\n"
+      "2) Principais riscos e oportunidades na base de clientes (bullet points)\n"
+      "3) Plano de ação sugerido (3 a 5 ações práticas de retenção e expansão)\n\n"
+      f"CNPJ emitente: {analise.get('emitente_cnpj', 'não informado')}\n"
+      f"Período: {periodo}\n"
+      f"Total vendido: R$ {total_vendido}\n"
+      f"Total de clientes no período: {total_clientes}\n\n"
+      "Top clientes por valor:\n"
+      f"{chr(10).join(linhas_clientes) if linhas_clientes else '- Sem dados'}"
     )
     
   def _carregar_prompt_agente(self) -> str:

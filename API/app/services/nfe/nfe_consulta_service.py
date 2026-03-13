@@ -744,6 +744,147 @@ class NFeConsultaService:
       "top_produtos_quantidade": top_produtos_quantidade,
     }
 
+  def analisar_clientes(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: int = 5,
+  ) -> dict:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+    if not cnpj_filtrado:
+      raise ValueError("Informe um emitente_cnpj válido.")
+
+    filtros_docs = [
+      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\D', '', 'g') = %s",
+      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\D', '', 'g'), 1) IN ('5','6','7')",
+    ]
+    parametros: list[object] = [cnpj_filtrado]
+
+    if periodo_ano:
+      filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
+      parametros.append(periodo_ano)
+
+    if periodo_mes:
+      filtros_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
+      parametros.append(periodo_mes)
+
+    where_clause = " AND ".join(filtros_docs)
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(SUM(i.valor_total), 0) AS total_vendido,
+            COUNT(DISTINCT COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado')) AS total_clientes
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          """,
+          parametros,
+        )
+        totais_row = cur.fetchone()
+        total_vendido = totais_row[0] if totais_row else Decimal("0.00")
+        total_clientes = totais_row[1] if totais_row else 0
+
+        cur.execute(
+          f"""
+          SELECT
+            cliente,
+            valor_total,
+            quantidade_documentos,
+            ticket_medio,
+            CASE
+              WHEN %s = 0 THEN 0
+              ELSE ROUND((valor_total * 100.0) / %s, 2)
+            END AS percentual_participacao
+          FROM (
+            SELECT
+              COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado') AS cliente,
+              COALESCE(SUM(i.valor_total), 0) AS valor_total,
+              COUNT(DISTINCT n.id) AS quantidade_documentos,
+              CASE
+                WHEN COUNT(DISTINCT n.id) = 0 THEN 0
+                ELSE COALESCE(SUM(i.valor_total), 0) / COUNT(DISTINCT n.id)
+              END AS ticket_medio
+            FROM public.notas AS n
+            JOIN public.notas_itens AS i
+              ON i.nota_id = n.id
+            WHERE {where_clause}
+            GROUP BY 1
+          ) base
+          ORDER BY valor_total DESC, cliente ASC
+          LIMIT %s
+          """,
+          [total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *parametros, limite],
+        )
+        top_clientes_valor = [
+          {
+            "cliente": cliente,
+            "valor_total": valor_total or Decimal("0.00"),
+            "quantidade_documentos": quantidade_documentos or 0,
+            "ticket_medio": ticket_medio or Decimal("0.00"),
+            "percentual_participacao": percentual_participacao or Decimal("0.00"),
+          }
+          for cliente, valor_total, quantidade_documentos, ticket_medio, percentual_participacao in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT
+            cliente,
+            valor_total,
+            quantidade_documentos,
+            ticket_medio,
+            CASE
+              WHEN %s = 0 THEN 0
+              ELSE ROUND((valor_total * 100.0) / %s, 2)
+            END AS percentual_participacao
+          FROM (
+            SELECT
+              COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado') AS cliente,
+              COALESCE(SUM(i.valor_total), 0) AS valor_total,
+              COUNT(DISTINCT n.id) AS quantidade_documentos,
+              CASE
+                WHEN COUNT(DISTINCT n.id) = 0 THEN 0
+                ELSE COALESCE(SUM(i.valor_total), 0) / COUNT(DISTINCT n.id)
+              END AS ticket_medio
+            FROM public.notas AS n
+            JOIN public.notas_itens AS i
+              ON i.nota_id = n.id
+            WHERE {where_clause}
+            GROUP BY 1
+          ) base
+          ORDER BY quantidade_documentos DESC, valor_total DESC, cliente ASC
+          LIMIT %s
+          """,
+          [total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *parametros, limite],
+        )
+        top_clientes_quantidade = [
+          {
+            "cliente": cliente,
+            "valor_total": valor_total or Decimal("0.00"),
+            "quantidade_documentos": quantidade_documentos or 0,
+            "ticket_medio": ticket_medio or Decimal("0.00"),
+            "percentual_participacao": percentual_participacao or Decimal("0.00"),
+          }
+          for cliente, valor_total, quantidade_documentos, ticket_medio, percentual_participacao in cur.fetchall()
+        ]
+
+    return {
+      "emitente_cnpj": cnpj_filtrado,
+      "periodo_ano": periodo_ano,
+      "periodo_mes": periodo_mes,
+      "total_vendido": total_vendido or Decimal("0.00"),
+      "total_clientes": int(total_clientes or 0),
+      "top_clientes_valor": top_clientes_valor,
+      "top_clientes_quantidade": top_clientes_quantidade,
+    }
       
   def comparar_kpis_mensal(
     self,

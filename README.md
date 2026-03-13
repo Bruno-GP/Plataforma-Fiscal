@@ -164,6 +164,15 @@ A aplicação carrega um `.env` localizado em `API/app/.env` usando `python-dote
 | `CORS_ALLOW_ORIGINS` | Não | `*` | Lista separada por vírgula de origens permitidas (ex.: `https://app.exemplo.com, http://localhost:3000`). `*` libera todas as origens. |
 | `CORS_ALLOW_CREDENTIALS` | Não | `true` | Controla se o CORS permitirá credenciais. Se `CORS_ALLOW_ORIGINS=*`, a aplicação força `allow_credentials=False` para evitar configuração inválida. |
 
+### OpenAI (relatórios com IA)
+
+| Variável | Obrigatória | Padrão | Descrição |
+| --- | --- | --- | --- |
+| `OPENAI_API_KEY` | Sim* | - | Chave da OpenAI usada para gerar relatórios narrativos no endpoint `GET /api/nfe/analise/compras?gerar_relatorio_ia=true`. |
+| `OPENAI_REPORT_MODEL` | Não | `gpt-4o-mini` | Modelo usado para geração do relatório de IA. |
+
+> \* Obrigatória apenas quando `gerar_relatorio_ia=true`.
+
 ---
 
 ## Preparação do banco de dados

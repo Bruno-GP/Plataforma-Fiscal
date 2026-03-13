@@ -4,6 +4,7 @@ from app.services.nfe.process_nfe import ProcessarNFeService
 from app.services.nfe.nfe_consulta_service import NFeConsultaService
 from app.services.company_profile_service import CompanyProfileService
 from app.services.nfe.xml_importacao_service import XMLImportacaoService
+from app.services.ai.openai_report_service import OpenAIReportService
 from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
   ConsultaNFeResponse,
@@ -173,6 +174,7 @@ def consultar_analise_compras_nfe(
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
+  gerar_relatorio_ia: bool = Query(default=False),
 ):
   service = NFeConsultaService()
 
@@ -195,10 +197,32 @@ def consultar_analise_compras_nfe(
       limite=limite,
     )
     
+    if gerar_relatorio_ia:
+      ia_service = OpenAIReportService()
+      if not ia_service.disponivel():
+        raise HTTPException(
+          status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+          detail=(
+            "Integração com OpenAI indisponível. "
+            "Configure OPENAI_API_KEY no ambiente da API."
+          ),
+        )
+
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(resultado)
+    
   except ValueError as exc:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail=str(exc),
+    ) from exc
+    
+  except HTTPException:
+    raise
+
+  except Exception as exc:
+    raise HTTPException(
+      status_code=status.HTTP_502_BAD_GATEWAY,
+      detail=f"Falha ao gerar relatório com IA: {exc}",
     ) from exc
 
   return AnaliseComprasResponse(status="ok", **resultado)

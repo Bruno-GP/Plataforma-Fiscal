@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS Notas_itens (
 CREATE TABLE IF NOT EXISTS Notas_cfops (
     id         BIGSERIAL PRIMARY KEY,
     codigo     VARCHAR(10) NOT NULL UNIQUE,
-    descricao  VARCHAR(255) NOT NULL
+    descricao  VARCHAR(500) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS Notas_processamento_erros (

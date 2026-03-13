@@ -32,7 +32,7 @@ export default function RelatoriosIA() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
-  const [tipoRelatorio, setTipoRelatorio] = useState<'compras' | 'vendas'>('compras');
+  const [tipoRelatorio, setTipoRelatorio] = useState<'compras' | 'vendas' | 'clientes'>('compras');
   const [totalPeriodo, setTotalPeriodo] = useState(0);
 
   const emitenteCnpj = user?.emitente_cnpj;
@@ -129,7 +129,7 @@ export default function RelatoriosIA() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Relatórios com IA</h1>
         <p className="text-muted-foreground">
-          Gere um relatório executivo automático com base nos dados fiscais de compras ou vendas ({fonteDados}).
+          Gere um relatório executivo automático com base nos dados fiscais de compras, vendas ou clientes ({fonteDados}).
         </p>
       </div>
 
@@ -145,7 +145,7 @@ export default function RelatoriosIA() {
             <Label>Tipo de relatório</Label>
             <RadioGroup
               value={tipoRelatorio}
-              onValueChange={(value) => setTipoRelatorio(value as 'compras' | 'vendas')}
+              onValueChange={(value) => setTipoRelatorio(value as 'compras' | 'vendas' | 'clientes')}
               className="flex gap-6"
             >
               <div className="flex items-center space-x-2">
@@ -155,6 +155,10 @@ export default function RelatoriosIA() {
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="vendas" id="relatorio-vendas" />
                 <Label htmlFor="relatorio-vendas">Vendas</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="clientes" id="relatorio-clientes" />
+                <Label htmlFor="relatorio-clientes">Clientes</Label>
               </div>
             </RadioGroup>
           </div>

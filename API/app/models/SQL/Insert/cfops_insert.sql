@@ -1,5 +1,5 @@
 BEGIN;
-INSERT INTO cfops (codigo, descricao) VALUES
+INSERT INTO notas_cfops (codigo, descricao) VALUES
 ('1.000', 'ENTRADAS OU AQUISIÇÕES DE SERVIÇOS DO ESTADO'),
 ('1.100', 'COMPRAS PARA INDUSTRIALIZAÇÃO, COMERCIALIZAÇÃO OU PRESTAÇÃO DE SERVIÇOS'),
 ('1.101', 'Compra para industrialização ou produção rural'),

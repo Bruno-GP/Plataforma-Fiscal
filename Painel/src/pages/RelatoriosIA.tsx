@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { useAuth } from '@/contexts/AuthContext';
+
 import { fetchNfeAnaliseCompras, fetchNfeAnaliseVendas, fetchNfeKpis, parseDecimal } from '@/services/nfe';
 import { fetchSpedAnaliseCompras, fetchSpedAnaliseVendas, fetchSpedKpis } from '@/services/sped';
 import { formatCurrency, monthLabels } from '@/services/utils';

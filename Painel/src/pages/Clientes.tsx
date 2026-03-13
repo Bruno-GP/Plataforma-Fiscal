@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Percent, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { Percent, TrendingUp, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchNfeAnaliseVendas, fetchNfeKpis, parseDecimal } from '@/services/nfe';
-import { fetchSpedAnaliseVendas, fetchSpedKpis } from '@/services/sped';
+import { fetchNfeKpis, parseDecimal } from '@/services/nfe';
+import { fetchSpedKpis } from '@/services/sped';
 import { monthLabels } from '@/services/utils';
 
 import { Header } from './components/Header';
@@ -33,9 +31,6 @@ export default function Clientes() {
   const [search, setSearch] = useState("");
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState('all');
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
-  const [report, setReport] = useState<string | null>(null);
   const { user } = useAuth();
   const usaSped = Boolean(user?.tem_sped);
   
@@ -215,37 +210,6 @@ const latestKpi = sortedResultados;
     },
   ] as const;
 
-  const handleGenerateReport = async () => {
-    if (!hasEmitenteCnpj || !emitenteCnpj) {
-      setReportError('CNPJ emitente inválido. Verifique o cadastro da empresa.');
-      return;
-    }
-
-    setIsGeneratingReport(true);
-    setReportError(null);
-
-    try {
-      const payload = {
-        emitente_cnpj: emitenteCnpj,
-        periodo_ano: safeYear,
-        periodo_mes: selectedMonth === 'all' ? undefined : Number.parseInt(selectedMonth, 10),
-        limite: 5,
-        gerar_relatorio_ia: true,
-      };
-
-      const response = usaSped
-        ? await fetchSpedAnaliseVendas(payload)
-        : await fetchNfeAnaliseVendas(payload);
-
-      setReport(response.relatorio_ia ?? 'A IA não retornou conteúdo para este período.');
-    } catch (error) {
-      setReport(null);
-      setReportError(error instanceof Error ? error.message : 'Falha ao gerar relatório de clientes com IA.');
-    } finally {
-      setIsGeneratingReport(false);
-    }
-  };
-
   return (
     <div className="space-y-6 py-6">
       <Header
@@ -294,34 +258,6 @@ const latestKpi = sortedResultados;
           showAbcReport={false}
           showAbcClassification={false}
         />
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Relatório de Clientes com IA</CardTitle>
-            <CardDescription>
-              Gere um resumo executivo com base no mesmo prompt dos relatórios de vendas.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button onClick={handleGenerateReport} disabled={isGeneratingReport || !hasEmitenteCnpj} className="gap-2">
-              {isGeneratingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {isGeneratingReport ? 'Gerando relatório...' : 'Gerar relatório de clientes com IA'}
-            </Button>
-
-            {reportError && (
-              <Alert variant="destructive">
-                <AlertTitle>Falha ao gerar relatório</AlertTitle>
-                <AlertDescription>{reportError}</AlertDescription>
-              </Alert>
-            )}
-
-            {report && (
-              <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-4 text-sm leading-6 text-foreground">
-                {report}
-              </pre>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { BellRing, FileUp, LayoutDashboard, Receipt } from 'lucide-react';
+import { FileDigit, FileSearch, FileUp, LayoutDashboard, Sparkles, Users } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 import { NavLink } from '@/components/NavLink';
@@ -13,24 +13,29 @@ import {
   SidebarHeader,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { hasUnreadUpdates } from '@/constants/updates';
 import { useAuth } from '@/contexts/AuthContext';
 
-const menuItems = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-  { title: 'Faturamento', url: '/faturamento', icon: Receipt },
-  { title: 'Importação XML', url: '/importacao-xml', icon: FileUp },
-  { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
-  // { title: 'Clientes', url: '/clientes', icon: Users },
+const menuItemsBase = [
+  { title: 'Análise de Vendas', url: '/analise-vendas', icon: LayoutDashboard },
+  { title: 'Análise de Clientes', url: '/analise-clientes', icon: Users },
+  // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
   // { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ];
+
+const menuItemImportacaoXml = { title: 'Importação XML', url: '/importacao-xml', icon: FileUp };
+const menuItemImportacaoSped = { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit };
+const menuItemAnaliseFiscal = { title: 'Análise de Compras', url: '/analise-compras', icon: FileSearch };
+const menuItemRelatoriosIA = { title: 'Relatórios com IA', url: '/relatorios-ia', icon: Sparkles };
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const location = useLocation();
   const { user } = useAuth();
-  const hasUnreadUpdateLog = hasUnreadUpdates();
+
+  const menuItems = user?.tem_sped
+    ? [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemImportacaoSped]
+    : [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemImportacaoXml];
 
   return (
     <Sidebar
@@ -68,7 +73,6 @@ export function AppSidebar() {
             <SidebarMenu className="w-full">
               {menuItems.map((item) => {
                 const isActive = location.pathname === item.url;
-                const isUpdatesItem = item.url === '/atualizacoes';
 
                 return (
                   <SidebarMenuItem key={item.title}>
@@ -89,12 +93,6 @@ export function AppSidebar() {
                             {item.title}
                           </span>
                         </span>
-
-                        {isUpdatesItem && hasUnreadUpdateLog && !collapsed && (
-                          <span className="rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-semibold uppercase text-yellow-950">
-                            Novo
-                          </span>
-                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

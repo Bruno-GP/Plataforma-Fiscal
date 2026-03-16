@@ -1,34 +1,14 @@
-import { FileDigit, FileSearch, FileUp, LayoutDashboard, LogOut, Sparkles, Users } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
-
-import { hasUnreadUpdates } from '../../contexts/updates';
+import { LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { NavLink } from '@/components/NavLink';
-
-const menuItemsBase = [
-  { title: 'Análise de Vendas', url: '/analise-vendas', icon: LayoutDashboard },
-  { title: 'Análise de Clientes', url: '/analise-clientes', icon: Users },
-  // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
-  // { title: 'Configurações', url: '/configuracoes', icon: Settings },
-]
-
-const menuItemImportacaoXml = { title: 'Importação XML', url: '/importacao-xml', icon: FileUp };
-const menuItemImportacaoSped = { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit };
-const menuItemAnaliseFiscal = { title: 'Análise de Compras', url: '/analise-compras', icon: FileSearch };
-const menuItemRelatoriosIA = { title: 'Relatórios com IA', url: '/relatorios-ia', icon: Sparkles };
+import { SidebarTrigger } from '@/components/ui/sidebar';
 
 export function AppHeader() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const nomeExibicao = user?.name?.trim() || 'Empresa';
-  const hasUnreadUpdateLog = hasUnreadUpdates();
-
-  const menuItems = user?.tem_sped
-    ? [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemImportacaoSped]
-    : [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemImportacaoXml];
 
   const handleLogout = () => {
     logout();
@@ -39,36 +19,14 @@ export function AppHeader() {
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0E1525] text-white">
       <div className="flex min-h-14 w-full flex-wrap items-center gap-2 px-4 py-2 md:flex-nowrap">
 
+        <SidebarTrigger className="text-white hover:bg-white/10 hover:text-white" />
+
         {/* ESQUERDA — Empresa / Logo */}
         <div className="shrink-0">
           <span className="block text-sm font-semibold" title={nomeExibicao}>
             {nomeExibicao}
           </span>
         </div>
-
-        <nav className="order-3 flex w-full items-center gap-1 overflow-x-auto pb-1 md:order-none md:w-auto md:flex-1 md:justify-center md:pb-0">
-          {menuItems.map((item) => {
-            const isUpdatesItem = item.url === '/atualizacoes';
-            const isUpdatesActive = location.pathname === '/atualizacoes';
-
-            return (
-              <NavLink
-                key={item.url}
-                to={item.url}
-                className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white whitespace-nowrap"
-                activeClassName="bg-white/10 text-white"
-              >
-                <item.icon className="h-4 w-4" />
-                <span>{item.title}</span>
-                {isUpdatesItem && hasUnreadUpdateLog && !isUpdatesActive && (
-                  <span className="rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-semibold uppercase text-yellow-950">
-                    Novo
-                  </span>
-                )}
-              </NavLink>
-            );
-          })}
-        </nav>
 
         {/* DIREITA — Ação */}
         <div className="ml-auto shrink-0">

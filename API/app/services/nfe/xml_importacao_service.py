@@ -55,6 +55,18 @@ class XMLImportacaoService:
           )
           continue
         
+        nfce_valida, motivo_rejeicao = self._validar_nfce_autorizada(conteudo)
+        if not nfce_valida:
+          resultados.append(
+            XMLImportacaoResultado(
+              arquivo=nome_arquivo,
+              cnpj_emitente=cnpj_emitente,
+              status="erro",
+              mensagem=motivo_rejeicao,
+            )
+          )
+          continue
+        
         if cnpj_emitente != cnpj_empresa_origem_normalizado:
           resultados.append(
             XMLImportacaoResultado(
@@ -258,3 +270,41 @@ class XMLImportacaoService:
       return digits
 
     return None
+  
+  def _validar_nfce_autorizada(self, conteudo: bytes) -> tuple[bool, str]:
+    try:
+      root = ET.fromstring(conteudo)
+    except ET.ParseError:
+      return False, "XML inválido: não foi possível interpretar o conteúdo."
+
+    nome_tag_raiz = root.tag.split("}")[-1].lower()
+
+    if nome_tag_raiz in {"inutnfe", "procinutnfe"}:
+      return False, "XML rejeitado: NFC-e inutilizada não pode ser importada."
+
+    tp_evento = self._encontrar_texto_por_tag(root, "tpEvento")
+    if tp_evento == "110111":
+      return False, "XML rejeitado: NFC-e cancelada não pode ser importada."
+
+    modelo = self._encontrar_texto_por_tag(root, "mod")
+    if modelo != "65":
+      return True, ""
+
+    status = self._encontrar_texto_por_tag(root, "cStat")
+    if status in {"100", "150"}:
+      return True, ""
+
+    if status == "101":
+      return False, "XML rejeitado: NFC-e cancelada não pode ser importada."
+
+    return False, "XML rejeitado: somente NFC-e autorizada pode ser importada."
+
+  def _encontrar_texto_por_tag(self, root: ET.Element, nome_tag: str) -> str | None:
+    elemento = next(
+      (element for element in root.iter() if element.tag.split("}")[-1] == nome_tag),
+      None,
+    )
+    if elemento is None or elemento.text is None:
+      return None
+
+    return elemento.text.strip()

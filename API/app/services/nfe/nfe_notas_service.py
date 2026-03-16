@@ -1,9 +1,11 @@
 import logging
 from typing import Iterable, Optional
+from decimal import Decimal
+from datetime import date
 
 import psycopg
 
-from app.domain.nfe.extractor import NotaExtraida
+from app.domain.nfe.extractor import NotaExtraida, ItemNota
 from app.services.nfe.postres_config import carregar_config_postgres
 from app.services.nfe.empresa_service import normalizar_cnpj
 
@@ -194,6 +196,119 @@ class NFeNotasService:
 
         logger.warning(f"✅ Notas afetadas no banco: {total}")
         return total
+    
+    def listar_notas_periodo_para_kpi(
+        self,
+        conn,
+        cnpj_emitente: str,
+        periodo_ano: int,
+        periodo_mes: int,
+    ) -> list[NotaExtraida]:
+        cnpj_normalizado = normalizar_cnpj(cnpj_emitente)
+        if not cnpj_normalizado:
+            return []
+
+        sql_notas = """
+            SELECT
+                id,
+                numero_nf,
+                emitente_cnpj,
+                modelo,
+                data_emissao,
+                natureza_operacao,
+                destinatario_documento,
+                destinatario_nome,
+                destinatario_cidade,
+                destinatario_uf,
+                valor_total_nf,
+                valor_icms,
+                valor_ipi,
+                valor_pis,
+                valor_cofins,
+                valor_produtos,
+                valor_desconto,
+                valor_frete
+            FROM public.notas
+            WHERE emitente_cnpj = %s
+              AND EXTRACT(YEAR FROM data_emissao) = %s
+              AND EXTRACT(MONTH FROM data_emissao) = %s
+            ORDER BY data_emissao, numero_nf;
+        """
+
+        sql_itens = """
+            SELECT
+                nota_id,
+                item_numero,
+                produto_codigo,
+                descricao,
+                ncm,
+                cfop,
+                quantidade,
+                valor_unitario,
+                valor_total
+            FROM public.notas_itens
+            WHERE cnpj = %s
+              AND nota_id = ANY(%s)
+            ORDER BY nota_id, item_numero;
+        """
+
+        with conn.cursor() as cur:
+            cur.execute(sql_notas, (cnpj_normalizado, periodo_ano, periodo_mes))
+            notas_rows = cur.fetchall()
+
+            if not notas_rows:
+                return []
+
+            nota_ids = [row[0] for row in notas_rows]
+
+            cur.execute(sql_itens, (cnpj_normalizado, nota_ids))
+            itens_rows = cur.fetchall()
+
+        itens_por_nota: dict[int, list[ItemNota]] = {}
+        for row in itens_rows:
+            nota_id = row[0]
+            itens_por_nota.setdefault(nota_id, []).append(
+                ItemNota(
+                    numero_item=int(row[1] or 0),
+                    codigo_produto=row[2] or "",
+                    descricao=row[3] or "",
+                    ncm=row[4] or "",
+                    cfop=row[5] or "",
+                    unidade="",
+                    quantidade=Decimal(row[6] or 0),
+                    valor_unitario=Decimal(row[7] or 0),
+                    valor_total=Decimal(row[8] or 0),
+                )
+            )
+
+        notas: list[NotaExtraida] = []
+        for row in notas_rows:
+            nota_id = row[0]
+            notas.append(
+                NotaExtraida(
+                    chave="",
+                    numero_nf=int(row[1] or 0),
+                    emitente_cnpj=row[2] or cnpj_normalizado,
+                    modelo=row[3] or "",
+                    data_emissao=row[4] if isinstance(row[4], date) else date.today(),
+                    natureza_operacao=row[5] or "",
+                    destinatario_documento=row[6] or "",
+                    destinatario_nome=row[7] or "",
+                    destinatario_cidade=row[8] or "",
+                    destinatario_uf=row[9] or "",
+                    valor_total_nf=Decimal(row[10] or 0),
+                    valor_icms=Decimal(row[11] or 0),
+                    valor_ipi=Decimal(row[12] or 0),
+                    valor_pis=Decimal(row[13] or 0),
+                    valor_cofins=Decimal(row[14] or 0),
+                    valor_produtos=Decimal(row[15] or 0),
+                    valor_desconto=Decimal(row[16] or 0),
+                    valor_frete=Decimal(row[17] or 0),
+                    itens=itens_por_nota.get(nota_id, []),
+                )
+            )
+
+        return notas
     
     def remover_notas_sem_cfop_venda(self, conn, processamento_id: int) -> int:
         logger.warning(

@@ -206,12 +206,6 @@ class ProcessarNFeService:
                             raise Exception("Processamento não registrado")
                         
                         notas_service = NFeNotasService()
-                        
-                        notas_para_kpi = notas_service.filtrar_notas_com_cfop_venda(
-                            conn=conn,
-                            notas=notas_periodo,
-                        )
-                        kpis_periodo = kpi_calculator.calcular(notas_para_kpi)
 
                         qtd = notas_service.registrar_notas(
                             conn=conn,
@@ -229,6 +223,14 @@ class ProcessarNFeService:
                             conn=conn,
                             processamento_id=processamento_id,
                         )
+                        
+                        notas_para_kpi = notas_service.listar_notas_periodo_para_kpi(
+                            conn=conn,
+                            cnpj_emitente=cnpj_emitente,
+                            periodo_ano=ano,
+                            periodo_mes=mes,
+                        )
+                        kpis_periodo = kpi_calculator.calcular(notas_para_kpi)
 
                         kpi_calculator.registrar_kpis(
                             processamento_id=processamento_id,

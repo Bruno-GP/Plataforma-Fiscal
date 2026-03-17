@@ -1,6 +1,9 @@
 from typing import List
 from datetime import datetime, date
 from decimal import Decimal
+from pathlib import Path
+from functools import lru_cache
+import json
 
 import re
 import logging
@@ -144,6 +147,60 @@ def _extrair_descricao_servico(discriminacao: str) -> str:
 
     return discriminacao.strip() or "Serviço NFSe"
 
+@lru_cache(maxsize=1)
+def _carregar_municipios_por_codigo() -> dict[str, str]:
+    caminho_municipios = Path(__file__).resolve().parent.parent.parent / "services" / "Municipios" / "municipios.json"
+    try:
+        with caminho_municipios.open(encoding="utf-8") as arquivo:
+            dados = json.load(arquivo)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    municipios: dict[str, str] = {}
+    for item in dados if isinstance(dados, list) else []:
+        codigo = "".join(ch for ch in str(item.get("id", "")) if ch.isdigit())
+        nome = str(item.get("nome", "")).strip()
+        if codigo and nome:
+            municipios[codigo] = nome
+
+    return municipios
+
+
+def _resolver_nome_municipio(codigo_ou_nome: str) -> str:
+    valor = (codigo_ou_nome or "").strip()
+    if not valor:
+        return ""
+
+    codigo = "".join(ch for ch in valor if ch.isdigit())
+    if len(codigo) >= 6:
+        return _carregar_municipios_por_codigo().get(codigo, valor)
+    return valor
+
+
+def _encontrar_textos_por_tag(root, nome_tag: str) -> list[str]:
+    if root is None:
+        return []
+
+    textos: list[str] = []
+    for element in root.iter():
+        if element.tag.split("}")[-1] != nome_tag:
+            continue
+        if element.text and element.text.strip():
+            textos.append(element.text.strip())
+    return textos
+
+
+def _extrair_nome_tomador(tomador) -> str:
+    if tomador is None:
+        return ""
+
+    for tag in ("RazaoSocial", "NomeRazaoSocial", "Nome", "xNome"):
+        for valor in _encontrar_textos_por_tag(tomador, tag):
+            if valor:
+                return valor
+    return ""
+
+
 def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
     root = xml_nfe.xml
     numero_nf = int(_encontrar_texto_xml(root, "Numero") or "0")
@@ -159,9 +216,15 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
 
     tomador = _encontrar_elemento(root, "TomadorServico")
 
-    destinatario_nome = _encontrar_texto_xml(tomador, "RazaoSocial") if tomador is not None else ""
-    destinatario_cidade = _encontrar_texto_xml(tomador, "CodigoMunicipio") if tomador is not None else ""
-    destinatario_uf = _encontrar_texto_xml(tomador, "Uf") if tomador is not None else ""
+    destinatario_nome = _extrair_nome_tomador(tomador)
+    destinatario_cidade_codigo = _encontrar_texto_xml(tomador, "CodigoMunicipio") if tomador is not None else ""
+    destinatario_cidade = _resolver_nome_municipio(destinatario_cidade_codigo)
+    destinatario_uf = (
+        _encontrar_texto_xml(tomador, "Uf")
+        or _encontrar_texto_xml(tomador, "UF")
+        if tomador is not None
+        else ""
+    )
 
     tomador_doc = ""
     if tomador is not None:

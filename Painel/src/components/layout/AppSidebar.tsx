@@ -41,7 +41,15 @@ export function AppSidebar() {
     <Sidebar
       variant="sidebar"
       collapsible="icon"
-      className="shrink-0 bg-[#0E1525] text-white border-r border-white/10"
+      className="
+        shrink-0
+        w-64
+        group-data-[collapsible=icon]:w-16
+        bg-[#0E1525]
+        text-white
+        border-r
+        border-white/10
+      "
     >
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2 bg-[#0E1525]">
         <div className="flex min-w-0 items-center gap-2 group-data-[collapsible=icon]:justify-center">

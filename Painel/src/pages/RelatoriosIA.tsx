@@ -6,7 +6,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,6 +31,14 @@ const monthOptions = [
   ...monthLabels.map((label, index) => ({ value: String(index + 1), label })),
 ];
 
+const reportTypeOptions = [
+  { value: 'compras', label: 'Compras' },
+  { value: 'vendas', label: 'Vendas' },
+  { value: 'clientes', label: 'Clientes' },
+] as const;
+
+type ReportType = (typeof reportTypeOptions)[number]['value'];
+
 export default function RelatoriosIA() {
   const { user } = useAuth();
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
@@ -39,7 +46,7 @@ export default function RelatoriosIA() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
-  const [tipoRelatorio, setTipoRelatorio] = useState<'compras' | 'vendas' | 'clientes'>('compras');
+  const [tipoRelatorio, setTipoRelatorio] = useState<ReportType>('compras');
   const [totalPeriodo, setTotalPeriodo] = useState(0);
 
   const emitenteCnpj = user?.emitente_cnpj;
@@ -150,35 +157,29 @@ export default function RelatoriosIA() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Tipo de relatório</Label>
-            <RadioGroup
-              value={tipoRelatorio}
-              onValueChange={(value) => setTipoRelatorio(value as 'compras' | 'vendas' | 'clientes')}
-              className="flex gap-6"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="compras" id="relatorio-compras" />
-                <Label htmlFor="relatorio-compras">Compras</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="vendas" id="relatorio-vendas" />
-                <Label htmlFor="relatorio-vendas">Vendas</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="clientes" id="relatorio-clientes" />
-                <Label htmlFor="relatorio-clientes">Clientes</Label>
-              </div>
-            </RadioGroup>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="relatorio-tipo">Relatório</Label>
+              <Select value={tipoRelatorio} onValueChange={(value) => setTipoRelatorio(value as ReportType)}>
+                <SelectTrigger id="relatorio-tipo">
+                  <SelectValue placeholder="Selecione o relatório" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0E1525]">
+                  {reportTypeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="relatorio-ano">Ano</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
                 <SelectTrigger id="relatorio-ano">
                   <SelectValue placeholder="Selecione o ano" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-[#0E1525]">
                   {availableYears.map((year) => (
                     <SelectItem key={year} value={String(year)}>
                       {year}
@@ -194,7 +195,7 @@ export default function RelatoriosIA() {
                 <SelectTrigger id="relatorio-mes">
                   <SelectValue placeholder="Selecione o mês" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-[#0E1525]">
                   {monthOptions.map((month) => (
                     <SelectItem key={month.value} value={month.value}>
                       {month.label}

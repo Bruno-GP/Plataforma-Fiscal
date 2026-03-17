@@ -7,6 +7,7 @@ import json
 
 import re
 import logging
+import unicodedata
 
 from app.domain.nfe.xml_models import XmlNFe
 
@@ -147,34 +148,51 @@ def _extrair_descricao_servico(discriminacao: str) -> str:
 
     return discriminacao.strip() or "Serviço NFSe"
 
+def _normalizar_chave_municipio(valor: str) -> str:
+    texto = " ".join((valor or "").strip().upper().split())
+    if not texto:
+        return ""
+    sem_acentos = unicodedata.normalize("NFD", texto)
+    return "".join(ch for ch in sem_acentos if unicodedata.category(ch) != "Mn")
+
 @lru_cache(maxsize=1)
-def _carregar_municipios_por_codigo() -> dict[str, str]:
-    caminho_municipios = Path(__file__).resolve().parent.parent.parent / "services" / "Municipios" / "municipios.json"
+def _carregar_municipios() -> tuple[dict[str, str], dict[str, str]]:
+    caminho_municipios = Path(__file__).resolve().parent.parent.parent / "services" / "Municipios" / "LL-municipios.json"
     try:
         with caminho_municipios.open(encoding="utf-8") as arquivo:
             dados = json.load(arquivo)
     except (OSError, json.JSONDecodeError):
-        return {}
+        return {}, {}
 
-    municipios: dict[str, str] = {}
-    for item in dados if isinstance(dados, list) else []:
-        codigo = "".join(ch for ch in str(item.get("id", "")) if ch.isdigit())
-        nome = str(item.get("nome", "")).strip()
+    municipios_por_codigo: dict[str, str] = {}
+    municipios_por_nome: dict[str, str] = {}
+
+    features = dados.get("features", []) if isinstance(dados, dict) else []
+    for item in features if isinstance(features, list) else []:
+        propriedades = item.get("properties", {}) if isinstance(item, dict) else {}
+        codigo = "".join(ch for ch in str(propriedades.get("id", "")) if ch.isdigit())
+        nome = str(propriedades.get("name", "")).strip()
+        nome_normalizado = _normalizar_chave_municipio(nome)
         if codigo and nome:
-            municipios[codigo] = nome
+            municipios_por_codigo[codigo] = nome
+            municipios_por_nome[nome_normalizado] = nome
 
-    return municipios
+    return municipios_por_codigo, municipios_por_nome
 
 
 def _resolver_nome_municipio(codigo_ou_nome: str) -> str:
     valor = (codigo_ou_nome or "").strip()
     if not valor:
         return ""
+    
+    municipios_por_codigo, municipios_por_nome = _carregar_municipios()
 
     codigo = "".join(ch for ch in valor if ch.isdigit())
     if len(codigo) >= 6:
-        return _carregar_municipios_por_codigo().get(codigo, valor)
-    return valor
+        return municipios_por_codigo.get(codigo, valor)
+
+    nome_normalizado = _normalizar_chave_municipio(valor)
+    return municipios_por_nome.get(nome_normalizado, valor)
 
 
 def _encontrar_textos_por_tag(root, nome_tag: str) -> list[str]:
@@ -324,7 +342,11 @@ class NFeExtractor:
                 )
 
                 ender = dest.find("nfe:enderDest", NS)
-                destinatario_cidade = ender.findtext("nfe:xMun", "", NS) if ender is not None else ""
+                destinatario_cidade = (
+                    _resolver_nome_municipio(ender.findtext("nfe:xMun", "", NS))
+                    if ender is not None
+                    else ""
+                )
                 destinatario_uf = ender.findtext("nfe:UF", "", NS) if ender is not None else ""
             else:
                 destinatario_nome = ""

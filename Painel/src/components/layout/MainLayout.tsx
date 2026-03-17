@@ -47,7 +47,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
           <SidebarInset className="min-w-0 flex-1">
             <div className="min-h-screen w-full bg-background">
-              <AppHeader />
+              {/* <AppHeader /> */}
 
             {totalPendentes > 0 && !user?.tem_sped && (
               <div className="border-b border-amber-200 bg-amber-50">

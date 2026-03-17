@@ -42,32 +42,34 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <div className="flex min-h-screen w-full">
+        <AppSidebar />
 
-      <SidebarInset>
-        <div className="min-h-screen w-full bg-background">
-          <AppHeader />
+          <SidebarInset className="min-w-0 flex-1">
+            <div className="min-h-screen w-full bg-background">
+              <AppHeader />
 
-          {totalPendentes > 0 && !user?.tem_sped && (
-            <div className="border-b border-amber-200 bg-amber-50">
-              <div className="mx-auto flex min-h-11 max-w-[1700px] items-center gap-2 pr-4 pl-8 py-2 text-sm text-amber-900 md:pr-8 md:pl-14">
-                <span>
-                  Ainda faltam XMLs a serem processados ({totalPendentes}). O botão <strong>Processar NFe</strong> continua habilitado.
-                </span>
-                <Link to="/importacao-xml" className="ml-auto whitespace-nowrap font-medium underline">
-                  Ir para Importação XML
-                </Link>
+            {totalPendentes > 0 && !user?.tem_sped && (
+              <div className="border-b border-amber-200 bg-amber-50">
+                <div className="mx-auto flex min-h-11 max-w-[1700px] items-center gap-2 py-2 pr-4 pl-8 text-sm text-amber-900 md:pr-8 md:pl-14">
+                  <span>
+                    Ainda faltam XMLs a serem processados ({totalPendentes}). O botão <strong>Processar NFe</strong> continua habilitado.
+                  </span>
+                  <Link to="/importacao-xml" className="ml-auto whitespace-nowrap font-medium underline">
+                    Ir para Importação XML
+                  </Link>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <main className="min-w-0 overflow-x-hidden">
-            <div className="mx-auto min-w-0 max-w-[1700px] pr-4 pl-8 md:pr-8 md:pl-14">
-              {children}
-            </div>
-          </main>
-        </div>
-      </SidebarInset>
+            <main className="min-w-0 overflow-x-hidden">
+              <div className="mx-auto min-w-0 max-w-[1700px] pr-4 pl-8 md:pr-8 md:pl-14">
+                {children}
+              </div>
+            </main>
+          </div>
+        </SidebarInset>
+      </div>
     </SidebarProvider>
   );
 }

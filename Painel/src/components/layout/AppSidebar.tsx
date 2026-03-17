@@ -43,22 +43,22 @@ export function AppSidebar() {
       collapsible="icon"
       className="
         shrink-0
-        w-64
-        group-data-[collapsible=icon]:w-16
+        w-56
+        group-data-[collapsible=icon]:w-14
         bg-[#0E1525]
         text-white
         border-r
         border-white/10
       "
     >
-      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2 bg-[#0E1525]">
+      <SidebarHeader className="p-3 group-data-[collapsible=icon]:p-2 bg-[#0E1525]">
         <div className="flex min-w-0 items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <div
             className="
               flex min-w-0 items-center rounded-md bg-[#0E1525] text-white text-sm font-semibold
               border border-white/10 overflow-hidden
-              px-3 py-2 w-full
-              group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:h-10
+              px-2.5 py-1.5 w-full
+              group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:h-9
               group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0
               group-data-[collapsible=icon]:justify-center
             "
@@ -76,7 +76,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="bg-[#0E1525]">
-        <SidebarGroup className="px-4 group-data-[collapsible=icon]:px-2">
+        <SidebarGroup className="px-3 group-data-[collapsible=icon]:px-1.5">
           <SidebarGroupContent className="flex justify-center">
             <SidebarMenu className="w-full">
               {menuItems.map((item) => {
@@ -87,16 +87,17 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       asChild
                       size="sm"
+                      className="h-6 text-[11px]"
                       isActive={isActive}
                       tooltip={collapsed ? item.title : undefined}
                     >
                       <NavLink
                         to={item.url}
-                        className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center text-sm text-white/80 hover:text-white"
+                        className="flex items-center justify-between gap-1.5 group-data-[collapsible=icon]:justify-center text-[11px] text-white/80 hover:text-white"
                         activeClassName="bg-white/10 text-white"
                       >
-                        <span className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
+                        <span className="flex items-center gap-1.5">
+                          <item.icon className="h-3.5 w-3.5" />
                           <span className="group-data-[collapsible=icon]:hidden">
                             {item.title}
                           </span>

@@ -128,6 +128,21 @@ def _encontrar_texto_xml(root, nome_tag: str) -> str:
         return ""
     return elemento.text.strip()
 
+def _encontrar_elemento(root, nome_tag: str):
+    return next(
+        (element for element in root.iter() if element.tag.split("}")[-1] == nome_tag),
+        None,
+    )
+
+def _extrair_descricao_servico(discriminacao: str) -> str:
+    if not discriminacao:
+        return "Serviço NFSe"
+
+    match = re.search(r"Descricao\s*=\s*([^,;|]+)", discriminacao, flags=re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+
+    return discriminacao.strip() or "Serviço NFSe"
 
 def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
     root = xml_nfe.xml
@@ -142,15 +157,22 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
     valor_iss = Decimal(_encontrar_texto_xml(root, "ValorIss") or "0")
     valor_desconto = Decimal(_encontrar_texto_xml(root, "DescontoIncondicionado") or "0")
 
-    destinatario_nome = _encontrar_texto_xml(root, "RazaoSocial")
-    destinatario_cidade = _encontrar_texto_xml(root, "CodigoMunicipio")
-    destinatario_uf = _encontrar_texto_xml(root, "Uf")
+    tomador = _encontrar_elemento(root, "TomadorServico")
+
+    destinatario_nome = _encontrar_texto_xml(tomador, "RazaoSocial") if tomador is not None else ""
+    destinatario_cidade = _encontrar_texto_xml(tomador, "CodigoMunicipio") if tomador is not None else ""
+    destinatario_uf = _encontrar_texto_xml(tomador, "Uf") if tomador is not None else ""
 
     tomador_doc = ""
-    for element in root.iter():
-        tag = element.tag.split("}")[-1]
-        if tag in {"Cnpj", "CPF", "CNPJ"} and element.text:
-            tomador_doc = element.text.strip()
+    if tomador is not None:
+        tomador_doc = (
+            _encontrar_texto_xml(tomador, "Cnpj")
+            or _encontrar_texto_xml(tomador, "CNPJ")
+            or _encontrar_texto_xml(tomador, "Cpf")
+            or _encontrar_texto_xml(tomador, "CPF")
+        )
+
+    descricao_servico = _extrair_descricao_servico(_encontrar_texto_xml(root, "Discriminacao"))
 
     return NotaExtraida(
         chave=str(numero_nf),
@@ -175,9 +197,9 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
             ItemNota(
                 numero_item=1,
                 codigo_produto=_encontrar_texto_xml(root, "ItemListaServico"),
-                descricao=_encontrar_texto_xml(root, "Discriminacao") or "Serviço NFSe",
-                ncm="",
-                cfop="",
+                descricao=descricao_servico,
+                ncm="00000000",
+                cfop="5933",
                 unidade="UN",
                 quantidade=Decimal("1"),
                 valor_unitario=valor_total_nf,

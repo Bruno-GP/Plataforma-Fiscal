@@ -48,6 +48,8 @@ export function AppSidebar() {
       collapsible="none"
       className="
         shrink-0
+        sticky top-0
+        h-svh
         w-56
         bg-[#0E1525]
         text-white
@@ -65,7 +67,7 @@ export function AppSidebar() {
             "
             title={user?.name ?? 'Empresa'}
           >
-            <span className="block w-full truncate whitespace-nowrap text-sm">
+            <span className="block w-full truncate whitespace-nowrap text-xs">
               {user?.name ?? 'Empresa'}
             </span>
 
@@ -88,13 +90,13 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       asChild
                       size="sm"
-                      className="h-9 text-sm"
+                      className="h-9 text-sm hover:bg-transparent hover:text-inherit data-[active=true]:bg-white data-[active=true]:text-[#0E1525] data-[active=true]:hover:bg-white/90 data-[active=true]:hover:text-[#0E1525]"
                       isActive={isActive}
                     >
                       <NavLink
                         to={item.url}
-                        className="flex items-center justify-between gap-2 text-sm text-white/80 hover:text-white"
-                        activeClassName="bg-white/10 text-white"
+                        className="flex items-center justify-between gap-2 text-sm text-white/80"
+                        activeClassName="bg-white text-[#0E1525] hover:bg-white/90"
                       >
                         <span className="flex items-center gap-2">
                           <item.icon className="h-4 w-4" />

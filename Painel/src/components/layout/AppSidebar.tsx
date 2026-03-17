@@ -12,9 +12,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
-  SidebarFooter,
-  SidebarTrigger,
-  useSidebar
+  SidebarFooter
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -31,8 +29,6 @@ const menuItemAnaliseFiscal = { title: 'Análise de Compras', url: '/analise-com
 const menuItemRelatoriosIA = { title: 'Relatórios com IA', url: '/relatorios-ia', icon: Sparkles };
 
 export function AppSidebar() {
-  const { state } = useSidebar();
-  const collapsed = state === 'collapsed';
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -49,45 +45,39 @@ export function AppSidebar() {
   return (
     <Sidebar
       variant="sidebar"
-      collapsible="icon"
+      collapsible="none"
       className="
         shrink-0
         w-56
-        group-data-[collapsible=icon]:w-14
         bg-[#0E1525]
         text-white
         border-r
         border-white/10
       "
     >
-      <SidebarHeader className="gap-3 p-3 group-data-[collapsible=icon]:p-2 bg-[#0E1525]">
+      <SidebarHeader className="gap-3 bg-[#0E1525] p-3">
         <div className="flex items-center justify-between gap-2">
           <div
             className="
               flex min-w-0 items-center rounded-md bg-[#0E1525] text-white text-sm font-semibold
               border border-white/10 overflow-hidden
               px-2.5 py-1.5 w-full
-              group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:h-9
-              group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0
-              group-data-[collapsible=icon]:justify-center
             "
             title={user?.name ?? 'Empresa'}
           >
-            <span className="block w-full truncate whitespace-nowrap text-xs group-data-[collapsible=icon]:hidden">
+            <span className="block w-full truncate whitespace-nowrap text-sm">
               {user?.name ?? 'Empresa'}
             </span>
 
-            <span className="hidden text-xs group-data-[collapsible=icon]:block">
+            {/* <span className="hidden text-xs group-data-[collapsible=icon]:block">
               {(user?.name ?? 'E').slice(0, 1).toUpperCase()}
-            </span>
+            </span> */}
           </div>
-
-          <SidebarTrigger className="shrink-0 text-white hover:bg-white/10 hover:text-white" />
         </div>
       </SidebarHeader>
 
       <SidebarContent className="bg-[#0E1525]">
-        <SidebarGroup className="px-2.5 group-data-[collapsible=icon]:px-1.5">
+        <SidebarGroup className="px-2.5">
           <SidebarGroupContent className="flex justify-center">
             <SidebarMenu className="w-full">
               {menuItems.map((item) => {
@@ -98,20 +88,17 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       asChild
                       size="sm"
-                      className="h-7 text-[10px]"
+                      className="h-9 text-sm"
                       isActive={isActive}
-                      tooltip={collapsed ? item.title : undefined}
                     >
                       <NavLink
                         to={item.url}
-                        className="flex items-center justify-between gap-1.5 text-[10px] text-white/80 hover:text-white group-data-[collapsible=icon]:justify-center"
+                        className="flex items-center justify-between gap-2 text-sm text-white/80 hover:text-white"
                         activeClassName="bg-white/10 text-white"
                       >
-                        <span className="flex items-center gap-1.5">
-                          <item.icon className="h-3 w-3" />
-                          <span className="group-data-[collapsible=icon]:hidden">
-                            {item.title}
-                          </span>
+                        <span className="flex items-center gap-2">
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
                         </span>
                       </NavLink>
                     </SidebarMenuButton>
@@ -123,15 +110,14 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="bg-[#0E1525] p-3 group-data-[collapsible=icon]:p-2">
+      <SidebarFooter className="bg-[#0E1525] p-3">
         <Button
           variant="outline"
           onClick={handleLogout}
-          className="w-full border-white/20 text-white hover:bg-white/10 group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:px-0"
           title="Sair"
         >
           <LogOut className="h-4 w-4" />
-          <span className="group-data-[collapsible=icon]:hidden">Sair</span>
+          <span>Sair</span>
         </Button>
       </SidebarFooter>
     </Sidebar>

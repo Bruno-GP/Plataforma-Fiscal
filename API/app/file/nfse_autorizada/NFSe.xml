@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompNfse>
+    <Nfse>
+        <InfNfse Id="19888">
+            <Numero>19888</Numero>
+            <CodigoVerificacao>LRSFYFXIC</CodigoVerificacao>
+            <DataEmissao>2026-03-16T15:34:17.000</DataEmissao>
+            <IdentificacaoRps/>
+            <NaturezaOperacao>1</NaturezaOperacao>
+            <OptanteSimplesNacional>1</OptanteSimplesNacional>
+            <Competencia>2026-03-01T00:00:00.000</Competencia>
+            <OutrasInformacoes>Nota emitida via DPS https://nota-eletronica.betha.cloud/nota-eletronica/notas/api/notas-fiscais/pdf/LRSFYFXIC_w6SLVaTadu3TTacOhMdWfQ==</OutrasInformacoes>
+            <Servico>
+                <Valores>
+                    <ValorServicos>260.00</ValorServicos>
+                    <ValorDeducoes>0</ValorDeducoes>
+                    <IssRetido>2</IssRetido>
+                    <ValorIss>11.21</ValorIss>
+                    <ValorIssRetido>0</ValorIssRetido>
+                    <BaseCalculo>260.00</BaseCalculo>
+                    <Aliquota>4.31</Aliquota>
+                    <ValorLiquidoNfse>260.00</ValorLiquidoNfse>
+                    <DescontoIncondicionado>0</DescontoIncondicionado>
+                    <DescontoCondicionado>0</DescontoCondicionado>
+                </Valores>
+                <ItemListaServico>140101</ItemListaServico>
+                <Discriminacao>{[[Descricao=SERVICO DE CONSERTOS E REPAROS | Qtde: 2 | Valor: R$ 260,00\s\nObservação: ATENDIMENTO TECNICO EM APTO 18 - FIAÇÃO - RPS Nº 13359\s\nPortador: A prazo R$ 260,00\s\nParcelas: | NUMERO: 105349/01-1 | VALOR: R$ 260,00 | VENCIMENTO: 13-04-2026][ItemServico=140101][Quantidade=1][ValorUnitario=260.00][ValorServico=260.00][ValorBaseCalculo=260.00][Aliquota=4.31][Deducoes=0][DescontoCondicionado=0][DescontoIncondicionado=0]]}</Discriminacao>
+                <CodigoMunicipio>4208906</CodigoMunicipio>
+            </Servico>
+            <PrestadorServico>
+                <IdentificacaoPrestador>
+                    <Cnpj>00572556000152</Cnpj>
+                    <InscricaoMunicipal>17807</InscricaoMunicipal>
+                </IdentificacaoPrestador>
+                <RazaoSocial>PORTEC PORTOES ELETRONICOS LTDA EPP.</RazaoSocial>
+                <Endereco>
+                    <Endereco>JOAO PLANINCHECK</Endereco>
+                    <Numero>1479</Numero>
+                    <Complemento>societario1@gumz.com.br</Complemento>
+                    <Bairro>NOVA BRASILIA</Bairro>
+                    <CodigoMunicipio>4208906</CodigoMunicipio>
+                    <Uf>SC</Uf>
+                    <Cep>89252220</Cep>
+                </Endereco>
+                <Contato/>
+            </PrestadorServico>
+            <TomadorServico>
+                <IdentificacaoTomador>
+                    <CpfCnpj>
+                        <Cnpj>01063061000160</Cnpj>
+                    </CpfCnpj>
+                </IdentificacaoTomador>
+                <RazaoSocial>ADMINISTRADORA DE BENS GAEL LTDA</RazaoSocial>
+                <Endereco>
+                    <Endereco>RUA AV. MARECHAL DEODORO DA FONSECA</Endereco>
+                    <Numero>88</Numero>
+                    <Bairro>CENTRO</Bairro>
+                    <CodigoMunicipio>4208906</CodigoMunicipio>
+                    <Uf>SC</Uf>
+                    <Cep>89251700</Cep>
+                </Endereco>
+                <Contato>
+                    <Telefone>4733720442</Telefone>
+                    <Email>gaeladmbens@gmail.com</Email>
+                </Contato>
+            </TomadorServico>
+            <IntermediarioServico/>
+            <OrgaoGerador>
+                <CodigoMunicipio>4208906</CodigoMunicipio>
+                <Uf>SC</Uf>
+            </OrgaoGerador>
+            <ConstrucaoCivil/>
+            <CondicaoPagamento/>
+        </InfNfse>
+    </Nfse>
+    <NfseCancelamento>
+        <Confirmacao>
+            <Pedido>
+                <InfPedidoCancelamento/>
+            </Pedido>
+            <InfConfirmacaoCancelamento>
+                <Sucesso>false</Sucesso>
+            </InfConfirmacaoCancelamento>
+        </Confirmacao>
+    </NfseCancelamento>
+    <NfseSubstituicao>
+        <SubstituicaoNfse/>
+    </NfseSubstituicao>
+</CompNfse>

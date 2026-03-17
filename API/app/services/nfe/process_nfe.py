@@ -11,11 +11,10 @@ from app.models.nfe.schemas import (
     ProcessarNFeRequest,
     ProcessarNFeResponse,
     ErroProcessamento,
-    KPIPorPeriodo, 
-    KPIsRelatorio
+    KPIPorPeriodo
 )
 
-from app.domain.nfe.xml_reader import XmlReader, NS
+from app.domain.nfe.xml_reader import XmlReader, extrair_emitente_xml
 from app.domain.nfe.xml_models import XmlNFe
 from app.domain.nfe.extractor import NFeExtractor
 from app.domain.nfe.consolidator import NFeConsolidator
@@ -56,14 +55,8 @@ class ProcessarNFeService:
             except ET.ParseError:
                 continue
 
-            emit = root.find(".//nfe:emit", NS)
-            if emit is None:
-                continue
-
-            nome_emitente = emit.findtext("nfe:xNome", default="", namespaces=NS)
-            cnpj_xml = normalizar_cnpj(
-                emit.findtext("nfe:CNPJ", default="", namespaces=NS)
-            )
+            cnpj_extraido, nome_emitente = extrair_emitente_xml(root)
+            cnpj_xml = normalizar_cnpj(cnpj_extraido)
 
             if not cnpj_xml or cnpj_xml != cnpj_emitente_normalizado:
                 continue
@@ -73,7 +66,7 @@ class ProcessarNFeService:
                     caminho=nome_arquivo,
                     xml=root,
                     emitente_cnpj=cnpj_xml,
-                    emitente_nome=nome_emitente,
+                    emitente_nome=nome_emitente or "",
                 )
             )
             ids_processados.append(xml_id)

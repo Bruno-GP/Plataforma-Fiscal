@@ -319,6 +319,7 @@ class NFeNotasService:
         sql = """
             DELETE FROM public.notas AS n
             WHERE n.processamento_id = %s
+              AND COALESCE(n.modelo, '') <> 'NFSE'
               AND NOT EXISTS (
                 SELECT 1
                 FROM public.notas_itens AS i

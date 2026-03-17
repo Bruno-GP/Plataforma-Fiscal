@@ -118,6 +118,74 @@ class NotaExtraida:
 # =========================
 
 """Converte XMLs já carregados em objetos de domínio usados no processamento."""
+
+def _encontrar_texto_xml(root, nome_tag: str) -> str:
+    elemento = next(
+        (element for element in root.iter() if element.tag.split("}")[-1] == nome_tag),
+        None,
+    )
+    if elemento is None or elemento.text is None:
+        return ""
+    return elemento.text.strip()
+
+
+def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
+    root = xml_nfe.xml
+    numero_nf = int(_encontrar_texto_xml(root, "Numero") or "0")
+    data_emissao_str = _encontrar_texto_xml(root, "DataEmissao")
+    if not data_emissao_str:
+        return None
+
+    data_emissao = datetime.fromisoformat(data_emissao_str).date()
+
+    valor_total_nf = Decimal(_encontrar_texto_xml(root, "ValorServicos") or "0")
+    valor_iss = Decimal(_encontrar_texto_xml(root, "ValorIss") or "0")
+    valor_desconto = Decimal(_encontrar_texto_xml(root, "DescontoIncondicionado") or "0")
+
+    destinatario_nome = _encontrar_texto_xml(root, "RazaoSocial")
+    destinatario_cidade = _encontrar_texto_xml(root, "CodigoMunicipio")
+    destinatario_uf = _encontrar_texto_xml(root, "Uf")
+
+    tomador_doc = ""
+    for element in root.iter():
+        tag = element.tag.split("}")[-1]
+        if tag in {"Cnpj", "CPF", "CNPJ"} and element.text:
+            tomador_doc = element.text.strip()
+
+    return NotaExtraida(
+        chave=str(numero_nf),
+        numero_nf=numero_nf,
+        emitente_cnpj=xml_nfe.emitente_cnpj,
+        modelo="NFSE",
+        data_emissao=data_emissao,
+        natureza_operacao="SERVICO",
+        destinatario_documento=tomador_doc,
+        destinatario_nome=destinatario_nome,
+        destinatario_cidade=destinatario_cidade,
+        destinatario_uf=destinatario_uf,
+        valor_total_nf=valor_total_nf,
+        valor_icms=Decimal("0"),
+        valor_ipi=Decimal("0"),
+        valor_pis=Decimal("0"),
+        valor_cofins=Decimal("0"),
+        valor_produtos=valor_total_nf,
+        valor_desconto=valor_desconto,
+        valor_frete=Decimal("0"),
+        itens=[
+            ItemNota(
+                numero_item=1,
+                codigo_produto=_encontrar_texto_xml(root, "ItemListaServico"),
+                descricao=_encontrar_texto_xml(root, "Discriminacao") or "Serviço NFSe",
+                ncm="",
+                cfop="",
+                unidade="UN",
+                quantidade=Decimal("1"),
+                valor_unitario=valor_total_nf,
+                valor_total=valor_total_nf,
+            )
+        ],
+    )
+
 class NFeExtractor:
     def extrair(self, xmls: List[XmlNFe]) -> List[NotaExtraida]:
         notas: List[NotaExtraida] = []
@@ -126,7 +194,9 @@ class NFeExtractor:
             root = xml_nfe.xml
             inf = root.find(".//nfe:infNFe", NS)
             if inf is None:
-                # Sem bloco principal da NFe não há dados mínimos para extração.
+                nota_nfse = _extrair_nfse(xml_nfe)
+                if nota_nfse is not None:
+                    notas.append(nota_nfse)
                 continue
 
             # ===== Identificação =====

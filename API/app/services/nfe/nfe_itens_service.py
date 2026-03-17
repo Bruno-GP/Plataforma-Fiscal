@@ -17,6 +17,20 @@ formatter = logging.Formatter(
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
+def _limitar_texto(valor: str | None, limite: int) -> str:
+    if valor is None:
+        return ""
+
+    texto = str(valor).strip()
+    if len(texto) <= limite:
+        return texto
+
+    logger.warning(
+        "Campo textual truncado de %s para %s caracteres",
+        len(texto),
+        limite,
+    )
+    return texto[:limite]
 
 class NFeItensService:
     def __init__(self):
@@ -114,6 +128,12 @@ class NFeItensService:
 
                     nota_id, empresa_id, cnpj = resultado
                     for item in nota.itens:
+                        
+                        codigo_produto = _limitar_texto(item.codigo_produto, 120)
+                        descricao = _limitar_texto(item.descricao, 255)
+                        ncm = _limitar_texto(item.ncm, 20)
+                        cfop = _limitar_texto(item.cfop, 10)
+                    
                         cur.execute(
                             sql_insert_item,
                             (
@@ -121,16 +141,16 @@ class NFeItensService:
                                 empresa_id,
                                 cnpj,
                                 item.numero_item,
-                                item.codigo_produto,
-                                item.descricao,
-                                item.ncm,
-                                item.cfop,
+                                codigo_produto,
+                                descricao,
+                                ncm,
+                                cfop,
                                 item.quantidade,
                                 item.valor_unitario,
                                 item.valor_total,
                                 nota_id,
                                 item.numero_item,
-                                item.codigo_produto,
+                                codigo_produto,
                             ),
                         )
                         inseridos += cur.rowcount

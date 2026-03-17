@@ -231,22 +231,35 @@ class OpenAIReportService:
     )
     
   def _carregar_prompt_agente(self) -> str:
-    prompt_padrao = (
-      "Você é um analista fiscal e financeiro sênior. "
-      "Gere um relatório executivo em português do Brasil, objetivo, "
-      "com insights acionáveis e linguagem simples para gestores."
-    )
 
     caminho_prompt = Path(__file__).resolve().parent / "Agents" / "Agente_Relatorio_Executivo.txt"
     if not caminho_prompt.exists():
-      return prompt_padrao
-
+      raise ValueError(
+        "Arquivo de prompt não encontrado: "
+        f"{caminho_prompt}. "
+        "Verifique se o arquivo Agente_Relatorio_Executivo.txt está presente."
+      )
     try:
       conteudo = caminho_prompt.read_text(encoding="utf-8").strip()
-      return conteudo or prompt_padrao
+      if not conteudo:
+        raise ValueError(
+          "Arquivo de prompt vazio: "
+          f"{caminho_prompt}. "
+          "Preencha o arquivo Agente_Relatorio_Executivo.txt para gerar o relatório de IA."
+        )
+
+      return conteudo
     except Exception as exc:
-      logger.warning("Falha ao carregar prompt do agente em %s: %s", caminho_prompt, exc)
-      return prompt_padrao
+        if isinstance(exc, ValueError):
+          raise
+      
+        logger.warning("Falha ao carregar prompt do agente em %s: %s", caminho_prompt, exc)
+        
+        raise ValueError(
+        "Falha ao carregar arquivo de prompt do agente: "
+        f"{caminho_prompt}. "
+        "Verifique permissões e encoding do arquivo."
+      ) from exc
 
   def _formatar_decimal(self, valor: Decimal | None) -> str:
     if valor is None:

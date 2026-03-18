@@ -12,6 +12,22 @@ from app.services.nfe.postres_config import carregar_config_postgres
 logger = logging.getLogger("KPICalculator")
 logger.setLevel(logging.INFO)
 
+def _normalizar_nome_cliente(nome: str | None) -> str:
+    valor = (nome or "").strip()
+    if not valor:
+        return "CLIENTE NÃO IDENTIFICADO"
+
+    if "/" not in valor:
+        return valor
+
+    prefixo, sufixo = valor.split("/", 1)
+    prefixo_limpo = "".join(ch for ch in prefixo if ch.isdigit())
+
+    if prefixo_limpo and len(prefixo_limpo) >= 11 and sufixo.strip():
+        return sufixo.strip()
+
+    return valor
+
 def _serializar_decimais(valor):
     if isinstance(valor, Decimal):
         return str(valor)
@@ -60,8 +76,7 @@ class KPICalculator:
 
         clientes = defaultdict(Decimal)
         for n in notas:
-            nome = n.destinatario_nome or "CLIENTE NÃO IDENTIFICADO"
-            cliente = nome.split("/", 1)[-1].strip()
+            cliente = _normalizar_nome_cliente(n.destinatario_nome)
             clientes[cliente] += n.valor_total_nf
 
         produtos = defaultdict(Decimal)

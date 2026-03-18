@@ -238,8 +238,11 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
 
     data_emissao = datetime.fromisoformat(data_emissao_str).date()
 
-    valor_total_nf = Decimal(_encontrar_texto_xml(root, "ValorServicos") or "0")
-    valor_iss = Decimal(_encontrar_texto_xml(root, "ValorIss") or "0")
+    valor_total_servicos = Decimal(_encontrar_texto_xml(root, "ValorServicos") or "0")
+    valor_total_nf = Decimal(_encontrar_texto_xml(root, "ValorLiquidoNfse") or "0")
+    valor_iss_retido = Decimal(_encontrar_texto_xml(root, "ValorIssRetido") or "0")
+    outras_retencoes = Decimal(_encontrar_texto_xml(root, "OutrasRetencoes") or "0")
+    valor_impostos_servico = valor_iss_retido + outras_retencoes
     valor_desconto = Decimal(_encontrar_texto_xml(root, "DescontoIncondicionado") or "0")
 
     tomador = _encontrar_elemento(root, "TomadorServico")
@@ -277,7 +280,7 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
         destinatario_cidade=destinatario_cidade,
         destinatario_uf=destinatario_uf,
         valor_total_nf=valor_total_nf,
-        valor_icms=Decimal("0"),
+        valor_icms=valor_impostos_servico,
         valor_ipi=Decimal("0"),
         valor_pis=Decimal("0"),
         valor_cofins=Decimal("0"),
@@ -293,7 +296,7 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
                 cfop="5933",
                 unidade="UN",
                 quantidade=Decimal("1"),
-                valor_unitario=valor_total_nf,
+                valor_unitario=valor_total_servicos,
                 valor_total=valor_total_nf,
             )
         ],

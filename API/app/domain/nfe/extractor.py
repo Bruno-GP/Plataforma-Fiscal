@@ -142,9 +142,20 @@ def _extrair_descricao_servico(discriminacao: str) -> str:
     if not discriminacao:
         return "Serviço NFSe"
 
-    match = re.search(r"Descricao\s*=\s*([^,;|]+)", discriminacao, flags=re.IGNORECASE)
+    match = re.search(r"Descricao\s*=\s*([^\]]+)", discriminacao, flags=re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        descricao = " ".join(match.group(1).strip().split())
+        descricao = re.sub(r"^\d+\s+", "", descricao)
+
+        partes = re.split(
+            r"\s+-\s+|\s+(?=Relat[oó]rio\b)|\s+(?=Relatorio\b)|\s+(?=Pedido\b)|\s+(?=Banco\b)|\s+(?=Agencia\b)|\s+(?=Operacao\b)|\s+(?=Conta\b)|\s+(?=Qtde\b)|\s+(?=Valor\b)",
+            descricao,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )
+        descricao = partes[0].strip(" -")
+
+        return descricao or "Serviço NFSe"
 
     return discriminacao.strip() or "Serviço NFSe"
 
@@ -212,10 +223,9 @@ def _extrair_nome_tomador(tomador) -> str:
     if tomador is None:
         return ""
 
-    for tag in ("RazaoSocial", "NomeRazaoSocial", "Nome", "xNome"):
-        for valor in _encontrar_textos_por_tag(tomador, tag):
-            if valor:
-                return valor
+    for valor in _encontrar_textos_por_tag(tomador, "RazaoSocial"):
+        if valor:
+            return valor
     return ""
 
 

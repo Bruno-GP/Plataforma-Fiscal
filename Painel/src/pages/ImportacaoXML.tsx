@@ -243,7 +243,7 @@ export default function ImportacaoXML() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Importação de XML</h1>
         <p className="text-muted-foreground">
-          Selecione os XMLs da NFe/NFCe e importe em lotes de até 1000 arquivos. Depois da importação, execute a fase de processamento para registrar notas, itens e KPIs.
+          Selecione os XMLs da NFe/NFCe/NFSe e importe em lotes de até 1000 arquivos. Depois da importação, execute a fase de processamento para registrar notas, itens e KPIs.
         </p>
       </div>
 

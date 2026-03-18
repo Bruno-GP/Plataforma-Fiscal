@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompNfse>
+    <Nfse>
+        <InfNfse Id="1828">
+            <Numero>1828</Numero>
+            <CodigoVerificacao>BXSXPFLID</CodigoVerificacao>
+            <DataEmissao>2026-02-03T10:24:44.000</DataEmissao>
+            <IdentificacaoRps/>
+            <NaturezaOperacao>2</NaturezaOperacao>
+            <OptanteSimplesNacional>1</OptanteSimplesNacional>
+            <Competencia>2026-02-01T00:00:00.000</Competencia>
+            <OutrasInformacoes>Nota emitida via DPS https://nota-eletronica.betha.cloud/nota-eletronica/notas/api/notas-fiscais/pdf/BXSXPFLID_TEUZprS-9OcbElahMjzCxw==</OutrasInformacoes>
+            <Servico>
+                <Valores>
+                    <ValorServicos>1305.80</ValorServicos>
+                    <ValorDeducoes>0</ValorDeducoes>
+                    <IssRetido>1</IssRetido>
+                    <ValorIssRetido>50.14</ValorIssRetido>
+                    <OutrasRetencoes>45.70</OutrasRetencoes>
+                    <BaseCalculo>1305.80</BaseCalculo>
+                    <Aliquota>3.84</Aliquota>
+                    <ValorLiquidoNfse>1209.96</ValorLiquidoNfse>
+                    <DescontoIncondicionado>0</DescontoIncondicionado>
+                    <DescontoCondicionado>0</DescontoCondicionado>
+                </Valores>
+                <ItemListaServico>070501</ItemListaServico>
+                <Discriminacao>{[[Descricao=1 Mao de Obra - Fora do Municipio. 1.305,80
+
+
+Mao de Obra - KS Construcoes 
+Relatorio 42
+Pedido 4518265174
+Banco: Caixa Agencia: 3077 Operacao: 1292 Conta:
+578037057-1][ItemServico=070501][Quantidade=1][ValorUnitario=1305.80][ValorServico=1305.80][ValorBaseCalculo=1305.80][Aliquota=3.84][Deducoes=0][DescontoCondicionado=0][DescontoIncondicionado=0]]}</Discriminacao>
+                <CodigoMunicipio>4208203</CodigoMunicipio>
+            </Servico>
+            <PrestadorServico>
+                <IdentificacaoPrestador>
+                    <Cnpj>28942600000198</Cnpj>
+                    <InscricaoMunicipal>40503</InscricaoMunicipal>
+                </IdentificacaoPrestador>
+                <RazaoSocial>EMPREITEIRA CHRISCHON E FLORES LTDA</RazaoSocial>
+                <Endereco>
+                    <Endereco>VERA FISCHER</Endereco>
+                    <Numero>834</Numero>
+                    <Bairro>CENTRO</Bairro>
+                    <CodigoMunicipio>4208906</CodigoMunicipio>
+                    <Uf>SC</Uf>
+                    <Cep>89251430</Cep>
+                </Endereco>
+                <Contato>
+                    <Telefone>4791741480</Telefone>
+                    <Email>ksconstrucoes@yahoo.com.br</Email>
+                </Contato>
+            </PrestadorServico>
+            <TomadorServico>
+                <IdentificacaoTomador>
+                    <CpfCnpj>
+                        <Cnpj>10953379000108</Cnpj>
+                    </CpfCnpj>
+                </IdentificacaoTomador>
+                <RazaoSocial>WEG EQUIPAMENTOS E LOGISTICA LTDA</RazaoSocial>
+                <Endereco>
+                    <Endereco>ROSA ORSI DALCOQUIO</Endereco>
+                    <Numero>100</Numero>
+                    <Bairro>CORDEIROS</Bairro>
+                    <CodigoMunicipio>4208203</CodigoMunicipio>
+                    <Uf>SC</Uf>
+                    <Cep>88311720</Cep>
+                </Endereco>
+                <Contato>
+                    <Telefone>4732764000</Telefone>
+                    <Email>CONTABIL1@WEG.NET</Email>
+                </Contato>
+            </TomadorServico>
+            <IntermediarioServico/>
+            <OrgaoGerador>
+                <CodigoMunicipio>4208906</CodigoMunicipio>
+                <Uf>SC</Uf>
+            </OrgaoGerador>
+            <ConstrucaoCivil/>
+            <CondicaoPagamento/>
+        </InfNfse>
+    </Nfse>
+    <NfseCancelamento>
+        <Confirmacao>
+            <Pedido>
+                <InfPedidoCancelamento/>
+            </Pedido>
+            <InfConfirmacaoCancelamento>
+                <Sucesso>false</Sucesso>
+            </InfConfirmacaoCancelamento>
+        </Confirmacao>
+    </NfseCancelamento>
+    <NfseSubstituicao>
+        <SubstituicaoNfse/>
+    </NfseSubstituicao>
+</CompNfse>

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompNfse>
+    <Nfse>
+        <InfNfse Id="1846">
+            <Numero>1846</Numero>
+            <CodigoVerificacao>2RMDSELBR</CodigoVerificacao>
+            <DataEmissao>2026-02-13T15:53:44.000</DataEmissao>
+            <IdentificacaoRps/>
+            <NaturezaOperacao>2</NaturezaOperacao>
+            <OptanteSimplesNacional>1</OptanteSimplesNacional>
+            <Competencia>2026-02-01T00:00:00.000</Competencia>
+            <OutrasInformacoes>Nota emitida via DPS https://nota-eletronica.betha.cloud/nota-eletronica/notas/api/notas-fiscais/pdf/2RMDSELBR_9HZL-DhLVZvBuu2kVNyqTQ==</OutrasInformacoes>
+            <Servico>
+                <Valores>
+                    <ValorServicos>3917.41</ValorServicos>
+                    <ValorDeducoes>0</ValorDeducoes>
+                    <IssRetido>1</IssRetido>
+                    <ValorIssRetido>150.43</ValorIssRetido>
+                    <OutrasRetencoes>137.11</OutrasRetencoes>
+                    <BaseCalculo>3917.41</BaseCalculo>
+                    <Aliquota>3.84</Aliquota>
+                    <ValorLiquidoNfse>3629.87</ValorLiquidoNfse>
+                    <DescontoIncondicionado>0</DescontoIncondicionado>
+                    <DescontoCondicionado>0</DescontoCondicionado>
+                </Valores>
+                <ItemListaServico>070501</ItemListaServico>
+                <Discriminacao>{[[Descricao=1 Mao de Obra - Fora do Municipio. 3.917,41
+
+
+Mao de Obra - KS Construcoes 
+Relatorio 42
+Pedido 4518228981
+Banco: Caixa Agencia: 3077 Operacao: 1292 Conta:
+578037057-1][ItemServico=070501][Quantidade=1][ValorUnitario=3917.41][ValorServico=3917.41][ValorBaseCalculo=3917.41][Aliquota=3.84][Deducoes=0][DescontoCondicionado=0][DescontoIncondicionado=0]]}</Discriminacao>
+                <CodigoMunicipio>4208203</CodigoMunicipio>
+            </Servico>
+            <PrestadorServico>
+                <IdentificacaoPrestador>
+                    <Cnpj>28942600000198</Cnpj>
+                    <InscricaoMunicipal>40503</InscricaoMunicipal>
+                </IdentificacaoPrestador>
+                <RazaoSocial>EMPREITEIRA CHRISCHON E FLORES LTDA</RazaoSocial>
+                <NomeFantasia>KS CONSTRUCOES</NomeFantasia>
+                <Endereco>
+                    <Endereco>MARINA FRUTUOSO</Endereco>
+                    <Numero>936</Numero>
+                    <Complemento>SALA 01</Complemento>
+                    <Bairro>CENTRO</Bairro>
+                    <CodigoMunicipio>4208906</CodigoMunicipio>
+                    <Uf>SC</Uf>
+                    <Cep>89251500</Cep>
+                </Endereco>
+                <Contato>
+                    <Telefone>4791741480</Telefone>
+                    <Email>ksconstrucoes@yahoo.com.br</Email>
+                </Contato>
+            </PrestadorServico>
+            <TomadorServico>
+                <IdentificacaoTomador>
+                    <CpfCnpj>
+                        <Cnpj>07175725000402</Cnpj>
+                    </CpfCnpj>
+                </IdentificacaoTomador>
+                <RazaoSocial>WEG EQUIPAMENTOS ELETRICOS S/A</RazaoSocial>
+                <Endereco>
+                    <Endereco>ROSA ORSI DALCOQUIO</Endereco>
+                    <Numero>100</Numero>
+                    <Bairro>CORDEIROS</Bairro>
+                    <CodigoMunicipio>4208203</CodigoMunicipio>
+                    <Uf>SC</Uf>
+                    <Cep>88311720</Cep>
+                </Endereco>
+                <Contato>
+                    <Telefone>4732764000</Telefone>
+                    <Email>CONTABIL1@WEG.NET</Email>
+                </Contato>
+            </TomadorServico>
+            <IntermediarioServico/>
+            <OrgaoGerador>
+                <CodigoMunicipio>4208906</CodigoMunicipio>
+                <Uf>SC</Uf>
+            </OrgaoGerador>
+            <ConstrucaoCivil/>
+            <CondicaoPagamento/>
+        </InfNfse>
+    </Nfse>
+    <NfseCancelamento>
+        <Confirmacao>
+            <Pedido>
+                <InfPedidoCancelamento/>
+            </Pedido>
+            <InfConfirmacaoCancelamento>
+                <Sucesso>false</Sucesso>
+            </InfConfirmacaoCancelamento>
+        </Confirmacao>
+    </NfseCancelamento>
+    <NfseSubstituicao>
+        <SubstituicaoNfse/>
+    </NfseSubstituicao>
+</CompNfse>

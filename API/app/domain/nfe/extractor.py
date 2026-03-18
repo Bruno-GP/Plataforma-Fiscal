@@ -296,7 +296,7 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
                 cfop="5933",
                 unidade="UN",
                 quantidade=Decimal("1"),
-                valor_unitario=valor_total_servicos,
+                valor_unitario=valor_total_nf,
                 valor_total=valor_total_nf,
             )
         ],

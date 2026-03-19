@@ -213,7 +213,7 @@ const latestKpi = sortedResultados;
   return (
     <div className="space-y-6 py-6">
       <Header
-        title="Análise de Clientes"
+        title="Clientes"
         subtitle="Visão consolidada de faturamento e desempenho"
         selectedMonth={selectedMonth}
         selectedYear={String(safeYear)}

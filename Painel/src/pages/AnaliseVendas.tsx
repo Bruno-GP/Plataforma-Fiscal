@@ -36,7 +36,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ 
-  title = 'Dashboard', 
+  title = 'Vendas', 
   subtitle = 'Visão geral do seu negócio' 
 }: DashboardProps) {
   const { user } = useAuth();

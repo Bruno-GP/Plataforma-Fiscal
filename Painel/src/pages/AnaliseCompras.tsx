@@ -255,7 +255,7 @@ export default function AnaliseFiscal() {
   return (
     <div className="space-y-6 py-6">
       <Header
-        title="Análise de Compras"
+        title="Compras"
         subtitle="Visão analitica das compras"
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}

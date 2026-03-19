@@ -17,15 +17,15 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 
 const menuItemsBase = [
-  { title: 'Análise de Vendas', url: '/analise-vendas', icon: LayoutDashboard },
-  { title: 'Análise de Clientes', url: '/analise-clientes', icon: Users },
+  { title: 'Vendas', url: '/analise-vendas', icon: LayoutDashboard },
+  { title: 'Clientes', url: '/analise-clientes', icon: Users },
   // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
   // { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ];
 
 const menuItemImportacaoXml = { title: 'Importação XML', url: '/importacao-xml', icon: FileUp };
 const menuItemImportacaoSped = { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit };
-const menuItemAnaliseFiscal = { title: 'Análise de Compras', url: '/analise-compras', icon: FileSearch };
+const menuItemAnaliseFiscal = { title: 'Compras', url: '/analise-compras', icon: FileSearch };
 const menuItemRelatoriosIA = { title: 'Relatórios com IA', url: '/relatorios-ia', icon: Sparkles };
 
 export function AppSidebar() {

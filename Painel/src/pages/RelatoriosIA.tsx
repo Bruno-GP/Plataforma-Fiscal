@@ -37,7 +37,21 @@ const reportTypeOptions = [
   { value: 'clientes', label: 'Clientes' },
 ] as const;
 
+const reportFormatOptions = [
+  {
+    value: 'executivo',
+    label: 'Executivo',
+    description: 'Resumo objetivo com os principais indicadores e conclusões.',
+  },
+  {
+    value: 'analitico',
+    label: 'Analítico',
+    description: 'Visão mais detalhada para aprofundar a leitura dos dados.',
+  },
+] as const;
+
 type ReportType = (typeof reportTypeOptions)[number]['value'];
+type ReportFormat = (typeof reportFormatOptions)[number]['value'];
 
 export default function RelatoriosIA() {
   const { user } = useAuth();
@@ -47,6 +61,7 @@ export default function RelatoriosIA() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [report, setReport] = useState<string | null>(null);
   const [tipoRelatorio, setTipoRelatorio] = useState<ReportType>('compras');
+  const [formatoRelatorio, setFormatoRelatorio] = useState<ReportFormat>('executivo');
   const [totalPeriodo, setTotalPeriodo] = useState(0);
 
   const emitenteCnpj = user?.emitente_cnpj;
@@ -91,6 +106,11 @@ export default function RelatoriosIA() {
   const availableYears = yearOptions.length
     ? yearOptions
     : [new Date().getFullYear()];
+
+  const formatoSelecionado = useMemo(
+    () => reportFormatOptions.find((option) => option.value === formatoRelatorio) ?? reportFormatOptions[0],
+    [formatoRelatorio],
+  );
 
   const periodoDescricao = useMemo(() => {
     if (selectedMonth === 'all') {
@@ -145,7 +165,7 @@ export default function RelatoriosIA() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Relatórios com IA</h1>
         <p className="text-muted-foreground">
-          Gere um relatório executivo automático com base nos dados fiscais de compras, vendas ou clientes ({fonteDados}).
+          Escolha o tipo e o formato do relatório para gerar uma leitura com IA baseada nos dados fiscais de compras, vendas ou clientes ({fonteDados}).
         </p>
       </div>
 
@@ -153,7 +173,7 @@ export default function RelatoriosIA() {
         <CardHeader>
           <CardTitle>Parâmetros do relatório</CardTitle>
           <CardDescription>
-            O sistema utiliza o agente executivo conectado ao backend para produzir o texto narrativo.
+            Defina o tema, o período e o formato desejado antes de solicitar a geração do relatório.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -173,6 +193,24 @@ export default function RelatoriosIA() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="relatorio-formato">Formato</Label>
+              <Select value={formatoRelatorio} onValueChange={(value) => setFormatoRelatorio(value as ReportFormat)}>
+                <SelectTrigger id="relatorio-formato">
+                  <SelectValue placeholder="Selecione o formato" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0E1525]">
+                  {reportFormatOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{formatoSelecionado.description}</p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="relatorio-ano">Ano</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
@@ -206,10 +244,12 @@ export default function RelatoriosIA() {
             </div>
           </div>
 
-          <Button onClick={handleGenerate} disabled={isLoading || !hasEmitenteCnpj} className="gap-2">
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {isLoading ? 'Gerando relatório...' : `Gerar relatório de ${tipoRelatorio} com IA`}
-          </Button>
+          <div className="flex justify-end">
+            <Button onClick={handleGenerate} disabled={isLoading || !hasEmitenteCnpj} className="min-w-32 gap-2">
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {isLoading ? 'Gerando...' : 'Gerar'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -223,9 +263,9 @@ export default function RelatoriosIA() {
       {report && (
         <Card>
           <CardHeader>
-            <CardTitle>Relatório executivo ({periodoDescricao})</CardTitle>
+            <CardTitle>Relatório {formatoSelecionado.label.toLowerCase()} ({periodoDescricao})</CardTitle>
             <CardDescription>
-              Total {tipoRelatorio === 'compras' ? 'comprado' : 'vendido'} no período: {formatCurrency(totalPeriodo)}
+              Formato solicitado: {formatoSelecionado.label}. Total {tipoRelatorio === 'compras' ? 'comprado' : 'vendido'} no período: {formatCurrency(totalPeriodo)}
             </CardDescription>
           </CardHeader>
           <CardContent>

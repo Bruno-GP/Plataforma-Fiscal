@@ -30,11 +30,11 @@ class ProcessarNFeService:
     def _registrar_notas_por_modelo(
         self,
         conn,
-        notas_periodo,
+        notas,
         processamento_id: int,
     ) -> int:
         notas_service = NFeNotasService()
-        notas_nfse, notas_demais_modelos = notas_service.separar_notas_por_modelo(notas_periodo)
+        notas_nfse, notas_demais_modelos = notas_service.separar_notas_por_modelo(notas)
 
         total_registrado = 0
 

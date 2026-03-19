@@ -434,7 +434,7 @@ class SpedConsultaService:
     limite: int = 5,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = ["regexp_replace(d.empresa_cnpj, '\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
+    filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
     params: list[object] = [cnpj]
 
     if periodo_ano:

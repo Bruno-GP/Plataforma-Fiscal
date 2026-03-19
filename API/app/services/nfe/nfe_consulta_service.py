@@ -603,8 +603,8 @@ class NFeConsultaService:
       raise ValueError("Informe um emitente_cnpj válido.")
 
     filtros_docs = [
-      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\D', '', 'g') = %s",
-      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\D', '', 'g'), 1) IN ('5','6','7')",
+      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
     ]
     parametros: list[object] = [cnpj_filtrado]
 
@@ -759,8 +759,8 @@ class NFeConsultaService:
       raise ValueError("Informe um emitente_cnpj válido.")
 
     filtros_docs = [
-      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\D', '', 'g') = %s",
-      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\D', '', 'g'), 1) IN ('5','6','7')",
+      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
     ]
     parametros: list[object] = [cnpj_filtrado]
 

@@ -111,6 +111,7 @@ class NFeNotasService:
                 SET processamento_id = %s
                 WHERE numero_nf = %s
                   AND emitente_cnpj = %s
+                  AND COALESCE(modelo, '') = COALESCE(%s, '')
                   AND data_emissao = %s
                 RETURNING id
             )
@@ -155,6 +156,7 @@ class NFeNotasService:
                         processamento_id,
                         str(nota.numero_nf),
                         emitente_cnpj,
+                        nota.modelo,
                         nota.data_emissao,
                         
                         processamento_id,
@@ -349,3 +351,18 @@ class NFeNotasService:
 
         logger.warning("🧹 Notas removidas: %s", removidas)
         return removidas
+    
+    def separar_notas_por_modelo(
+        self,
+        notas: Iterable[NotaExtraida],
+    ) -> tuple[list[NotaExtraida], list[NotaExtraida]]:
+        notas_list = list(notas)
+        notas_nfse = [
+            nota for nota in notas_list
+            if (nota.modelo or "").strip().upper() == "NFSE"
+        ]
+        notas_demais_modelos = [
+            nota for nota in notas_list
+            if (nota.modelo or "").strip().upper() != "NFSE"
+        ]
+        return notas_nfse, notas_demais_modelos

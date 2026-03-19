@@ -70,6 +70,7 @@ class NFeItensService:
               ON p.id = n.processamento_id
             WHERE n.numero_nf = %s
               AND n.emitente_cnpj = %s
+              AND COALESCE(n.modelo, '') = COALESCE(%s, '')
               AND n.data_emissao = %s
             LIMIT 1;
         """
@@ -113,6 +114,7 @@ class NFeItensService:
                         (
                             str(nota.numero_nf),
                             emitente_cnpj,
+                            nota.modelo,
                             nota.data_emissao,
                         ),
                     )

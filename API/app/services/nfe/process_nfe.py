@@ -27,6 +27,51 @@ from app.services.nfe.nfe_process_service import NFeProcessamentosService
 logger = logging.getLogger("ProcessarNFeService")
 
 class ProcessarNFeService:
+    def _registrar_notas_por_modelo(
+        self,
+        conn,
+        notas_periodo,
+        processamento_id: int,
+    ) -> int:
+        notas_service = NFeNotasService()
+        notas_nfse, notas_demais_modelos = notas_service.separar_notas_por_modelo(notas_periodo)
+
+        total_registrado = 0
+
+        if notas_demais_modelos:
+            total_registrado += notas_service.registrar_notas(
+                conn=conn,
+                notas=notas_demais_modelos,
+                processamento_id=processamento_id,
+            )
+            NFeItensService().registrar_itens(
+                conn=conn,
+                notas=notas_demais_modelos,
+            )
+            notas_service.remover_notas_sem_cfop_venda(
+                conn=conn,
+                processamento_id=processamento_id,
+            )
+
+        if notas_nfse:
+            logger.info(
+                "Aplicando regra específica de NFSe para %s nota(s) no processamento %s.",
+                len(notas_nfse),
+                processamento_id,
+            )
+            total_registrado += notas_service.registrar_notas(
+                conn=conn,
+                notas=notas_nfse,
+                processamento_id=processamento_id,
+            )
+            NFeItensService().registrar_itens(
+                conn=conn,
+                notas=notas_nfse,
+            )
+
+        return total_registrado
+
+    
     def executar(self, request: ProcessarNFeRequest) -> ProcessarNFeResponse:
         xmls = XmlReader().ler_pasta(request.pasta_xml)
         return self._executar_com_xmls(
@@ -198,24 +243,14 @@ class ProcessarNFeService:
                         if not processamento_id:
                             raise Exception("Processamento não registrado")
                         
-                        notas_service = NFeNotasService()
-
-                        qtd = notas_service.registrar_notas(
+                        qtd = self._registrar_notas_por_modelo(
                             conn=conn,
                             notas=notas_periodo,
                             processamento_id=processamento_id,
                         )
                         logger.warning(f"NOTAS INSERIDAS: {qtd}")
                         
-                        NFeItensService().registrar_itens(
-                            conn=conn,
-                            notas=notas_periodo
-                        )
-                        
-                        notas_service.remover_notas_sem_cfop_venda(
-                            conn=conn,
-                            processamento_id=processamento_id,
-                        )
+                        notas_service = NFeNotasService()
                         
                         notas_para_kpi = notas_service.listar_notas_periodo_para_kpi(
                             conn=conn,

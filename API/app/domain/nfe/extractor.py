@@ -154,10 +154,19 @@ def _extrair_descricao_servico(discriminacao: str) -> str:
             flags=re.IGNORECASE,
         )
         descricao = partes[0].strip(" -")
+        
+        descricao_normalizada = _normalizar_chave_municipio(descricao)
+        if descricao_normalizada.startswith("MAO DE OBRA"):
+            return "Mão de Obra"
 
         return descricao or "Serviço NFSe"
 
-    return discriminacao.strip() or "Serviço NFSe"
+    descricao = discriminacao.strip()
+    descricao_normalizada = _normalizar_chave_municipio(descricao)
+    if descricao_normalizada.startswith("MAO DE OBRA"):
+        return "Mão de Obra"
+
+    return descricao or "Serviço NFSe"
 
 def _normalizar_chave_municipio(valor: str) -> str:
     texto = " ".join((valor or "").strip().upper().split())

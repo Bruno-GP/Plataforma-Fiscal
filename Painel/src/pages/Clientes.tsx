@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Percent, TrendingUp, Users } from 'lucide-react';
+import { Percent, ShieldAlert, TrendingUp } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -15,30 +15,37 @@ import { RankingCard } from './components/RankingCard';
 import { StatCard } from './components/StatCard';
 
 const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
+  new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
   }).format(value);
 
 const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? "").replace(/\D/g, "");
-  return digits.length === 14 && ![...digits].every((digit) => digit === "0");
+  const digits = (value ?? '').replace(/\D/g, '');
+  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
 };
 
+interface ClienteComRisco {
+  cliente: string;
+  valorTotal: number;
+  percentual: number | null;
+  temRisco: boolean;
+}
+
 export default function Clientes() {
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState('all');
   const { user } = useAuth();
   const usaSped = Boolean(user?.tem_sped);
-  
+
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
 
   const kpisQuery = useQuery({
-    queryKey: ["kpis-clientes", usaSped ? "sped" : "xml", emitenteCnpj],
+    queryKey: ['kpis-clientes', usaSped ? 'sped' : 'xml', emitenteCnpj],
     queryFn: () =>
       usaSped
         ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
@@ -47,7 +54,7 @@ export default function Clientes() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const sortedResultados = useMemo(() => {
+  const latestResult = useMemo(() => {
     const resultados = kpisQuery.data?.resultados ?? [];
     return [...resultados].sort((a, b) => {
       const anoA = a.periodo_ano ?? 0;
@@ -58,8 +65,6 @@ export default function Clientes() {
       return (b.periodo_mes ?? 0) - (a.periodo_mes ?? 0);
     })[0];
   }, [kpisQuery.data]);
-
-const latestKpi = sortedResultados;
 
   const availableYears = useMemo(() => {
     const resultados = kpisQuery.data?.resultados ?? [];
@@ -87,7 +92,7 @@ const latestKpi = sortedResultados;
 
   const safeYear = availableYears.length
     ? Number.parseInt(selectedYear, 10)
-    : (latestKpi?.periodo_ano ?? new Date().getFullYear());
+    : (latestResult?.periodo_ano ?? new Date().getFullYear());
 
   const selectedPeriodKpis = useMemo(() => {
     const resultados = kpisQuery.data?.resultados ?? [];
@@ -114,7 +119,7 @@ const latestKpi = sortedResultados;
         acc.total_cofins += parseDecimal(kpi.total_cofins ?? 0);
 
         (kpi.top_clientes ?? []).forEach((cliente) => {
-          const name = cliente.cliente ?? 'Cliente não identificado';
+          const name = cliente.cliente ?? 'Cliente nao identificado';
           const value = parseDecimal(cliente.valor_total ?? 0);
           topClientesMap.set(name, (topClientesMap.get(name) ?? 0) + value);
         });
@@ -141,64 +146,105 @@ const latestKpi = sortedResultados;
   }, [kpisQuery.data, safeYear, selectedMonth]);
 
   const totalReceita = parseDecimal(selectedPeriodKpis?.total_vendas ?? 0);
-
   const totalImpostos =
     parseDecimal(selectedPeriodKpis?.total_icms ?? 0) +
     parseDecimal(selectedPeriodKpis?.total_ipi ?? 0) +
     parseDecimal(selectedPeriodKpis?.total_pis ?? 0) +
     parseDecimal(selectedPeriodKpis?.total_cofins ?? 0);
-  const margem =
-    totalReceita > 0
-      ? ((totalReceita - totalImpostos) / totalReceita) * 100
-      : 0;
-  
+  const margem = totalReceita > 0 ? ((totalReceita - totalImpostos) / totalReceita) * 100 : 0;
+
   const topClientes = useMemo(() => selectedPeriodKpis?.top_clientes ?? [], [selectedPeriodKpis]);
+
+  const clientesComRisco = useMemo(() => {
+    const resultados = (kpisQuery.data?.resultados ?? [])
+      .filter((item) => item.periodo_ano && item.periodo_mes)
+      .sort((a, b) => {
+        const anoA = a.periodo_ano ?? 0;
+        const anoB = b.periodo_ano ?? 0;
+        if (anoA !== anoB) {
+          return anoA - anoB;
+        }
+        return (a.periodo_mes ?? 0) - (b.periodo_mes ?? 0);
+      });
+
+    const latestPeriod = resultados[resultados.length - 1];
+    const previousPeriod = resultados[resultados.length - 2];
+
+    const previousMap = new Map<string, number>();
+    (previousPeriod?.kpis.top_clientes ?? []).forEach((cliente, index) => {
+      const nome = cliente.cliente ?? `Cliente nao identificado ${index + 1}`;
+      previousMap.set(nome, parseDecimal(cliente.valor_total ?? 0));
+    });
+
+    return topClientes.map((cliente, index) => {
+      const nome = cliente.cliente ?? `Cliente nao identificado ${index + 1}`;
+      const valorTotal = parseDecimal(cliente.valor_total ?? 0);
+      const percentual =
+        cliente.percentual !== undefined && cliente.percentual !== null
+          ? parseDecimal(cliente.percentual)
+          : totalReceita > 0
+            ? (valorTotal / totalReceita) * 100
+            : null;
+
+      const valorAnterior = previousMap.get(nome) ?? 0;
+      const quedaForte = valorAnterior > 0 && valorTotal < valorAnterior * 0.7;
+      const saiuDoRanking = valorAnterior > 0 && valorTotal === 0;
+      const temRisco = quedaForte || saiuDoRanking;
+
+      return {
+        cliente: nome,
+        valorTotal,
+        percentual,
+        temRisco,
+      } satisfies ClienteComRisco;
+    });
+  }, [kpisQuery.data, topClientes, totalReceita]);
+
   const filteredClientes = useMemo(
     () =>
-      topClientes.filter((client) =>
-        (client.cliente ?? '').toLowerCase().includes(search.toLowerCase()),
+      clientesComRisco.filter((client) =>
+        client.cliente.toLowerCase().includes(search.toLowerCase()),
       ),
-    [search, topClientes],
+    [clientesComRisco, search],
   );
 
-  const topClientesItems = filteredClientes.map((cliente, index) => {
-    const valorTotal = parseDecimal(cliente.valor_total ?? 0);
-    const percentual =
-      cliente.percentual !== undefined && cliente.percentual !== null
-        ? parseDecimal(cliente.percentual)
-        : totalReceita > 0
-          ? (valorTotal / totalReceita) * 100
-          : null;
+  const topClientesItems = filteredClientes.map((cliente, index) => ({
+    key: `${cliente.cliente}-${index}`,
+    title: cliente.cliente,
+    subtitle:
+      cliente.percentual !== null
+        ? `${cliente.percentual.toFixed(1)}% do faturamento`
+        : 'Participacao nao informada',
+    value: formatCurrency(cliente.valorTotal),
+    rawValue: cliente.valorTotal,
+    percent: cliente.percentual,
+    badgeLabel: cliente.temRisco ? 'Com risco de perda' : 'Sem risco de perda',
+    badgeClassName: cliente.temRisco
+      ? 'border-rose-500/40 bg-rose-500/15 text-rose-300'
+      : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
+  }));
 
-    return {
-      key: `${cliente.cliente}-${index}`,
-      title: cliente.cliente ?? 'Cliente não identificado',
-      subtitle:
-        percentual !== null
-          ? `${percentual.toFixed(1)}% do faturamento`
-          : 'Participação não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
+  const clientesEmRisco = filteredClientes.filter((cliente) => cliente.temRisco).length;
+  const clientesSemRisco = filteredClientes.filter((cliente) => !cliente.temRisco).length;
 
   const stats = [
     {
       title: 'Faturamento por Cliente',
       value: formatCurrency(totalReceita),
-      description: 'Total no último período',
+      description: 'Total no periodo selecionado',
       icon: TrendingUp,
       trend: 'up',
       accentClass: 'border-l-sky-500',
+      appendPreviousMonthLabel: false,
     },
     {
-      title: 'Total de Clientes no Ranking',
-      value: String(topClientes.length),
-      description: `${filteredClientes.length} após filtro`,
-      icon: Users,
-      trend: 'up',
-      accentClass: 'border-l-amber-400',
+      title: 'Clientes com Risco',
+      value: String(clientesEmRisco),
+      description: `${clientesSemRisco} sem risco`,
+      icon: ShieldAlert,
+      trend: clientesEmRisco > 0 ? 'down' : 'up',
+      accentClass: 'border-l-rose-500',
+      appendPreviousMonthLabel: false,
     },
     {
       title: 'Margem',
@@ -214,7 +260,7 @@ const latestKpi = sortedResultados;
     <div className="space-y-6 py-6">
       <Header
         title="Clientes"
-        subtitle="Visão consolidada de faturamento e desempenho"
+        subtitle="Visao consolidada de faturamento e risco de perda"
         selectedMonth={selectedMonth}
         selectedYear={String(safeYear)}
         availableYears={availableYears.length ? availableYears : [safeYear]}
@@ -227,7 +273,7 @@ const latestKpi = sortedResultados;
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar clientes</AlertTitle>
           <AlertDescription>
-            Não foi possível buscar o ranking de clientes na API.
+            Nao foi possivel buscar o ranking de clientes na API.
           </AlertDescription>
         </Alert>
       )}
@@ -248,7 +294,7 @@ const latestKpi = sortedResultados;
 
         <RankingCard
           title="Ranking de Clientes"
-          description="Lista de clientes por participação no faturamento"
+          description="Lista de clientes por participacao no faturamento com indicacao simples de risco"
           items={topClientesItems}
           isLoading={kpisQuery.isLoading}
           loadingMessage="Carregando clientes..."

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Percent, ShieldAlert, TrendingUp } from 'lucide-react';
+import { ShieldAlert, TrendingUp } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -19,8 +19,6 @@ const formatCurrency = (value: number) =>
     style: 'currency',
     currency: 'BRL',
   }).format(value);
-
-const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
   const digits = (value ?? '').replace(/\D/g, '');
@@ -146,13 +144,6 @@ export default function Clientes() {
   }, [kpisQuery.data, safeYear, selectedMonth]);
 
   const totalReceita = parseDecimal(selectedPeriodKpis?.total_vendas ?? 0);
-  const totalImpostos =
-    parseDecimal(selectedPeriodKpis?.total_icms ?? 0) +
-    parseDecimal(selectedPeriodKpis?.total_ipi ?? 0) +
-    parseDecimal(selectedPeriodKpis?.total_pis ?? 0) +
-    parseDecimal(selectedPeriodKpis?.total_cofins ?? 0);
-  const margem = totalReceita > 0 ? ((totalReceita - totalImpostos) / totalReceita) * 100 : 0;
-
   const topClientes = useMemo(() => selectedPeriodKpis?.top_clientes ?? [], [selectedPeriodKpis]);
 
   const clientesComRisco = useMemo(() => {
@@ -245,14 +236,6 @@ export default function Clientes() {
       trend: clientesEmRisco > 0 ? 'down' : 'up',
       accentClass: 'border-l-rose-500',
       appendPreviousMonthLabel: false,
-    },
-    {
-      title: 'Margem',
-      value: `${margem.toFixed(1)}%`,
-      description: formatPercent(margem),
-      icon: Percent,
-      trend: margem >= 0 ? 'up' : 'down',
-      accentClass: 'border-l-violet-500',
     },
   ] as const;
 

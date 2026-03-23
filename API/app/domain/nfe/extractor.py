@@ -13,6 +13,38 @@ from app.domain.nfe.xml_models import XmlNFe
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
+_IBGE_PREFIXO_POR_UF = {
+    "RO": "11",
+    "AC": "12",
+    "AM": "13",
+    "RR": "14",
+    "PA": "15",
+    "AP": "16",
+    "TO": "17",
+    "MA": "21",
+    "PI": "22",
+    "CE": "23",
+    "RN": "24",
+    "PB": "25",
+    "PE": "26",
+    "AL": "27",
+    "SE": "28",
+    "BA": "29",
+    "MG": "31",
+    "ES": "32",
+    "RJ": "33",
+    "SP": "35",
+    "PR": "41",
+    "SC": "42",
+    "RS": "43",
+    "MS": "50",
+    "MT": "51",
+    "GO": "52",
+    "DF": "53",
+}
+
+_UF_POR_IBGE_PREFIXO = {valor: chave for chave, valor in _IBGE_PREFIXO_POR_UF.items()}
+
 logger = logging.getLogger("NFeExtractor")
 
 """Normaliza os formatos de data de emissão existentes em NF-e/NFC-e."""
@@ -176,16 +208,17 @@ def _normalizar_chave_municipio(valor: str) -> str:
     return "".join(ch for ch in sem_acentos if unicodedata.category(ch) != "Mn")
 
 @lru_cache(maxsize=1)
-def _carregar_municipios() -> tuple[dict[str, str], dict[str, str]]:
+def _carregar_municipios() -> tuple[dict[str, tuple[str, str]], dict[str, str], dict[str, str]]:
     caminho_municipios = Path(__file__).resolve().parent.parent.parent / "services" / "Municipios" / "LL-municipios.json"
     try:
         with caminho_municipios.open(encoding="utf-8") as arquivo:
             dados = json.load(arquivo)
     except (OSError, json.JSONDecodeError):
-        return {}, {}
+        return {}, {}, {}
 
-    municipios_por_codigo: dict[str, str] = {}
+    municipios_por_codigo: dict[str, tuple[str, str]] = {}
     municipios_por_nome: dict[str, str] = {}
+    uf_por_nome: dict[str, str] = {}
 
     features = dados.get("features", []) if isinstance(dados, dict) else []
     for item in features if isinstance(features, list) else []:
@@ -193,27 +226,51 @@ def _carregar_municipios() -> tuple[dict[str, str], dict[str, str]]:
         codigo = "".join(ch for ch in str(propriedades.get("id", "")) if ch.isdigit())
         nome = str(propriedades.get("name", "")).strip()
         nome_normalizado = _normalizar_chave_municipio(nome)
+        uf = _UF_POR_IBGE_PREFIXO.get(codigo[:2], "") if len(codigo) >= 2 else ""
+        
         if codigo and nome:
-            municipios_por_codigo[codigo] = nome
+            municipios_por_codigo[codigo] = (nome, uf)
             municipios_por_nome[nome_normalizado] = nome
+            if uf and nome_normalizado not in uf_por_nome:
+                uf_por_nome[nome_normalizado] = uf
 
-    return municipios_por_codigo, municipios_por_nome
-
+    return municipios_por_codigo, municipios_por_nome, uf_por_nome
 
 def _resolver_nome_municipio(codigo_ou_nome: str) -> str:
     valor = (codigo_ou_nome or "").strip()
     if not valor:
         return ""
     
-    municipios_por_codigo, municipios_por_nome = _carregar_municipios()
+    municipios_por_codigo, municipios_por_nome, _ = _carregar_municipios()
 
     codigo = "".join(ch for ch in valor if ch.isdigit())
     if len(codigo) >= 6:
-        return municipios_por_codigo.get(codigo, valor)
+        municipio = municipios_por_codigo.get(codigo)
+        return municipio[0] if municipio else valor
 
     nome_normalizado = _normalizar_chave_municipio(valor)
     return municipios_por_nome.get(nome_normalizado, valor)
 
+def _resolver_uf_municipio(codigo_ou_nome: str, uf_atual: str = "") -> str:
+    uf_normalizada = (uf_atual or "").strip().upper()
+    if uf_normalizada:
+        return uf_normalizada
+
+    valor = (codigo_ou_nome or "").strip()
+    if not valor:
+        return ""
+
+    municipios_por_codigo, _, uf_por_nome = _carregar_municipios()
+
+    codigo = "".join(ch for ch in valor if ch.isdigit())
+    if len(codigo) >= 2:
+        municipio = municipios_por_codigo.get(codigo)
+        if municipio and municipio[1]:
+            return municipio[1]
+        return _UF_POR_IBGE_PREFIXO.get(codigo[:2], "")
+
+    nome_normalizado = _normalizar_chave_municipio(valor)
+    return uf_por_nome.get(nome_normalizado, "")
 
 def _encontrar_textos_por_tag(root, nome_tag: str) -> list[str]:
     if root is None:
@@ -258,12 +315,23 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
 
     destinatario_nome = _extrair_nome_tomador(tomador)
     destinatario_cidade_codigo = _encontrar_texto_xml(tomador, "CodigoMunicipio") if tomador is not None else ""
-    destinatario_cidade = _resolver_nome_municipio(destinatario_cidade_codigo)
-    destinatario_uf = (
+    destinatario_cidade_nome = (
+        _encontrar_texto_xml(tomador, "Municipio")
+        or _encontrar_texto_xml(tomador, "Cidade")
+        if tomador is not None
+        else ""
+    )
+    destinatario_cidade = _resolver_nome_municipio(destinatario_cidade_codigo or destinatario_cidade_nome)
+    destinatario_uf_informada = (
         _encontrar_texto_xml(tomador, "Uf")
         or _encontrar_texto_xml(tomador, "UF")
         if tomador is not None
         else ""
+    )
+    
+    destinatario_uf = _resolver_uf_municipio(
+        destinatario_cidade_codigo or destinatario_cidade or destinatario_cidade_nome,
+        destinatario_uf_informada,
     )
 
     tomador_doc = ""

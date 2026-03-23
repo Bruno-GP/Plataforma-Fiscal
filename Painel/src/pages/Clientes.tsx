@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ShieldAlert, TrendingUp } from 'lucide-react';
+import { Receipt, ShieldAlert, TrendingUp } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -145,6 +145,7 @@ export default function Clientes() {
 
   const totalReceita = parseDecimal(selectedPeriodKpis?.total_vendas ?? 0);
   const topClientes = useMemo(() => selectedPeriodKpis?.top_clientes ?? [], [selectedPeriodKpis]);
+  const ticketMedioPorCliente = topClientes.length > 0 ? totalReceita / topClientes.length : 0;
 
   const clientesComRisco = useMemo(() => {
     const resultados = (kpisQuery.data?.resultados ?? [])
@@ -235,6 +236,15 @@ export default function Clientes() {
       icon: ShieldAlert,
       trend: clientesEmRisco > 0 ? 'down' : 'up',
       accentClass: 'border-l-rose-500',
+      appendPreviousMonthLabel: false,
+    },
+    {
+      title: 'Ticket Medio por Cliente',
+      value: formatCurrency(ticketMedioPorCliente),
+      description: `${topClientes.length} clientes no ranking`,
+      icon: Receipt,
+      trend: 'up',
+      accentClass: 'border-l-amber-400',
       appendPreviousMonthLabel: false,
     },
   ] as const;

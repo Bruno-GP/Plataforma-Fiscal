@@ -192,6 +192,7 @@ export const fetchSpedAnaliseVendas = async (params: {
     limite?: number;
     gerar_relatorio_ia?: boolean;
     formato_relatorio?: 'executivo' | 'analitico';
+    layout?: string;
   } = {}): Promise<AnaliseVendasResponse> => {
 
   const searchParams = new URLSearchParams();
@@ -206,6 +207,7 @@ export const fetchSpedAnaliseVendas = async (params: {
   if (params.limite) searchParams.set('limite', String(params.limite));
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
+  if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
 
   const response = await fetch(`${API_BASE_URL}/sped/analise/vendas?${searchParams.toString()}`);
 

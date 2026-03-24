@@ -7,6 +7,15 @@ from app.models.nfe.schemas import NFeKPI, NFeKPIConsulta
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.sped.postgres_config import carregar_config_postgres_sped
 
+UF_PARA_REGIAO = {
+  "AC": "Norte", "AL": "Nordeste", "AP": "Norte", "AM": "Norte", "BA": "Nordeste",
+  "CE": "Nordeste", "DF": "Centro-Oeste", "ES": "Sudeste", "GO": "Centro-Oeste",
+  "MA": "Nordeste", "MT": "Centro-Oeste", "MS": "Centro-Oeste", "MG": "Sudeste",
+  "PA": "Norte", "PB": "Nordeste", "PR": "Sul", "PE": "Nordeste", "PI": "Nordeste",
+  "RJ": "Sudeste", "RN": "Nordeste", "RS": "Sul", "RO": "Norte", "RR": "Norte",
+  "SC": "Sul", "SP": "Sudeste", "SE": "Nordeste", "TO": "Norte",
+}
+
 def _parece_codigo_municipio(valor: object) -> bool:
   codigo = "".join(ch for ch in str(valor or "") if ch.isdigit())
   return len(codigo) in {6, 7}
@@ -32,6 +41,10 @@ def _normalizar_nome_cidade(valor: object) -> str:
           return f"{partes[0]} - {ultimo}"
 
   return cidade
+
+def _obter_regiao_por_uf(uf: object) -> str | None:
+  uf_normalizada = str(uf or "").strip().upper()
+  return UF_PARA_REGIAO.get(uf_normalizada)
 
 class SpedConsultaService:
   def __init__(self) -> None:
@@ -524,6 +537,77 @@ class SpedConsultaService:
           tuple([*params, limite]),
         )
 
+        cur.execute(
+          f"""
+          SELECT CONCAT(
+                  COALESCE(
+                    NULLIF(TRIM(p.municipio_nome), ''),
+                    NULLIF(TRIM(p.municipio), ''),
+                    'Cidade não identificada'
+                  ),
+                  CASE
+                    WHEN NULLIF(TRIM(p.uf), '') IS NOT NULL THEN CONCAT(' - ', UPPER(TRIM(p.uf)))
+                    ELSE ''
+                  END
+                ) AS cidade,
+                COALESCE(NULLIF(TRIM(p.uf), ''), '') AS uf,
+                COALESCE(SUM(d.valor_total), 0) AS valor_total,
+                COUNT(*) AS quantidade_documentos
+          FROM public.sped_documentos_fiscais d
+          LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+          WHERE {where_clause}
+          GROUP BY 1, 2
+          ORDER BY 3 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+        top_cidades_valor = [
+          {
+            "cidade": _normalizar_nome_cidade(cidade),
+            "uf": uf,
+            "valor_total": valor_total or Decimal("0.00"),
+            "quantidade_documentos": quantidade_documentos or 0,
+          }
+          for cidade, uf, valor_total, quantidade_documentos in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT COALESCE(NULLIF(TRIM(p.uf), ''), '') AS uf,
+                COALESCE(SUM(d.valor_total), 0) AS valor_total,
+                COUNT(*) AS quantidade_documentos
+          FROM public.sped_documentos_fiscais d
+          LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+          """,
+          tuple(params),
+        )
+        top_regioes_map: dict[str, dict[str, Decimal | int | str]] = {}
+        for uf, valor_total, quantidade_documentos in cur.fetchall():
+          regiao = _obter_regiao_por_uf(uf)
+          if not regiao:
+            continue
+
+          acumulado = top_regioes_map.setdefault(
+            regiao,
+            {
+              "regiao": regiao,
+              "valor_total": Decimal("0.00"),
+              "quantidade_documentos": 0,
+            },
+          )
+          acumulado["valor_total"] = Decimal(str(acumulado["valor_total"])) + (valor_total or Decimal("0.00"))
+          acumulado["quantidade_documentos"] = int(acumulado["quantidade_documentos"]) + (quantidade_documentos or 0)
+
+        top_regioes_valor = sorted(
+          top_regioes_map.values(),
+          key=lambda item: Decimal(str(item["valor_total"])),
+          reverse=True,
+        )[:limite]
+
         return {
           "emitente_cnpj": cnpj,
           "periodo_ano": periodo_ano,
@@ -533,6 +617,8 @@ class SpedConsultaService:
           "top_clientes_quantidade": top_clientes_quantidade,
           "top_produtos_valor": top_produtos_valor,
           "top_produtos_quantidade": top_produtos_quantidade,
+          "top_regioes_valor": top_regioes_valor,
+          "top_cidades_valor": top_cidades_valor,
         }
 
   def analisar_clientes(

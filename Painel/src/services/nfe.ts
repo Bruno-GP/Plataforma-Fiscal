@@ -374,7 +374,16 @@ export interface AnaliseClientesResponse {
 }
 
 export const fetchNfeAnaliseVendas = async (
-  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean; formato_relatorio?: 'executivo' | 'analitico' } = {}
+  params: {
+    emitente_cnpj?: string;
+    email?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+    gerar_relatorio_ia?: boolean;
+    formato_relatorio?: 'executivo' | 'analitico';
+    layout?: string;
+  } = {}
 ): Promise<AnaliseVendasResponse> => {
   const searchParams = new URLSearchParams();
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
@@ -390,6 +399,7 @@ export const fetchNfeAnaliseVendas = async (
   if (params.limite) searchParams.set('limite', String(params.limite));
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
+  if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
 
   const response = await fetch(`${API_BASE_URL}/nfe/analise/vendas?${searchParams.toString()}`);
 

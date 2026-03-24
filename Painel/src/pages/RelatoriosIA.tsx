@@ -292,7 +292,7 @@ export default function RelatoriosIA() {
         limite: 5,
         gerar_relatorio_ia: true,
         formato_relatorio: formatoRelatorio,
-        layout: tipoRelatorio === 'compras' ? layoutRelatorio : undefined,
+        layout: tipoRelatorio === 'vendas' ? layoutRelatorio : undefined,
       };
 
       const response =
@@ -427,6 +427,22 @@ export default function RelatoriosIA() {
               </Select>
             </div>
           </div>
+
+          {/* {tipoRelatorio === 'vendas' && formatoRelatorio === 'analitico' && (
+            <div className="space-y-2">
+              <Label htmlFor="relatorio-layout">Layout do relatório</Label>
+              <Textarea
+                id="relatorio-layout"
+                value={layoutRelatorio}
+                onChange={(event) => setLayoutRelatorio(event.target.value)}
+                placeholder="Descreva a organização desejada do relatório analítico de vendas."
+                className="min-h-28 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">
+                Campo opcional. Quando preenchido, a IA segue esse layout como guia na resposta analítica de vendas.
+              </p>
+            </div>
+          )} */}
 
           {/* {tipoRelatorio === 'compras' && (
             <div className="space-y-2">

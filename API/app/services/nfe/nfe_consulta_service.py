@@ -24,6 +24,15 @@ formatter = logging.Formatter(
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
+UF_PARA_REGIAO = {
+  "AC": "Norte", "AL": "Nordeste", "AP": "Norte", "AM": "Norte", "BA": "Nordeste",
+  "CE": "Nordeste", "DF": "Centro-Oeste", "ES": "Sudeste", "GO": "Centro-Oeste",
+  "MA": "Nordeste", "MT": "Centro-Oeste", "MS": "Centro-Oeste", "MG": "Sudeste",
+  "PA": "Norte", "PB": "Nordeste", "PR": "Sul", "PE": "Nordeste", "PI": "Nordeste",
+  "RJ": "Sudeste", "RN": "Nordeste", "RS": "Sul", "RO": "Norte", "RR": "Norte",
+  "SC": "Sul", "SP": "Sudeste", "SE": "Nordeste", "TO": "Norte",
+}
+
 class NFeConsultaService:
   def __init__(self):
     logger.debug("Inicializando NFeConsultaService")
@@ -56,6 +65,10 @@ class NFeConsultaService:
       return None
 
     return cnpj  
+
+  def _obter_regiao_por_uf(self, uf: object) -> str | None:
+    uf_normalizada = str(uf or "").strip().upper()
+    return UF_PARA_REGIAO.get(uf_normalizada)
   
   def obter_cnpj_por_email(
     self,
@@ -733,6 +746,71 @@ class NFeConsultaService:
           for produto, valor_total, quantidade_total in cur.fetchall()
         ]
 
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nÃ£o identificada') AS cidade,
+            COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total,
+            COUNT(DISTINCT n.id) AS quantidade_documentos
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          GROUP BY 1, 2
+          ORDER BY 3 DESC, 1 ASC
+          LIMIT %s
+          """,
+          [*parametros, limite],
+        )
+        top_cidades_valor = [
+          {
+            "cidade": cidade,
+            "uf": uf,
+            "valor_total": valor_total or Decimal("0.00"),
+            "quantidade_documentos": quantidade_documentos or 0,
+          }
+          for cidade, uf, valor_total, quantidade_documentos in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total,
+            COUNT(DISTINCT n.id) AS quantidade_documentos
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+          """,
+          parametros,
+        )
+        top_regioes_map: dict[str, dict[str, Decimal | int | str]] = {}
+        for uf, valor_total, quantidade_documentos in cur.fetchall():
+          regiao = self._obter_regiao_por_uf(uf)
+          if not regiao:
+            continue
+
+          acumulado = top_regioes_map.setdefault(
+            regiao,
+            {
+              "regiao": regiao,
+              "valor_total": Decimal("0.00"),
+              "quantidade_documentos": 0,
+            },
+          )
+          acumulado["valor_total"] = Decimal(str(acumulado["valor_total"])) + (valor_total or Decimal("0.00"))
+          acumulado["quantidade_documentos"] = int(acumulado["quantidade_documentos"]) + (quantidade_documentos or 0)
+
+        top_regioes_valor = sorted(
+          top_regioes_map.values(),
+          key=lambda item: Decimal(str(item["valor_total"])),
+          reverse=True,
+        )[:limite]
+
     return {
       "emitente_cnpj": cnpj_filtrado,
       "periodo_ano": periodo_ano,
@@ -742,6 +820,8 @@ class NFeConsultaService:
       "top_clientes_quantidade": top_clientes_quantidade,
       "top_produtos_valor": top_produtos_valor,
       "top_produtos_quantidade": top_produtos_quantidade,
+      "top_regioes_valor": top_regioes_valor,
+      "top_cidades_valor": top_cidades_valor,
     }
 
   def analisar_clientes(

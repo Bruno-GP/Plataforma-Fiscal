@@ -1,63 +1,35 @@
-# Painel Plataforma Fiscal (React + Vite)
+# Painel Plataforma Fiscal
 
-Documentação oficial do front-end da plataforma, responsável por autenticação, operação de importações fiscais e visualização de análises/KPIs.
+Frontend em React + Vite para operação da plataforma fiscal, com autenticação, importações, dashboards analíticos e central de relatórios.
 
-URL local padrão: `http://localhost:5173`
+## Stack
 
----
+- React 18
+- TypeScript
+- Vite 5
+- React Router 6
+- TanStack Query 5
+- Tailwind CSS
+- Radix UI
+- Recharts
 
-## Sumário
-
-- [1. Visão geral](#1-visão-geral)
-- [2. Stack e requisitos](#2-stack-e-requisitos)
-- [3. Instalação e execução](#3-instalação-e-execução)
-- [4. Configuração de ambiente](#4-configuração-de-ambiente)
-- [5. Rotas da aplicação](#5-rotas-da-aplicação)
-- [6. Funcionalidades por página](#6-funcionalidades-por-página)
-- [7. Integração com a API](#7-integração-com-a-api)
-- [8. Build, preview e testes](#8-build-preview-e-testes)
-- [9. Troubleshooting](#9-troubleshooting)
-
----
-
-## 1. Visão geral
-
-O Painel é a interface operacional da plataforma e cobre:
-
-- Login e cadastro interno de empresa.
-- Importação fiscal por perfil de empresa (**XML** ou **SPED**).
-- Visualização de análises (vendas, compras, clientes).
-- Consulta de relatórios com IA.
-- Navegação protegida e contextual por sessão.
-
----
-
-## 2. Stack e requisitos
-
-- **React + TypeScript**
-- **Vite**
-- **React Router**
-- **TanStack Query**
-- **Tailwind + componentes UI**
-- **Node.js 18+**
-- **Yarn** (recomendado)
-
----
-
-## 3. Instalação e execução
-
-No diretório `Painel`:
+## Scripts disponíveis
 
 ```bash
-yarn install
-yarn dev
+npm install
+npm run dev
+npm run build
+npm run lint
+npm run preview
 ```
 
-Aplicação em: `http://localhost:5173`
+Se preferir, os comandos equivalentes com `yarn` também funcionam.
 
----
+Observação:
 
-## 4. Configuração de ambiente
+- O projeto possui `vitest.config.ts` e arquivos de teste base, mas ainda não há script `test` definido em `package.json`.
+
+## Ambiente
 
 Crie `Painel/.env`:
 
@@ -65,18 +37,28 @@ Crie `Painel/.env`:
 VITE_API_URL=http://localhost:8000
 ```
 
-### Observação importante
+Normalização automática:
 
-O front-end normaliza automaticamente a URL da API:
+- `http://localhost:8000` -> `http://localhost:8000/api`
+- `http://localhost:8000/api` -> mantido como está
 
-- Se você informar `http://localhost:8000`, ele usa `http://localhost:8000/api`.
-- Se você informar `http://localhost:8000/api`, ele mantém como está.
+## Estrutura principal
 
----
+```text
+Painel/
+|-- public/
+|-- src/
+|   |-- components/
+|   |-- contexts/
+|   |-- hooks/
+|   |-- pages/
+|   |-- services/
+|   `-- test/
+|-- package.json
+`-- README.md
+```
 
-## 5. Rotas da aplicação
-
-### 5.1 Rotas ativas
+## Rotas ativas
 
 - `/login`
 - `/interno/cadastro-empresa`
@@ -86,75 +68,85 @@ O front-end normaliza automaticamente a URL da API:
 - `/relatorios-ia`
 - `/importacao-xml`
 - `/importacao-sped`
+- `/`
+- `/clientes` redireciona para `/analise-clientes`
 
-### 5.2 Regras de redirecionamento
+## Rotas implementadas, mas fora do roteador principal
 
-- `/` redireciona para `/analise-vendas`.
-- `/clientes` redireciona para `/analise-clientes`.
-- Empresa com `tem_sped=true` não acessa fluxo XML (redireciona para SPED).
-- Empresa com `tem_sped=false` não acessa fluxo SPED (redireciona para XML).
+- `/configuracoes`
+- `/atualizacoes`
 
-### 5.3 Rotas atualmente fora da navegação
+Essas páginas existem no código, mas hoje estão comentadas em `src/App.tsx`.
 
-- Configurações (`/configuracoes`) está comentada no roteador.
-- Atualizações (`/atualizacoes`) está comentada no roteador.
+## Comportamento da aplicação
 
----
+- Sessão persistida em `localStorage`
+- Proteção de rotas via `MainLayout`
+- Redirecionamento automático por perfil fiscal:
+  - empresa SPED -> bloqueia fluxo XML
+  - empresa XML -> bloqueia fluxo SPED
+- Aviso superior quando existem XMLs pendentes de processamento
 
-## 6. Funcionalidades por página
+## Páginas principais
 
-## Login (`/login`)
+### Login
 
-- Autenticação via API.
-- Persistência de contexto de sessão do usuário.
+- Autenticação via `POST /api/auth/entrar`
+- Normalização de erros de API para exibição amigável
 
-## Cadastro interno (`/interno/cadastro-empresa`)
+### Cadastro de empresa
 
-- Cadastro de empresa + usuário.
-- Define perfil de operação (`tem_sped`).
+- Cadastro via `POST /api/auth/registrar`
+- Define o perfil operacional com `tem_sped`
 
-## Importação XML (`/importacao-xml`)
+### Importação XML
 
-- Upload em lote de XML.
-- Consulta de pendências.
-- Processamento dos importados.
+- Upload de XML
+- Consulta de pendências
+- Processamento de XMLs importados
 
-## Importação SPED (`/importacao-sped`)
+### Importação SPED
 
-- Upload em lote de TXT SPED.
-- Consulta de pendências.
-- Processamento dos importados.
+- Upload de arquivos TXT
+- Consulta de pendências
+- Processamento de arquivos importados
 
-## Análise de vendas (`/analise-vendas`)
+### Análise de vendas
 
-- Indicadores e rankings por período.
-- Integração com dados NFe ou SPED conforme perfil.
+- KPIs por período
+- Rankings de clientes, produtos e cidades
+- Evolução temporal
+- Comparativo com período anterior
+- Seção de análise ABC
 
-## Análise de compras (`/analise-compras`)
+### Análise de compras
 
-- Total comprado, principais fornecedores e produtos.
-- Suporte a geração opcional de relatório IA.
+- Total comprado por período
+- Rankings de fornecedores e produtos
+- Evolução mensal
+- Comparativo com período anterior
 
-## Análise de clientes (`/analise-clientes`)
+### Análise de clientes
 
-- Indicadores e concentrações por cliente.
+- Busca de clientes
+- Concentração de receita
+- Identificação de risco de perda por comparação entre períodos
 
-## Relatórios IA (`/relatorios-ia`)
+### Relatórios IA
 
-- Interface para leitura de análises com texto gerado por IA (quando disponível na API).
+- Geração de relatório para compras, vendas ou clientes
+- Formato `executivo` ou `analitico`
+- Campo livre de layout para orientar a resposta em compras e vendas
+- Exportação do relatório para PDF via impressão do navegador
 
----
+## Integração com a API
 
-## 7. Integração com a API
-
-Principais endpoints consumidos pelo Painel:
-
-### Autenticação
+### Auth
 
 - `POST /api/auth/entrar`
 - `POST /api/auth/registrar`
 
-### NFe (XML)
+### NFe
 
 - `GET /api/nfe/kpis`
 - `GET /api/nfe/kpis/comparativo/atual`
@@ -170,40 +162,41 @@ Principais endpoints consumidos pelo Painel:
 - `GET /api/sped/kpis`
 - `GET /api/sped/analise/compras`
 - `GET /api/sped/analise/vendas`
+- `GET /api/sped/analise/clientes`
 - `POST /api/sped/importar`
 - `GET /api/sped/pendencias`
 - `POST /api/sped/processar-importados`
 
----
+## Recursos auxiliares no código
 
-## 8. Build, preview e testes
+- `ChatContext` e `ChatWidget` existem, mas o widget está desabilitado no layout.
+- O chat atual usa respostas simuladas no frontend e não integra com a API.
+- A página de atualizações lê um changelog local em `src/contexts/updates.ts`.
 
-### Build de produção
+## Build e qualidade
 
-```bash
-yarn build
-```
-
-### Preview da build
+### Build
 
 ```bash
-yarn preview
+npm run build
 ```
 
-### Testes
+### Lint
 
 ```bash
-yarn test
+npm run lint
 ```
 
-> Caso a suíte seja expandida, manter testes de serviços HTTP e rotas protegidas como prioridade.
+### Preview
 
----
+```bash
+npm run preview
+```
 
-## 9. Troubleshooting
+## Troubleshooting
 
-- **Tela sem dados:** validar `VITE_API_URL` e API ativa.
-- **Erro de CORS:** ajustar `CORS_ALLOW_ORIGINS` na API.
-- **Importação negada:** conferir se perfil da empresa bate com o tipo de importação (XML x SPED).
-- **Falha em relatórios IA:** validar disponibilidade de `OPENAI_API_KEY` no backend.
-- **Erro de autenticação:** revisar credenciais e resposta da rota `/api/auth/entrar`.
+- Sem dados na tela: valide `VITE_API_URL`, login e disponibilidade da API.
+- CORS: ajuste a configuração no backend.
+- Erro ao importar: confirme se a empresa está no fluxo correto de XML ou SPED.
+- Relatório IA indisponível: valide `OPENAI_API_KEY` na API.
+- PDF não gerado: confirme se o navegador permite a janela de impressão.

@@ -1,83 +1,63 @@
-# API Plataforma Fiscal (FastAPI)
+# API Plataforma Fiscal
 
-Documentação oficial da API responsável por autenticação, importação fiscal (XML NFe e SPED), processamento de dados e consultas analíticas.
+Backend em FastAPI responsável por autenticação, importação fiscal, processamento e consultas analíticas.
 
-Base URL local (desenvolvimento): `http://localhost:8000`  
-Prefixo de rotas da API: `/api`  
-Documentação interativa (Swagger): `/docs`
+## Resumo
 
----
+- Base local: `http://localhost:8000`
+- Prefixo da API: `/api`
+- Swagger: `/docs`
+- Health check: `/health`
 
-## Sumário
+## Stack
 
-- [1. Visão geral](#1-visão-geral)
-- [2. Requisitos](#2-requisitos)
-- [3. Instalação e execução](#3-instalação-e-execução)
-- [4. Configuração de ambiente](#4-configuração-de-ambiente)
-- [5. Banco de dados](#5-banco-de-dados)
-- [6. Organização de rotas](#6-organização-de-rotas)
-- [7. Contratos da API](#7-contratos-da-api)
-  - [7.1 Sistema](#71-sistema)
-  - [7.2 Autenticação](#72-autenticação)
-  - [7.3 NFe (XML)](#73-nfe-xml)
-  - [7.4 SPED Fiscal](#74-sped-fiscal)
-  - [7.5 Geo](#75-geo)
-- [8. Regras de negócio importantes](#8-regras-de-negócio-importantes)
-- [9. Erros comuns e respostas HTTP](#9-erros-comuns-e-respostas-http)
-- [10. Boas práticas de operação](#10-boas-práticas-de-operação)
-
----
-
-## 1. Visão geral
-
-A API centraliza os principais fluxos fiscais da plataforma:
-
-- Cadastro e login de usuários/empresa.
-- Importação e processamento de XML de NFe.
-- Importação e processamento de arquivos SPED Fiscal.
-- Consulta de KPIs e análises (compras, vendas, clientes).
-- Endpoints auxiliares geográficos para mapa de municípios.
-- Geração opcional de relatório textual com IA (`gerar_relatorio_ia=true`).
-
----
-
-## 2. Requisitos
-
-- Python **3.11+**
-- Pip
+- FastAPI `0.115.0`
+- Uvicorn `0.30.6`
+- Pydantic `2.8.2`
+- Psycopg `3.2.1`
+- OpenAI SDK `1.51.2`
 - PostgreSQL
-- Variáveis de ambiente configuradas (seção 4)
 
----
+## Estrutura principal
 
-## 3. Instalação e execução
+```text
+API/
+|-- app/
+|   |-- api/
+|   |   |-- auth/
+|   |   |-- geo/
+|   |   |-- nfe/
+|   |   `-- sped/
+|   |-- core/
+|   |-- domain/
+|   |-- models/
+|   |-- services/
+|   |-- file/
+|   |-- requirements.txt
+|   `-- main.py
+`-- README.md
+```
 
-### 3.1 Instalar dependências
+## Como executar
 
 Na raiz do repositório:
 
 ```bash
 pip install -r API/app/requirements.txt
-```
-
-### 3.2 Executar servidor
-
-```bash
 cd API
 python -m uvicorn app.main:app --reload
 ```
 
-- API: `http://127.0.0.1:8000`
-- Health: `http://127.0.0.1:8000/health`
-- Swagger: `http://127.0.0.1:8000/docs`
+Endpoints locais:
 
----
+- `http://127.0.0.1:8000/health`
+- `http://127.0.0.1:8000/docs`
 
-## 4. Configuração de ambiente
+## Configuração de ambiente
 
-A API carrega variáveis de ambiente de `API/app/.env`.
+As variáveis são carregadas de `API/app/.env`.
 
-### 4.1 Banco PostgreSQL
+### Banco principal
 
 ```env
 POSTGRES_HOST=localhost
@@ -89,7 +69,7 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 ```
 
-### 4.2 Banco SPED dedicado (opcional)
+### Banco dedicado para SPED
 
 ```env
 POSTGRES_SPED_HOST=localhost
@@ -99,327 +79,121 @@ POSTGRES_SPED_USER=postgres
 POSTGRES_SPED_PASSWORD=postgres
 ```
 
-### 4.3 CORS
+### CORS
 
 ```env
 CORS_ALLOW_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 CORS_ALLOW_CREDENTIALS=true
-# opcional
 CORS_ALLOW_ORIGIN_REGEX=
 ```
 
-### 4.4 OpenAI (opcional)
+Observações:
+
+- A aplicação expande automaticamente aliases `localhost` e `127.0.0.1`.
+- Se `CORS_ALLOW_ORIGINS=*`, `allow_credentials` é desativado por segurança.
+- Existe regex local padrão para suportar portas variáveis em desenvolvimento.
+
+### OpenAI
 
 ```env
 OPENAI_API_KEY=<sua-chave>
 OPENAI_REPORT_MODEL=gpt-4o-mini
 ```
 
-> `OPENAI_API_KEY` só é necessária para chamadas com `gerar_relatorio_ia=true`.
+`OPENAI_API_KEY` só é obrigatória quando `gerar_relatorio_ia=true`.
 
----
+## Módulos de rota
 
-## 5. Banco de dados
+- `/api/auth`
+- `/api/nfe`
+- `/api/sped`
+- `/api/geo`
 
-- O projeto usa PostgreSQL para autenticação, staging de importação e KPIs.
-- Não há migrações automáticas no repositório.
-- Scripts SQL disponíveis em `API/app/file/sql/`.
-- Para ambientes com separação de domínio, criar bancos NFe e SPED e aplicar schemas correspondentes.
+## Endpoints principais
 
----
+### Sistema
 
-## 6. Organização de rotas
+- `GET /health`
 
-- Prefixo global: `/api`
-- Módulos:
-  - `/api/auth`
-  - `/api/nfe`
-  - `/api/sped`
-  - `/api/geo`
-- Endpoint fora do prefixo: `GET /health`
+### Auth
 
----
+- `POST /api/auth/registrar`
+- `POST /api/auth/entrar`
 
-## 7. Contratos da API
+### NFe
 
-## 7.1 Sistema
+- `POST /api/nfe/processar`
+- `POST /api/nfe/xml/importar`
+- `GET /api/nfe/xml/pendencias`
+- `POST /api/nfe/xml/processar-importados`
+- `GET /api/nfe/kpis`
+- `GET /api/nfe/kpis/comparativo`
+- `GET /api/nfe/kpis/comparativo/atual`
+- `GET /api/nfe/analise/compras`
+- `GET /api/nfe/analise/vendas`
+- `GET /api/nfe/analise/clientes`
 
-### `GET /health`
+### SPED
 
-Verifica disponibilidade da aplicação.
+- `POST /api/sped/processar`
+- `POST /api/sped/importar`
+- `GET /api/sped/pendencias`
+- `POST /api/sped/processar-importados`
+- `GET /api/sped/kpis`
+- `GET /api/sped/clientes`
+- `GET /api/sped/analise/compras`
+- `GET /api/sped/analise/vendas`
+- `GET /api/sped/analise/clientes`
 
-**Resposta 200 (exemplo):**
+### Geo
 
-```json
-{ "status": "ok" }
-```
+- `GET /api/geo/municipios`
+- `GET /api/geo/municipios/{uf}`
 
----
+## Regras de negócio
 
-## 7.2 Autenticação
+- Empresa com `tem_sped=true` não pode usar rotas XML.
+- Empresa com `tem_sped=false` não pode usar rotas SPED.
+- NFe aceita até `10.000` arquivos por importação e apenas `.xml`.
+- SPED aceita até `500` arquivos por importação e apenas `.txt`.
+- A validação de CNPJ ocorre em vários endpoints com janela mínima e máxima de tamanho.
 
-## `POST /api/auth/registrar`
+## Relatórios com IA
 
-Registra login + empresa.
+As rotas de análise aceitam geração opcional de relatório:
 
-**Body (JSON):**
+- `gerar_relatorio_ia=true`
+- `formato_relatorio=executivo|analitico`
+- `layout` disponível para compras e vendas
 
-```json
-{
-  "empresa_nome": "Empresa Exemplo LTDA",
-  "email": "contato@empresa.com",
-  "senha": "senha-forte",
-  "cnpj": "12345678000190",
-  "tem_sped": false
-}
-```
+Implementação atual:
 
-**Resposta 201:**
+- O serviço usa `OpenAI().responses.create(...)`
+- Modelo padrão: `gpt-4o-mini`
+- Prompts ficam em `API/app/services/AI/Agents/`
 
-```json
-{
-  "status": "cadastrado",
-  "login_id": 1,
-  "empresa_id": 1,
-  "cnpj": "12345678000190",
-  "email": "contato@empresa.com",
-  "empresa_nome": "Empresa Exemplo LTDA",
-  "tem_sped": false
-}
-```
+## Arquivos e dados auxiliares
 
----
+- Scripts SQL: `API/app/file/sql/`
+- Prompt templates: `API/app/services/AI/Agents/`
+- GeoJSON local: `API/app/services/Municipios/`
+- Arquivos de exemplo e massa de teste: `API/app/file/`
 
-## `POST /api/auth/entrar`
+## Banco de dados
 
-Autentica usuário.
+- Não há mecanismo de migração automatizado no repositório.
+- A estrutura SQL está distribuída entre scripts em `file/sql/` e `models/`.
+- Há suporte para separação entre base NFe e base SPED.
 
-**Body (JSON):**
+## Respostas e erros comuns
 
-```json
-{
-  "email": "contato@empresa.com",
-  "senha": "senha-forte"
-}
-```
+- `400 Bad Request`: parâmetros inválidos, empresa em fluxo errado, arquivo inválido
+- `401 Unauthorized`: falha de autenticação
+- `404 Not Found`: sem dados, sem pendências ou período inexistente
+- `502 Bad Gateway`: falha ao gerar relatório com IA
+- `503 Service Unavailable`: indisponibilidade de banco ou OpenAI
 
-**Resposta 200:**
+## Observações de manutenção
 
-```json
-{
-  "status": "ok",
-  "login_id": 1,
-  "empresa_id": 1,
-  "cnpj": "12345678000190",
-  "email": "contato@empresa.com",
-  "empresa_nome": "Empresa Exemplo LTDA",
-  "tem_sped": false
-}
-```
-
----
-
-## 7.3 NFe (XML)
-
-## `POST /api/nfe/processar`
-
-Fluxo legado/lote para processar XMLs de uma origem já disponível (sem upload).
-
-- Usa o contrato `ProcessarNFeRequest`.
-- Retorna `ProcessarNFeResponse`.
-
-> Recomenda-se usar o fluxo de upload + processamento importado para operação no Painel.
-
----
-
-## `POST /api/nfe/xml/importar`
-
-Importa XMLs para staging (sem calcular KPI imediatamente).
-
-**Tipo:** `multipart/form-data`  
-**Query obrigatória:** `cnpj_empresa_origem`  
-**Campo de arquivo:** `arquivos`
-
-Regras:
-
-- Máximo de **10.000 arquivos** por requisição.
-- Apenas extensão `.xml` é aceita.
-
----
-
-## `GET /api/nfe/xml/pendencias`
-
-Consulta quantidade pendente por CNPJ.
-
-**Query:** `cnpj_emitente`
-
----
-
-## `POST /api/nfe/xml/processar-importados`
-
-Processa XMLs pendentes do staging e marca como processados.
-
-**Query:** `cnpj_emitente`
-
-- Retorna 404 quando não existem pendências.
-
----
-
-## `GET /api/nfe/kpis`
-
-Consulta KPIs consolidados.
-
-**Query principal:**
-
-- `emitente_cnpj` (obrigatório efetivo)
-- `periodo_ano` (opcional)
-- `periodo_mes` (opcional)
-- `limite` e `offset` (paginação)
-
----
-
-## `GET /api/nfe/kpis/comparativo`
-
-Compara KPI entre mês atual e anterior (manual).
-
-- Parâmetros obrigatórios: `periodo_ano`, `periodo_mes`
-- `periodo_anterior_ano/mes` opcionais (auto-cálculo se não informados)
-- `emitente_cnpj` ou `email` para resolução de empresa
-
----
-
-## `GET /api/nfe/kpis/comparativo/atual`
-
-Compara automaticamente os dois períodos mais recentes disponíveis.
-
-- Entrada: `emitente_cnpj` ou `email`
-
----
-
-## `GET /api/nfe/analise/compras`
-## `GET /api/nfe/analise/vendas`
-## `GET /api/nfe/analise/clientes`
-
-Análises avançadas com rankings e totais.
-
-Parâmetros comuns:
-
-- `emitente_cnpj` ou `email`
-- `periodo_ano` / `periodo_mes` (opcional)
-- `limite` (1..20)
-- `gerar_relatorio_ia` (opcional)
-
----
-
-## `GET /api/nfe/notas`
-
-Atualmente retorna **501 Not Implemented**.
-
----
-
-## 7.4 SPED Fiscal
-
-> Endpoints SPED só funcionam para empresas configuradas com `tem_sped=true`.
-
-## `POST /api/sped/processar`
-
-Processamento direto de arquivo SPED (fluxo de serviço).
-
----
-
-## `POST /api/sped/importar`
-
-Importa arquivos TXT do SPED para staging.
-
-**Tipo:** `multipart/form-data`  
-**Query obrigatória:** `cnpj_empresa_origem`  
-**Campo de arquivo:** `arquivos`
-
-Regras:
-
-- Máximo de **500 arquivos** por requisição.
-- Apenas extensão `.txt`.
-
----
-
-## `GET /api/sped/pendencias`
-
-Retorna total de arquivos SPED pendentes por CNPJ.
-
----
-
-## `POST /api/sped/processar-importados`
-
-Processa staging SPED pendente e marca como processado.
-
----
-
-## `GET /api/sped/kpis`
-
-Consulta KPIs consolidados do SPED.
-
----
-
-## `GET /api/sped/clientes`
-
-Lista clientes (com filtros de período/paginação).
-
----
-
-## `GET /api/sped/analise/compras`
-## `GET /api/sped/analise/vendas`
-
-Análises de compras e vendas no domínio SPED.
-
-Parâmetros comuns:
-
-- `emitente_cnpj` (obrigatório)
-- `periodo_ano`, `periodo_mes` (opcional)
-- `limite` (1..20)
-- `gerar_relatorio_ia` (opcional)
-
----
-
-## 7.5 Geo
-
-## `GET /api/geo/municipios`
-
-Entrega arquivo local de municípios em formato GeoJSON (quando disponível).
-
-## `GET /api/geo/municipios/{uf}`
-
-Retorna municípios por UF:
-
-- Prioriza base local `LL-municipios.json`.
-- Se necessário, consulta fallback no IBGE.
-
----
-
-## 8. Regras de negócio importantes
-
-- Empresa com `tem_sped=true` **não** deve usar rotas de XML NFe.
-- Empresa com `tem_sped=false` **não** deve usar rotas SPED.
-- CNPJ é validado com tamanho mínimo/máximo (14..20) em vários endpoints.
-- Limites de upload existem para segurança de processamento (NFe 10.000, SPED 500).
-- Rotas de análise com IA retornam 503 se `OPENAI_API_KEY` não estiver configurada.
-
----
-
-## 9. Erros comuns e respostas HTTP
-
-- **400 Bad Request**: entrada inválida (CNPJ, arquivo, parâmetros).
-- **401 Unauthorized**: falha de login.
-- **404 Not Found**: sem dados/pêndencias para o filtro.
-- **501 Not Implemented**: endpoint previsto ainda sem implementação (`/api/nfe/notas`).
-- **502 Bad Gateway**: erro de integração externa (ex.: geração IA).
-- **503 Service Unavailable**: indisponibilidade de banco/auth/OpenAI.
-
----
-
-## 10. Boas práticas de operação
-
-1. Sempre validar perfil da empresa no login (`tem_sped`) antes do fluxo de importação.
-2. Trabalhar por lote com lotes menores em produção para monitorar throughput.
-3. Usar `GET /health` em monitoramento.
-4. Auditar pendências antes de processamento (`/pendencias`).
-5. Consultar `/docs` para schemas atualizados automaticamente.
+- O nome exibido no `FastAPI(...)` ainda está como `API - Agente Extrator NFe`, embora a API hoje cubra NFe e SPED.
+- Consulte sempre `/docs` para confirmar schemas e contratos atualizados.

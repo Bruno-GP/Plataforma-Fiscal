@@ -1,59 +1,51 @@
-# Plataforma Fiscal — Documentação Principal
+# Plataforma Fiscal
 
-Este repositório contém **duas aplicações principais** que trabalham em conjunto:
+Repositório com duas aplicações que operam em conjunto:
 
-- **API (FastAPI)** para autenticação, importação/processamento fiscal (XML NFe e SPED), consultas analíticas e geração opcional de relatórios com IA.
-- **Painel (React + Vite)** para operação do dia a dia (login, importação, análises e relatórios), consumindo os endpoints da API.
+- `API/`: backend em FastAPI para autenticação, importação fiscal, processamento e consultas analíticas.
+- `Painel/`: frontend em React + Vite para operação diária, importações, dashboards e relatórios.
 
-> A documentação foi separada por contexto para facilitar manutenção e onboarding:
->
-> - 📘 **Documentação da API:** [`API/README.md`](API/README.md)
-> - 📙 **Documentação do Painel:** [`Painel/README.md`](Painel/README.md)
+Cada módulo possui seu próprio guia:
 
----
+- [API/README.md](C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\API\README.md)
+- [Painel/README.md](C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\Painel\README.md)
 
-## Sumário rápido
+## Visão geral
 
-- [Visão geral da arquitetura](#visão-geral-da-arquitetura)
-- [Estrutura do repositório](#estrutura-do-repositório)
-- [Quick start (API + Painel)](#quick-start-api--painel)
-- [Fluxo operacional recomendado](#fluxo-operacional-recomendado)
-- [Funcionalidades por módulo](#funcionalidades-por-módulo)
-- [Ambiente e requisitos gerais](#ambiente-e-requisitos-gerais)
-- [Guia de troubleshooting](#guia-de-troubleshooting)
+Fluxo principal da plataforma:
 
----
+1. A empresa é cadastrada e passa a ter um perfil fiscal definido por `tem_sped`.
+2. O Painel autentica o usuário e direciona o fluxo conforme o perfil:
+   - `tem_sped=false`: operação com XML/NFe
+   - `tem_sped=true`: operação com SPED Fiscal
+3. Os arquivos são importados para staging.
+4. A API processa os arquivos pendentes e consolida KPIs.
+5. O Painel exibe dashboards de vendas, compras e clientes.
+6. Relatórios narrativos podem ser gerados via OpenAI nas análises suportadas.
 
-## Visão geral da arquitetura
-
-A plataforma funciona em camadas:
-
-1. **Usuário acessa o Painel** e realiza login/cadastro.
-2. O **Painel consome a API** via `VITE_API_URL`.
-3. A **API valida perfil da empresa** (fluxo XML x fluxo SPED).
-4. A API **importa/ processa documentos fiscais** e persiste no PostgreSQL.
-5. O Painel consome **KPIs e análises** para exibir dashboards.
-6. Opcionalmente, algumas análises podem ser enriquecidas com **relatório narrativo via OpenAI**.
-
----
-
-## Estrutura do repositório
+## Estrutura
 
 ```text
 .
-├── API/
-│   └── README.md        # Documentação completa da API
-├── Painel/
-│   └── README.md        # Documentação completa do front-end
-└── README.md            # Este guia principal (orquestração da plataforma)
-
+|-- API/
+|   |-- app/
+|   |-- README.md
+|   `-- Arquivo SQL para validacao de dados.sql
+|-- Painel/
+|   |-- src/
+|   |-- public/
+|   `-- README.md
+`-- README.md
 ```
 
----
+## Stack
 
-## Quick start (API + Painel)
+- Backend: FastAPI, Pydantic v2, Psycopg v3, PostgreSQL, OpenAI SDK
+- Frontend: React 18, TypeScript, Vite, React Router, TanStack Query, Tailwind
 
-### 1) Subir a API
+## Quick start
+
+### API
 
 ```bash
 pip install -r API/app/requirements.txt
@@ -61,93 +53,77 @@ cd API
 python -m uvicorn app.main:app --reload
 ```
 
-API local: `http://localhost:8000`
-Swagger: `http://localhost:8000/docs`
+- API local: `http://localhost:8000`
+- Health check: `http://localhost:8000/health`
+- Swagger: `http://localhost:8000/docs`
 
-### 2) Subir o Painel
-
-Em outro terminal:
+### Painel
 
 ```bash
 cd Painel
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
-Painel local: `http://localhost:5173`
+Se preferir, `yarn install` e `yarn dev` também funcionam.
 
-### 3) Configurar integração
+- Painel local: `http://localhost:5173`
 
-No arquivo `Painel/.env`:
+### Integração
+
+Crie `Painel/.env`:
 
 ```env
 VITE_API_URL=http://localhost:8000
 ```
 
-> O front-end aceita `VITE_API_URL` com ou sem `/api` no final.
+O frontend normaliza a URL automaticamente:
 
----
+- `http://localhost:8000` -> `http://localhost:8000/api`
+- `http://localhost:8000/api` -> mantido como está
 
-## Fluxo operacional recomendado
+## Funcionalidades atuais
 
-1. **Cadastro/login** de empresa e usuário.
-2. Definir se empresa trabalha com **XML NFe** ou **SPED Fiscal**.
-3. Usar a tela correta de importação no Painel:
-   - XML: `/importacao-xml`
-   - SPED: `/importacao-sped`
-4. Consultar pendências e processar importados.
-5. Acompanhar dashboards:
-   - Análise de vendas
-   - Análise de compras
-   - Análise de clientes
-   - Relatórios IA
+### API
 
----
+- Autenticação com cadastro e login
+- Processamento de XML/NFe
+- Processamento de SPED Fiscal
+- Importação para staging com consulta de pendências
+- KPIs consolidados por período
+- Análises de compras, vendas e clientes
+- Comparativo mensal de KPIs para NFe
+- GeoJSON de municípios
+- Relatórios narrativos via OpenAI
 
-### API (backend)
+### Painel
 
-Abaixo está o significado dos principais campos calculados:
+- Login e cadastro de empresa
+- Controle de sessão em `localStorage`
+- Navegação condicionada por perfil XML/SPED
+- Importação e processamento de XML
+- Importação e processamento de SPED
+- Dashboard de vendas
+- Dashboard de compras
+- Dashboard de clientes
+- Central de relatórios com IA e exportação para PDF
 
-- Health check e CORS configurável por ambiente.
-- Autenticação (registro e login).
-- Importação e processamento de **XML NFe**.
-- Importação e processamento de **SPED Fiscal**.
-- Consultas de KPIs e análises analíticas.
-- Endpoints de GeoJSON para municípios.
-- Integração opcional com OpenAI para relatórios narrativos.
+## Observações importantes
 
-👉 Detalhes completos em [`API/README.md`](API/README.md).
+- Empresas configuradas para SPED não devem usar o fluxo XML.
+- Empresas configuradas para XML não devem usar o fluxo SPED.
+- O painel possui páginas de `Atualizações` e `Configurações` implementadas no código, mas elas ainda não estão ativas no roteador principal.
+- O chat do frontend existe como componente/contexto local, porém está desabilitado no layout e hoje não conversa com a API.
 
-### Painel (frontend)
+## Requisitos
 
-- Autenticação e contexto de sessão.
-- Navegação protegida por perfil da empresa.
-- Fluxos de importação fiscal (XML/SPED).
-- Dashboards analíticos com filtros de período.
-- Módulo de relatórios IA.
-- Integração centralizada com serviços HTTP.
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL
 
-👉 Detalhes completos em [`Painel/README.md`](Painel/README.md).
+## Troubleshooting rápido
 
----
-
-## Ambiente e requisitos gerais
-
-- **Python 3.11+** (API)
-- **Node.js 18+** (Painel)
-- **Yarn** (recomendado para o front)
-- **PostgreSQL** (persistência dos módulos fiscais e autenticação)
-
----
-
-## Guia de troubleshooting
-
-- **Erro de CORS:** validar `CORS_ALLOW_ORIGINS` na API e URL do painel.
-- **Painel sem dados:** conferir `VITE_API_URL`, API ativa e credenciais válidas.
-- **Importação rejeitada:** confirmar tipo de empresa (XML x SPED) e formato de arquivo.
-- **Relatório IA indisponível:** definir `OPENAI_API_KEY` no ambiente da API.
-
-Para troubleshooting específico, consulte:
-
-- API: [`API/README.md`](API/README.md)
-- Painel: [`Painel/README.md`](Painel/README.md)
+- CORS: revise `CORS_ALLOW_ORIGINS`, `CORS_ALLOW_CREDENTIALS` e `CORS_ALLOW_ORIGIN_REGEX` na API.
+- Tela sem dados: confirme `VITE_API_URL`, API ativa e sessão válida.
+- Importação rejeitada: valide o perfil da empresa (`tem_sped`) e o tipo de arquivo enviado.
+- Relatórios IA indisponíveis: configure `OPENAI_API_KEY` no backend.

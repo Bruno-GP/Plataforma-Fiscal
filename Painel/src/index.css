@@ -117,6 +117,7 @@
 
   .ia-report__hero {
     padding: 1rem 1.1rem;
+    max-width: min(52rem, calc(100% - 7rem));
   }
 
   .ia-report__eyebrow {
@@ -133,11 +134,12 @@
     font-size: clamp(1.25rem, 1.6vw, 1.9rem);
     line-height: 1.1;
     color: white;
+    text-wrap: balance;
   }
 
   .ia-report__subtitle {
     margin: 0.55rem 0 0;
-    max-width: 56rem;
+    max-width: 42rem;
     font-size: 0.9rem;
     line-height: 1.55;
     color: rgb(148 163 184);
@@ -281,6 +283,10 @@
   }
 
   @media (max-width: 768px) {
+    .ia-report__hero {
+      max-width: 100%;
+    }
+
     .ia-report {
       padding: 1rem;
     }

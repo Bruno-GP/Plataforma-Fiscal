@@ -19,8 +19,22 @@ class OpenAIReportService:
   def disponivel(self) -> bool:
     return bool(self.api_key)
 
-  def gerar_relatorio_compras(self, analise: dict, formato: ReportFormat = "executivo") -> str:
-    prompt = self._montar_prompt_compras(analise, formato)
+  def gerar_relatorio_compras(
+    self,
+    analise: dict,
+    formato: ReportFormat = "executivo",
+    layout: str | None = None,
+  ) -> str:
+    prompt = self._montar_prompt_compras(analise, formato, layout)
+    layout_normalizado = (layout or "").strip()
+    if layout_normalizado:
+      prompt = (
+        f"{prompt}\n\n"
+        "Layout solicitado para a saÃƒÂ­da:\n"
+        f"{layout_normalizado}\n\n"
+        "Siga esse layout com prioridade na organizaÃƒÂ§ÃƒÂ£o da resposta, "
+        "sem inventar dados fora da base recebida."
+      )
     return self._gerar_relatorio("compras", formato, prompt)
 
   def gerar_relatorio_vendas(self, analise: dict, formato: ReportFormat = "executivo") -> str:
@@ -58,7 +72,12 @@ class OpenAIReportService:
 
     return texto
 
-  def _montar_prompt_compras(self, analise: dict, formato: ReportFormat) -> str:
+  def _montar_prompt_compras(
+    self,
+    analise: dict,
+    formato: ReportFormat,
+    layout: str | None = None,
+  ) -> str:
     total_comprado = self._formatar_decimal(analise.get("total_comprado"))
 
     top_fornecedores = analise.get("top_fornecedores_valor", [])

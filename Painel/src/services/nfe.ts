@@ -299,7 +299,16 @@ export const processarXmlsImportados = async (cnpjEmitente: string): Promise<Pro
 };
 
 export const fetchNfeAnaliseCompras = async (
-  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean; formato_relatorio?: 'executivo' | 'analitico' } = {}
+  params: {
+    emitente_cnpj?: string;
+    email?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+    gerar_relatorio_ia?: boolean;
+    formato_relatorio?: 'executivo' | 'analitico';
+    layout?: string;
+  } = {}
 ): Promise<AnaliseComprasResponse> => {
   const searchParams = new URLSearchParams();
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
@@ -315,6 +324,7 @@ export const fetchNfeAnaliseCompras = async (
   if (params.limite) searchParams.set('limite', String(params.limite));
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
+  if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
 
   const response = await fetch(`${API_BASE_URL}/nfe/analise/compras?${searchParams.toString()}`);
 

@@ -178,6 +178,7 @@ def consultar_analise_compras_nfe(
   limite: int = Query(default=5, ge=1, le=20),
   gerar_relatorio_ia: bool = Query(default=False),
   formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
+  layout: str | None = Query(default=None),
 ):
   service = NFeConsultaService()
 
@@ -211,7 +212,11 @@ def consultar_analise_compras_nfe(
           ),
         )
 
-      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(resultado, formato_relatorio)
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(
+        resultado,
+        formato_relatorio,
+        layout,
+      )
     
   except ValueError as exc:
     raise HTTPException(

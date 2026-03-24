@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   fetchNfeAnaliseClientes,
@@ -65,6 +66,7 @@ export default function RelatoriosIA() {
   const [report, setReport] = useState<string | null>(null);
   const [tipoRelatorio, setTipoRelatorio] = useState<ReportType>('compras');
   const [formatoRelatorio, setFormatoRelatorio] = useState<ReportFormat>('executivo');
+  const [layoutRelatorio, setLayoutRelatorio] = useState('');
   const [totalPeriodo, setTotalPeriodo] = useState(0);
   const reportContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -290,6 +292,7 @@ export default function RelatoriosIA() {
         limite: 5,
         gerar_relatorio_ia: true,
         formato_relatorio: formatoRelatorio,
+        layout: tipoRelatorio === 'compras' ? layoutRelatorio : undefined,
       };
 
       const response =
@@ -424,6 +427,22 @@ export default function RelatoriosIA() {
               </Select>
             </div>
           </div>
+
+          {/* {tipoRelatorio === 'compras' && (
+            <div className="space-y-2">
+              <Label htmlFor="relatorio-layout">Layout do relatÃ³rio</Label>
+              <Textarea
+                id="relatorio-layout"
+                value={layoutRelatorio}
+                onChange={(event) => setLayoutRelatorio(event.target.value)}
+                placeholder="Descreva a organizaÃ§Ã£o desejada do relatÃ³rio analÃ­tico de compras."
+                className="min-h-28 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">
+                Campo opcional. Quando preenchido, a IA segue esse layout como guia na resposta de compras.
+              </p>
+            </div>
+          )} */}
 
           <div className="flex justify-end">
             <Button onClick={handleGenerate} disabled={isLoading || !hasEmitenteCnpj} className="min-w-32 gap-2">

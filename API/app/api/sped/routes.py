@@ -10,6 +10,7 @@ from app.models.sped.schemas import (
   ProcessarSpedImportadosResponse,
   RegistroSpedResumo,
   AnaliseComprasResponse,
+  AnaliseClientesResponse,
   ConsultaClientesSpedResponse,
   AnaliseVendasResponse
 )
@@ -107,6 +108,7 @@ def consultar_analise_compras_sped(
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
   gerar_relatorio_ia: bool = Query(default=False),
+  formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
 ):
   _validar_empresa_sped(emitente_cnpj)
 
@@ -129,7 +131,7 @@ def consultar_analise_compras_sped(
           ),
         )
 
-      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(resultado)
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(resultado, formato_relatorio)
 
   except ValueError as exc:
     raise HTTPException(
@@ -155,6 +157,7 @@ def consultar_analise_vendas_sped(
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
   gerar_relatorio_ia: bool = Query(default=False),
+  formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
 ):
   _validar_empresa_sped(emitente_cnpj)
 
@@ -177,7 +180,7 @@ def consultar_analise_vendas_sped(
           ),
         )
 
-      resultado["relatorio_ia"] = ia_service.gerar_relatorio_vendas(resultado)
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_vendas(resultado, formato_relatorio)
 
   except ValueError as exc:
     raise HTTPException(
@@ -195,6 +198,55 @@ def consultar_analise_vendas_sped(
     ) from exc
 
   return AnaliseVendasResponse(status="ok", **resultado)
+
+@sped_router.get("/analise/clientes", response_model=AnaliseClientesResponse)
+def consultar_analise_clientes_sped(
+  emitente_cnpj: str = Query(..., min_length=14, max_length=20),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=5, ge=1, le=20),
+  gerar_relatorio_ia: bool = Query(default=False),
+  formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
+):
+  _validar_empresa_sped(emitente_cnpj)
+
+  try:
+    resultado = SpedConsultaService().analisar_clientes(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+
+    if gerar_relatorio_ia:
+      ia_service = OpenAIReportService()
+      if not ia_service.disponivel():
+        raise HTTPException(
+          status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+          detail=(
+            "IntegraÃ§Ã£o com OpenAI indisponÃ­vel. "
+            "Configure OPENAI_API_KEY no ambiente da API."
+          ),
+        )
+
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_clientes(resultado, formato_relatorio)
+
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  except HTTPException:
+    raise
+
+  except Exception as exc:
+    raise HTTPException(
+      status_code=status.HTTP_502_BAD_GATEWAY,
+      detail=f"Falha ao gerar relatÃ³rio com IA: {exc}",
+    ) from exc
+
+  return AnaliseClientesResponse(status="ok", **resultado)
 
 @sped_router.get("/pendencias", response_model=ImportacaoSpedPendenciasResponse)
 def consultar_pendencias_sped(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):

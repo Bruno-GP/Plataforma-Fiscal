@@ -103,3 +103,21 @@ class AnaliseVendasResponse(BaseModel):
   top_produtos_valor: list[RankingProdutoVenda] = Field(default_factory=list)
   top_produtos_quantidade: list[RankingProdutoVenda] = Field(default_factory=list)
   relatorio_ia: str | None = None
+
+class RankingClienteAnalise(BaseModel):
+  cliente: str
+  valor_total: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+  ticket_medio: Decimal = Decimal("0.00")
+  percentual_participacao: Decimal = Decimal("0.00")
+
+class AnaliseClientesResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  total_vendido: Decimal = Decimal("0.00")
+  total_clientes: int = 0
+  top_clientes_valor: list[RankingClienteAnalise] = Field(default_factory=list)
+  top_clientes_quantidade: list[RankingClienteAnalise] = Field(default_factory=list)
+  relatorio_ia: str | None = None

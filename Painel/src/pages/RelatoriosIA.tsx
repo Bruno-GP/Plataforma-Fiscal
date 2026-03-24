@@ -17,7 +17,7 @@ import {
   fetchNfeKpis, 
   parseDecimal 
 } from '@/services/nfe';
-import { fetchSpedAnaliseCompras, fetchSpedAnaliseVendas, fetchSpedKpis } from '@/services/sped';
+import { fetchSpedAnaliseClientes, fetchSpedAnaliseCompras, fetchSpedAnaliseVendas, fetchSpedKpis } from '@/services/sped';
 
 import { formatCurrency, monthLabels } from '@/services/utils';
 
@@ -140,12 +140,13 @@ export default function RelatoriosIA() {
         periodo_mes: selectedMonth === 'all' || Number.isNaN(monthNumber) ? undefined : monthNumber,
         limite: 5,
         gerar_relatorio_ia: true,
+        formato_relatorio: formatoRelatorio,
       };
 
       const response = tipoRelatorio === 'compras'
         ? (usaSped ? await fetchSpedAnaliseCompras(payload) : await fetchNfeAnaliseCompras(payload))
         : tipoRelatorio === 'clientes'
-          ? (usaSped ? await fetchSpedAnaliseVendas(payload) : await fetchNfeAnaliseClientes(payload))
+          ? (usaSped ? await fetchSpedAnaliseClientes(payload) : await fetchNfeAnaliseClientes(payload))
           : (usaSped ? await fetchSpedAnaliseVendas(payload) : await fetchNfeAnaliseVendas(payload));
 
       const total = 'total_comprado' in response ? response.total_comprado : response.total_vendido;

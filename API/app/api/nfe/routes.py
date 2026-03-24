@@ -177,6 +177,7 @@ def consultar_analise_compras_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
   gerar_relatorio_ia: bool = Query(default=False),
+  formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
 ):
   service = NFeConsultaService()
 
@@ -210,7 +211,7 @@ def consultar_analise_compras_nfe(
           ),
         )
 
-      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(resultado)
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(resultado, formato_relatorio)
     
   except ValueError as exc:
     raise HTTPException(
@@ -237,6 +238,7 @@ def consultar_analise_vendas_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
   gerar_relatorio_ia: bool = Query(default=False),
+  formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
 ):
   service = NFeConsultaService()
 
@@ -270,7 +272,7 @@ def consultar_analise_vendas_nfe(
           ),
         )
 
-      resultado["relatorio_ia"] = ia_service.gerar_relatorio_vendas(resultado)
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_vendas(resultado, formato_relatorio)
 
   except ValueError as exc:
     raise HTTPException(
@@ -297,6 +299,7 @@ def consultar_analise_clientes_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
   gerar_relatorio_ia: bool = Query(default=False),
+  formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
 ):
   service = NFeConsultaService()
 
@@ -330,7 +333,7 @@ def consultar_analise_clientes_nfe(
           ),
         )
 
-      resultado["relatorio_ia"] = ia_service.gerar_relatorio_clientes(resultado)
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_clientes(resultado, formato_relatorio)
 
   except ValueError as exc:
     raise HTTPException(

@@ -535,6 +535,127 @@ class SpedConsultaService:
           "top_produtos_quantidade": top_produtos_quantidade,
         }
 
+  def analisar_clientes(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: int = 5,
+  ) -> dict:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
+    params: list[object] = [cnpj]
+
+    if periodo_ano:
+      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
+      params.append(periodo_ano)
+    if periodo_mes:
+      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
+      params.append(periodo_mes)
+
+    where_clause = " AND ".join(filtros)
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        total_vendido = self._safe_scalar_query(
+          cur,
+          f"""
+          SELECT COALESCE(SUM(d.valor_total), 0)
+          FROM public.sped_documentos_fiscais d
+          WHERE {where_clause}
+          """,
+          tuple(params),
+        )
+
+        total_clientes = self._safe_scalar_query(
+          cur,
+          f"""
+          SELECT COUNT(*)
+          FROM (
+            SELECT 1
+            FROM public.sped_documentos_fiscais d
+            LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+            WHERE {where_clause}
+            GROUP BY COALESCE(NULLIF(TRIM(p.nome), ''), 'Cliente nÃ£o identificado')
+          ) clientes
+          """,
+          tuple(params),
+        )
+
+        top_clientes_valor = self._safe_top_cliente_analise_query(
+          cur,
+          f"""
+          SELECT
+            cliente,
+            valor_total,
+            quantidade_documentos,
+            ticket_medio,
+            CASE
+              WHEN %s = 0 THEN 0
+              ELSE ROUND((valor_total * 100.0) / %s, 2)
+            END AS percentual_participacao
+          FROM (
+            SELECT
+              COALESCE(NULLIF(TRIM(p.nome), ''), 'Cliente nÃ£o identificado') AS cliente,
+              COALESCE(SUM(d.valor_total), 0) AS valor_total,
+              COUNT(*) AS quantidade_documentos,
+              CASE
+                WHEN COUNT(*) = 0 THEN 0
+                ELSE COALESCE(SUM(d.valor_total), 0) / COUNT(*)
+              END AS ticket_medio
+            FROM public.sped_documentos_fiscais d
+            LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+            WHERE {where_clause}
+            GROUP BY 1
+          ) base
+          ORDER BY valor_total DESC, cliente ASC
+          LIMIT %s
+          """,
+          tuple([total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *params, limite]),
+        )
+
+        top_clientes_quantidade = self._safe_top_cliente_analise_query(
+          cur,
+          f"""
+          SELECT
+            cliente,
+            valor_total,
+            quantidade_documentos,
+            ticket_medio,
+            CASE
+              WHEN %s = 0 THEN 0
+              ELSE ROUND((valor_total * 100.0) / %s, 2)
+            END AS percentual_participacao
+          FROM (
+            SELECT
+              COALESCE(NULLIF(TRIM(p.nome), ''), 'Cliente nÃ£o identificado') AS cliente,
+              COALESCE(SUM(d.valor_total), 0) AS valor_total,
+              COUNT(*) AS quantidade_documentos,
+              CASE
+                WHEN COUNT(*) = 0 THEN 0
+                ELSE COALESCE(SUM(d.valor_total), 0) / COUNT(*)
+              END AS ticket_medio
+            FROM public.sped_documentos_fiscais d
+            LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+            WHERE {where_clause}
+            GROUP BY 1
+          ) base
+          ORDER BY quantidade_documentos DESC, valor_total DESC, cliente ASC
+          LIMIT %s
+          """,
+          tuple([total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *params, limite]),
+        )
+
+        return {
+          "emitente_cnpj": cnpj,
+          "periodo_ano": periodo_ano,
+          "periodo_mes": periodo_mes,
+          "total_vendido": total_vendido or Decimal("0.00"),
+          "total_clientes": int(total_clientes or 0),
+          "top_clientes_valor": top_clientes_valor,
+          "top_clientes_quantidade": top_clientes_quantidade,
+        }
+
   def _safe_scalar_query(self, cur, sql: str, params: tuple[object, ...]) -> Decimal:
     try:
       cur.execute(sql, params)
@@ -581,6 +702,22 @@ class SpedConsultaService:
           "quantidade_total": quantidade_total or Decimal("0.00"),
         }
         for produto, valor_total, quantidade_total in cur.fetchall()
+      ]
+    except psycopg.errors.UndefinedTable:
+      return []
+
+  def _safe_top_cliente_analise_query(self, cur, sql: str, params: tuple[object, ...]) -> list[dict]:
+    try:
+      cur.execute(sql, params)
+      return [
+        {
+          "cliente": cliente,
+          "valor_total": valor_total or Decimal("0.00"),
+          "quantidade_documentos": quantidade_documentos or 0,
+          "ticket_medio": ticket_medio or Decimal("0.00"),
+          "percentual_participacao": percentual_participacao or Decimal("0.00"),
+        }
+        for cliente, valor_total, quantidade_documentos, ticket_medio, percentual_participacao in cur.fetchall()
       ]
     except psycopg.errors.UndefinedTable:
       return []

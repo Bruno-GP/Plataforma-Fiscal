@@ -1,0 +1,146 @@
+<GENERATED_PROMPT>
+  <goal>
+    Gerar uma página web moderna, elegante e responsiva para exibir um relatório analítico de clientes, com foco em clareza visual, leitura executiva, hierarquia de informações e aparência profissional. A interface deve apresentar vendas por cliente, crescimento percentual, ticket médio, insights e plano de ação em um layout sofisticado, utilizando como cores principais azul marinho e branco.
+  </goal>
+
+  <PlanningAndVerification>
+    Antes de construir a página:
+    1. Validar quais dados estarão disponíveis para renderização no relatório.
+    2. Confirmar se o conteúdo será carregado de forma estática ou dinâmica.
+    3. Garantir que o layout seja responsivo para desktop, tablet e mobile.
+    4. Verificar contraste, legibilidade e acessibilidade das cores azul marinho e branco.
+    5. Organizar os blocos do relatório em ordem lógica, priorizando leitura executiva e interpretação rápida.
+    6. Caso algum dado não esteja disponível, manter a estrutura visual pronta com placeholders elegantes.
+  </PlanningAndVerification>
+
+  <return_format>
+    Retorne a resposta como uma especificação completa de interface web, podendo incluir estrutura HTML, CSS e orientação de componentes visuais.
+
+    A resposta deve conter obrigatoriamente:
+
+    1. Estrutura Geral da Página
+       - Cabeçalho executivo
+       - Área de filtros ou seleção de período
+       - Cards de indicadores principais
+       - Seções analíticas
+       - Tabelas e gráficos
+       - Bloco de insights
+       - Bloco de plano de ação
+       - Rodapé discreto e corporativo
+
+    2. Direção Visual
+       - Estilo premium, corporativo e limpo
+       - Uso predominante de azul marinho e branco
+       - Tons auxiliares suaves para destaque
+       - Layout com bastante respiro visual
+       - Tipografia moderna e profissional
+       - Bordas suaves, sombras discretas e sensação de dashboard executivo
+
+    3. Seções do Relatório na Página
+       - Resumo executivo no topo
+       - Cards com métricas principais: faturamento total, crescimento médio, ticket médio e número de clientes
+       - Tabela de vendas por cliente
+       - Gráfico ou área visual para crescimento percentual por cliente
+       - Área comparativa de ticket médio
+       - Bloco de insights analíticos
+       - Bloco de plano de ação com priorização visual
+       - Conclusão executiva
+
+    4. Regras de UI e UX
+       - Hierarquia visual forte
+       - Leitura escaneável
+       - Cores consistentes
+       - Componentes alinhados e bem distribuídos
+       - Responsividade completa
+       - Boa experiência em telas grandes e pequenas
+       - Destaque visual para alertas, oportunidades e crescimento
+
+    5. Paleta de Cores Sugerida
+       - Azul marinho como cor principal
+       - Branco como cor base de fundo ou cartões
+       - Tons neutros claros para separações
+       - Verde suave para crescimento positivo
+       - Vermelho suave ou coral discreto para quedas ou alertas
+       - Azul claro ou cinza azulado para elementos de apoio
+
+    6. Componentes Visuais Esperados
+       - Cards KPI com números grandes
+       - Tabelas elegantes com cabeçalhos destacados
+       - Gráficos com visual limpo
+       - Blocos de insight com ícones discretos ou diferenciação por cor
+       - Plano de ação em formato de cards ou tabela priorizada
+       - Estados visuais para positivo, neutro e alerta
+
+    7. Entrega Técnica
+       - Gerar código organizado e legível
+       - Separar claramente HTML, CSS e opcionalmente JavaScript
+       - Nomear classes de forma semântica
+       - Preparar estrutura para futura integração com dados reais
+       - Garantir design consistente e reutilizável
+
+    Sempre que possível:
+       - Utilizar seções com aparência de dashboard executivo
+       - Aplicar grid responsivo
+       - Criar sensação de produto profissional e confiável
+       - Priorizar elegância e legibilidade acima de excesso de efeitos
+  </return_format>
+
+  <ReasoningSteps>
+    1. Definir a proposta visual da página com base no objetivo analítico.
+    2. Organizar a arquitetura da informação do relatório.
+    3. Distribuir os conteúdos em blocos executivos e analíticos.
+    4. Construir uma hierarquia visual clara para facilitar leitura e interpretação.
+    5. Aplicar a identidade visual com azul marinho e branco de forma sofisticada.
+    6. Definir cards, tabelas, áreas de gráfico e seções de insights.
+    7. Garantir responsividade e consistência visual.
+    8. Ajustar espaçamento, contraste, tipografia e usabilidade.
+    9. Preparar a estrutura para receber dados reais.
+    10. Entregar um resultado com aparência de dashboard analítico premium.
+  </ReasoningSteps>
+
+  <AgenticEagerness>
+    - Modo: Extendido
+    - Reasoning Effort: High
+    - Verbosity: High
+    - Primeira execução de forma autônoma; parar ou escalar para o usuário se faltar informação crítica ou se conflitos excederem o limite.
+  </AgenticEagerness>
+
+  <warnings>
+    - Não criar uma interface genérica ou visualmente pobre.
+    - Não exagerar em efeitos visuais, gradientes pesados ou elementos que prejudiquem a leitura.
+    - Não comprometer a clareza analítica por excesso de decoração.
+    - Evitar contraste fraco entre texto e fundo.
+    - Garantir que azul marinho e branco sejam aplicados de forma elegante e corporativa.
+    - Não montar um layout sem prioridade visual para os indicadores mais importantes.
+    - Evitar tabelas e blocos apertados que dificultem leitura executiva.
+    - Garantir que o design seja responsivo e profissional em diferentes resoluções.
+  </warnings>
+
+  <context_dump>
+    A página web será usada para exibir um relatório analítico de clientes. O objetivo é unir análise de dados e apresentação visual sofisticada em uma interface web com aparência profissional.
+
+    O relatório deve apresentar:
+    - Vendas por cliente
+    - Crescimento percentual de cada cliente
+    - Ticket médio
+    - Insights estratégicos
+    - Plano de ação comercial
+
+    A identidade visual principal deve usar azul marinho e branco, transmitindo confiança, sofisticação, clareza e perfil corporativo.
+
+    O layout ideal deve lembrar dashboards executivos modernos, com boa separação entre seções, indicadores em destaque, áreas para tabelas e gráficos, além de blocos de insights e ações recomendadas.
+
+    A experiência visual precisa ser agradável, organizada, elegante e preparada para uso real em ambiente corporativo.
+  </context_dump>
+
+  <StopConditions>
+    - Encerrar somente após apresentar uma proposta visual completa da página.
+    - Não finalizar sem definir estrutura, identidade visual, seções e comportamento responsivo.
+    - Caso não haja dados reais, criar a interface com conteúdo demonstrativo coerente.
+  </StopConditions>
+
+  <Tools>
+    - Ferramentas permitidas: HTML, CSS, JavaScript opcional, layout responsivo, grid, flexbox, componentes de dashboard, tabelas estilizadas, cards KPI e áreas preparadas para gráficos.
+    - Preparar a solução para integração futura com APIs, JSON, CSV ou backend.
+  </Tools>
+</GENERATED_PROMPT>

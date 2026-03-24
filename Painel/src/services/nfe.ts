@@ -299,7 +299,7 @@ export const processarXmlsImportados = async (cnpjEmitente: string): Promise<Pro
 };
 
 export const fetchNfeAnaliseCompras = async (
-  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean } = {}
+  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean; formato_relatorio?: 'executivo' | 'analitico' } = {}
 ): Promise<AnaliseComprasResponse> => {
   const searchParams = new URLSearchParams();
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
@@ -314,6 +314,7 @@ export const fetchNfeAnaliseCompras = async (
   if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
   if (params.limite) searchParams.set('limite', String(params.limite));
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
+  if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
 
   const response = await fetch(`${API_BASE_URL}/nfe/analise/compras?${searchParams.toString()}`);
 
@@ -363,7 +364,7 @@ export interface AnaliseClientesResponse {
 }
 
 export const fetchNfeAnaliseVendas = async (
-  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean } = {}
+  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean; formato_relatorio?: 'executivo' | 'analitico' } = {}
 ): Promise<AnaliseVendasResponse> => {
   const searchParams = new URLSearchParams();
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
@@ -378,6 +379,7 @@ export const fetchNfeAnaliseVendas = async (
   if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
   if (params.limite) searchParams.set('limite', String(params.limite));
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
+  if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
 
   const response = await fetch(`${API_BASE_URL}/nfe/analise/vendas?${searchParams.toString()}`);
 
@@ -390,7 +392,7 @@ export const fetchNfeAnaliseVendas = async (
 };
 
 export const fetchNfeAnaliseClientes = async (
-  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean } = {}
+  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean; formato_relatorio?: 'executivo' | 'analitico' } = {}
 ): Promise<AnaliseClientesResponse> => {
   const searchParams = new URLSearchParams();
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
@@ -405,6 +407,7 @@ export const fetchNfeAnaliseClientes = async (
   if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
   if (params.limite) searchParams.set('limite', String(params.limite));
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
+  if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
 
   const response = await fetch(`${API_BASE_URL}/nfe/analise/clientes?${searchParams.toString()}`);
 

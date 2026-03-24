@@ -132,7 +132,7 @@ export function IAReportPreview({ report }: IAReportPreviewProps) {
 
   return (
     <div
-      className="ia-report-surface overflow-hidden rounded-3xl border border-slate-800/80 bg-slate-950/70 shadow-[0_30px_90px_-50px_rgba(15,23,42,1)]"
+      className="ia-report-surface overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/70 shadow-[0_24px_70px_-48px_rgba(15,23,42,1)]"
       dangerouslySetInnerHTML={{ __html: sanitizedReport }}
     />
   );

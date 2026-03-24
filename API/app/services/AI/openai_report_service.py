@@ -48,7 +48,7 @@ class OpenAIReportService:
         {"role": "user", "content": prompt},
       ],
       temperature=0.3,
-      max_output_tokens=700 if formato == "analitico" else 500,
+      max_output_tokens=1200 if formato == "analitico" else 500,
     )
 
     texto = (resposta.output_text or "").strip()
@@ -157,7 +157,6 @@ class OpenAIReportService:
       (
         f"- {item.get('cliente', 'Cliente nÃ£o identificado')}: "
         f"R$ {self._formatar_decimal(item.get('valor_total'))} | "
-        f"{item.get('quantidade_documentos', 0)} documentos | "
         f"ticket mÃ©dio R$ {self._formatar_decimal(item.get('ticket_medio'))} | "
         f"participaÃ§Ã£o {self._formatar_decimal(item.get('percentual_participacao'))}%"
       )

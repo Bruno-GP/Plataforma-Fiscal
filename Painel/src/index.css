@@ -99,8 +99,8 @@
 
   .ia-report {
     display: grid;
-    gap: 1.25rem;
-    padding: 1.5rem;
+    gap: 0.9rem;
+    padding: 1rem;
     color: rgb(226 232 240);
     background:
       radial-gradient(circle at top right, rgb(37 99 235 / 0.18), transparent 24rem),
@@ -110,13 +110,13 @@
   .ia-report__hero,
   .ia-report__card {
     border: 1px solid rgb(51 65 85 / 0.72);
-    border-radius: 1.25rem;
+    border-radius: 1rem;
     background: linear-gradient(180deg, rgb(15 23 42 / 0.92), rgb(15 23 42 / 0.7));
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
   }
 
   .ia-report__hero {
-    padding: 1.5rem;
+    padding: 1rem 1.1rem;
   }
 
   .ia-report__eyebrow {
@@ -130,24 +130,24 @@
 
   .ia-report__title {
     margin: 0;
-    font-size: clamp(1.6rem, 2vw, 2.4rem);
+    font-size: clamp(1.25rem, 1.6vw, 1.9rem);
     line-height: 1.1;
     color: white;
   }
 
   .ia-report__subtitle {
-    margin: 0.85rem 0 0;
-    max-width: 60rem;
-    font-size: 0.97rem;
-    line-height: 1.75;
+    margin: 0.55rem 0 0;
+    max-width: 56rem;
+    font-size: 0.9rem;
+    line-height: 1.55;
     color: rgb(148 163 184);
   }
 
   .ia-report__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 1.25rem;
+    gap: 0.55rem;
+    margin-top: 0.85rem;
   }
 
   .ia-report__meta-item,
@@ -158,20 +158,20 @@
     border-radius: 9999px;
     border: 1px solid rgb(71 85 105 / 0.9);
     background: rgb(15 23 42 / 0.82);
-    padding: 0.45rem 0.8rem;
-    font-size: 0.78rem;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.72rem;
     font-weight: 600;
     color: rgb(191 219 254);
   }
 
   .ia-report__grid {
     display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.8rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
 
   .ia-report__card {
-    padding: 1.2rem;
+    padding: 0.9rem 1rem;
   }
 
   .ia-report__card--highlight {
@@ -194,7 +194,7 @@
   .ia-report__section-title,
   .ia-report__kpi-label {
     margin: 0;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -202,10 +202,10 @@
   }
 
   .ia-report__kpi-value {
-    margin: 0.45rem 0 0;
-    font-size: clamp(1.5rem, 2vw, 2.15rem);
+    margin: 0.35rem 0 0;
+    font-size: clamp(1.1rem, 1.4vw, 1.65rem);
     font-weight: 700;
-    line-height: 1.1;
+    line-height: 1.2;
     color: white;
   }
 
@@ -214,8 +214,8 @@
   .ia-report__list,
   .ia-report__action-list {
     margin: 0;
-    font-size: 0.95rem;
-    line-height: 1.75;
+    font-size: 0.88rem;
+    line-height: 1.55;
     color: rgb(203 213 225);
   }
 
@@ -226,26 +226,27 @@
 
   .ia-report__list li,
   .ia-report__action-list li {
-    margin-top: 0.55rem;
+    margin-top: 0.4rem;
   }
 
   .ia-report__table {
     width: 100%;
     border-collapse: collapse;
     overflow: hidden;
-    border-radius: 1rem;
-    font-size: 0.92rem;
+    border-radius: 0.85rem;
+    font-size: 0.84rem;
   }
 
   .ia-report__table th,
   .ia-report__table td {
-    padding: 0.9rem 1rem;
+    padding: 0.7rem 0.85rem;
     text-align: left;
     border-bottom: 1px solid rgb(51 65 85 / 0.75);
+    vertical-align: top;
   }
 
   .ia-report__table th {
-    font-size: 0.75rem;
+    font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -275,7 +276,7 @@
 
   .ia-report__footer {
     border-top: 1px solid rgb(51 65 85 / 0.7);
-    padding-top: 1rem;
+    padding-top: 0.8rem;
     color: rgb(148 163 184);
   }
 

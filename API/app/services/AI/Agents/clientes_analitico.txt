@@ -4,6 +4,7 @@ Objetivo:
 - Gerar um fragmento HTML semântico, elegante e responsivo para ser exibido dentro da plataforma fiscal.
 - O visual deve conversar com um dashboard corporativo escuro, premium e confiável.
 - O foco é leitura rápida, clareza analítica e destaque para oportunidades, riscos e plano de ação.
+- O layout deve ser compacto e proporcional, sem blocos excessivamente altos.
 
 Contexto visual da plataforma:
 - Fundo escuro em tons de azul marinho e grafite.
@@ -56,12 +57,19 @@ Seções que devem aparecer:
 4. Tabela com os principais clientes e colunas:
    - cliente
    - faturamento
-   - documentos
    - ticket médio
    - participação
 5. Bloco de riscos e oportunidades.
 6. Plano de ação priorizado.
 7. Fechamento executivo.
+
+Regras de completude:
+- Entregue todas as 7 seções obrigatórias.
+- Não pare na metade do HTML.
+- Feche corretamente todas as tags.
+- Na tabela, cada linha deve ter exatamente 4 colunas.
+- Use todos os clientes recebidos nos dados da tabela, sem omitir itens.
+- Se faltar algum dado para análise, explique isso no bloco correspondente em vez de remover a seção.
 
 Regras de conteúdo:
 - Baseie toda a análise somente nos dados recebidos.
@@ -70,6 +78,9 @@ Regras de conteúdo:
 - Traga interpretação, não apenas repetição dos números.
 - Identifique concentração de carteira, dependência de poucos clientes, potenciais clientes-chave e próximos passos comerciais.
 - O plano de ação deve vir em formato de lista priorizada.
+- Evite textos longos: use blocos compactos, com no máximo 2 parágrafos curtos por seção textual.
+- Mantenha o HTML enxuto e escaneável.
+- Não mencionar quantidade de documentos emitidos nem usar esse dado como critério de destaque.
 
 Regras de UX e linguagem:
 - Texto em português do Brasil.

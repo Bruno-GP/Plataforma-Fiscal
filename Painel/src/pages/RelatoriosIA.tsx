@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Loader2, Sparkles } from 'lucide-react';
+import { CalendarRange, Download, FileText, Loader2, Sparkles } from 'lucide-react';
 
+import { IAReportPreview } from '@/components/reports/IAReportPreview';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { IAReportPreview } from '@/components/reports/IAReportPreview';
-
 import { useAuth } from '@/contexts/AuthContext';
 import {
   fetchNfeAnaliseClientes,
@@ -114,6 +113,11 @@ export default function RelatoriosIA() {
     [formatoRelatorio],
   );
 
+  const tipoSelecionado = useMemo(
+    () => reportTypeOptions.find((option) => option.value === tipoRelatorio) ?? reportTypeOptions[0],
+    [tipoRelatorio],
+  );
+
   const periodoDescricao = useMemo(() => {
     if (selectedMonth === 'all') {
       return `Ano ${selectedYear}`;
@@ -128,12 +132,21 @@ export default function RelatoriosIA() {
     [formatoSelecionado.label, periodoDescricao],
   );
 
+  const totalPeriodoLabel = useMemo(() => {
+    if (tipoRelatorio === 'compras') {
+      return 'comprado';
+    }
+
+    if (tipoRelatorio === 'clientes') {
+      return 'faturado';
+    }
+
+    return 'vendido';
+  }, [tipoRelatorio]);
+
   const reportSubtitle = useMemo(
-    () =>
-      `Formato solicitado: ${formatoSelecionado.label}. Total ${
-        tipoRelatorio === 'compras' ? 'comprado' : 'vendido'
-      } no período: ${formatCurrency(totalPeriodo)}`,
-    [formatoSelecionado.label, tipoRelatorio, totalPeriodo],
+    () => `Formato solicitado: ${formatoSelecionado.label}. Total ${totalPeriodoLabel} no período: ${formatCurrency(totalPeriodo)}`,
+    [formatoSelecionado.label, totalPeriodo, totalPeriodoLabel],
   );
 
   const handleExportPdf = () => {
@@ -179,7 +192,9 @@ export default function RelatoriosIA() {
             body {
               margin: 0;
               padding: 32px;
-              background: #020617;
+              background:
+                radial-gradient(circle at top right, rgb(37 99 235 / 0.18), transparent 24rem),
+                linear-gradient(180deg, rgb(15 23 42 / 0.98), rgb(2 6 23 / 1));
               color: #e2e8f0;
               font-family: ui-sans-serif, system-ui, sans-serif;
             }
@@ -191,6 +206,10 @@ export default function RelatoriosIA() {
 
             .pdf-header {
               margin-bottom: 20px;
+              padding: 20px 22px;
+              border: 1px solid rgb(51 65 85 / 0.72);
+              border-radius: 24px;
+              background: linear-gradient(180deg, rgb(15 23 42 / 0.92), rgb(15 23 42 / 0.7));
             }
 
             .pdf-title {
@@ -214,7 +233,6 @@ export default function RelatoriosIA() {
             @media print {
               body {
                 padding: 0;
-                background: #020617;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
@@ -309,14 +327,37 @@ export default function RelatoriosIA() {
         </p>
       </div>
 
-      <Card>
+      <Card className="border-slate-800/80 bg-slate-950/60 shadow-[0_24px_70px_-48px_rgba(15,23,42,1)]">
         <CardHeader>
           <CardTitle>Parâmetros do relatório</CardTitle>
           <CardDescription>
             Defina o tema, o período e o formato desejado antes de solicitar a geração do relatório.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-300">Tema</p>
+              <p className="mt-2 text-sm text-slate-100">{tipoSelecionado.label}</p>
+              <p className="mt-1 text-xs text-slate-400">Leitura guiada por IA com foco executivo.</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Formato</p>
+              <p className="mt-2 text-sm text-slate-100">{formatoSelecionado.label}</p>
+              <p className="mt-1 text-xs text-slate-400">{formatoSelecionado.description}</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800/70 bg-slate-900/70 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Período</p>
+              <p className="mt-2 flex items-center gap-2 text-sm text-slate-100">
+                <CalendarRange className="h-4 w-4 text-slate-400" />
+                {periodoDescricao}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">Base consultada: {fonteDados}</p>
+            </div>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="relatorio-tipo">Relatório</Label>
@@ -401,24 +442,45 @@ export default function RelatoriosIA() {
       )}
 
       {report && (
-        <Card>
-          <CardHeader>
-            <div className="space-y-1">
-              <CardTitle>{reportTitle}</CardTitle>
-              <CardDescription>{reportSubtitle}</CardDescription>
+        <Card className="overflow-hidden border-slate-800/80 bg-slate-950/40 shadow-[0_28px_90px_-56px_rgba(15,23,42,1)]">
+          <CardHeader className="border-b border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-300">
+                  <FileText className="h-3.5 w-3.5" />
+                  Pré-visualização pronta para exportação
+                </div>
+                <div className="space-y-1">
+                  <CardTitle>{reportTitle}</CardTitle>
+                  <CardDescription>{reportSubtitle}</CardDescription>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGenerate}
+                  disabled={isLoading}
+                  className="gap-2 border-slate-700 bg-slate-900/80 text-slate-100 hover:bg-slate-800"
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Atualizar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleExportPdf}
+                  className="gap-2 bg-red-600 text-white shadow-lg hover:bg-red-700"
+                >
+                  <Download className="h-4 w-4" />
+                  Exportar PDF
+                </Button>
+              </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="relative">
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={handleExportPdf}
-                className="absolute top-3 right-3 z-10 gap-2 bg-red-600 text-white shadow-lg hover:bg-red-700"
-              >
-                <FileText className="h-4 w-4" />
-                Gerar PDF
-              </Button>
+
+          <CardContent className="p-4 md:p-6">
+            <div className="rounded-[1.75rem] border border-slate-800/80 bg-slate-950/40 p-2 md:p-3">
               <div ref={reportContainerRef}>
                 <IAReportPreview report={report} />
               </div>

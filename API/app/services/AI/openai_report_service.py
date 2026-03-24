@@ -48,7 +48,7 @@ class OpenAIReportService:
         {"role": "user", "content": prompt},
       ],
       temperature=0.3,
-      max_output_tokens=1200 if formato == "analitico" else 500,
+      max_output_tokens=1200 if formato == "analitico" else 900,
     )
 
     texto = (resposta.output_text or "").strip()

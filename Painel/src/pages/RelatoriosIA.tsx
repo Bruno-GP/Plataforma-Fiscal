@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { IAReportPreview } from '@/components/reports/IAReportPreview';
 
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -270,9 +271,7 @@ export default function RelatoriosIA() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-4 text-sm leading-6 text-foreground">
-              {report}
-            </pre>
+            <IAReportPreview report={report} />
           </CardContent>
         </Card>
       )}

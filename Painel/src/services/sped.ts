@@ -5,6 +5,10 @@ const API_BASE_URL = RAW_API_BASE_URL.endsWith('/api')
   ? RAW_API_BASE_URL
   : `${RAW_API_BASE_URL.replace(/\/$/, '')}/api`;
 
+interface RequestOptions {
+  signal?: AbortSignal;
+}
+
 export interface ImportacaoSpedArquivoResultado {
   arquivo: string;
   cnpj_emitente?: string | null;
@@ -146,7 +150,7 @@ export const fetchSpedAnaliseCompras = async (params: {
     gerar_relatorio_ia?: boolean;
     formato_relatorio?: 'executivo' | 'analitico';
     layout?: string;
-  } = {}): Promise<AnaliseComprasResponse> => {
+  } = {}, options: RequestOptions = {}): Promise<AnaliseComprasResponse> => {
 
   const searchParams = new URLSearchParams();
   const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
@@ -162,7 +166,9 @@ export const fetchSpedAnaliseCompras = async (params: {
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
   if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
 
-  const response = await fetch(`${API_BASE_URL}/sped/analise/compras?${searchParams.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/sped/analise/compras?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de compras.' }));
@@ -193,7 +199,7 @@ export const fetchSpedAnaliseVendas = async (params: {
     gerar_relatorio_ia?: boolean;
     formato_relatorio?: 'executivo' | 'analitico';
     layout?: string;
-  } = {}): Promise<AnaliseVendasResponse> => {
+  } = {}, options: RequestOptions = {}): Promise<AnaliseVendasResponse> => {
 
   const searchParams = new URLSearchParams();
   const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
@@ -209,7 +215,9 @@ export const fetchSpedAnaliseVendas = async (params: {
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
   if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
 
-  const response = await fetch(`${API_BASE_URL}/sped/analise/vendas?${searchParams.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/sped/analise/vendas?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de vendas.' }));
@@ -250,7 +258,7 @@ export const fetchSpedAnaliseClientes = async (params: {
     limite?: number;
     gerar_relatorio_ia?: boolean;
     formato_relatorio?: 'executivo' | 'analitico';
-  } = {}): Promise<AnaliseClientesResponse> => {
+  } = {}, options: RequestOptions = {}): Promise<AnaliseClientesResponse> => {
 
   const searchParams = new URLSearchParams();
   const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
@@ -265,7 +273,9 @@ export const fetchSpedAnaliseClientes = async (params: {
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
 
-  const response = await fetch(`${API_BASE_URL}/sped/analise/clientes?${searchParams.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/sped/analise/clientes?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar anÃ¡lise de clientes.' }));

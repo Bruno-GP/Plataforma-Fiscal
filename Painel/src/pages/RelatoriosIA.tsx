@@ -69,6 +69,7 @@ export default function RelatoriosIA() {
   const [layoutRelatorio, setLayoutRelatorio] = useState('');
   const [totalPeriodo, setTotalPeriodo] = useState(0);
   const reportContainerRef = useRef<HTMLDivElement | null>(null);
+  const generationAbortRef = useRef<AbortController | null>(null);
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
@@ -278,6 +279,10 @@ export default function RelatoriosIA() {
       return;
     }
 
+    generationAbortRef.current?.abort();
+    const abortController = new AbortController();
+    generationAbortRef.current = abortController;
+
     setIsLoading(true);
     setErrorMessage(null);
 
@@ -298,27 +303,45 @@ export default function RelatoriosIA() {
       const response =
         tipoRelatorio === 'compras'
           ? usaSped
-            ? await fetchSpedAnaliseCompras(payload)
-            : await fetchNfeAnaliseCompras(payload)
+            ? await fetchSpedAnaliseCompras(payload, { signal: abortController.signal })
+            : await fetchNfeAnaliseCompras(payload, { signal: abortController.signal })
           : tipoRelatorio === 'clientes'
             ? usaSped
-              ? await fetchSpedAnaliseClientes(payload)
-              : await fetchNfeAnaliseClientes(payload)
+              ? await fetchSpedAnaliseClientes(payload, { signal: abortController.signal })
+              : await fetchNfeAnaliseClientes(payload, { signal: abortController.signal })
             : usaSped
-              ? await fetchSpedAnaliseVendas(payload)
-              : await fetchNfeAnaliseVendas(payload);
+              ? await fetchSpedAnaliseVendas(payload, { signal: abortController.signal })
+              : await fetchNfeAnaliseVendas(payload, { signal: abortController.signal });
 
       const total = 'total_comprado' in response ? response.total_comprado : response.total_vendido;
 
       setTotalPeriodo(parseDecimal(total ?? 0));
       setReport(response.relatorio_ia ?? 'A IA não retornou conteúdo para este período.');
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setErrorMessage(null);
+        return;
+      }
+
       setReport(null);
       setErrorMessage(error instanceof Error ? error.message : 'Falha ao gerar relatório com IA.');
     } finally {
+      if (generationAbortRef.current === abortController) {
+        generationAbortRef.current = null;
+      }
       setIsLoading(false);
     }
   };
+
+  const handleCancelGeneration = () => {
+    generationAbortRef.current?.abort();
+  };
+
+  useEffect(() => {
+    return () => {
+      generationAbortRef.current?.abort();
+    };
+  }, []);
 
   return (
     <section className="space-y-6 py-8">
@@ -460,7 +483,12 @@ export default function RelatoriosIA() {
             </div>
           )} */}
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3">
+            {isLoading && (
+              <Button type="button" variant="outline" onClick={handleCancelGeneration} className="min-w-32">
+                Cancelar
+              </Button>
+            )}
             <Button onClick={handleGenerate} disabled={isLoading || !hasEmitenteCnpj} className="min-w-32 gap-2">
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {isLoading ? 'Gerando...' : 'Gerar'}

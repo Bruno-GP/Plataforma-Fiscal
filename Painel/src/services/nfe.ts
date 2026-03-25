@@ -46,6 +46,10 @@ export interface FetchKpiParams {
   offset?: number;
 }
 
+interface RequestOptions {
+  signal?: AbortSignal;
+}
+
 export interface KpiComparativoValor {
   atual: number | string;
   anterior: number | string;
@@ -220,9 +224,18 @@ export interface ImportacaoXmlResponse {
 export const importarXmlArquivo = async (
   file: File,
   cnpjEmpresaOrigem: string,
+  options: RequestOptions = {},
+): Promise<ImportacaoXmlResponse> => {
+  return importarXmlArquivos([file], cnpjEmpresaOrigem, options);
+}
+
+export const importarXmlArquivos = async (
+  files: File[],
+  cnpjEmpresaOrigem: string,
+  options: RequestOptions = {},
 ): Promise<ImportacaoXmlResponse> => {
   const formData = new FormData();
-  formData.append('arquivos', file);
+  files.forEach((file) => formData.append('arquivos', file));
 
   const cnpjDigits = cnpjEmpresaOrigem.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_empresa_origem: cnpjDigits });
@@ -230,6 +243,7 @@ export const importarXmlArquivo = async (
   const response = await fetch(`${API_BASE_URL}/nfe/xml/importar?${searchParams.toString()}`, {
     method: 'POST',
     body: formData,
+    signal: options.signal,
   });
 
   if (!response.ok) {
@@ -238,7 +252,7 @@ export const importarXmlArquivo = async (
   }
 
   return response.json() as Promise<ImportacaoXmlResponse>;
-}
+};
 
 export interface ImportacaoXmlPendenciasResponse {
   status: string;
@@ -282,12 +296,16 @@ export interface ProcessamentoNfeResponse {
   data_processamento?: string;
 }
 
-export const processarXmlsImportados = async (cnpjEmitente: string): Promise<ProcessamentoNfeResponse> => {
+export const processarXmlsImportados = async (
+  cnpjEmitente: string,
+  options: RequestOptions = {},
+): Promise<ProcessamentoNfeResponse> => {
   const digits = cnpjEmitente.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
   const response = await fetch(`${API_BASE_URL}/nfe/xml/processar-importados?${searchParams.toString()}`, {
     method: 'POST',
+    signal: options.signal,
   });
 
   if (!response.ok) {
@@ -308,7 +326,8 @@ export const fetchNfeAnaliseCompras = async (
     gerar_relatorio_ia?: boolean;
     formato_relatorio?: 'executivo' | 'analitico';
     layout?: string;
-  } = {}
+  } = {},
+  options: RequestOptions = {},
 ): Promise<AnaliseComprasResponse> => {
   const searchParams = new URLSearchParams();
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
@@ -326,7 +345,9 @@ export const fetchNfeAnaliseCompras = async (
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
   if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
 
-  const response = await fetch(`${API_BASE_URL}/nfe/analise/compras?${searchParams.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/nfe/analise/compras?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de compras da NFe.' }));
@@ -383,7 +404,8 @@ export const fetchNfeAnaliseVendas = async (
     gerar_relatorio_ia?: boolean;
     formato_relatorio?: 'executivo' | 'analitico';
     layout?: string;
-  } = {}
+  } = {},
+  options: RequestOptions = {},
 ): Promise<AnaliseVendasResponse> => {
   const searchParams = new URLSearchParams();
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
@@ -401,7 +423,9 @@ export const fetchNfeAnaliseVendas = async (
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
   if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
 
-  const response = await fetch(`${API_BASE_URL}/nfe/analise/vendas?${searchParams.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/nfe/analise/vendas?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de vendas da NFe.' }));
@@ -412,7 +436,8 @@ export const fetchNfeAnaliseVendas = async (
 };
 
 export const fetchNfeAnaliseClientes = async (
-  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean; formato_relatorio?: 'executivo' | 'analitico' } = {}
+  params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean; formato_relatorio?: 'executivo' | 'analitico' } = {},
+  options: RequestOptions = {},
 ): Promise<AnaliseClientesResponse> => {
   const searchParams = new URLSearchParams();
   const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
@@ -429,7 +454,9 @@ export const fetchNfeAnaliseClientes = async (
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
 
-  const response = await fetch(`${API_BASE_URL}/nfe/analise/clientes?${searchParams.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/nfe/analise/clientes?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de clientes da NFe.' }));

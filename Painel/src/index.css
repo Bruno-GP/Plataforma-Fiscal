@@ -173,6 +173,10 @@
   }
 
   .ia-report__card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.45rem;
     padding: 0.9rem 1rem;
   }
 
@@ -195,6 +199,7 @@
 
   .ia-report__section-title,
   .ia-report__kpi-label {
+    display: block;
     margin: 0;
     font-size: 0.72rem;
     font-weight: 700;
@@ -204,7 +209,8 @@
   }
 
   .ia-report__kpi-value {
-    margin: 0.35rem 0 0;
+    display: block;
+    margin: 0;
     font-size: clamp(1.1rem, 1.4vw, 1.65rem);
     font-weight: 700;
     line-height: 1.2;

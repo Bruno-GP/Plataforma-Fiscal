@@ -8,14 +8,7 @@ from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("NFeItensService")
-logger.setLevel(logging.DEBUG)
-
-handler = logging.StreamHandler()
-formatter = logging.Formatter(
-    "[%(asctime)s] [%(levelname)s] %(message)s"
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+logger.disabled = True
 
 def _limitar_texto(valor: str | None, limite: int) -> str:
     if valor is None:

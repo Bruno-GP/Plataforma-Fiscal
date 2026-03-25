@@ -272,6 +272,21 @@ def _resolver_uf_municipio(codigo_ou_nome: str, uf_atual: str = "") -> str:
     nome_normalizado = _normalizar_chave_municipio(valor)
     return uf_por_nome.get(nome_normalizado, "")
 
+def _resolver_municipio_e_uf(codigo_ou_nome: str, uf_atual: str = "") -> tuple[str, str]:
+    nome_padrao = _resolver_nome_municipio(codigo_ou_nome)
+    uf_padrao = _resolver_uf_municipio(codigo_ou_nome or nome_padrao, uf_atual)
+
+    if not nome_padrao:
+        return "", uf_padrao
+
+    _, municipios_por_nome, uf_por_nome = _carregar_municipios()
+    nome_normalizado = _normalizar_chave_municipio(nome_padrao)
+
+    return (
+        municipios_por_nome.get(nome_normalizado, nome_padrao),
+        uf_padrao or uf_por_nome.get(nome_normalizado, ""),
+    )
+
 def _encontrar_textos_por_tag(root, nome_tag: str) -> list[str]:
     if root is None:
         return []
@@ -321,16 +336,15 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
         if tomador is not None
         else ""
     )
-    destinatario_cidade = _resolver_nome_municipio(destinatario_cidade_codigo or destinatario_cidade_nome)
     destinatario_uf_informada = (
         _encontrar_texto_xml(tomador, "Uf")
         or _encontrar_texto_xml(tomador, "UF")
         if tomador is not None
         else ""
     )
-    
-    destinatario_uf = _resolver_uf_municipio(
-        destinatario_cidade_codigo or destinatario_cidade or destinatario_cidade_nome,
+
+    destinatario_cidade, destinatario_uf = _resolver_municipio_e_uf(
+        destinatario_cidade_codigo or destinatario_cidade_nome,
         destinatario_uf_informada,
     )
 
@@ -432,18 +446,26 @@ class NFeExtractor:
                 )
 
                 ender = dest.find("nfe:enderDest", NS)
-                destinatario_cidade = (
-                    _resolver_nome_municipio(ender.findtext("nfe:xMun", "", NS))
-                    if ender is not None
-                    else ""
-                )
-                destinatario_uf = ender.findtext("nfe:UF", "", NS) if ender is not None else ""
+                if ender is not None:
+                    codigo_municipio = (
+                        ender.findtext("nfe:cMun", "", NS)
+                        or ender.findtext("nfe:cMunDest", "", NS)
+                    )
+                    nome_municipio = ender.findtext("nfe:xMun", "", NS)
+                    uf_informada = ender.findtext("nfe:UF", "", NS)
+                    destinatario_cidade, destinatario_uf = _resolver_municipio_e_uf(
+                        codigo_municipio or nome_municipio,
+                        uf_informada,
+                    )
+                else:
+                    destinatario_cidade = ""
+                    destinatario_uf = ""
             else:
                 destinatario_nome = ""
                 destinatario_doc = ""
                 destinatario_cidade = ""
                 destinatario_uf = ""
-                print("[AVISO] XML sem destinatário identificado")
+                logger.warning("XML sem destinatario identificado")
                 
             if modelo == "65" and not destinatario_nome:
                 destinatario_nome = "Consumidor Final"

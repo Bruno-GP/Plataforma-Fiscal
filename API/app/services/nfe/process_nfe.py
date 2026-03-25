@@ -1,7 +1,6 @@
 from datetime import datetime
 from xml.etree import ElementTree as ET
 
-import time
 import psycopg
 import logging
 
@@ -27,6 +26,14 @@ from app.services.nfe.nfe_process_service import NFeProcessamentosService
 logger = logging.getLogger("ProcessarNFeService")
 
 class ProcessarNFeService:
+    def _registrar_progresso(self, percentual: int) -> None:
+        percentual_normalizado = max(0, min(100, percentual))
+        ultimo_percentual = getattr(self, "_ultimo_progresso", 0)
+        if percentual_normalizado <= ultimo_percentual:
+            return
+        self._ultimo_progresso = percentual_normalizado
+        logger.info("Processamento em %s%%", percentual_normalizado)
+
     def _registrar_notas_por_modelo(
         self,
         conn,
@@ -54,11 +61,6 @@ class ProcessarNFeService:
             )
 
         if notas_nfse:
-            logger.info(
-                "Aplicando regra específica de NFSe para %s nota(s) no processamento %s.",
-                len(notas_nfse),
-                processamento_id,
-            )
             total_registrado += notas_service.registrar_notas(
                 conn=conn,
                 notas=notas_nfse,
@@ -137,14 +139,19 @@ class ProcessarNFeService:
         erros_processamento = []
 
         try:
+            self._ultimo_progresso = 0
             # 1️⃣ Ler XMLs
             if not xmls:
                 raise Exception("Nenhum XML válido encontrado")
+
+            logger.info("Processamento iniciado")
+            self._registrar_progresso(10)
 
             # 2️⃣ Extrair notas
             notas = NFeExtractor().extrair(xmls)
             if not notas:
                 raise Exception("Nenhuma NFe válida extraída")
+            self._registrar_progresso(20)
 
             # 3️⃣ Determinar períodos
             periodos = {
@@ -161,6 +168,7 @@ class ProcessarNFeService:
 
             if len(periodos_ordenados) == 1:
                 periodo_ano, periodo_mes = periodos_ordenados[0]
+            self._registrar_progresso(30)
 
             # 4️⃣ Identificar CNPJ emitente
             cnpjs = {n.emitente_cnpj for n in notas}
@@ -179,9 +187,11 @@ class ProcessarNFeService:
                 raise Exception("Nome do emitente não encontrado")
 
             nome_emitente = next(iter(nomes_emitente))
+            self._registrar_progresso(40)
 
             # 6️⃣ Consolidar notas e itens
             consolidacao = NFeConsolidator().consolidar(notas)
+            self._registrar_progresso(50)
 
             # 7️⃣ Registrar empresa
             empresa_id = request.empresa_id
@@ -190,6 +200,7 @@ class ProcessarNFeService:
                     cnpj_emitente=cnpj_emitente,
                     nome_emitente=nome_emitente
                 )
+            self._registrar_progresso(60)
 
             # 🔟 Calcular KPIs (total e por período)
             kpi_calculator = KPICalculator()
@@ -202,6 +213,7 @@ class ProcessarNFeService:
 
             # 1️⃣1️⃣ Registrar processamento por período
             processamento_service = NFeProcessamentosService()
+            self._registrar_progresso(70)
 
             for indice, (ano, mes) in enumerate(periodos_ordenados):
                 notas_periodo = notas_por_periodo.get((ano, mes), [])
@@ -243,12 +255,12 @@ class ProcessarNFeService:
                         if not processamento_id:
                             raise Exception("Processamento não registrado")
                         
-                        qtd = self._registrar_notas_por_modelo(
+                        self._registrar_notas_por_modelo(
                             conn=conn,
                             notas=notas_periodo,
                             processamento_id=processamento_id,
                         )
-                        logger.warning(f"NOTAS INSERIDAS: {qtd}")
+                        self._registrar_progresso(80)
                         
                         notas_service = NFeNotasService()
                         
@@ -268,6 +280,7 @@ class ProcessarNFeService:
                             kpis=kpis_periodo,
                             conn=conn,
                         )
+                        self._registrar_progresso(90)
                 
                 # 🔹 Converter dict de KPIs para o schema correto do response
                 kpis_relatorio = kpis_periodo
@@ -280,12 +293,8 @@ class ProcessarNFeService:
                     )
                 )
                 
-                if indice < len(periodos_ordenados) - 1:
-                    logger.info(
-                        "Aguardando 15 segundos antes de processar o próximo mês."
-                    )
-                    time.sleep(15)
-
+            self._registrar_progresso(100)
+            logger.info("Processamento finalizado")
 
             # ✅ RETORNO DE SUCESSO (ERA ISSO QUE FALTAVA)
             return ProcessarNFeResponse(
@@ -310,6 +319,7 @@ class ProcessarNFeService:
                     mensagem=str(exc)
                 ).model_dump()
             )
+            logger.error("Falha durante o processamento dos XMLs: %s", exc)
             
             return ProcessarNFeResponse(
                 status="erro",

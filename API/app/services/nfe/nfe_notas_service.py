@@ -10,14 +10,7 @@ from app.services.nfe.postres_config import carregar_config_postgres
 from app.services.nfe.empresa_service import normalizar_cnpj
 
 logger = logging.getLogger("NFeNotasService")
-logger.setLevel(logging.DEBUG)
-
-handler = logging.StreamHandler()
-formatter = logging.Formatter(
-    "[%(asctime)s] [%(levelname)s] %(message)s"
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+logger.disabled = True
 
 class NFeNotasService:
     def __init__(self):

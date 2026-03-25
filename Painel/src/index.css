@@ -223,6 +223,8 @@
 
   .ia-report__list,
   .ia-report__action-list {
+    width: 90%;
+    margin-inline: auto;
     padding-left: 1.1rem;
   }
 
@@ -232,7 +234,8 @@
   }
 
   .ia-report__table {
-    width: 100%;
+    width: 90%;
+    margin-inline: auto;
     border-collapse: collapse;
     overflow: hidden;
     border-radius: 0.85rem;

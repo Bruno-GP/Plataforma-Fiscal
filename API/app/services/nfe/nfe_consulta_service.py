@@ -69,7 +69,7 @@ class NFeConsultaService:
   def _obter_regiao_por_uf(self, uf: object) -> str | None:
     uf_normalizada = str(uf or "").strip().upper()
     return UF_PARA_REGIAO.get(uf_normalizada)
-  
+
   def obter_cnpj_por_email(
     self,
     email: Optional[str],
@@ -606,7 +606,7 @@ class NFeConsultaService:
     emitente_cnpj: Optional[str],
     periodo_ano: Optional[int] = None,
     periodo_mes: Optional[int] = None,
-    limite: int = 5,
+    limite: Optional[int] = None,
   ) -> dict:
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
@@ -829,7 +829,7 @@ class NFeConsultaService:
     emitente_cnpj: Optional[str],
     periodo_ano: Optional[int] = None,
     periodo_mes: Optional[int] = None,
-    limite: int = 5,
+    limite: Optional[int] = None,
   ) -> dict:
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,

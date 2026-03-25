@@ -444,7 +444,7 @@ class SpedConsultaService:
     emitente_cnpj: str,
     periodo_ano: Optional[int] = None,
     periodo_mes: Optional[int] = None,
-    limite: int = 5,
+    limite: Optional[int] = None,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
     filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
@@ -626,7 +626,7 @@ class SpedConsultaService:
     emitente_cnpj: str,
     periodo_ano: Optional[int] = None,
     periodo_mes: Optional[int] = None,
-    limite: int = 5,
+    limite: Optional[int] = None,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
     filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]

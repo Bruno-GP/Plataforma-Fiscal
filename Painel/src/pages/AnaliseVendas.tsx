@@ -1,20 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingDown, TrendingUp, Users, Percent  } from 'lucide-react';
+import { TrendingDown, TrendingUp, Users, Percent } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
 import { Header } from './components/Header';
 import { RankingCard } from './components/RankingCard';
 import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
 import { EvolucaoChart } from './components/EvolucaoChart';
-import { AbcAnalysisSection } from './components/abcAnalysisSection';
-
-import { fetchNfeKpis, fetchNfeKpisComparativoAtual, parseDecimal } from '@/services/nfe';
-import { useAuth } from '@/contexts/AuthContext'
-import { fetchSpedKpis } from '@/services/sped';
-// import { useChat } from '@/contexts/ChatContext';
+import { fetchNfeDashboardVendas, parseDecimal } from '@/services/nfe';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchSpedDashboardVendas } from '@/services/sped';
 import { monthLabels } from '../services/utils';
 
 const formatCurrency = (value: number) =>
@@ -35,432 +31,194 @@ interface DashboardProps {
   subtitle?: string;
 }
 
-export default function Dashboard({ 
-  title = 'Vendas', 
-  subtitle = 'Visão geral do seu negócio' 
+export default function Dashboard({
+  title = 'Vendas',
+  subtitle = 'Vis\\u00e3o geral do seu neg\\u00f3cio',
 }: DashboardProps) {
   const { user } = useAuth();
-  // const { toggleChat, sendMessage, isOpen } = useChat();
 
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const usaSped = Boolean(user?.tem_sped);
-
   const monthNumber = Number.parseInt(selectedMonth, 10);
   const year = Number.parseInt(selectedYear, 10);
 
-  const yearsQuery = useQuery({
-    queryKey: ['kpis-years', usaSped ? 'sped' : 'xml', emitenteCnpj],
-    queryFn: () => (usaSped ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }) : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })),
+  const dashboardQuery = useQuery({
+    queryKey: ['dashboard-vendas', emitenteCnpj, user?.tem_sped, year, selectedMonth],
+    queryFn: () =>
+      user?.tem_sped
+        ? fetchSpedDashboardVendas({
+            emitente_cnpj: emitenteCnpj,
+            periodo_ano: Number.isNaN(year) ? undefined : year,
+            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+            limite: 5,
+          })
+        : fetchNfeDashboardVendas({
+            emitente_cnpj: emitenteCnpj,
+            email: user?.email,
+            periodo_ano: Number.isNaN(year) ? undefined : year,
+            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+            limite: 5,
+          }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
-  const kpisQuery = useQuery({
-    queryKey: ['kpis', usaSped ? 'sped' : 'xml', emitenteCnpj, year],
-    queryFn: () => (usaSped ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year }) : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year })),
-    enabled: hasEmitenteCnpj,
-    staleTime: 5 * 60 * 1000,
-  });
+  const availableYears = dashboardQuery.data?.anos_disponiveis?.length
+    ? dashboardQuery.data.anos_disponiveis
+    : [year];
 
-  const previousYearQuery = useQuery({
-    queryKey: ['kpis', usaSped ? 'sped' : 'xml', emitenteCnpj, year - 1],
-    queryFn: () => (usaSped ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 }) : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, periodo_ano: year - 1 })),
-    enabled: hasEmitenteCnpj && year > 2000,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const isAllMonths = selectedMonth === 'all';
-
-  const filteredResultados = useMemo(() => {
-    const resultados = kpisQuery.data?.resultados ?? [];
-    if (isAllMonths) {
-      return resultados;
-    }
-    return resultados.filter((item) => item.periodo_mes === monthNumber);
-  }, [isAllMonths, kpisQuery.data, monthNumber]);
-
-  const aggregatedData = useMemo(() => {
-    const totals = {
-      totalSales: 0,
-      totalNotes: 0,
-      totalTaxes: 0,
-    };
-    const topClientesMap = new Map<string, number>();
-    const topProdutosMap = new Map<string, number>();
-    const topCidadesMap = new Map<string, number>();
-
-    filteredResultados.forEach((item) => {
-      const kpis = item.kpis;
-      totals.totalSales += parseDecimal(kpis.total_vendas ?? 0);
-      totals.totalNotes += kpis.quantidade_notas ?? 0;
-      totals.totalTaxes += parseDecimal(kpis.total_icms ?? 0)
-        + parseDecimal(kpis.total_ipi ?? 0)
-        + parseDecimal(kpis.total_pis ?? 0)
-        + parseDecimal(kpis.total_cofins ?? 0);
-
-      (kpis.top_clientes ?? []).forEach((cliente, index) => {
-        const nome = cliente.cliente ?? `Cliente não identificado ${index + 1}`;
-        const atual = topClientesMap.get(nome) ?? 0;
-        topClientesMap.set(nome, atual + parseDecimal(cliente.valor_total ?? 0));
-      });
-
-      (kpis.top_produtos ?? []).forEach((produto, index) => {
-        const nome = produto.produto ?? `Produto não identificado ${index + 1}`;
-        const atual = topProdutosMap.get(nome) ?? 0;
-        topProdutosMap.set(nome, atual + parseDecimal(produto.valor_total ?? 0));
-      });
-
-      (kpis.top_cidades ?? []).forEach((cidade, index) => {
-        const nome = cidade.cidade ?? `Cidade não identificada ${index + 1}`;
-        const atual = topCidadesMap.get(nome) ?? 0;
-        topCidadesMap.set(nome, atual + parseDecimal(cidade.valor_total ?? 0));
-      });
-    });
-
-    return {
-      totals,
-      topClientesMap,
-      topProdutosMap,
-      topCidadesMap,
-    };
-  }, [filteredResultados]);
-
-  const latestKpi = useMemo(() => {
-    return [...filteredResultados].sort((a, b) => {
-      const anoA = a.periodo_ano ?? 0;
-      const anoB = b.periodo_ano ?? 0;
-      if (anoA !== anoB) {
-        return anoB - anoA;
-      }
-      return (b.periodo_mes ?? 0) - (a.periodo_mes ?? 0);
-    })[0];
-  }, [filteredResultados]);
-
-  const previousPeriodKpi = useMemo(() => {
-    if (!latestKpi?.periodo_mes || !latestKpi?.periodo_ano) {
-      return null;
+  useEffect(() => {
+    if (!dashboardQuery.data?.anos_disponiveis?.length) {
+      return;
     }
 
-    const currentMonth = latestKpi.periodo_mes;
-    const currentYear = latestKpi.periodo_ano;
-    const previousMonth = currentMonth - 1;
-
-    if (previousMonth >= 1) {
-      return (
-        (kpisQuery.data?.resultados ?? []).find(
-          (item) => item.periodo_mes === previousMonth && item.periodo_ano === currentYear
-        ) ?? null
-      );
+    if (!dashboardQuery.data.anos_disponiveis.includes(year)) {
+      setSelectedYear(String(dashboardQuery.data.anos_disponiveis[0]));
     }
+  }, [dashboardQuery.data?.anos_disponiveis, year]);
 
-    return (
-      (previousYearQuery.data?.resultados ?? []).find(
-        (item) => item.periodo_mes === 12 && item.periodo_ano === currentYear - 1
-      ) ?? null
-    );
-  }, [kpisQuery.data, latestKpi, previousYearQuery.data]);
+  const currentData = dashboardQuery.data?.resumo_atual;
+  const previousData = dashboardQuery.data?.resumo_anterior;
+  const totalFaturamento = parseDecimal(currentData?.total_vendido ?? 0);
+
+  const totalSalesChange = parseDecimal(previousData?.total_vendido ?? 0)
+    ? ((totalFaturamento - parseDecimal(previousData?.total_vendido ?? 0)) / parseDecimal(previousData?.total_vendido ?? 0)) * 100
+    : 0;
+  const ticketChange = parseDecimal(previousData?.ticket_medio ?? 0)
+    ? ((parseDecimal(currentData?.ticket_medio ?? 0) - parseDecimal(previousData?.ticket_medio ?? 0)) / parseDecimal(previousData?.ticket_medio ?? 0)) * 100
+    : 0;
+  const totalTaxesChange = parseDecimal(previousData?.total_impostos ?? 0)
+    ? ((parseDecimal(currentData?.total_impostos ?? 0) - parseDecimal(previousData?.total_impostos ?? 0)) / parseDecimal(previousData?.total_impostos ?? 0)) * 100
+    : 0;
 
   const faturamentoPeriodo = useMemo(() => {
-    if (isAllMonths) {
-      const months = filteredResultados
-        .map((item) => item.periodo_mes)
-        .filter((item): item is number => Boolean(item));
-      if (!months.length) {
-        return null;
-      }
-      const minMonth = Math.min(...months);
-      const maxMonth = Math.max(...months);
-      return `${String(minMonth).padStart(2, '0')}/${selectedYear} a ${String(maxMonth).padStart(2, '0')}/${selectedYear}`;
+    if (selectedMonth === 'all') {
+      return selectedYear;
     }
+    return `${String(monthNumber).padStart(2, '0')}/${selectedYear}`;
+  }, [monthNumber, selectedMonth, selectedYear]);
 
-    const mes = latestKpi?.periodo_mes;
-    const ano = latestKpi?.periodo_ano;
-
-    if (!mes || !ano) {
-      return null;
-    }
-
-    return `${String(mes).padStart(2, '0')}/${ano}`;
-  }, [filteredResultados, isAllMonths, latestKpi?.periodo_mes, latestKpi?.periodo_ano, selectedYear]);
-
-  const stats = useMemo(() => {
-    const currentKpis = latestKpi?.kpis;
-    const previousKpis = previousPeriodKpi?.kpis;
-
-    const previousYearResultados = previousYearQuery.data?.resultados ?? [];
-
-    const totals = isAllMonths
-      ? aggregatedData.totals
-      : {
-        totalSales: parseDecimal(currentKpis?.total_vendas ?? 0),
-        totalNotes: currentKpis?.quantidade_notas ?? 0,
-        totalTaxes: parseDecimal(currentKpis?.total_icms ?? 0)
-          + parseDecimal(currentKpis?.total_ipi ?? 0)
-          + parseDecimal(currentKpis?.total_pis ?? 0)
-          + parseDecimal(currentKpis?.total_cofins ?? 0),
-      };
-
-    const previousTotals = isAllMonths
-      ? previousYearResultados.reduce(
-        (acc, item) => {
-          acc.totalSales += parseDecimal(item.kpis.total_vendas ?? 0);
-          acc.totalNotes += item.kpis.quantidade_notas ?? 0;
-          acc.totalTaxes += parseDecimal(item.kpis.total_icms ?? 0)
-            + parseDecimal(item.kpis.total_ipi ?? 0)
-            + parseDecimal(item.kpis.total_pis ?? 0)
-            + parseDecimal(item.kpis.total_cofins ?? 0);
-          return acc;
-        },
-        { totalSales: 0, totalNotes: 0, totalTaxes: 0 }
-      )
-      : {
-        totalSales: parseDecimal(previousKpis?.total_vendas ?? 0),
-        totalNotes: previousKpis?.quantidade_notas ?? 0,
-        totalTaxes: parseDecimal(previousKpis?.total_icms ?? 0)
-          + parseDecimal(previousKpis?.total_ipi ?? 0)
-          + parseDecimal(previousKpis?.total_pis ?? 0)
-          + parseDecimal(previousKpis?.total_cofins ?? 0),
-      };
-
-    const totalSalesChange = previousTotals.totalSales
-      ? ((totals.totalSales - previousTotals.totalSales) / previousTotals.totalSales) * 100
-      : 0;
-    const comparativoAnualSalesChange = previousTotals.totalSales
-      ? ((totals.totalSales - previousTotals.totalSales) / previousTotals.totalSales) * 100
-      : 0;
-    const ticketMedio = totals.totalNotes ? totals.totalSales / totals.totalNotes : 0;
-    const previousTicketMedio = previousTotals.totalNotes
-      ? previousTotals.totalSales / previousTotals.totalNotes
-      : 0;
-    const ticketChange = previousTicketMedio
-      ? ((ticketMedio - previousTicketMedio) / previousTicketMedio) * 100
-      : 0;
-    const totalTaxesChange = previousTotals.totalTaxes
-      ? ((totals.totalTaxes - previousTotals.totalTaxes) / previousTotals.totalTaxes) * 100
-      : 0;
-
-    return [
-      {
-        title: `Faturamento Mensal${faturamentoPeriodo ? ` (Período ${faturamentoPeriodo})` : ''}`,
-        value: formatCurrency(totals.totalSales),
-        description: formatPercent(totalSalesChange),
-        icon: TrendingUp,
-        trend: totalSalesChange >= 0 ? 'up' : 'down',
-        accentClass: 'border-l-sky-500',
-      },
-      {
-        title: 'Comparativo anual',
-        value: `${comparativoAnualSalesChange >= 0 ? '+' : ''}${comparativoAnualSalesChange.toFixed(1)}%`,
-        description: isAllMonths
-          ? `vs. mesmo período de ${year - 1}`
-          : `vs. ${String(latestKpi?.periodo_mes ?? 1).padStart(2, '0')}/${year - 1}`,
-        icon: comparativoAnualSalesChange >= 0 ? TrendingUp : TrendingDown,
-        trend: comparativoAnualSalesChange >= 0 ? 'up' : 'down',
-        accentClass: 'border-l-emerald-500',
-        appendPreviousMonthLabel: false,
-      },
-      {
-        title: 'Ticket Médio',
-        value: formatCurrency(ticketMedio),
-        description: formatPercent(ticketChange),
-        icon: Users,
-        trend: ticketChange >= 0 ? 'up' : 'down',
-        accentClass: 'border-l-amber-400',
-      },
-      {
-        title: 'Impostos sobre vendas',
-        value: formatCurrency(totals.totalTaxes),
-        description: formatPercent(totalTaxesChange),
-        icon: Percent,
-        trend: totalTaxesChange >= 0 ? 'up' : 'down',
-        accentClass: 'border-l-violet-500',
-      },
-    ];
-  }, [aggregatedData.totals, faturamentoPeriodo, isAllMonths, latestKpi, previousPeriodKpi, previousYearQuery.data, year]);
+  const stats = [
+    {
+      title: `Faturamento Mensal${faturamentoPeriodo ? ` (Per\\u00edodo ${faturamentoPeriodo})` : ''}`,
+      value: formatCurrency(totalFaturamento),
+      description: formatPercent(totalSalesChange),
+      icon: TrendingUp,
+      trend: totalSalesChange >= 0 ? 'up' : 'down',
+      accentClass: 'border-l-sky-500',
+    },
+    {
+      title: 'Comparativo anual',
+      value: `${totalSalesChange >= 0 ? '+' : ''}${totalSalesChange.toFixed(1)}%`,
+      description: selectedMonth === 'all'
+        ? `vs. mesmo per\\u00edodo de ${year - 1}`
+        : 'vs. per\\u00edodo anterior',
+      icon: totalSalesChange >= 0 ? TrendingUp : TrendingDown,
+      trend: totalSalesChange >= 0 ? 'up' : 'down',
+      accentClass: 'border-l-emerald-500',
+      appendPreviousMonthLabel: false,
+    },
+    {
+      title: 'Ticket M\\u00e9dio',
+      value: formatCurrency(parseDecimal(currentData?.ticket_medio ?? 0)),
+      description: formatPercent(ticketChange),
+      icon: Users,
+      trend: ticketChange >= 0 ? 'up' : 'down',
+      accentClass: 'border-l-amber-400',
+    },
+    {
+      title: 'Impostos sobre vendas',
+      value: formatCurrency(parseDecimal(currentData?.total_impostos ?? 0)),
+      description: formatPercent(totalTaxesChange),
+      icon: Percent,
+      trend: totalTaxesChange >= 0 ? 'up' : 'down',
+      accentClass: 'border-l-violet-500',
+    },
+  ];
 
   const salesEvolutionData = useMemo(() => {
-    return [...filteredResultados]
-      .filter((item) => item.periodo_mes)
-      .sort((a, b) => (a.periodo_mes ?? 0) - (b.periodo_mes ?? 0))
-      .map((item, index) => {
-        const monthIndex = (item.periodo_mes ?? index + 1) - 1;
-        return {
-          month: monthLabels[monthIndex] ?? `Mês ${item.periodo_mes ?? index + 1}`,
-          faturamento: parseDecimal(item.kpis.total_vendas ?? 0),
-        };
-      });
-  }, [filteredResultados]);
+    const serie = dashboardQuery.data?.serie_mensal ?? [];
+    const itens = selectedMonth === 'all'
+      ? serie
+      : serie.filter((item) => item.periodo_mes === monthNumber);
+
+    return itens.map((item) => ({
+      month: monthLabels[item.periodo_mes - 1] ?? `M\\u00eas ${item.periodo_mes}`,
+      faturamento: parseDecimal(item.total_vendido ?? 0),
+    }));
+  }, [dashboardQuery.data?.serie_mensal, monthNumber, selectedMonth]);
 
   const selectedMonthLabel = selectedMonth === 'all' ? null : monthLabels[monthNumber - 1];
-  const chartMessage = kpisQuery.isLoading
+  const chartMessage = dashboardQuery.isLoading
     ? 'Carregando dados...'
-    : kpisQuery.isError
-      ? 'Não foi possível carregar o gráfico.'
+    : dashboardQuery.isError
+      ? 'N\\u00e3o foi poss\\u00edvel carregar o gr\\u00e1fico.'
       : selectedMonthLabel
-        ? `Nenhum dado disponível para ${selectedMonthLabel} de ${selectedYear}.`
-        : `Nenhum dado disponível para ${selectedYear}.`;
+        ? `Nenhum dado dispon\\u00edvel para ${selectedMonthLabel} de ${selectedYear}.`
+        : `Nenhum dado dispon\\u00edvel para ${selectedYear}.`;
   const hasChartData = salesEvolutionData.length > 0;
 
-  const aggregatedTopClientes = useMemo(() => {
-    return [...aggregatedData.topClientesMap.entries()]
-      .map(([cliente, valor_total]) => ({ cliente, valor_total }))
-      .sort((a, b) => b.valor_total - a.valor_total)
-      .slice(0, 5);
-  }, [aggregatedData.topClientesMap]);
-
-  const aggregatedTopProdutos = useMemo(() => {
-    return [...aggregatedData.topProdutosMap.entries()]
-      .map(([produto, valor_total]) => ({ produto, valor_total }))
-      .sort((a, b) => b.valor_total - a.valor_total)
-      .slice(0, 5);
-  }, [aggregatedData.topProdutosMap]);
-
-  const aggregatedTopCidades = useMemo(() => {
-    return [...aggregatedData.topCidadesMap.entries()]
-      .map(([cidade, valor_total]) => ({ cidade, valor_total }))
-      .sort((a, b) => b.valor_total - a.valor_total)
-      .slice(0, 5);
-  }, [aggregatedData.topCidadesMap]);
-
-  const aggregatedCidadesMapa = useMemo(() => {
-    return [...aggregatedData.topCidadesMap.entries()]
-      .map(([cidade, valor_total]) => ({ cidade, valor_total }))
-      .sort((a, b) => b.valor_total - a.valor_total);
-  }, [aggregatedData.topCidadesMap]);
-
-  const totalFaturamento = isAllMonths
-    ? aggregatedData.totals.totalSales
-    : parseDecimal(latestKpi?.kpis.total_vendas ?? 0);
-  const topClientes = useMemo(
-    () => (isAllMonths ? aggregatedTopClientes : (latestKpi?.kpis.top_clientes ?? [])),
-    [aggregatedTopClientes, isAllMonths, latestKpi?.kpis.top_clientes],
-  );
-  const topProdutos = useMemo(
-    () => (isAllMonths ? aggregatedTopProdutos : (latestKpi?.kpis.top_produtos ?? [])),
-    [aggregatedTopProdutos, isAllMonths, latestKpi?.kpis.top_produtos],
-  );
-  const topCidades = useMemo(
-    () => (isAllMonths ? aggregatedTopCidades : (latestKpi?.kpis.top_cidades ?? [])),
-    [aggregatedTopCidades, isAllMonths, latestKpi?.kpis.top_cidades],
-  );
-
-  const cidadesMapa = useMemo(
-    () => (isAllMonths ? aggregatedCidadesMapa : (latestKpi?.kpis.top_cidades ?? [])),
-    [aggregatedCidadesMapa, isAllMonths, latestKpi?.kpis.top_cidades],
-  );
-
-  const resolvePercentual = (percentual?: number | string, valorTotal?: number | string) => {
-    if (percentual !== undefined && percentual !== null) {
-      return parseDecimal(percentual);
-    }
-
+  const resolvePercentual = (valorTotal?: number | string) => {
     const valor = parseDecimal(valorTotal ?? 0);
     if (!totalFaturamento || !valor) {
       return null;
     }
-
     return (valor / totalFaturamento) * 100;
   };
 
-  const isLoading = kpisQuery.isLoading || previousYearQuery.isLoading;
-  const hasError = kpisQuery.isError || previousYearQuery.isError;
-
-  const topClientesItems = topClientes.map((cliente, index) => {
-    const percentual = resolvePercentual(cliente.percentual, cliente.valor_total);
+  const topClientesItems = (currentData?.top_clientes ?? []).map((cliente, index) => {
+    const percentual = resolvePercentual(cliente.valor_total);
     const valorTotal = parseDecimal(cliente.valor_total ?? 0);
 
     return {
       key: `${cliente.cliente}-${index}`,
-      title: cliente.cliente ?? 'Cliente não identificado',
+      title: cliente.cliente ?? 'Cliente n\\u00e3o identificado',
       subtitle:
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
-          : 'Participação não informada',
+          : 'Participa\\u00e7\\u00e3o n\\u00e3o informada',
       value: formatCurrency(valorTotal),
       rawValue: valorTotal,
       percent: percentual,
     };
   });
 
-  const topProdutosItems = topProdutos.map((produto, index) => {
-    const percentual = resolvePercentual(produto.percentual, produto.valor_total);
+  const topProdutosItems = (currentData?.top_produtos ?? []).map((produto, index) => {
+    const percentual = resolvePercentual(produto.valor_total);
     const valorTotal = parseDecimal(produto.valor_total ?? 0);
 
     return {
       key: `${produto.produto}-${index}`,
-      title: produto.produto ?? 'Produto não identificado',
+      title: produto.produto ?? 'Produto n\\u00e3o identificado',
       subtitle:
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
-          : 'Participação não informada',
+          : 'Participa\\u00e7\\u00e3o n\\u00e3o informada',
       value: formatCurrency(valorTotal),
       rawValue: valorTotal,
       percent: percentual,
     };
   });
 
-  const topCidadesItems = topCidades.map((cidade, index) => {
-    const percentual = resolvePercentual(cidade.percentual, cidade.valor_total);
+  const topCidadesItems = (currentData?.top_cidades ?? []).map((cidade, index) => {
+    const percentual = resolvePercentual(cidade.valor_total);
     const valorTotal = parseDecimal(cidade.valor_total ?? 0);
 
     return {
       key: `${cidade.cidade}-${index}`,
-      title: cidade.cidade ?? 'Cidade não identificada',
+      title: cidade.cidade ?? 'Cidade n\\u00e3o identificada',
       subtitle:
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
-          : 'Participação não informada',
+          : 'Participa\\u00e7\\u00e3o n\\u00e3o informada',
       value: formatCurrency(valorTotal),
       rawValue: valorTotal,
       percent: percentual,
     };
   });
-
-  const cidadesMapaItems = cidadesMapa.map((cidade, index) => {
-    const percentual = resolvePercentual(cidade.percentual, cidade.valor_total);
-    const valorTotal = parseDecimal(cidade.valor_total ?? 0);
-
-    return {
-      key: `${cidade.cidade}-${index}`,
-      title: cidade.cidade ?? 'Cidade não identificada',
-      subtitle:
-        percentual !== null
-          ? `${percentual.toFixed(1)}% do faturamento`
-          : 'Participação não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
-
-  const yearOptions = useMemo(() => {
-    const resultados = yearsQuery.data?.resultados ?? [];
-    const uniqueYears = new Set<number>();
-
-    resultados.forEach((item) => {
-      if (item.periodo_ano) {
-        uniqueYears.add(item.periodo_ano);
-      }
-    });
-
-    return [...uniqueYears].sort((a, b) => b - a);
-  }, [yearsQuery.data]);
-
-  const availableYears = yearOptions.length ? yearOptions : [year];
-
-  useEffect(() => {
-    if (!yearOptions.length) {
-      return;
-    }
-
-    if (!yearOptions.includes(year)) {
-      setSelectedYear(String(yearOptions[0]));
-    }
-  }, [year, yearOptions]);
 
   return (
     <div className="space-y-6 py-6">
@@ -475,32 +233,29 @@ export default function Dashboard({
         onYearChange={setSelectedYear}
       />
 
-      {/* <Button onClick={handleAIPlanAction} className="w-fit gap-2">
-        <Sparkles className="h-4 w-4" />
-        Gerar Plano de Ação com IA
-      </Button> */}
-
-      {hasError && (
+      {dashboardQuery.isError && (
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar indicadores</AlertTitle>
           <AlertDescription>
-            Não foi possível buscar os KPIs mais recentes na API.
+            {dashboardQuery.error instanceof Error
+              ? dashboardQuery.error.message
+              : 'N\\u00e3o foi poss\\u00edvel buscar os KPIs mais recentes na API.'}
           </AlertDescription>
         </Alert>
       )}
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <StatCard key={stat.title} {...stat} isLoading={isLoading} />
+          <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />
         ))}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <RankingCard
           title="Top Clientes"
-          description="Clientes com maior faturamento no último período"
+          description="Clientes com maior faturamento no \\u00faltimo per\\u00edodo"
           items={topClientesItems}
-          isLoading={isLoading}
+          isLoading={dashboardQuery.isLoading}
           loadingMessage="Carregando ranking..."
           emptyMessage="Nenhum cliente registrado."
           totalValue={formatCurrency(totalFaturamento)}
@@ -509,9 +264,9 @@ export default function Dashboard({
         />
         <RankingCard
           title="Top Produtos"
-          description="Itens com maior faturamento no último período"
+          description="Itens com maior faturamento no \\u00faltimo per\\u00edodo"
           items={topProdutosItems}
-          isLoading={isLoading}
+          isLoading={dashboardQuery.isLoading}
           loadingMessage="Carregando ranking..."
           emptyMessage="Nenhum produto registrado."
           totalValue={formatCurrency(totalFaturamento)}
@@ -520,9 +275,9 @@ export default function Dashboard({
         />
         <RankingCard
           title="Top Cidades"
-          description="Cidades com maior faturamento no último período"
+          description="Cidades com maior faturamento no \\u00faltimo per\\u00edodo"
           items={topCidadesItems}
-          isLoading={isLoading}
+          isLoading={dashboardQuery.isLoading}
           loadingMessage="Carregando ranking..."
           emptyMessage="Nenhuma cidade registrada."
           totalValue={formatCurrency(totalFaturamento)}
@@ -537,57 +292,16 @@ export default function Dashboard({
         chartMessage={chartMessage}
         selectedMonthLabel={selectedMonthLabel}
         selectedYear={selectedYear}
-        title="Evolução das Vendas"
+        title="Evolu\\u00e7\\u00e3o das Vendas"
         descriptionPrefix="Vendas"
         metricLabel="Vendas"
       />
 
       <SalesRegionCityMap
-        topCidadesItems={cidadesMapaItems}
+        topCidadesItems={topCidadesItems}
         totalFaturamento={totalFaturamento}
         formatCurrency={formatCurrency}
       />
-
-       {/* <AbcAnalysisSection
-        options={[
-          {
-            id: 'clientes',
-            label: 'Clientes',
-            title: 'Relatório ABC de Clientes',
-            description: 'Distribuição dos clientes por relevância no período selecionado',
-            items: topClientesItems.map((item) => ({
-              key: item.key,
-              label: item.title,
-              value: item.rawValue,
-              formattedValue: item.value,
-            })),
-          },
-          {
-            id: 'produtos',
-            label: 'Produtos',
-            title: 'Relatório ABC de Produtos',
-            description: 'Distribuição dos produtos por relevância no período selecionado',
-            items: topProdutosItems.map((item) => ({
-              key: item.key,
-              label: item.title,
-              value: item.rawValue,
-              formattedValue: item.value,
-            })),
-          },
-          {
-            id: 'cidades',
-            label: 'Cidades',
-            title: 'Relatório ABC de Cidades',
-            description: 'Distribuição das cidades por relevância no período selecionado',
-            items: topCidadesItems.map((item) => ({
-              key: item.key,
-              label: item.title,
-              value: item.rawValue,
-              formattedValue: item.value,
-            })),
-          },
-        ]}
-      /> */}
     </div>
   );
 }

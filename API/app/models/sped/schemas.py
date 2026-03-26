@@ -66,6 +66,21 @@ class AnaliseComprasResponse(BaseModel):
   top_produtos_valor: list[RankingProdutoCompra] = Field(default_factory=list)
   top_produtos_quantidade: list[RankingProdutoCompra] = Field(default_factory=list)
   relatorio_ia: str | None = None
+
+class SerieMensalComprasItem(BaseModel):
+  periodo_ano: int
+  periodo_mes: int
+  total_comprado: Decimal = Decimal("0.00")
+
+class DashboardComprasResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  anos_disponiveis: list[int] = Field(default_factory=list)
+  resumo_atual: AnaliseComprasResponse
+  resumo_anterior: AnaliseComprasResponse
+  serie_mensal: list[SerieMensalComprasItem] = Field(default_factory=list)
   
 class RankingClienteSped(BaseModel):
   cliente: str
@@ -103,6 +118,32 @@ class AnaliseVendasResponse(BaseModel):
   top_produtos_valor: list[RankingProdutoVenda] = Field(default_factory=list)
   top_produtos_quantidade: list[RankingProdutoVenda] = Field(default_factory=list)
   relatorio_ia: str | None = None
+
+class SerieMensalVendasItem(BaseModel):
+  periodo_ano: int
+  periodo_mes: int
+  total_vendido: Decimal = Decimal("0.00")
+  quantidade_notas: int = 0
+  total_impostos: Decimal = Decimal("0.00")
+
+class DashboardVendasResumo(BaseModel):
+  total_vendido: Decimal = Decimal("0.00")
+  quantidade_notas: int = 0
+  total_impostos: Decimal = Decimal("0.00")
+  ticket_medio: Decimal = Decimal("0.00")
+  top_clientes: list[dict] = Field(default_factory=list)
+  top_produtos: list[dict] = Field(default_factory=list)
+  top_cidades: list[dict] = Field(default_factory=list)
+
+class DashboardVendasResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  anos_disponiveis: list[int] = Field(default_factory=list)
+  resumo_atual: DashboardVendasResumo
+  resumo_anterior: DashboardVendasResumo
+  serie_mensal: list[SerieMensalVendasItem] = Field(default_factory=list)
 
 class RankingClienteAnalise(BaseModel):
   cliente: str

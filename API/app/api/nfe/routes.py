@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Query, HTTPException, status, UploadFile, File
 
 from app.services.nfe.process_nfe import ProcessarNFeService
@@ -17,7 +19,12 @@ from app.models.nfe.schemas import (
   ProcessarNFeResponse,
   AnaliseComprasResponse,
   AnaliseVendasResponse,
-  AnaliseClientesResponse
+  AnaliseClientesResponse,
+  DashboardComprasResponse,
+  DashboardVendasResponse,
+  DashboardVendasResumo,
+  SerieMensalComprasItem,
+  SerieMensalVendasItem,
 )
 
 router = APIRouter()
@@ -32,6 +39,63 @@ def _validar_empresa_xml(cnpj: str):
       status_code=status.HTTP_400_BAD_REQUEST,
       detail="Esta empresa está configurada para SPED Fiscal e não para XML.",
     )
+
+def _obter_periodo_anterior(periodo_ano: int, periodo_mes: int | None) -> tuple[int, int | None]:
+  if periodo_mes is None:
+    return periodo_ano - 1, None
+  if periodo_mes > 1:
+    return periodo_ano, periodo_mes - 1
+  return periodo_ano - 1, 12
+
+def _agrupar_ranking_por_chave(itens: list[dict], chave: str, limite: int = 5) -> list[dict]:
+  agrupado: dict[str, Decimal] = {}
+  for item in itens:
+    nome = str(item.get(chave) or "").strip() or f"{chave.title()} nÃ£o identificado"
+    valor_total = Decimal(str(item.get("valor_total") or 0))
+    agrupado[nome] = agrupado.get(nome, Decimal("0.00")) + valor_total
+
+  return [
+    {chave: nome, "valor_total": valor_total}
+    for nome, valor_total in sorted(
+      agrupado.items(),
+      key=lambda entry: entry[1],
+      reverse=True,
+    )[:limite]
+  ]
+
+def _resumo_vendas_por_kpis(resultados: list, limite: int = 5) -> DashboardVendasResumo:
+  total_vendido = Decimal("0.00")
+  quantidade_notas = 0
+  total_impostos = Decimal("0.00")
+  top_clientes: list[dict] = []
+  top_produtos: list[dict] = []
+  top_cidades: list[dict] = []
+
+  for item in resultados:
+    kpis = item.kpis
+    total_vendido += Decimal(str(kpis.total_vendas or 0))
+    quantidade_notas += int(kpis.quantidade_notas or 0)
+    total_impostos += (
+      Decimal(str(kpis.total_icms or 0))
+      + Decimal(str(kpis.total_ipi or 0))
+      + Decimal(str(kpis.total_pis or 0))
+      + Decimal(str(kpis.total_cofins or 0))
+    )
+    top_clientes.extend(kpis.top_clientes or [])
+    top_produtos.extend(kpis.top_produtos or [])
+    top_cidades.extend(kpis.top_cidades or [])
+
+  ticket_medio = total_vendido / quantidade_notas if quantidade_notas else Decimal("0.00")
+
+  return DashboardVendasResumo(
+    total_vendido=total_vendido,
+    quantidade_notas=quantidade_notas,
+    total_impostos=total_impostos,
+    ticket_medio=ticket_medio,
+    top_clientes=_agrupar_ranking_por_chave(top_clientes, "cliente", limite),
+    top_produtos=_agrupar_ranking_por_chave(top_produtos, "produto", limite),
+    top_cidades=_agrupar_ranking_por_chave(top_cidades, "cidade", limite),
+  )
 
 # -------------------------
 # Processamento
@@ -300,6 +364,173 @@ def consultar_analise_vendas_nfe(
     ) from exc
 
   return AnaliseVendasResponse(status="ok", **resultado)
+
+@nfe_router.get("/analise/compras/dashboard", response_model=DashboardComprasResponse)
+def consultar_dashboard_compras_nfe(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=5, ge=1, le=20),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj vÃ¡lido ou um email cadastrado.",
+    )
+
+  anos_disponiveis = sorted(
+    {
+      item.periodo_ano
+      for item in service.listar_kpis(emitente_cnpj=emitente_resolvido, limite=120)
+      if item.periodo_ano
+    },
+    reverse=True,
+  )
+
+  ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
+  if ano_referencia is None:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Nenhum perÃ­odo disponÃ­vel para o emitente informado.",
+    )
+
+  ano_anterior, mes_anterior = _obter_periodo_anterior(ano_referencia, periodo_mes)
+
+  try:
+    resumo_atual = service.analisar_compras(
+      emitente_cnpj=emitente_resolvido,
+      periodo_ano=ano_referencia,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+    resumo_anterior = service.analisar_compras(
+      emitente_cnpj=emitente_resolvido,
+      periodo_ano=ano_anterior,
+      periodo_mes=mes_anterior,
+      limite=limite,
+    )
+    serie_mensal = [
+      SerieMensalComprasItem(
+        periodo_ano=ano_referencia,
+        periodo_mes=mes,
+        total_comprado=service.analisar_compras(
+          emitente_cnpj=emitente_resolvido,
+          periodo_ano=ano_referencia,
+          periodo_mes=mes,
+          limite=limite,
+        )["total_comprado"],
+      )
+      for mes in range(1, 13)
+    ]
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  return DashboardComprasResponse(
+    status="ok",
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+    periodo_mes=periodo_mes,
+    anos_disponiveis=anos_disponiveis,
+    resumo_atual=AnaliseComprasResponse(status="ok", **resumo_atual),
+    resumo_anterior=AnaliseComprasResponse(status="ok", **resumo_anterior),
+    serie_mensal=serie_mensal,
+  )
+
+@nfe_router.get("/analise/vendas/dashboard", response_model=DashboardVendasResponse)
+def consultar_dashboard_vendas_nfe(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=5, ge=1, le=20),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj vÃ¡lido ou um email cadastrado.",
+    )
+
+  resultados_anos = service.listar_kpis(emitente_cnpj=emitente_resolvido, limite=120)
+  anos_disponiveis = sorted(
+    {item.periodo_ano for item in resultados_anos if item.periodo_ano},
+    reverse=True,
+  )
+  ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
+
+  if ano_referencia is None:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Nenhum perÃ­odo disponÃ­vel para o emitente informado.",
+    )
+
+  resultados_ano_atual = service.listar_kpis(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+    limite=120,
+  )
+  resultados_ano_anterior = service.listar_kpis(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia - 1,
+    limite=120,
+  )
+
+  if periodo_mes is not None:
+    resultados_filtrados = [item for item in resultados_ano_atual if item.periodo_mes == periodo_mes]
+    ano_anterior, mes_anterior = _obter_periodo_anterior(ano_referencia, periodo_mes)
+    resultados_anteriores = (
+      [item for item in resultados_ano_atual if item.periodo_mes == mes_anterior]
+      if ano_anterior == ano_referencia
+      else [item for item in resultados_ano_anterior if item.periodo_mes == mes_anterior]
+    )
+  else:
+    resultados_filtrados = resultados_ano_atual
+    resultados_anteriores = resultados_ano_anterior
+
+  serie_mensal = [
+    SerieMensalVendasItem(
+      periodo_ano=ano_referencia,
+      periodo_mes=item.periodo_mes or 0,
+      total_vendido=Decimal(str(item.kpis.total_vendas or 0)),
+      quantidade_notas=int(item.kpis.quantidade_notas or 0),
+      total_impostos=(
+        Decimal(str(item.kpis.total_icms or 0))
+        + Decimal(str(item.kpis.total_ipi or 0))
+        + Decimal(str(item.kpis.total_pis or 0))
+        + Decimal(str(item.kpis.total_cofins or 0))
+      ),
+    )
+    for item in sorted(resultados_ano_atual, key=lambda resultado: resultado.periodo_mes or 0)
+    if item.periodo_mes
+  ]
+
+  return DashboardVendasResponse(
+    status="ok",
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+    periodo_mes=periodo_mes,
+    anos_disponiveis=anos_disponiveis,
+    resumo_atual=_resumo_vendas_por_kpis(resultados_filtrados, limite),
+    resumo_anterior=_resumo_vendas_por_kpis(resultados_anteriores, limite),
+    serie_mensal=serie_mensal,
+  )
 
 @nfe_router.get("/analise/clientes", response_model=AnaliseClientesResponse)
 def consultar_analise_clientes_nfe(

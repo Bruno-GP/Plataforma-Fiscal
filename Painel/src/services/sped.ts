@@ -142,6 +142,23 @@ export interface AnaliseComprasResponse {
   relatorio_ia?: string | null;
 }
 
+export interface SerieMensalComprasItem {
+  periodo_ano: number;
+  periodo_mes: number;
+  total_comprado: number | string;
+}
+
+export interface DashboardComprasResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  anos_disponiveis: number[];
+  resumo_atual: AnaliseComprasResponse;
+  resumo_anterior: AnaliseComprasResponse;
+  serie_mensal: SerieMensalComprasItem[];
+}
+
 export const fetchSpedAnaliseCompras = async (params: { 
     emitente_cnpj?: string; 
     periodo_ano?: number; 
@@ -178,6 +195,38 @@ export const fetchSpedAnaliseCompras = async (params: {
   return response.json() as Promise<AnaliseComprasResponse>;
 };
 
+export const fetchSpedDashboardCompras = async (
+  params: {
+    emitente_cnpj?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<DashboardComprasResponse> => {
+  const searchParams = new URLSearchParams();
+  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+
+  if (digits.length === 14) {
+    searchParams.set('emitente_cnpj', digits);
+  }
+
+  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
+  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
+  if (params.limite) searchParams.set('limite', String(params.limite));
+
+  const response = await fetch(`${API_BASE_URL}/sped/analise/compras/dashboard?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar dashboard de compras.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar dashboard de compras.');
+  }
+
+  return response.json() as Promise<DashboardComprasResponse>;
+};
+
 export interface AnaliseVendasResponse {
   status: string;
   emitente_cnpj: string;
@@ -189,6 +238,35 @@ export interface AnaliseVendasResponse {
   top_produtos_valor: RankingProdutoCompra[];
   top_produtos_quantidade: RankingProdutoCompra[];
   relatorio_ia?: string | null;
+}
+
+export interface SerieMensalVendasItem {
+  periodo_ano: number;
+  periodo_mes: number;
+  total_vendido: number | string;
+  quantidade_notas: number;
+  total_impostos: number | string;
+}
+
+export interface DashboardVendasResumo {
+  total_vendido: number | string;
+  quantidade_notas: number;
+  total_impostos: number | string;
+  ticket_medio: number | string;
+  top_clientes: Array<{ cliente?: string; valor_total?: number | string }>;
+  top_produtos: Array<{ produto?: string; valor_total?: number | string }>;
+  top_cidades: Array<{ cidade?: string; valor_total?: number | string }>;
+}
+
+export interface DashboardVendasResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  anos_disponiveis: number[];
+  resumo_atual: DashboardVendasResumo;
+  resumo_anterior: DashboardVendasResumo;
+  serie_mensal: SerieMensalVendasItem[];
 }
 
 export const fetchSpedAnaliseVendas = async (params: {
@@ -225,6 +303,38 @@ export const fetchSpedAnaliseVendas = async (params: {
   }
 
   return response.json() as Promise<AnaliseVendasResponse>;
+};
+
+export const fetchSpedDashboardVendas = async (
+  params: {
+    emitente_cnpj?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<DashboardVendasResponse> => {
+  const searchParams = new URLSearchParams();
+  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+
+  if (digits.length === 14) {
+    searchParams.set('emitente_cnpj', digits);
+  }
+
+  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
+  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
+  if (params.limite) searchParams.set('limite', String(params.limite));
+
+  const response = await fetch(`${API_BASE_URL}/sped/analise/vendas/dashboard?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar dashboard de vendas.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar dashboard de vendas.');
+  }
+
+  return response.json() as Promise<DashboardVendasResponse>;
 };
 
 export interface AnaliseClientesResponse {

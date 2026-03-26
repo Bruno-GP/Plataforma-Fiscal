@@ -205,6 +205,23 @@ export interface AnaliseComprasResponse {
   relatorio_ia?: string | null;
 }
 
+export interface SerieMensalComprasItem {
+  periodo_ano: number;
+  periodo_mes: number;
+  total_comprado: number | string;
+}
+
+export interface DashboardComprasResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  anos_disponiveis: number[];
+  resumo_atual: AnaliseComprasResponse;
+  resumo_anterior: AnaliseComprasResponse;
+  serie_mensal: SerieMensalComprasItem[];
+}
+
 export interface ImportacaoXmlArquivoResultado {
   arquivo: string;
   cnpj_emitente?: string | null;
@@ -357,6 +374,41 @@ export const fetchNfeAnaliseCompras = async (
   return response.json() as Promise<AnaliseComprasResponse>;
 };
 
+export const fetchNfeDashboardCompras = async (
+  params: {
+    emitente_cnpj?: string;
+    email?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<DashboardComprasResponse> => {
+  const searchParams = new URLSearchParams();
+  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+
+  if (cnpjParam) {
+    searchParams.set('emitente_cnpj', cnpjParam);
+  } else if (params.email) {
+    searchParams.set('email', params.email);
+  }
+
+  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
+  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
+  if (params.limite) searchParams.set('limite', String(params.limite));
+
+  const response = await fetch(`${API_BASE_URL}/nfe/analise/compras/dashboard?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar dashboard de compras da NFe.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar dashboard de compras da NFe.');
+  }
+
+  return response.json() as Promise<DashboardComprasResponse>;
+};
+
 export interface AnaliseVendasResponse {
   status: string;
   emitente_cnpj: string;
@@ -392,6 +444,35 @@ export interface AnaliseClientesResponse {
     percentual_participacao: number | string;
   }>;
   relatorio_ia?: string | null;
+}
+
+export interface SerieMensalVendasItem {
+  periodo_ano: number;
+  periodo_mes: number;
+  total_vendido: number | string;
+  quantidade_notas: number;
+  total_impostos: number | string;
+}
+
+export interface DashboardVendasResumo {
+  total_vendido: number | string;
+  quantidade_notas: number;
+  total_impostos: number | string;
+  ticket_medio: number | string;
+  top_clientes: Array<{ cliente?: string; valor_total?: number | string }>;
+  top_produtos: Array<{ produto?: string; valor_total?: number | string }>;
+  top_cidades: Array<{ cidade?: string; valor_total?: number | string }>;
+}
+
+export interface DashboardVendasResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  anos_disponiveis: number[];
+  resumo_atual: DashboardVendasResumo;
+  resumo_anterior: DashboardVendasResumo;
+  serie_mensal: SerieMensalVendasItem[];
 }
 
 export const fetchNfeAnaliseVendas = async (
@@ -433,6 +514,41 @@ export const fetchNfeAnaliseVendas = async (
   }
 
   return response.json() as Promise<AnaliseVendasResponse>;
+};
+
+export const fetchNfeDashboardVendas = async (
+  params: {
+    emitente_cnpj?: string;
+    email?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<DashboardVendasResponse> => {
+  const searchParams = new URLSearchParams();
+  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+
+  if (cnpjParam) {
+    searchParams.set('emitente_cnpj', cnpjParam);
+  } else if (params.email) {
+    searchParams.set('email', params.email);
+  }
+
+  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
+  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
+  if (params.limite) searchParams.set('limite', String(params.limite));
+
+  const response = await fetch(`${API_BASE_URL}/nfe/analise/vendas/dashboard?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar dashboard de vendas da NFe.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar dashboard de vendas da NFe.');
+  }
+
+  return response.json() as Promise<DashboardVendasResponse>;
 };
 
 export const fetchNfeAnaliseClientes = async (

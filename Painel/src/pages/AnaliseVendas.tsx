@@ -33,7 +33,7 @@ interface DashboardProps {
 
 export default function Dashboard({
   title = 'Vendas',
-  subtitle = 'Vis\\u00e3o geral do seu neg\\u00f3cio',
+  subtitle = 'Visão geral do seu negócio',
 }: DashboardProps) {
   const { user } = useAuth();
 
@@ -103,7 +103,7 @@ export default function Dashboard({
 
   const stats = [
     {
-      title: `Faturamento Mensal${faturamentoPeriodo ? ` (Per\\u00edodo ${faturamentoPeriodo})` : ''}`,
+      title: `Faturamento Mensal${faturamentoPeriodo ? ` (Período ${faturamentoPeriodo})` : ''}`,
       value: formatCurrency(totalFaturamento),
       description: formatPercent(totalSalesChange),
       icon: TrendingUp,
@@ -114,15 +114,15 @@ export default function Dashboard({
       title: 'Comparativo anual',
       value: `${totalSalesChange >= 0 ? '+' : ''}${totalSalesChange.toFixed(1)}%`,
       description: selectedMonth === 'all'
-        ? `vs. mesmo per\\u00edodo de ${year - 1}`
-        : 'vs. per\\u00edodo anterior',
+        ? `vs. mesmo período de ${year - 1}`
+        : 'vs. período anterior',
       icon: totalSalesChange >= 0 ? TrendingUp : TrendingDown,
       trend: totalSalesChange >= 0 ? 'up' : 'down',
       accentClass: 'border-l-emerald-500',
       appendPreviousMonthLabel: false,
     },
     {
-      title: 'Ticket M\\u00e9dio',
+      title: 'Ticket Médio',
       value: formatCurrency(parseDecimal(currentData?.ticket_medio ?? 0)),
       description: formatPercent(ticketChange),
       icon: Users,
@@ -146,7 +146,7 @@ export default function Dashboard({
       : serie.filter((item) => item.periodo_mes === monthNumber);
 
     return itens.map((item) => ({
-      month: monthLabels[item.periodo_mes - 1] ?? `M\\u00eas ${item.periodo_mes}`,
+      month: monthLabels[item.periodo_mes - 1] ?? `Mês ${item.periodo_mes}`,
       faturamento: parseDecimal(item.total_vendido ?? 0),
     }));
   }, [dashboardQuery.data?.serie_mensal, monthNumber, selectedMonth]);
@@ -155,10 +155,10 @@ export default function Dashboard({
   const chartMessage = dashboardQuery.isLoading
     ? 'Carregando dados...'
     : dashboardQuery.isError
-      ? 'N\\u00e3o foi poss\\u00edvel carregar o gr\\u00e1fico.'
+      ? 'Não foi possível carregar o gráfico.'
       : selectedMonthLabel
-        ? `Nenhum dado dispon\\u00edvel para ${selectedMonthLabel} de ${selectedYear}.`
-        : `Nenhum dado dispon\\u00edvel para ${selectedYear}.`;
+        ? `Nenhum dado disponível para ${selectedMonthLabel} de ${selectedYear}.`
+        : `Nenhum dado disponível para ${selectedYear}.`;
   const hasChartData = salesEvolutionData.length > 0;
 
   const resolvePercentual = (valorTotal?: number | string) => {
@@ -175,11 +175,11 @@ export default function Dashboard({
 
     return {
       key: `${cliente.cliente}-${index}`,
-      title: cliente.cliente ?? 'Cliente n\\u00e3o identificado',
+      title: cliente.cliente ?? 'Cliente não identificado',
       subtitle:
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
-          : 'Participa\\u00e7\\u00e3o n\\u00e3o informada',
+        : 'Participação não informada',
       value: formatCurrency(valorTotal),
       rawValue: valorTotal,
       percent: percentual,
@@ -192,11 +192,11 @@ export default function Dashboard({
 
     return {
       key: `${produto.produto}-${index}`,
-      title: produto.produto ?? 'Produto n\\u00e3o identificado',
+      title: produto.produto ?? 'Produto não identificado',
       subtitle:
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
-          : 'Participa\\u00e7\\u00e3o n\\u00e3o informada',
+        : 'Participação não informada',
       value: formatCurrency(valorTotal),
       rawValue: valorTotal,
       percent: percentual,
@@ -209,11 +209,11 @@ export default function Dashboard({
 
     return {
       key: `${cidade.cidade}-${index}`,
-      title: cidade.cidade ?? 'Cidade n\\u00e3o identificada',
+      title: cidade.cidade ?? 'Cidade não identificada',
       subtitle:
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
-          : 'Participa\\u00e7\\u00e3o n\\u00e3o informada',
+        : 'Participação não informada',
       value: formatCurrency(valorTotal),
       rawValue: valorTotal,
       percent: percentual,
@@ -239,7 +239,7 @@ export default function Dashboard({
           <AlertDescription>
             {dashboardQuery.error instanceof Error
               ? dashboardQuery.error.message
-              : 'N\\u00e3o foi poss\\u00edvel buscar os KPIs mais recentes na API.'}
+            : 'Não foi possível buscar os KPIs mais recentes na API.'}
           </AlertDescription>
         </Alert>
       )}
@@ -253,7 +253,7 @@ export default function Dashboard({
       <div className="grid gap-6 lg:grid-cols-3">
         <RankingCard
           title="Top Clientes"
-          description="Clientes com maior faturamento no \\u00faltimo per\\u00edodo"
+          description="Clientes com maior faturamento no último período"
           items={topClientesItems}
           isLoading={dashboardQuery.isLoading}
           loadingMessage="Carregando ranking..."
@@ -264,7 +264,7 @@ export default function Dashboard({
         />
         <RankingCard
           title="Top Produtos"
-          description="Itens com maior faturamento no \\u00faltimo per\\u00edodo"
+          description="Itens com maior faturamento no último período"
           items={topProdutosItems}
           isLoading={dashboardQuery.isLoading}
           loadingMessage="Carregando ranking..."
@@ -275,7 +275,7 @@ export default function Dashboard({
         />
         <RankingCard
           title="Top Cidades"
-          description="Cidades com maior faturamento no \\u00faltimo per\\u00edodo"
+          description="Cidades com maior faturamento no último período"
           items={topCidadesItems}
           isLoading={dashboardQuery.isLoading}
           loadingMessage="Carregando ranking..."
@@ -292,7 +292,7 @@ export default function Dashboard({
         chartMessage={chartMessage}
         selectedMonthLabel={selectedMonthLabel}
         selectedYear={selectedYear}
-        title="Evolu\\u00e7\\u00e3o das Vendas"
+        title="Evolução das Vendas"
         descriptionPrefix="Vendas"
         metricLabel="Vendas"
       />

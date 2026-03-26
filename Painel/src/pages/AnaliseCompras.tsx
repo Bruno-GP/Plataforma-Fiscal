@@ -126,7 +126,7 @@ export default function AnaliseFiscal() {
       accentClass: 'border-l-amber-400',
     },
     {
-      title: 'Ticket M\\u00e9dio por Compra',
+      title: 'Ticket Médio por Compra',
       value: formatCurrency(currentTicketMedio),
       description: formatPercent(safePercentage(currentTicketMedio, previousTicketMedio)),
       icon: Box,
@@ -142,7 +142,7 @@ export default function AnaliseFiscal() {
       : serie.filter((item) => item.periodo_mes === monthNumber);
 
     return itens.map((item) => ({
-      month: monthLabels[item.periodo_mes - 1] ?? `M\\u00eas ${item.periodo_mes}`,
+      month: monthLabels[item.periodo_mes - 1] ?? `Mês ${item.periodo_mes}`,
       faturamento: parseDecimal(item.total_comprado),
     }));
   }, [dashboardQuery.data?.serie_mensal, monthNumber, selectedMonth]);
@@ -152,16 +152,16 @@ export default function AnaliseFiscal() {
   const chartMessage = dashboardQuery.isLoading
     ? 'Carregando dados...'
     : dashboardQuery.isError
-      ? 'N\\u00e3o foi poss\\u00edvel carregar o gr\\u00e1fico.'
+      ? 'Não foi possível carregar o gráfico.'
       : selectedMonthLabel
-        ? `Nenhum dado dispon\\u00edvel para ${selectedMonthLabel} de ${selectedYear}.`
-        : `Nenhum dado dispon\\u00edvel para ${selectedYear}.`;
+        ? `Nenhum dado disponível para ${selectedMonthLabel} de ${selectedYear}.`
+        : `Nenhum dado disponível para ${selectedYear}.`;
 
   return (
     <div className="space-y-6 py-6">
       <Header
         title="Compras"
-        subtitle="Vis\\u00e3o anal\\u00edtica das compras"
+        subtitle="Visão analítica das compras"
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
         availableYears={availableYears}
@@ -172,11 +172,11 @@ export default function AnaliseFiscal() {
 
       {dashboardQuery.isError && (
         <Alert variant="destructive">
-          <AlertTitle>Erro ao carregar an\\u00e1lise de compras</AlertTitle>
+          <AlertTitle>Erro ao carregar análise de compras</AlertTitle>
           <AlertDescription>
             {dashboardQuery.error instanceof Error
               ? dashboardQuery.error.message
-              : 'N\\u00e3o foi poss\\u00edvel consultar os dados de compras no momento.'}
+              : 'Não foi possível consultar os dados de compras no momento.'}
           </AlertDescription>
         </Alert>
       )}
@@ -190,7 +190,7 @@ export default function AnaliseFiscal() {
       <div className="grid gap-6 lg:grid-cols-3">
         <RankingCard
           title="Top Fornecedores"
-          description="Fornecedores com maior valor de compras no per\\u00edodo"
+          description="Fornecedores com maior valor de compras no período"
           items={(currentData?.top_fornecedores_valor ?? []).map((row, index) => {
             const valorTotal = parseDecimal(row.valor_total);
             const percentual = currentTotalComprado ? (valorTotal / currentTotalComprado) * 100 : null;
@@ -206,7 +206,7 @@ export default function AnaliseFiscal() {
           })}
           isLoading={dashboardQuery.isLoading}
           loadingMessage="Carregando ranking de fornecedores..."
-          emptyMessage="Sem dados para o per\\u00edodo selecionado."
+          emptyMessage="Sem dados para o período selecionado."
           totalValue={formatCurrency(currentTotalComprado)}
           showAbcReport={false}
           showAbcClassification={false}
@@ -214,7 +214,7 @@ export default function AnaliseFiscal() {
 
         <RankingCard
           title="Top Produtos por Valor"
-          description="Produtos com maior valor de compra no per\\u00edodo"
+          description="Produtos com maior valor de compra no período"
           items={(currentData?.top_produtos_valor ?? []).map((row, index) => {
             const valorTotal = parseDecimal(row.valor_total);
             const percentual = currentTotalComprado ? (valorTotal / currentTotalComprado) * 100 : null;
@@ -230,7 +230,7 @@ export default function AnaliseFiscal() {
           })}
           isLoading={dashboardQuery.isLoading}
           loadingMessage="Carregando ranking de produtos..."
-          emptyMessage="Sem dados para o per\\u00edodo selecionado."
+          emptyMessage="Sem dados para o período selecionado."
           totalValue={formatCurrency(currentTotalComprado)}
           showAbcReport={false}
           showAbcClassification={false}
@@ -238,7 +238,7 @@ export default function AnaliseFiscal() {
 
         <RankingCard
           title="Top Produtos por Quantidade"
-          description="Produtos mais comprados no per\\u00edodo"
+          description="Produtos mais comprados no período"
           items={(currentData?.top_produtos_quantidade ?? []).map((row, index) => {
             const quantidade = parseDecimal(row.quantidade_total);
             const percentual = currentItemCount ? (quantidade / currentItemCount) * 100 : null;
@@ -255,7 +255,7 @@ export default function AnaliseFiscal() {
           })}
           isLoading={dashboardQuery.isLoading}
           loadingMessage="Carregando ranking de produtos por quantidade..."
-          emptyMessage="Sem dados para o per\\u00edodo selecionado."
+          emptyMessage="Sem dados para o período selecionado."
           totalValue={formatCurrency(currentTotalComprado)}
           showAbcReport={false}
           showAbcClassification={false}
@@ -268,7 +268,7 @@ export default function AnaliseFiscal() {
         chartMessage={chartMessage}
         selectedMonthLabel={selectedMonthLabel}
         selectedYear={selectedYear}
-        title="Evolu\\u00e7\\u00e3o das compras"
+        title="Evolução das compras"
         descriptionPrefix="Compras"
         metricLabel="Compras"
       />

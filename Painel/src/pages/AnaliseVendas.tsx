@@ -245,8 +245,8 @@ export default function Dashboard({
     const valorTotal = parseDecimal(cidade.valor_total ?? 0);
     const percentual = resolvePercentual(valorTotal);
     const cidadeComUf = cidade.uf?.trim()
-      ? `${cidade.cidade ?? 'Cidade nÃ£o identificada'} - ${cidade.uf.trim().toUpperCase()}`
-      : cidade.cidade ?? 'Cidade nÃ£o identificada';
+      ? `${cidade.cidade ?? 'Cidade não identificada'} - ${cidade.uf.trim().toUpperCase()}`
+      : cidade.cidade ?? 'Cidade não identificada';
 
     return {
       key: `${cidade.cidade}-${cidade.uf ?? 'sem-uf'}-${index}`,
@@ -254,7 +254,7 @@ export default function Dashboard({
       subtitle:
         percentual !== null
           ? `${percentual.toFixed(1)}% do faturamento`
-          : 'ParticipaÃ§Ã£o nÃ£o informada',
+          : 'Participção não informada',
       value: formatCurrency(valorTotal),
       rawValue: valorTotal,
       percent: percentual,

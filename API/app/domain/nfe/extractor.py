@@ -9,6 +9,10 @@ import re
 import logging
 import unicodedata
 
+from app.domain.nfe.normalization import (
+    normalizar_descricao_produto,
+    normalizar_nome_cliente,
+)
 from app.domain.nfe.xml_models import XmlNFe
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
@@ -328,7 +332,7 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
 
     tomador = _encontrar_elemento(root, "TomadorServico")
 
-    destinatario_nome = _extrair_nome_tomador(tomador)
+    destinatario_nome = normalizar_nome_cliente(_extrair_nome_tomador(tomador))
     destinatario_cidade_codigo = _encontrar_texto_xml(tomador, "CodigoMunicipio") if tomador is not None else ""
     destinatario_cidade_nome = (
         _encontrar_texto_xml(tomador, "Municipio")
@@ -357,7 +361,9 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
             or _encontrar_texto_xml(tomador, "CPF")
         )
 
-    descricao_servico = _extrair_descricao_servico(_encontrar_texto_xml(root, "Discriminacao"))
+    descricao_servico = normalizar_descricao_produto(
+        _extrair_descricao_servico(_encontrar_texto_xml(root, "Discriminacao"))
+    )
 
     return NotaExtraida(
         chave=str(numero_nf),
@@ -439,7 +445,9 @@ class NFeExtractor:
             dest = inf.find("nfe:dest", NS)
 
             if dest is not None:
-                destinatario_nome = dest.findtext("nfe:xNome", "", NS)
+                destinatario_nome = normalizar_nome_cliente(
+                    dest.findtext("nfe:xNome", "", NS)
+                )
                 destinatario_doc = (
                     dest.findtext("nfe:CNPJ", "", NS) or
                     dest.findtext("nfe:CPF", "", NS)
@@ -491,7 +499,9 @@ class NFeExtractor:
                     ItemNota(
                         numero_item=int(det.attrib.get("nItem", "0")),
                         codigo_produto=prod.findtext("nfe:cProd", "", NS),
-                        descricao=prod.findtext("nfe:xProd", "", NS),
+                        descricao=normalizar_descricao_produto(
+                            prod.findtext("nfe:xProd", "", NS)
+                        ),
                         ncm=prod.findtext("nfe:NCM", "", NS),
                         cfop=prod.findtext("nfe:CFOP", "", NS),
                         unidade=prod.findtext("nfe:uCom", "", NS),

@@ -101,7 +101,20 @@ class NFeNotasService:
         sql = """
             WITH atualizacao AS (
                 UPDATE public.notas
-                SET processamento_id = %s
+                SET processamento_id = %s,
+                    natureza_operacao = %s,
+                    destinatario_documento = %s,
+                    destinatario_nome = %s,
+                    destinatario_cidade = %s,
+                    destinatario_uf = %s,
+                    valor_produtos = %s,
+                    valor_desconto = %s,
+                    valor_frete = %s,
+                    valor_icms = %s,
+                    valor_ipi = %s,
+                    valor_pis = %s,
+                    valor_cofins = %s,
+                    valor_total_nf = %s
                 WHERE numero_nf = %s
                   AND emitente_cnpj = %s
                   AND COALESCE(modelo, '') = COALESCE(%s, '')
@@ -147,6 +160,19 @@ class NFeNotasService:
                     emitente_cnpj = normalizar_cnpj(nota.emitente_cnpj)
                     valores.append((
                         processamento_id,
+                        nota.natureza_operacao,
+                        nota.destinatario_documento,
+                        nota.destinatario_nome,
+                        nota.destinatario_cidade,
+                        nota.destinatario_uf,
+                        nota.valor_produtos,
+                        nota.valor_desconto,
+                        nota.valor_frete,
+                        nota.valor_icms,
+                        nota.valor_ipi,
+                        nota.valor_pis,
+                        nota.valor_cofins,
+                        nota.valor_total_nf,
                         str(nota.numero_nf),
                         emitente_cnpj,
                         nota.modelo,

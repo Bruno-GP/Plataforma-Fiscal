@@ -6,6 +6,10 @@ import psycopg
 from psycopg.types.json import Json
 
 from app.domain.nfe.extractor import NotaExtraida
+from app.domain.nfe.normalization import (
+    normalizar_descricao_produto,
+    normalizar_nome_cliente,
+)
 from app.models.nfe.schemas import KPIsRelatorio
 from app.services.nfe.postres_config import carregar_config_postgres
 
@@ -76,13 +80,14 @@ class KPICalculator:
 
         clientes = defaultdict(Decimal)
         for n in notas:
-            cliente = _normalizar_nome_cliente(n.destinatario_nome)
+            cliente = normalizar_nome_cliente(n.destinatario_nome) or "CLIENTE NÃƒO IDENTIFICADO"
             clientes[cliente] += n.valor_total_nf
 
         produtos = defaultdict(Decimal)
         for n in notas:
             for item in n.itens:
-                produtos[item.descricao] += item.valor_total
+                produto = normalizar_descricao_produto(item.descricao) or "Produto nÃ£o identificado"
+                produtos[produto] += item.valor_total
 
         cidades = defaultdict(Decimal)
         for n in notas:

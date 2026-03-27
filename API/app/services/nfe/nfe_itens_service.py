@@ -69,6 +69,22 @@ class NFeItensService:
         """
 
         sql_insert_item = """
+            WITH atualizacao AS (
+                UPDATE public.notas_itens
+                SET
+                    empresa_id = %s,
+                    cnpj = %s,
+                    descricao = %s,
+                    ncm = %s,
+                    cfop = %s,
+                    quantidade = %s,
+                    valor_unitario = %s,
+                    valor_total = %s
+                WHERE nota_id = %s
+                  AND item_numero = %s
+                  AND produto_codigo = %s
+                RETURNING id
+            )
             INSERT INTO public.notas_itens (
                 nota_id,
                 empresa_id,
@@ -86,13 +102,7 @@ class NFeItensService:
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, 
                 %s
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM public.notas_itens
-                WHERE nota_id = %s
-                  AND item_numero = %s
-                  AND produto_codigo = %s
-            );
+            WHERE NOT EXISTS (SELECT 1 FROM atualizacao);
         """
 
         try:
@@ -132,6 +142,17 @@ class NFeItensService:
                         cur.execute(
                             sql_insert_item,
                             (
+                                empresa_id,
+                                cnpj,
+                                descricao,
+                                ncm,
+                                cfop,
+                                item.quantidade,
+                                item.valor_unitario,
+                                item.valor_total,
+                                nota_id,
+                                item.numero_item,
+                                codigo_produto,
                                 nota_id,
                                 empresa_id,
                                 cnpj,
@@ -143,9 +164,6 @@ class NFeItensService:
                                 item.quantidade,
                                 item.valor_unitario,
                                 item.valor_total,
-                                nota_id,
-                                item.numero_item,
-                                codigo_produto,
                             ),
                         )
                         inseridos += cur.rowcount

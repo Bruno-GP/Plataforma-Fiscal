@@ -1,9 +1,6 @@
 import type { ConsultaKpiResponse } from './nfe';
-
-const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-const API_BASE_URL = RAW_API_BASE_URL.endsWith('/api')
-  ? RAW_API_BASE_URL
-  : `${RAW_API_BASE_URL.replace(/\/$/, '')}/api`;
+import { API_BASE_URL, apiFetch } from './api';
+import { buildFiscalSearchParams } from './fiscal';
 
 interface RequestOptions {
   signal?: AbortSignal;
@@ -49,7 +46,7 @@ export const importarSpedArquivo = async (file: File, cnpjEmpresaOrigem: string)
   const cnpjDigits = cnpjEmpresaOrigem.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_empresa_origem: cnpjDigits });
 
-  const response = await fetch(`${API_BASE_URL}/sped/importar?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/sped/importar?${searchParams.toString()}`, {
     method: 'POST',
     body: formData,
   });
@@ -66,7 +63,7 @@ export const consultarPendenciasSped = async (cnpjEmitente: string): Promise<Imp
   const digits = cnpjEmitente.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
-  const response = await fetch(`${API_BASE_URL}/sped/pendencias?${searchParams.toString()}`);
+  const response = await apiFetch(`${API_BASE_URL}/sped/pendencias?${searchParams.toString()}`);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar pendências do SPED.' }));
@@ -80,7 +77,7 @@ export const processarSpedsImportados = async (cnpjEmitente: string): Promise<Pr
   const digits = cnpjEmitente.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
-  const response = await fetch(`${API_BASE_URL}/sped/processar-importados?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/sped/processar-importados?${searchParams.toString()}`, {
     method: 'POST',
   });
 
@@ -95,19 +92,9 @@ export const processarSpedsImportados = async (cnpjEmitente: string): Promise<Pr
 export type ConsultaSpedKpiResponse = ConsultaKpiResponse;
 
 export const fetchSpedKpis = async (params: { emitente_cnpj?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; offset?: number } = {}): Promise<ConsultaSpedKpiResponse> => {
-  const searchParams = new URLSearchParams();
-  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (digits.length === 14) {
-    searchParams.set('emitente_cnpj', digits);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.offset) searchParams.set('offset', String(params.offset));
-
-  const response = await fetch(`${API_BASE_URL}/sped/kpis?${searchParams.toString()}`);
+  const response = await apiFetch(`${API_BASE_URL}/sped/kpis?${searchParams.toString()}`);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar KPIs do SPED.' }));
@@ -169,21 +156,9 @@ export const fetchSpedAnaliseCompras = async (params: {
     layout?: string;
   } = {}, options: RequestOptions = {}): Promise<AnaliseComprasResponse> => {
 
-  const searchParams = new URLSearchParams();
-  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (digits.length === 14) {
-    searchParams.set('emitente_cnpj', digits);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
-  if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
-  if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
-
-  const response = await fetch(`${API_BASE_URL}/sped/analise/compras?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/compras?${searchParams.toString()}`, {
     signal: options.signal,
   });
 
@@ -204,18 +179,9 @@ export const fetchSpedDashboardCompras = async (
   } = {},
   options: RequestOptions = {},
 ): Promise<DashboardComprasResponse> => {
-  const searchParams = new URLSearchParams();
-  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (digits.length === 14) {
-    searchParams.set('emitente_cnpj', digits);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-
-  const response = await fetch(`${API_BASE_URL}/sped/analise/compras/dashboard?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/compras/dashboard?${searchParams.toString()}`, {
     signal: options.signal,
   });
 
@@ -279,21 +245,9 @@ export const fetchSpedAnaliseVendas = async (params: {
     layout?: string;
   } = {}, options: RequestOptions = {}): Promise<AnaliseVendasResponse> => {
 
-  const searchParams = new URLSearchParams();
-  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (digits.length === 14) {
-    searchParams.set('emitente_cnpj', digits);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
-  if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
-  if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
-
-  const response = await fetch(`${API_BASE_URL}/sped/analise/vendas?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/vendas?${searchParams.toString()}`, {
     signal: options.signal,
   });
 
@@ -314,18 +268,9 @@ export const fetchSpedDashboardVendas = async (
   } = {},
   options: RequestOptions = {},
 ): Promise<DashboardVendasResponse> => {
-  const searchParams = new URLSearchParams();
-  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (digits.length === 14) {
-    searchParams.set('emitente_cnpj', digits);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-
-  const response = await fetch(`${API_BASE_URL}/sped/analise/vendas/dashboard?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/vendas/dashboard?${searchParams.toString()}`, {
     signal: options.signal,
   });
 
@@ -370,20 +315,9 @@ export const fetchSpedAnaliseClientes = async (params: {
     formato_relatorio?: 'executivo' | 'analitico';
   } = {}, options: RequestOptions = {}): Promise<AnaliseClientesResponse> => {
 
-  const searchParams = new URLSearchParams();
-  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (digits.length === 14) {
-    searchParams.set('emitente_cnpj', digits);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
-  if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
-
-  const response = await fetch(`${API_BASE_URL}/sped/analise/clientes?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/clientes?${searchParams.toString()}`, {
     signal: options.signal,
   });
 

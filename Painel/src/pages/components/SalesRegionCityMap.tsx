@@ -559,7 +559,7 @@ export function SalesRegionCityMap({
         centroidY: number;
         projectedRings: number[][][];
       } => Boolean(item));
-  }, [cidadesGeoJsonQuery.data, mapViewMode, projectionConfig, topCidadesItems, totalFaturamento]);
+  }, [cidadesGeoJsonQuery.data, estadoFocoCidade, mapViewMode, projectionConfig, topCidadesItems, totalFaturamento]);
 
   const cidadesComVendasOrdenadas = useMemo(
     () => [...cityGeoJsonProjetado].filter((city) => city.value > 0).sort((a, b) => b.value - a.value),

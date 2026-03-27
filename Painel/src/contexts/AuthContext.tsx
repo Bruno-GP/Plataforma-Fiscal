@@ -1,4 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import {
+  API_BASE_URL,
+  apiFetch,
+  clearAuthSession,
+  readAuthSession,
+  saveAuthSession,
+  type SessionUser,
+} from '@/services/api';
 
 interface User {
   id: string;
@@ -40,6 +48,9 @@ interface LoginResponse {
   email: string;
   empresa_nome: string;
   tem_sped?: boolean;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
 }
 
 interface ApiErrorDetail {
@@ -77,11 +88,6 @@ const normalizeSessionCnpj = (value: string | null | undefined): string => {
   return digits;
 };
 
-const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-const API_BASE_URL = RAW_API_BASE_URL.endsWith('/api')
-  ? RAW_API_BASE_URL
-  : `${RAW_API_BASE_URL.replace(/\/$/, '')}/api`;
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
@@ -94,13 +100,12 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem('user');
-
-    if (!stored) {
+    const session = readAuthSession();
+    if (!session) {
       return null;
     }
 
-    const parsed = JSON.parse(stored) as StoredUserLegacy;
+    const parsed = session.user as StoredUserLegacy;
     const emitenteCnpj = (parsed.emitente_cnpj ?? parsed.cnpj ?? '').replace(/\D/g, '');
 
     if (!parsed.id || !parsed.email || !emitenteCnpj) {
@@ -117,28 +122,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   });
 
-    const resolveDisplayName = (empresaNome: string | null | undefined, email: string) => {
-      const trimmed = empresaNome?.trim() ?? '';
-      if (!trimmed) {
-        return '';
-      }
+  const resolveDisplayName = (empresaNome: string | null | undefined, email: string) => {
+    const trimmed = empresaNome?.trim() ?? '';
+    if (!trimmed) {
+      return '';
+    }
 
-      const emailNormalizado = email.trim().toLowerCase();
-      if (emailNormalizado && trimmed.toLowerCase() === emailNormalizado) {
-        return '';
-      }
+    const emailNormalizado = email.trim().toLowerCase();
+    if (emailNormalizado && trimmed.toLowerCase() === emailNormalizado) {
+      return '';
+    }
 
-      const normalizedName = trimmed.split('/').pop()?.trim() ?? trimmed;
+    const normalizedName = trimmed.split('/').pop()?.trim() ?? trimmed;
 
-      return normalizedName;
+    return normalizedName;
+  };
+
+  const persistAuthenticatedUser = (data: LoginResponse, fallbackId: string) => {
+    const resolvedId = data.login_id ?? data.empresa_id ?? fallbackId;
+    const displayName = resolveDisplayName(data.empresa_nome, data.email);
+    const nextUser: SessionUser = {
+      id: String(resolvedId),
+      name: displayName,
+      email: data.email,
+      emitente_cnpj: normalizeSessionCnpj(data.cnpj),
+      avatar: undefined,
+      tem_sped: Boolean(data.tem_sped),
     };
+
+    setUser(nextUser);
+    saveAuthSession({
+      user: nextUser,
+      accessToken: data.access_token,
+      tokenType: data.token_type,
+      expiresAt: Date.now() + data.expires_in * 1000,
+    });
+  };
 
   const login = async (email: string, password: string): Promise<AuthResult> => {
     if (!email || !password) {
       return { ok: false, message: 'Informe email e senha.' };
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/entrar`, {
+    const response = await apiFetch(`${API_BASE_URL}/auth/entrar`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -158,19 +184,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const data = (await response.json()) as LoginResponse;
-    const resolvedId = data.login_id ?? data.empresa_id ?? email;
-    const displayName = resolveDisplayName(data.empresa_nome, data.email);
-    const nextUser: User = {
-      id: String(resolvedId),
-      name: displayName,
-      email: data.email,
-      emitente_cnpj: normalizeSessionCnpj(data.cnpj),
-      avatar: undefined,
-      tem_sped: Boolean(data.tem_sped),
-    };
-
-    setUser(nextUser);
-    localStorage.setItem('user', JSON.stringify(nextUser));
+    persistAuthenticatedUser(data, email);
     return { ok: true };
   };
 
@@ -200,7 +214,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, message: 'Informe um CNPJ válido com 14 dígitos.' };
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/registrar`, {
+    const response = await apiFetch(`${API_BASE_URL}/auth/registrar`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -225,19 +239,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const data = (await response.json()) as LoginResponse;
     
     if (autoLogin) {
-      const resolvedId = data.login_id ?? data.empresa_id ?? emailNormalizado;
-      const displayName = resolveDisplayName(data.empresa_nome, data.email);
-      const nextUser: User = {
-        id: String(resolvedId),
-        name: displayName,
-        email: data.email,
-        emitente_cnpj: normalizeSessionCnpj(data.cnpj),
-        avatar: undefined,
-        tem_sped: Boolean(data.tem_sped),
-      };
-
-      setUser(nextUser);
-      localStorage.setItem('user', JSON.stringify(nextUser));
+      persistAuthenticatedUser(data, emailNormalizado);
     }
 
     return { ok: true };
@@ -245,7 +247,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('user');
+    clearAuthSession();
   };
 
   return (

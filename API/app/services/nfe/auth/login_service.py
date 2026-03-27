@@ -3,7 +3,6 @@ import hmac
 import os
 from dataclasses import dataclass
 import logging
-from contextlib import contextmanager
 
 import psycopg
 
@@ -11,14 +10,7 @@ from app.services.nfe.postres_config import carregar_config_postgres
 from app.services.nfe.empresa_service import normalizar_cnpj
 
 logger = logging.getLogger("LoginService")
-logger.setLevel(logging.DEBUG)
-
-handler = logging.StreamHandler()
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 
 @dataclass
@@ -83,14 +75,6 @@ class LoginService:
     def _nome_empresa_completo(self, nome: str | None) -> str:
         return nome.strip() if nome else ""
 
-    def _ensure_tem_sped_column(self, cur) -> None:
-        cur.execute(
-            """
-            ALTER TABLE public.empresas
-            ADD COLUMN IF NOT EXISTS tem_sped BOOLEAN NOT NULL DEFAULT FALSE;
-            """
-        )
-
     def registrar(self, empresa_nome: str, email: str, senha: str, cnpj: str, tem_sped: bool = False) -> LoginResult:
         cnpj_normalizado = normalizar_cnpj(cnpj)
         empresa_nome_normalizado = empresa_nome.strip()
@@ -101,7 +85,6 @@ class LoginService:
 
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
-                self._ensure_tem_sped_column(cur)
                 cur.execute(
                     """
                     SELECT id, cnpj, nome
@@ -195,7 +178,6 @@ class LoginService:
         
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
-                self._ensure_tem_sped_column(cur)
                 cur.execute(
                     """
                     SELECT login.id,

@@ -1,7 +1,8 @@
 from decimal import Decimal
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
+from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
 from app.models.nfe.schemas import ConsultaKPIResponse
 from app.models.sped.schemas import (
   ImportacaoSpedArquivoResultado,
@@ -21,6 +22,7 @@ from app.models.sped.schemas import (
   SerieMensalComprasItem,
   SerieMensalVendasItem,
 )
+from app.core.security import require_company_scope
 from app.services.sped.sped_importacao_service import SpedImportacaoService
 from app.services.sped.sped_process_service import ProcessarSpedFiscalService
 from app.services.company_profile_service import CompanyProfileService
@@ -28,7 +30,7 @@ from app.services.sped.sped_consulta_service import SpedConsultaService
 from app.services.AI.openai_report_service import OpenAIReportService
 
 router = APIRouter()
-sped_router = APIRouter(prefix="/sped", tags=["SPED Fiscal"])
+sped_router = APIRouter(prefix="/sped", tags=["SPED Fiscal"], dependencies=[Depends(require_company_scope)])
 
 def _validar_empresa_sped(cnpj: str):
   if not CompanyProfileService().empresa_tem_sped(cnpj):
@@ -36,63 +38,6 @@ def _validar_empresa_sped(cnpj: str):
       status_code=status.HTTP_400_BAD_REQUEST,
       detail="Esta empresa está configurada para XML e não para SPED Fiscal.",
     )
-
-def _obter_periodo_anterior(periodo_ano: int, periodo_mes: int | None) -> tuple[int, int | None]:
-  if periodo_mes is None:
-    return periodo_ano - 1, None
-  if periodo_mes > 1:
-    return periodo_ano, periodo_mes - 1
-  return periodo_ano - 1, 12
-
-def _agrupar_ranking_por_chave(itens: list[dict], chave: str, limite: int = 5) -> list[dict]:
-  agrupado: dict[str, Decimal] = {}
-  for item in itens:
-    nome = str(item.get(chave) or "").strip() or f"{chave.title()} nÃ£o identificado"
-    valor_total = Decimal(str(item.get("valor_total") or 0))
-    agrupado[nome] = agrupado.get(nome, Decimal("0.00")) + valor_total
-
-  return [
-    {chave: nome, "valor_total": valor_total}
-    for nome, valor_total in sorted(
-      agrupado.items(),
-      key=lambda entry: entry[1],
-      reverse=True,
-    )[:limite]
-  ]
-
-def _resumo_vendas_por_kpis(resultados: list, limite: int = 5) -> DashboardVendasResumo:
-  total_vendido = Decimal("0.00")
-  quantidade_notas = 0
-  total_impostos = Decimal("0.00")
-  top_clientes: list[dict] = []
-  top_produtos: list[dict] = []
-  top_cidades: list[dict] = []
-
-  for item in resultados:
-    kpis = item.kpis
-    total_vendido += Decimal(str(kpis.total_vendas or 0))
-    quantidade_notas += int(kpis.quantidade_notas or 0)
-    total_impostos += (
-      Decimal(str(kpis.total_icms or 0))
-      + Decimal(str(kpis.total_ipi or 0))
-      + Decimal(str(kpis.total_pis or 0))
-      + Decimal(str(kpis.total_cofins or 0))
-    )
-    top_clientes.extend(kpis.top_clientes or [])
-    top_produtos.extend(kpis.top_produtos or [])
-    top_cidades.extend(kpis.top_cidades or [])
-
-  ticket_medio = total_vendido / quantidade_notas if quantidade_notas else Decimal("0.00")
-
-  return DashboardVendasResumo(
-    total_vendido=total_vendido,
-    quantidade_notas=quantidade_notas,
-    total_impostos=total_impostos,
-    ticket_medio=ticket_medio,
-    top_clientes=_agrupar_ranking_por_chave(top_clientes, "cliente", limite),
-    top_produtos=_agrupar_ranking_por_chave(top_produtos, "produto", limite),
-    top_cidades=_agrupar_ranking_por_chave(top_cidades, "cidade", limite),
-  )
 
 @sped_router.post("/processar", response_model=ProcessarSpedFiscalResponse)
 def processar_sped_fiscal(request: ProcessarSpedFiscalRequest):
@@ -299,7 +244,7 @@ def consultar_dashboard_compras_sped(
       detail="Nenhum perÃ­odo disponÃ­vel para o emitente informado.",
     )
 
-  ano_anterior, mes_anterior = _obter_periodo_anterior(ano_referencia, periodo_mes)
+  ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
 
   resumo_atual = service.analisar_compras(
     emitente_cnpj=emitente_cnpj,
@@ -374,7 +319,7 @@ def consultar_dashboard_vendas_sped(
 
   if periodo_mes is not None:
     resultados_filtrados = [item for item in resultados_ano_atual if item.periodo_mes == periodo_mes]
-    ano_anterior, mes_anterior = _obter_periodo_anterior(ano_referencia, periodo_mes)
+    ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
     resultados_anteriores = (
       [item for item in resultados_ano_atual if item.periodo_mes == mes_anterior]
       if ano_anterior == ano_referencia
@@ -407,8 +352,8 @@ def consultar_dashboard_vendas_sped(
     periodo_ano=ano_referencia,
     periodo_mes=periodo_mes,
     anos_disponiveis=anos_disponiveis,
-    resumo_atual=_resumo_vendas_por_kpis(resultados_filtrados, limite),
-    resumo_anterior=_resumo_vendas_por_kpis(resultados_anteriores, limite),
+    resumo_atual=resumir_vendas_por_kpis(resultados_filtrados, DashboardVendasResumo, limite),
+    resumo_anterior=resumir_vendas_por_kpis(resultados_anteriores, DashboardVendasResumo, limite),
     serie_mensal=serie_mensal,
   )
 

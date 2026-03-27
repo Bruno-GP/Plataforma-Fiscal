@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   fetchNfeAnaliseClientes,
@@ -66,7 +65,7 @@ export default function RelatoriosIA() {
   const [report, setReport] = useState<string | null>(null);
   const [tipoRelatorio, setTipoRelatorio] = useState<ReportType>('compras');
   const [formatoRelatorio, setFormatoRelatorio] = useState<ReportFormat>('executivo');
-  const [layoutRelatorio, setLayoutRelatorio] = useState('');
+  const [layoutRelatorio] = useState('');
   const [totalPeriodo, setTotalPeriodo] = useState(0);
   const reportContainerRef = useRef<HTMLDivElement | null>(null);
   const generationAbortRef = useRef<AbortController | null>(null);

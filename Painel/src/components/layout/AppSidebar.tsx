@@ -1,4 +1,4 @@
-import { FileDigit, FileSearch, FileUp, LayoutDashboard, LogOut, Sparkles, Users } from 'lucide-react';
+import { AlertTriangle, FileDigit, FileSearch, FileUp, LayoutDashboard, LogOut, Sparkles, Users } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { NavLink } from '@/components/NavLink';
@@ -27,6 +27,7 @@ const menuItemImportacaoXml = { title: 'Importação XML', url: '/importacao-xml
 const menuItemImportacaoSped = { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit };
 const menuItemAnaliseFiscal = { title: 'Compras', url: '/analise-compras', icon: FileSearch };
 const menuItemRelatoriosIA = { title: 'Relatórios com IA', url: '/relatorios-ia', icon: Sparkles };
+const menuItemInconsistencias = { title: 'Inconsistencias', url: '/inconsistencias', icon: AlertTriangle };
 
 export function AppSidebar() {
   const location = useLocation();
@@ -34,8 +35,8 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
 
   const menuItems = user?.tem_sped
-    ? [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemImportacaoSped]
-    : [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemImportacaoXml];
+    ? [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemInconsistencias, menuItemImportacaoSped]
+    : [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemInconsistencias, menuItemImportacaoXml];
 
   const handleLogout = () => {
     logout();

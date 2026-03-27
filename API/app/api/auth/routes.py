@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 import psycopg
 
+from app.core.security import AuthenticatedUser, create_access_token
 from app.models.nfe.auth.schemas import (
     LoginCadastroRequest,
     LoginCadastroResponse,
@@ -12,6 +13,19 @@ from app.services.nfe.auth.login_service import LoginService
 router = APIRouter()
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+def _build_auth_payload(resultado) -> tuple[AuthenticatedUser, str, int]:
+    user = AuthenticatedUser(
+        login_id=resultado.login_id,
+        empresa_id=resultado.empresa_id,
+        cnpj=resultado.cnpj,
+        email=resultado.email,
+        empresa_nome=resultado.empresa_nome,
+        tem_sped=resultado.tem_sped,
+    )
+    access_token, expires_in = create_access_token(user)
+    return user, access_token, expires_in
 
 
 @auth_router.post(
@@ -39,14 +53,19 @@ def registrar_login(request: LoginCadastroRequest):
             detail="Serviço de autenticação indisponível no momento.",
         ) from exc
 
+    user, access_token, expires_in = _build_auth_payload(resultado)
+
     return LoginCadastroResponse(
         status="cadastrado",
-        login_id=resultado.login_id,
-        empresa_id=resultado.empresa_id,
-        cnpj=resultado.cnpj,
-        email=resultado.email,
-        empresa_nome=resultado.empresa_nome,
-        tem_sped=resultado.tem_sped,
+        login_id=user.login_id,
+        empresa_id=user.empresa_id,
+        cnpj=user.cnpj,
+        email=user.email,
+        empresa_nome=user.empresa_nome,
+        tem_sped=user.tem_sped,
+        access_token=access_token,
+        token_type="Bearer",
+        expires_in=expires_in,
     )
 
 
@@ -68,14 +87,19 @@ def autenticar_login(request: LoginRequest):
             detail="Serviço de autenticação indisponível no momento.",
         ) from exc
 
+    user, access_token, expires_in = _build_auth_payload(resultado)
+
     return LoginResponse(
         status="ok",
-        login_id=resultado.login_id,
-        empresa_id=resultado.empresa_id,
-        cnpj=resultado.cnpj,
-        email=resultado.email,
-        empresa_nome=resultado.empresa_nome,
-        tem_sped=resultado.tem_sped,
+        login_id=user.login_id,
+        empresa_id=user.empresa_id,
+        cnpj=user.cnpj,
+        email=user.email,
+        empresa_nome=user.empresa_nome,
+        tem_sped=user.tem_sped,
+        access_token=access_token,
+        token_type="Bearer",
+        expires_in=expires_in,
     )
 
 

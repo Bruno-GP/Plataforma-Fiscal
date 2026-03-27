@@ -1,7 +1,7 @@
-const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
-const API_BASE_URL = RAW_API_BASE_URL.endsWith("/api")
-  ? RAW_API_BASE_URL
-  : `${RAW_API_BASE_URL.replace(/\/$/, "")}/api`;
+import { API_BASE_URL, apiFetch } from './api';
+import { buildFiscalSearchParams } from './fiscal';
+
+export { parseDecimal } from './fiscal';
 
 export interface NfeKpi {
   total_vendas: number | string;
@@ -82,71 +82,10 @@ export interface KpiComparativoResponse {
   };
 }
 
-export const parseDecimal = (value: unknown): number => {
-  if (typeof value === "number") {
-    return value;
-  }
-
-  if (typeof value !== "string") {
-    return 0;
-  }
-
-  const cleaned = value.replace(/[^\d,.-]/g, "");
-  if (!cleaned) {
-    return 0;
-  }
-
-  if (cleaned.includes(",") && !cleaned.includes(".")) {
-    return Number(cleaned.replace(",", ".")) || 0;
-  }
-
-  return Number(cleaned.replace(/,/g, "")) || 0;
-};
-
-const normalizeCnpjParam = (value?: string): string | null => {
-  if (!value) {
-    return null;
-  }
-
-  const digits = value.replace(/\D/g, "");
-  if (!digits || digits.length < 14) {
-    return null;
-  }
-
-  if ([...digits].every((digit) => digit === "0")) {
-    return null;
-  }
-
-  return digits;
-};
-
-
 export const fetchNfeKpis = async (params: FetchKpiParams = {}): Promise<ConsultaKpiResponse> => {
-  const searchParams = new URLSearchParams();
-
-  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
-  if (cnpjParam) {
-    searchParams.set("emitente_cnpj", cnpjParam);
-  }
-
-  if (params.periodo_ano) {
-    searchParams.set("periodo_ano", String(params.periodo_ano));
-  }
-
-  if (params.periodo_mes) {
-    searchParams.set("periodo_mes", String(params.periodo_mes));
-  }
-
-  if (params.limite) {
-    searchParams.set("limite", String(params.limite));
-  }
-
-  if (params.offset) {
-    searchParams.set("offset", String(params.offset));
-  }
-
+  const searchParams = buildFiscalSearchParams(params);
   const queryString = searchParams.toString();
-  const response = await fetch(`${API_BASE_URL}/nfe/kpis${queryString ? `?${queryString}` : ""}`);
+  const response = await apiFetch(`${API_BASE_URL}/nfe/kpis${queryString ? `?${queryString}` : ""}`);
 
   if (!response.ok) {
     throw new Error("Não foi possível carregar os KPIs da NFe.");
@@ -159,17 +98,10 @@ export const fetchNfeKpisComparativoAtual = async (
   emitenteCnpj?: string,
   email?: string
 ): Promise<KpiComparativoResponse> => {
-  const searchParams = new URLSearchParams();
-
-  const cnpjParam = normalizeCnpjParam(emitenteCnpj);
-  if (cnpjParam) {
-    searchParams.set("emitente_cnpj", cnpjParam);
-  } else if (email) {
-    searchParams.set("email", email);
-  }
+  const searchParams = buildFiscalSearchParams({ emitente_cnpj: emitenteCnpj, email });
 
   const queryString = searchParams.toString();
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_BASE_URL}/nfe/kpis/comparativo/atual${queryString ? `?${queryString}` : ""}`
   );
 
@@ -257,7 +189,7 @@ export const importarXmlArquivos = async (
   const cnpjDigits = cnpjEmpresaOrigem.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_empresa_origem: cnpjDigits });
 
-  const response = await fetch(`${API_BASE_URL}/nfe/xml/importar?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/nfe/xml/importar?${searchParams.toString()}`, {
     method: 'POST',
     body: formData,
     signal: options.signal,
@@ -284,7 +216,7 @@ export const consultarPendenciasXmlImportados = async (
   const digits = cnpjEmitente.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
-  const response = await fetch(`${API_BASE_URL}/nfe/xml/pendencias?${searchParams.toString()}`);
+  const response = await apiFetch(`${API_BASE_URL}/nfe/xml/pendencias?${searchParams.toString()}`);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar pendências de XML.' }));
@@ -320,7 +252,7 @@ export const processarXmlsImportados = async (
   const digits = cnpjEmitente.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
-  const response = await fetch(`${API_BASE_URL}/nfe/xml/processar-importados?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/nfe/xml/processar-importados?${searchParams.toString()}`, {
     method: 'POST',
     signal: options.signal,
   });
@@ -346,23 +278,9 @@ export const fetchNfeAnaliseCompras = async (
   } = {},
   options: RequestOptions = {},
 ): Promise<AnaliseComprasResponse> => {
-  const searchParams = new URLSearchParams();
-  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (cnpjParam) {
-    searchParams.set('emitente_cnpj', cnpjParam);
-  } else if (params.email) {
-    searchParams.set('email', params.email);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
-  if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
-  if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
-
-  const response = await fetch(`${API_BASE_URL}/nfe/analise/compras?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/nfe/analise/compras?${searchParams.toString()}`, {
     signal: options.signal,
   });
 
@@ -384,20 +302,9 @@ export const fetchNfeDashboardCompras = async (
   } = {},
   options: RequestOptions = {},
 ): Promise<DashboardComprasResponse> => {
-  const searchParams = new URLSearchParams();
-  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (cnpjParam) {
-    searchParams.set('emitente_cnpj', cnpjParam);
-  } else if (params.email) {
-    searchParams.set('email', params.email);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-
-  const response = await fetch(`${API_BASE_URL}/nfe/analise/compras/dashboard?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/nfe/analise/compras/dashboard?${searchParams.toString()}`, {
     signal: options.signal,
   });
 
@@ -488,23 +395,9 @@ export const fetchNfeAnaliseVendas = async (
   } = {},
   options: RequestOptions = {},
 ): Promise<AnaliseVendasResponse> => {
-  const searchParams = new URLSearchParams();
-  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (cnpjParam) {
-    searchParams.set('emitente_cnpj', cnpjParam);
-  } else if (params.email) {
-    searchParams.set('email', params.email);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
-  if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
-  if (params.layout?.trim()) searchParams.set('layout', params.layout.trim());
-
-  const response = await fetch(`${API_BASE_URL}/nfe/analise/vendas?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/nfe/analise/vendas?${searchParams.toString()}`, {
     signal: options.signal,
   });
 
@@ -526,20 +419,9 @@ export const fetchNfeDashboardVendas = async (
   } = {},
   options: RequestOptions = {},
 ): Promise<DashboardVendasResponse> => {
-  const searchParams = new URLSearchParams();
-  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (cnpjParam) {
-    searchParams.set('emitente_cnpj', cnpjParam);
-  } else if (params.email) {
-    searchParams.set('email', params.email);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-
-  const response = await fetch(`${API_BASE_URL}/nfe/analise/vendas/dashboard?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/nfe/analise/vendas/dashboard?${searchParams.toString()}`, {
     signal: options.signal,
   });
 
@@ -555,22 +437,9 @@ export const fetchNfeAnaliseClientes = async (
   params: { emitente_cnpj?: string; email?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; gerar_relatorio_ia?: boolean; formato_relatorio?: 'executivo' | 'analitico' } = {},
   options: RequestOptions = {},
 ): Promise<AnaliseClientesResponse> => {
-  const searchParams = new URLSearchParams();
-  const cnpjParam = normalizeCnpjParam(params.emitente_cnpj);
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (cnpjParam) {
-    searchParams.set('emitente_cnpj', cnpjParam);
-  } else if (params.email) {
-    searchParams.set('email', params.email);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
-  if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);
-
-  const response = await fetch(`${API_BASE_URL}/nfe/analise/clientes?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/nfe/analise/clientes?${searchParams.toString()}`, {
     signal: options.signal,
   });
 

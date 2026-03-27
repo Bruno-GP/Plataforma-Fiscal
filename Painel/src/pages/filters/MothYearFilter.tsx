@@ -9,7 +9,6 @@ interface MonthYearFilterProps {
   onMonthChange: (value: string) => void;
   onYearChange: (value: string) => void;
   includeAllMonths?: boolean;
-  allMonthsLabel?: string;
   monthPlaceholder?: string;
   yearPlaceholder?: string;
   className?: string;
@@ -23,7 +22,6 @@ export function MonthYearFilter({
   onMonthChange,
   onYearChange,
   includeAllMonths = true,
-  allMonthsLabel = 'Todos os meses',
   monthPlaceholder = 'Mês',
   yearPlaceholder = 'Ano',
   className,
@@ -61,7 +59,7 @@ export function MonthYearFilter({
             <SelectValue placeholder={yearPlaceholder} />
           </SelectTrigger>
 
-        <SelectContent className="bg-[#0E1525] text-white border-[#1E293B]">
+          <SelectContent className="bg-[#0E1525] text-white border-[#1E293B]">
             {availableYears.map((yearOption) => (
               <SelectItem
                 key={yearOption}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText, FileUp, Loader2, Upload, X } from 'lucide-react';
 
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { saveFiscalOperation } from '@/services/operations';
 import {
   consultarPendenciasXmlImportados,
   importarXmlArquivos,
@@ -68,7 +69,6 @@ export default function ImportacaoXML() {
   const [results, setResults] = useState<ImportacaoXmlArquivoResultado[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendenciasXml, setPendenciasXml] = useState<ImportacaoXmlPendenciasResponse | null>(null);
-  const [isLoadingPendencias, setIsLoadingPendencias] = useState(false);
   const [operationStage, setOperationStage] = useState<OperationStage>('idle');
   const [operationProgress, setOperationProgress] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -113,27 +113,23 @@ export default function ImportacaoXML() {
 
   const possuiPendenciasNaoProcessadas = (pendenciasXml?.total_pendentes ?? 0) > 0;
 
-  const carregarPendenciasXml = async () => {
+  const carregarPendenciasXml = useCallback(async () => {
     if (!user?.emitente_cnpj) {
       setPendenciasXml(null);
       return;
     }
-
-    setIsLoadingPendencias(true);
 
     try {
       const response = await consultarPendenciasXmlImportados(user.emitente_cnpj);
       setPendenciasXml(response);
     } catch {
       setPendenciasXml(null);
-    } finally {
-      setIsLoadingPendencias(false);
     }
-  };
+  }, [user?.emitente_cnpj]);
 
   useEffect(() => {
     void carregarPendenciasXml();
-  }, [user?.emitente_cnpj]);
+  }, [carregarPendenciasXml]);
 
   useEffect(() => {
     if (!isImporting && !isProcessing) {
@@ -282,6 +278,13 @@ export default function ImportacaoXML() {
         title: 'Processamento concluído',
         description: 'Itens, notas e KPIs foram registrados com sucesso.',
       });
+      saveFiscalOperation({
+        type: 'xml-process',
+        status: 'success',
+        title: 'Processamento XML concluido',
+        description: `Foram processados ${cnpjs.length} CNPJ(s) com sucesso.`,
+        cnpj: user?.emitente_cnpj ?? '',
+      });
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['nfe-kpis'] }),
@@ -349,6 +352,13 @@ export default function ImportacaoXML() {
         title: 'Importação concluída',
         description: `Importação finalizada com sucesso. Duplicados: ${duplicados}. Erros: ${erros}.`,
       });
+      saveFiscalOperation({
+        type: 'xml-import',
+        status: erros > 0 || duplicados > 0 ? 'warning' : 'success',
+        title: 'Importacao XML concluida',
+        description: `Importados: ${importResults.filter((item) => item.status === 'importado').length}. Duplicados: ${duplicados}. Erros: ${erros}.`,
+        cnpj: user.emitente_cnpj,
+      });
 
       setSelectedFiles([]);
       await carregarPendenciasXml();
@@ -375,10 +385,24 @@ export default function ImportacaoXML() {
           title: 'Operação cancelada',
           description: 'A importação/processamento dos XMLs foi cancelada na tela.',
         });
+        saveFiscalOperation({
+          type: isProcessing ? 'xml-process' : 'xml-import',
+          status: 'cancelled',
+          title: 'Operacao XML cancelada',
+          description: 'A operacao foi interrompida antes da conclusao.',
+          cnpj: user?.emitente_cnpj ?? '',
+        });
         return;
       }
 
       setOperationStage('error');
+      saveFiscalOperation({
+        type: isProcessing ? 'xml-process' : 'xml-import',
+        status: 'error',
+        title: 'Falha no fluxo XML',
+        description: error instanceof Error ? error.message : 'Nao foi possivel importar e processar os XMLs.',
+        cnpj: user?.emitente_cnpj ?? '',
+      });
       toast({
         title: 'Falha na importação',
         description:

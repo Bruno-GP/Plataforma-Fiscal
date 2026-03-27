@@ -5,7 +5,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { consultarPendenciasXmlImportados } from '@/services/nfe';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
-import { AppHeader } from './AppHeader';
 import { AppSidebar } from './AppSidebar';
 // import { ChatWidget } from '@/components/chat/ChatWidget';
 
@@ -55,8 +54,8 @@ export function MainLayout({ children }: MainLayoutProps) {
                   <span>
                     Ainda faltam XMLs a serem processados ({totalPendentes}). O botão <strong>Processar NFe</strong> continua habilitado.
                   </span>
-                  <Link to="/importacao-xml" className="ml-auto whitespace-nowrap font-medium underline">
-                    Ir para Importação XML
+                  <Link to="/inconsistencias" className="ml-auto whitespace-nowrap font-medium underline">
+                    Abrir central
                   </Link>
                 </div>
               </div>

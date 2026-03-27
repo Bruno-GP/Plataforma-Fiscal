@@ -14,6 +14,10 @@ class LoginCadastroResponse(BaseModel):
     cnpj: str
     email: str
     empresa_nome: str
+    tem_sped: bool
+    access_token: str
+    token_type: str
+    expires_in: int
 
 class LoginRequest(BaseModel):
     email: str = Field(..., description="E-mail do usuário")
@@ -27,3 +31,6 @@ class LoginResponse(BaseModel):
     email: str
     empresa_nome: str
     tem_sped: bool
+    access_token: str
+    token_type: str
+    expires_in: int

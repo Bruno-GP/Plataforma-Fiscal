@@ -12,13 +12,12 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/AnaliseVendas";
 import Clientes from "./pages/Clientes";
-import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 import CadastroEmpresa from "./pages/CadastroEmpresa";
 import ImportacaoXML from "./pages/ImportacaoXML";
-import Atualizacoes from "./pages/Atualizacoes";
 import ImportacaoSPED from "./pages/ImportacaoSPED";
 import AnaliseCompras from "./pages/AnaliseCompras";
+import Inconsistencias from "./pages/Inconsistencias";
 import RelatoriosIA from "./pages/RelatoriosIA";
 
 // QueryClient centraliza cache e invalidação de chamadas HTTP da aplicação.
@@ -66,12 +65,6 @@ const App = () => (
                   </MainLayout>
                 }
               />
-              <Route 
-                path="/analise-vendas" 
-                element={
-                  <Navigate to="/analise-vendas" replace />
-                } 
-              />
               {/* <Route
                 path="/configuracoes"
                 element={
@@ -109,6 +102,14 @@ const App = () => (
                 element={
                   <MainLayout>
                     <RelatoriosIA />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/inconsistencias"
+                element={
+                  <MainLayout>
+                    <Inconsistencias />
                   </MainLayout>
                 }
               />

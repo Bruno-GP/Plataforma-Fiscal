@@ -11,8 +11,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
+from app.core.logger import configure_logging, log_request_cycle
 
 # Instância principal da API (metadados aparecem no /docs automaticamente).
+configure_logging()
+
 app = FastAPI(
     title="API - Agente Extrator NFe",
     version="0.1.0",
@@ -70,6 +73,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.middleware("http")(log_request_cycle)
 
 app.include_router(api_router, prefix="/api")
 

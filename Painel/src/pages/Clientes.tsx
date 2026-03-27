@@ -159,7 +159,6 @@ export default function Clientes() {
         return (a.periodo_mes ?? 0) - (b.periodo_mes ?? 0);
       });
 
-    const latestPeriod = resultados[resultados.length - 1];
     const previousPeriod = resultados[resultados.length - 2];
 
     const previousMap = new Map<string, number>();

@@ -8,9 +8,9 @@ import { RankingCard } from './components/RankingCard';
 import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
 import { EvolucaoChart } from './components/EvolucaoChart';
-import { fetchNfeDashboardVendas, parseDecimal } from '@/services/nfe';
+import { fetchNfeAnaliseVendas, fetchNfeDashboardVendas, parseDecimal } from '@/services/nfe';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchSpedDashboardVendas } from '@/services/sped';
+import { fetchSpedAnaliseVendas, fetchSpedDashboardVendas } from '@/services/sped';
 import { monthLabels } from '../services/utils';
 
 const formatCurrency = (value: number) =>
@@ -61,6 +61,27 @@ export default function Dashboard({
             periodo_ano: Number.isNaN(year) ? undefined : year,
             periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
             limite: 5,
+          }),
+    enabled: hasEmitenteCnpj,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const mapQuery = useQuery({
+    queryKey: ['dashboard-vendas-mapa', emitenteCnpj, user?.tem_sped, year, selectedMonth],
+    queryFn: () =>
+      user?.tem_sped
+        ? fetchSpedAnaliseVendas({
+            emitente_cnpj: emitenteCnpj,
+            periodo_ano: Number.isNaN(year) ? undefined : year,
+            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+            limite: 500,
+          })
+        : fetchNfeAnaliseVendas({
+            emitente_cnpj: emitenteCnpj,
+            email: user?.email,
+            periodo_ano: Number.isNaN(year) ? undefined : year,
+            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+            limite: 500,
           }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
@@ -220,6 +241,31 @@ export default function Dashboard({
     };
   });
 
+  const mapTopCidadesItems = (mapQuery.data?.top_cidades_valor ?? []).map((cidade, index) => {
+    const valorTotal = parseDecimal(cidade.valor_total ?? 0);
+    const percentual = resolvePercentual(valorTotal);
+    const cidadeComUf = cidade.uf?.trim()
+      ? `${cidade.cidade ?? 'Cidade nÃ£o identificada'} - ${cidade.uf.trim().toUpperCase()}`
+      : cidade.cidade ?? 'Cidade nÃ£o identificada';
+
+    return {
+      key: `${cidade.cidade}-${cidade.uf ?? 'sem-uf'}-${index}`,
+      title: cidadeComUf,
+      subtitle:
+        percentual !== null
+          ? `${percentual.toFixed(1)}% do faturamento`
+          : 'ParticipaÃ§Ã£o nÃ£o informada',
+      value: formatCurrency(valorTotal),
+      rawValue: valorTotal,
+      percent: percentual,
+    };
+  });
+
+  const mapTopRegioesItems = (mapQuery.data?.top_regioes_valor ?? []).map((regiao) => ({
+    regiao: regiao.regiao,
+    rawValue: parseDecimal(regiao.valor_total ?? 0),
+  }));
+
   return (
     <div className="space-y-6 py-6">
       <Header
@@ -298,7 +344,8 @@ export default function Dashboard({
       />
 
       <SalesRegionCityMap
-        topCidadesItems={topCidadesItems}
+        topCidadesItems={mapTopCidadesItems.length ? mapTopCidadesItems : topCidadesItems}
+        topRegioesItems={mapTopRegioesItems}
         totalFaturamento={totalFaturamento}
         formatCurrency={formatCurrency}
       />

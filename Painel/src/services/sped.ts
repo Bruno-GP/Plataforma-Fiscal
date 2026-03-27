@@ -199,6 +199,8 @@ export interface AnaliseVendasResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_vendido: number | string;
+  top_regioes_valor: Array<{ regiao: string; valor_total: number | string; quantidade_documentos: number }>;
+  top_cidades_valor: Array<{ cidade: string; uf?: string; valor_total: number | string; quantidade_documentos: number }>;
   top_clientes_valor: Array<{ cliente: string; valor_total: number | string; quantidade_documentos: number }>;
   top_clientes_quantidade: Array<{ cliente: string; valor_total: number | string; quantidade_documentos: number }>;
   top_produtos_valor: RankingProdutoCompra[];

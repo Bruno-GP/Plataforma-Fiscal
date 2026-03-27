@@ -107,12 +107,28 @@ class RankingProdutoVenda(BaseModel):
   valor_total: Decimal = Decimal("0.00")
   quantidade_total: Decimal = Decimal("0.00")
 
+
+class RankingRegiaoVenda(BaseModel):
+  regiao: str
+  valor_total: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+
+
+class RankingCidadeVenda(BaseModel):
+  cidade: str
+  uf: str = ""
+  valor_total: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+
+
 class AnaliseVendasResponse(BaseModel):
   status: str
   emitente_cnpj: str
   periodo_ano: int | None = None
   periodo_mes: int | None = None
   total_vendido: Decimal = Decimal("0.00")
+  top_regioes_valor: list[RankingRegiaoVenda] = Field(default_factory=list)
+  top_cidades_valor: list[RankingCidadeVenda] = Field(default_factory=list)
   top_clientes_valor: list[RankingClienteVenda] = Field(default_factory=list)
   top_clientes_quantidade: list[RankingClienteVenda] = Field(default_factory=list)
   top_produtos_valor: list[RankingProdutoVenda] = Field(default_factory=list)

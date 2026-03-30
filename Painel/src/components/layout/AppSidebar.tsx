@@ -1,4 +1,14 @@
-import { AlertTriangle, FileDigit, FileSearch, FileUp, LayoutDashboard, LogOut, Sparkles, Users } from 'lucide-react';
+import {
+  AlertTriangle,
+  FileDigit,
+  FileSearch,
+  FileUp,
+  LayoutDashboard,
+  ListTree,
+  LogOut,
+  Sparkles,
+  Users,
+} from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { NavLink } from '@/components/NavLink';
@@ -6,27 +16,27 @@ import { Button } from '@/components/ui/button';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarHeader,
-  SidebarFooter
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 
 const menuItemsBase = [
   { title: 'Vendas', url: '/analise-vendas', icon: LayoutDashboard },
+  { title: 'Detalhe vendas', url: '/detalhamento-vendas', icon: ListTree },
   { title: 'Clientes', url: '/analise-clientes', icon: Users },
-  // { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
-  // { title: 'Configurações', url: '/configuracoes', icon: Settings },
 ];
 
-const menuItemImportacaoXml = { title: 'Importação XML', url: '/importacao-xml', icon: FileUp };
-const menuItemImportacaoSped = { title: 'Importações SPED', url: '/importacao-sped', icon: FileDigit };
-const menuItemAnaliseFiscal = { title: 'Compras', url: '/analise-compras', icon: FileSearch };
-const menuItemRelatoriosIA = { title: 'Relatórios com IA', url: '/relatorios-ia', icon: Sparkles };
+const menuItemImportacaoXml = { title: 'Importacao XML', url: '/importacao-xml', icon: FileUp };
+const menuItemImportacaoSped = { title: 'Importacoes SPED', url: '/importacao-sped', icon: FileDigit };
+const menuItemAnaliseCompras = { title: 'Compras', url: '/analise-compras', icon: FileSearch };
+const menuItemDetalhamentoCompras = { title: 'Detalhe compras', url: '/detalhamento-compras', icon: ListTree };
+const menuItemRelatoriosIA = { title: 'Relatorios com IA', url: '/relatorios-ia', icon: Sparkles };
 const menuItemInconsistencias = { title: 'Inconsistencias', url: '/inconsistencias', icon: AlertTriangle };
 
 export function AppSidebar() {
@@ -35,8 +45,22 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
 
   const menuItems = user?.tem_sped
-    ? [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemInconsistencias, menuItemImportacaoSped]
-    : [...menuItemsBase, menuItemAnaliseFiscal, menuItemRelatoriosIA, menuItemInconsistencias, menuItemImportacaoXml];
+    ? [
+        ...menuItemsBase,
+        menuItemAnaliseCompras,
+        menuItemDetalhamentoCompras,
+        menuItemRelatoriosIA,
+        menuItemInconsistencias,
+        menuItemImportacaoSped,
+      ]
+    : [
+        ...menuItemsBase,
+        menuItemAnaliseCompras,
+        menuItemDetalhamentoCompras,
+        menuItemRelatoriosIA,
+        menuItemInconsistencias,
+        menuItemImportacaoXml,
+      ];
 
   const handleLogout = () => {
     logout();
@@ -48,33 +72,27 @@ export function AppSidebar() {
       variant="sidebar"
       collapsible="none"
       className="
-        shrink-0
         sticky top-0
         h-svh
         w-56
+        shrink-0
+        border-r border-white/10
         bg-[#0E1525]
         text-white
-        border-r
-        border-white/10
       "
     >
       <SidebarHeader className="gap-3 bg-[#0E1525] p-3">
         <div className="flex items-center justify-between gap-2">
           <div
             className="
-              flex min-w-0 items-center rounded-md bg-[#0E1525] text-white text-sm font-semibold
-              border border-white/10 overflow-hidden
-              px-2.5 py-1.5 w-full
+              flex min-w-0 w-full items-center overflow-hidden rounded-md border border-white/10
+              bg-[#0E1525] px-2.5 py-1.5 text-sm font-semibold text-white
             "
             title={user?.name ?? 'Empresa'}
           >
             <span className="block w-full truncate whitespace-nowrap text-xs">
               {user?.name ?? 'Empresa'}
             </span>
-
-            {/* <span className="hidden text-xs group-data-[collapsible=icon]:block">
-              {(user?.name ?? 'E').slice(0, 1).toUpperCase()}
-            </span> */}
           </div>
         </div>
       </SidebarHeader>
@@ -114,11 +132,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="bg-[#0E1525] p-3">
-        <Button
-          variant="outline"
-          onClick={handleLogout}
-          title="Sair"
-        >
+        <Button variant="outline" onClick={handleLogout} title="Sair">
           <LogOut className="h-4 w-4" />
           <span>Sair</span>
         </Button>

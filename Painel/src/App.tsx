@@ -14,6 +14,8 @@ import Dashboard from "./pages/AnaliseVendas";
 import Clientes from "./pages/Clientes";
 import NotFound from "./pages/NotFound";
 import CadastroEmpresa from "./pages/CadastroEmpresa";
+import DetalhamentoCompras from "./pages/DetalhamentoCompras";
+import DetalhamentoVendas from "./pages/DetalhamentoVendas";
 import ImportacaoXML from "./pages/ImportacaoXML";
 import ImportacaoSPED from "./pages/ImportacaoSPED";
 import AnaliseCompras from "./pages/AnaliseCompras";
@@ -94,6 +96,22 @@ const App = () => (
                 element={
                   <MainLayout>
                     <AnaliseComprasRoute />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/detalhamento-vendas"
+                element={
+                  <MainLayout>
+                    <DetalhamentoVendas />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/detalhamento-compras"
+                element={
+                  <MainLayout>
+                    <DetalhamentoCompras />
                   </MainLayout>
                 }
               />

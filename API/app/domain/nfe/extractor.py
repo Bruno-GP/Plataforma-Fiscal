@@ -1,10 +1,6 @@
 from typing import List
 from datetime import datetime, date
 from decimal import Decimal
-from pathlib import Path
-from functools import lru_cache
-import json
-
 import re
 import logging
 import unicodedata
@@ -14,6 +10,7 @@ from app.domain.nfe.normalization import (
     normalizar_nome_cliente,
 )
 from app.domain.nfe.xml_models import XmlNFe
+from app.services.Municipios.municipios_catalog_service import MunicipiosCatalogService
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
@@ -211,34 +208,8 @@ def _normalizar_chave_municipio(valor: str) -> str:
     sem_acentos = unicodedata.normalize("NFD", texto)
     return "".join(ch for ch in sem_acentos if unicodedata.category(ch) != "Mn")
 
-@lru_cache(maxsize=1)
 def _carregar_municipios() -> tuple[dict[str, tuple[str, str]], dict[str, str], dict[str, str]]:
-    caminho_municipios = Path(__file__).resolve().parent.parent.parent / "services" / "Municipios" / "LL-municipios.json"
-    try:
-        with caminho_municipios.open(encoding="utf-8") as arquivo:
-            dados = json.load(arquivo)
-    except (OSError, json.JSONDecodeError):
-        return {}, {}, {}
-
-    municipios_por_codigo: dict[str, tuple[str, str]] = {}
-    municipios_por_nome: dict[str, str] = {}
-    uf_por_nome: dict[str, str] = {}
-
-    features = dados.get("features", []) if isinstance(dados, dict) else []
-    for item in features if isinstance(features, list) else []:
-        propriedades = item.get("properties", {}) if isinstance(item, dict) else {}
-        codigo = "".join(ch for ch in str(propriedades.get("id", "")) if ch.isdigit())
-        nome = str(propriedades.get("name", "")).strip()
-        nome_normalizado = _normalizar_chave_municipio(nome)
-        uf = _UF_POR_IBGE_PREFIXO.get(codigo[:2], "") if len(codigo) >= 2 else ""
-        
-        if codigo and nome:
-            municipios_por_codigo[codigo] = (nome, uf)
-            municipios_por_nome[nome_normalizado] = nome
-            if uf and nome_normalizado not in uf_por_nome:
-                uf_por_nome[nome_normalizado] = uf
-
-    return municipios_por_codigo, municipios_por_nome, uf_por_nome
+    return MunicipiosCatalogService.carregar_mapas()
 
 def _resolver_nome_municipio(codigo_ou_nome: str) -> str:
     valor = (codigo_ou_nome or "").strip()

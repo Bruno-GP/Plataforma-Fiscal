@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { TrendingDown, TrendingUp, Users, Percent } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Header } from './components/Header';
 import { RankingCard } from './components/RankingCard';
 import { StatCard } from './components/StatCard';
@@ -278,6 +280,12 @@ export default function Dashboard({
         onMonthChange={setSelectedMonth}
         onYearChange={setSelectedYear}
       />
+
+      <div className="flex justify-end">
+        <Button asChild variant="outline">
+          <Link to="/detalhamento-vendas">Abrir detalhamento analítico</Link>
+        </Button>
+      </div>
 
       {dashboardQuery.isError && (
         <Alert variant="destructive">

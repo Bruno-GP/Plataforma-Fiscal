@@ -355,6 +355,45 @@ export interface AnaliseClientesResponse {
   relatorio_ia?: string | null;
 }
 
+export interface NfeItemDetalhado {
+  item_numero: number;
+  produto_codigo: string;
+  descricao: string;
+  ncm: string;
+  descricao_ncm?: string | null;
+  cfop: string;
+  quantidade: number | string;
+  valor_unitario: number | string;
+  valor_total: number | string;
+}
+
+export interface NfeNotaDetalhada {
+  numero_nf: string;
+  emitente_cnpj: string;
+  modelo: string;
+  data_emissao: string;
+  natureza_operacao: string;
+  destinatario_documento: string;
+  destinatario_nome: string;
+  destinatario_cidade: string;
+  destinatario_uf: string;
+  valor_produtos: number | string;
+  valor_desconto: number | string;
+  valor_frete: number | string;
+  valor_icms: number | string;
+  valor_ipi: number | string;
+  valor_pis: number | string;
+  valor_cofins: number | string;
+  valor_total_nf: number | string;
+  itens: NfeItemDetalhado[];
+}
+
+export interface ConsultaNotasDetalhadasResponse {
+  status: string;
+  total: number;
+  notas: NfeNotaDetalhada[];
+}
+
 export interface SerieMensalVendasItem {
   periodo_ano: number;
   periodo_mes: number;
@@ -451,4 +490,30 @@ export const fetchNfeAnaliseClientes = async (
   }
 
   return response.json() as Promise<AnaliseClientesResponse>;
+};
+
+export const fetchNfeNotasDetalhadas = async (
+  params: {
+    emitente_cnpj?: string;
+    email?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    tipo_operacao?: 'todas' | 'vendas' | 'compras';
+    limite?: number;
+    offset?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<ConsultaNotasDetalhadasResponse> => {
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/nfe/notas/detalhado?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar notas detalhadas da NFe.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar notas detalhadas da NFe.');
+  }
+
+  return response.json() as Promise<ConsultaNotasDetalhadasResponse>;
 };

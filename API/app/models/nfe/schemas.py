@@ -28,6 +28,7 @@ class NFeItem(BaseModel):
   produto_codigo: str
   descricao: str
   ncm: str
+  descricao_ncm: Optional[str] = None
   cfop: str
 
   quantidade: Decimal

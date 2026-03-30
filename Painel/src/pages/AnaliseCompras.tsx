@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Box, Package, ShoppingCart, Truck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchNfeDashboardCompras, parseDecimal } from '@/services/nfe';
 import { fetchSpedDashboardCompras } from '@/services/sped';
@@ -169,6 +171,12 @@ export default function AnaliseFiscal() {
         onMonthChange={setSelectedMonth}
         onYearChange={setSelectedYear}
       />
+
+      <div className="flex justify-end">
+        <Button asChild variant="outline">
+          <Link to="/detalhamento-compras">Abrir detalhamento analítico</Link>
+        </Button>
+      </div>
 
       {dashboardQuery.isError && (
         <Alert variant="destructive">

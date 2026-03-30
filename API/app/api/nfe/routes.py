@@ -1,16 +1,22 @@
 from decimal import Decimal
 
+import psycopg
+
 from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File
 
 from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
 from app.core.security import require_company_scope
 from app.services.nfe.process_nfe import ProcessarNFeService
 from app.services.nfe.nfe_consulta_service import NFeConsultaService
+from app.services.nfe.nfe_notas_service import NFeNotasService
+from app.services.NCM.ncm_catalog_service import NCMCatalogService
 from app.services.company_profile_service import CompanyProfileService
 from app.services.nfe.xml_importacao_service import XMLImportacaoService
 from app.services.AI.openai_report_service import OpenAIReportService
 from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
+  NFeItem,
+  NFeNota,
   ConsultaNFeResponse,
   ConsultaKPIResponse,
   ImportacaoXMLResponse,
@@ -41,6 +47,22 @@ def _validar_empresa_xml(cnpj: str):
       status_code=status.HTTP_400_BAD_REQUEST,
       detail="Esta empresa está configurada para SPED Fiscal e não para XML.",
     )
+
+def _nota_possui_tipo_operacao(nota, tipo_operacao: str) -> bool:
+  if tipo_operacao == "todas":
+    return True
+
+  prefixos = {"vendas": {"5", "6", "7"}, "compras": {"1", "2", "3"}}.get(tipo_operacao, set())
+  if not prefixos:
+    return True
+
+  for item in nota.itens:
+    cfop = "".join(ch for ch in str(item.cfop or "") if ch.isdigit())
+    if cfop and cfop[0] in prefixos:
+      return True
+
+  return False
+
 
 # -------------------------
 # Processamento
@@ -695,5 +717,97 @@ def consultar_notas(
     status_code=status.HTTP_501_NOT_IMPLEMENTED,
     detail="Consulta detalhada de notas ainda não implementada. Use GET /nfe/kpis para KPIs consolidados.",
   )
+
+@nfe_router.get("/notas/detalhado", response_model=ConsultaNFeResponse)
+def consultar_notas_detalhadas(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None, ge=2000, le=2100),
+  periodo_mes: int | None = Query(default=None, ge=1, le=12),
+  tipo_operacao: str = Query(default="todas", pattern="^(todas|vendas|compras)$"),
+  limite: int = Query(default=100, ge=1, le=500),
+  offset: int = Query(default=0, ge=0),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj vÃ¡lido ou um email cadastrado.",
+    )
+
+  if periodo_ano is None or periodo_mes is None:
+    try:
+      periodo_ano, periodo_mes = service.obter_ultimo_periodo(emitente_resolvido)
+    except ValueError as exc:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=str(exc),
+      ) from exc
+
+  _validar_empresa_xml(emitente_resolvido)
+  notas_service = NFeNotasService()
+  ncm_catalog_service = NCMCatalogService()
+
+  try:
+    with psycopg.connect(**notas_service.conn_params) as conn:
+      notas = notas_service.listar_notas_periodo_para_kpi(
+        conn=conn,
+        cnpj_emitente=emitente_resolvido,
+        periodo_ano=periodo_ano,
+        periodo_mes=periodo_mes,
+      )
+  except psycopg.Error as exc:
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail="NÃ£o foi possÃ­vel consultar as notas deste perÃ­odo.",
+    ) from exc
+
+  notas_filtradas = [nota for nota in notas if _nota_possui_tipo_operacao(nota, tipo_operacao)]
+  total = len(notas_filtradas)
+  notas_paginadas = [
+    NFeNota(
+      numero_nf=str(nota.numero_nf),
+      emitente_cnpj=nota.emitente_cnpj,
+      modelo=nota.modelo,
+      data_emissao=nota.data_emissao,
+      natureza_operacao=nota.natureza_operacao,
+      destinatario_documento=nota.destinatario_documento,
+      destinatario_nome=nota.destinatario_nome,
+      destinatario_cidade=nota.destinatario_cidade,
+      destinatario_uf=nota.destinatario_uf,
+      valor_produtos=nota.valor_produtos,
+      valor_desconto=nota.valor_desconto,
+      valor_frete=nota.valor_frete,
+      valor_icms=nota.valor_icms,
+      valor_ipi=nota.valor_ipi,
+      valor_pis=nota.valor_pis,
+      valor_cofins=nota.valor_cofins,
+      valor_total_nf=nota.valor_total_nf,
+      itens=[
+        NFeItem(
+          item_numero=item.numero_item,
+          produto_codigo=item.codigo_produto,
+          descricao=item.descricao,
+          ncm=item.ncm,
+          descricao_ncm=ncm_catalog_service.obter_descricao(item.ncm),
+          cfop=item.cfop,
+          quantidade=item.quantidade,
+          valor_unitario=item.valor_unitario,
+          valor_total=item.valor_total,
+        )
+        for item in nota.itens
+      ],
+    )
+    for nota in notas_filtradas[offset:offset + limite]
+  ]
+
+  return ConsultaNFeResponse(status="ok", total=total, notas=notas_paginadas)
+
 
 router.include_router(nfe_router)

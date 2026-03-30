@@ -136,7 +136,7 @@ export function DetalhamentoVendasRegiaoMode({
                                   <TableRow className="border-slate-800 bg-slate-950/80 hover:bg-slate-950/80">
                                     <TableHead className="text-slate-300">Cod do produto</TableHead>
                                     <TableHead className="text-slate-300">Nome do produto</TableHead>
-                                    <TableHead className="text-slate-300">Notas</TableHead>
+                                    <TableHead className="text-slate-300">Nota</TableHead>
                                     <TableHead className="text-slate-300">QTD vendida</TableHead>
                                     <TableHead className="text-right text-slate-300">Valor total</TableHead>
                                   </TableRow>
@@ -146,7 +146,9 @@ export function DetalhamentoVendasRegiaoMode({
                                     <TableRow key={productEntry.key} className="border-slate-800 hover:bg-slate-800/55">
                                       <TableCell className="font-medium text-slate-100">{productEntry.code}</TableCell>
                                       <TableCell className="text-slate-200">{productEntry.description}</TableCell>
-                                      <TableCell className="text-slate-300">{productEntry.notesCount}</TableCell>
+                                      <TableCell className="text-slate-300">
+                                        {productEntry.noteNumbers.join(', ') || '-'}
+                                      </TableCell>
                                       <TableCell className="text-slate-300">{productEntry.totalQuantity.toFixed(2)}</TableCell>
                                       <TableCell className="text-right font-medium text-slate-100">
                                         {formatCurrency(productEntry.totalValue)}

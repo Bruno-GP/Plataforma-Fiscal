@@ -12,6 +12,7 @@ export type RegionProduct = {
   totalQuantity: number;
   totalValue: number;
   notesCount: number;
+  noteNumbers: string[];
 };
 
 export type RegionClient = {
@@ -126,21 +127,25 @@ export const buildRegionHierarchy = (notas: NfeNotaDetalhada[]): RegionState[] =
       const productKey = `${clientKey}-produto-${productCode}-${productDescription.toLowerCase()}`;
 
       let productEntry = clientEntry.products.find((entry) => entry.key === productKey);
-      if (!productEntry) {
-        productEntry = {
-          key: productKey,
-          code: productCode,
-          description: productDescription,
-          totalQuantity: 0,
-          totalValue: 0,
-          notesCount: 0,
-        };
-        clientEntry.products.push(productEntry);
-      }
+        if (!productEntry) {
+          productEntry = {
+            key: productKey,
+            code: productCode,
+            description: productDescription,
+            totalQuantity: 0,
+            totalValue: 0,
+            notesCount: 0,
+            noteNumbers: [],
+          };
+          clientEntry.products.push(productEntry);
+        }
 
-      productEntry.totalQuantity += parseDecimal(item.quantidade);
-      productEntry.totalValue += parseDecimal(item.valor_total);
-      productEntry.notesCount += 1;
+        productEntry.totalQuantity += parseDecimal(item.quantidade);
+        productEntry.totalValue += parseDecimal(item.valor_total);
+        productEntry.notesCount += 1;
+        if (!productEntry.noteNumbers.includes(nota.numero_nf)) {
+          productEntry.noteNumbers.push(nota.numero_nf);
+        }
     }
   }
 

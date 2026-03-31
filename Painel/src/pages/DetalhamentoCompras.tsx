@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, FileText, Package, ReceiptText, Truck } from 'lucide-react';
+import { ArrowRight, Box, Package, ShoppingCart, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -8,11 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { DetalhamentoComprasNotaMode } from '@/pages/components/DetalhamentoComprasNotaMode';
 import { Header } from '@/pages/components/Header';
+import { RankingCard } from '@/pages/components/RankingCard';
 import { StatCard } from '@/pages/components/StatCard';
-import { fetchNfeKpis, fetchNfeNotasDetalhadas, parseDecimal } from '@/services/nfe';
-import { fetchSpedKpis } from '@/services/sped';
+import {
+  fetchNfeDashboardCompras,
+  parseDecimal,
+} from '@/services/nfe';
+import { fetchSpedDashboardCompras } from '@/services/sped';
 import { formatCurrency, monthLabels } from '@/services/utils';
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
@@ -24,9 +27,6 @@ export default function DetalhamentoCompras() {
   const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
-  const [openNoteValues, setOpenNoteValues] = useState<string[]>([]);
-  const [openSupplierValues, setOpenSupplierValues] = useState<string[]>([]);
-  const [openNcmValues, setOpenNcmValues] = useState<string[]>([]);
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
@@ -34,178 +34,161 @@ export default function DetalhamentoCompras() {
   const yearNumber = Number.parseInt(selectedYear, 10);
   const isSped = Boolean(user?.tem_sped);
 
-  const yearsQuery = useQuery({
-    queryKey: ['detalhamento-compras-anos', emitenteCnpj, isSped],
+  const dashboardQuery = useQuery({
+    queryKey: ['detalhamento-compras-dashboard', emitenteCnpj, isSped, yearNumber, selectedMonth],
     queryFn: () =>
       isSped
-        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
-        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+        ? fetchSpedDashboardCompras({
+            emitente_cnpj: emitenteCnpj,
+            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+            limite: 5,
+          })
+        : fetchNfeDashboardCompras({
+            emitente_cnpj: emitenteCnpj,
+            email: user?.email,
+            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+            limite: 5,
+          }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
-  const notasQuery = useQuery({
-    queryKey: ['detalhamento-compras-notas', emitenteCnpj, selectedYear, selectedMonth],
-    queryFn: () =>
-      fetchNfeNotasDetalhadas({
-        emitente_cnpj: emitenteCnpj,
-        email: user?.email,
-        periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-        periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-        tipo_operacao: 'compras',
-        limite: 100,
-      }),
-    enabled: hasEmitenteCnpj && !isSped,
-    staleTime: 5 * 60 * 1000,
-  });
+  const availableYears = dashboardQuery.data?.anos_disponiveis?.length
+    ? dashboardQuery.data.anos_disponiveis
+    : [yearNumber];
 
-  const availableYears = useMemo(() => {
-    const years = new Set<number>();
-    for (const item of yearsQuery.data?.resultados ?? []) {
-      if (item.periodo_ano) years.add(item.periodo_ano);
+  useEffect(() => {
+    if (!dashboardQuery.data?.anos_disponiveis?.length) return;
+    if (!dashboardQuery.data.anos_disponiveis.includes(yearNumber)) {
+      setSelectedYear(String(dashboardQuery.data.anos_disponiveis[0]));
     }
-    return years.size ? [...years].sort((a, b) => b - a) : [new Date().getFullYear()];
-  }, [yearsQuery.data]);
+  }, [dashboardQuery.data?.anos_disponiveis, yearNumber]);
 
-  useEffect(() => {
-    if (!availableYears.length) return;
-    if (!availableYears.includes(Number.parseInt(selectedYear, 10))) {
-      setSelectedYear(String(availableYears[0]));
-    }
-  }, [availableYears, selectedYear]);
-
-  const notas = useMemo(() => notasQuery.data?.notas ?? [], [notasQuery.data?.notas]);
-  const totalComprado = notas.reduce((total, nota) => total + parseDecimal(nota.valor_total_nf), 0);
-  const ticketMedio = notas.length ? totalComprado / notas.length : 0;
-  const totalItens = notas.reduce((total, nota) => total + nota.itens.length, 0);
-  const maiorNota = notas.reduce((max, nota) => Math.max(max, parseDecimal(nota.valor_total_nf)), 0);
-
-  const noteAccordionValues = useMemo(
-    () => notas.map((nota) => `${nota.numero_nf}-${nota.data_emissao}`),
-    [notas],
+  const currentData = dashboardQuery.data?.resumo_atual;
+  const previousData = dashboardQuery.data?.resumo_anterior;
+  const currentTotalComprado = parseDecimal(currentData?.total_comprado ?? 0);
+  const previousTotalComprado = parseDecimal(previousData?.total_comprado ?? 0);
+  const currentDocCount = (currentData?.top_fornecedores_quantidade ?? []).reduce(
+    (acc, row) => acc + (row.quantidade_documentos ?? 0),
+    0,
   );
-  const supplierAccordionValues = useMemo(
-    () => notas.map((nota) => `fornecedor-${nota.numero_nf}-${nota.data_emissao}`),
-    [notas],
+  const previousDocCount = (previousData?.top_fornecedores_quantidade ?? []).reduce(
+    (acc, row) => acc + (row.quantidade_documentos ?? 0),
+    0,
   );
-  const ncmAccordionValues = useMemo(
-    () =>
-      notas.flatMap((nota) =>
-        Array.from(new Set(nota.itens.map((item) => item.ncm || 'sem-ncm'))).map(
-          (ncm) => `ncm-${nota.numero_nf}-${nota.data_emissao}-${ncm}`,
-        ),
-      ),
-    [notas],
+  const currentItemCount = (currentData?.top_produtos_quantidade ?? []).reduce(
+    (acc, row) => acc + parseDecimal(row.quantidade_total ?? 0),
+    0,
   );
+  const previousItemCount = (previousData?.top_produtos_quantidade ?? []).reduce(
+    (acc, row) => acc + parseDecimal(row.quantidade_total ?? 0),
+    0,
+  );
+  const currentTicketMedio = currentDocCount ? currentTotalComprado / currentDocCount : 0;
+  const previousTicketMedio = previousDocCount ? previousTotalComprado / previousDocCount : 0;
 
-  useEffect(() => {
-    setOpenNoteValues((current) => current.filter((value) => noteAccordionValues.includes(value)));
-  }, [noteAccordionValues]);
-
-  useEffect(() => {
-    setOpenSupplierValues((current) => current.filter((value) => supplierAccordionValues.includes(value)));
-  }, [supplierAccordionValues]);
-
-  useEffect(() => {
-    setOpenNcmValues((current) => current.filter((value) => ncmAccordionValues.includes(value)));
-  }, [ncmAccordionValues]);
-
-  const allNotesOpen =
-    noteAccordionValues.length > 0 && noteAccordionValues.every((value) => openNoteValues.includes(value));
-  const allSuppliersOpen =
-    supplierAccordionValues.length > 0 &&
-    supplierAccordionValues.every((value) => openSupplierValues.includes(value));
-  const allNcmsOpen =
-    ncmAccordionValues.length > 0 && ncmAccordionValues.every((value) => openNcmValues.includes(value));
-
-  const levelButtons = [
-    {
-      key: 'nivel-1',
-      title: 'Nota',
-      isOpen: allNotesOpen,
-      onClick: () => setOpenNoteValues(allNotesOpen ? [] : noteAccordionValues),
-    },
-    {
-      key: 'nivel-2',
-      title: 'Fornecedor',
-      isOpen: allSuppliersOpen,
-      onClick: () => {
-        if (allSuppliersOpen) {
-          setOpenSupplierValues([]);
-          return;
-        }
-        setOpenNoteValues(noteAccordionValues);
-        setOpenSupplierValues(supplierAccordionValues);
-      },
-    },
-    {
-      key: 'nivel-3',
-      title: 'NCM',
-      isOpen: allNcmsOpen,
-      onClick: () => {
-        if (allNcmsOpen) {
-          setOpenNcmValues([]);
-          return;
-        }
-        setOpenNoteValues(noteAccordionValues);
-        setOpenSupplierValues(supplierAccordionValues);
-        setOpenNcmValues(ncmAccordionValues);
-      },
-    },
-    {
-      key: 'nivel-4',
-      title: 'Produto',
-      isOpen: allNcmsOpen,
-      onClick: () => {
-        if (allNcmsOpen) {
-          setOpenNcmValues([]);
-          return;
-        }
-        setOpenNoteValues(noteAccordionValues);
-        setOpenSupplierValues(supplierAccordionValues);
-        setOpenNcmValues(ncmAccordionValues);
-      },
-    },
-  ] as const;
+  const safePercentage = (current: number, previous: number) =>
+    previous ? ((current - previous) / previous) * 100 : 0;
 
   const stats = [
     {
-      title: 'Compras detalhadas',
-      value: formatCurrency(totalComprado),
-      description: `${notas.length} notas no recorte`,
-      icon: ReceiptText,
-      trend: 'up',
+      title: 'Total Comprado',
+      value: formatCurrency(currentTotalComprado),
+      description: `${safePercentage(currentTotalComprado, previousTotalComprado) >= 0 ? '+' : ''}${safePercentage(currentTotalComprado, previousTotalComprado).toFixed(1)}%`,
+      icon: ShoppingCart,
+      trend: currentTotalComprado >= previousTotalComprado ? 'up' : 'down',
       accentClass: 'border-l-sky-500',
-      appendPreviousMonthLabel: false,
     },
     {
-      title: 'Ticket medio por nota',
-      value: formatCurrency(ticketMedio),
-      description: 'Leitura nota a nota',
-      icon: FileText,
-      trend: 'up',
-      accentClass: 'border-l-emerald-500',
-      appendPreviousMonthLabel: false,
-    },
-    {
-      title: 'Itens mapeados',
-      value: String(totalItens),
-      description: 'Produtos vinculados as compras',
-      icon: Package,
-      trend: 'up',
-      accentClass: 'border-l-amber-400',
-      appendPreviousMonthLabel: false,
-    },
-    {
-      title: 'Maior nota',
-      value: formatCurrency(maiorNota),
-      description: 'Pico do periodo',
+      title: 'Documentos de Compra (Top 5 fornecedores)',
+      value: currentDocCount.toString(),
+      description: `${safePercentage(currentDocCount, previousDocCount) >= 0 ? '+' : ''}${safePercentage(currentDocCount, previousDocCount).toFixed(1)}%`,
       icon: Truck,
-      trend: 'up',
+      trend: currentDocCount >= previousDocCount ? 'up' : 'down',
+      accentClass: 'border-l-emerald-500',
+    },
+    {
+      title: 'Quantidade Comprada',
+      value: currentItemCount.toFixed(2),
+      description: `${safePercentage(currentItemCount, previousItemCount) >= 0 ? '+' : ''}${safePercentage(currentItemCount, previousItemCount).toFixed(1)}%`,
+      icon: Package,
+      trend: currentItemCount >= previousItemCount ? 'up' : 'down',
+      accentClass: 'border-l-amber-400',
+    },
+    {
+      title: 'Ticket Medio por Compra',
+      value: formatCurrency(currentTicketMedio),
+      description: `${safePercentage(currentTicketMedio, previousTicketMedio) >= 0 ? '+' : ''}${safePercentage(currentTicketMedio, previousTicketMedio).toFixed(1)}%`,
+      icon: Box,
+      trend: currentTicketMedio >= previousTicketMedio ? 'up' : 'down',
       accentClass: 'border-l-violet-500',
-      appendPreviousMonthLabel: false,
     },
   ] as const;
+
+  const purchasePanels = useMemo(
+    () => [
+      {
+        title: 'Top Fornecedores',
+        description: 'Fornecedores com maior valor de compras no periodo',
+        items: (currentData?.top_fornecedores_valor ?? []).map((row, index) => {
+          const valorTotal = parseDecimal(row.valor_total);
+          const percentual = currentTotalComprado ? (valorTotal / currentTotalComprado) * 100 : null;
+
+          return {
+            key: `${row.fornecedor}-${index}`,
+            title: row.fornecedor,
+            subtitle: `${row.quantidade_documentos} documentos`,
+            value: formatCurrency(valorTotal),
+            rawValue: valorTotal,
+            percent: percentual,
+          };
+        }),
+        loadingMessage: 'Carregando ranking de fornecedores...',
+      },
+      {
+        title: 'Top Produtos por Valor',
+        description: 'Produtos com maior valor de compra no periodo',
+        items: (currentData?.top_produtos_valor ?? []).map((row, index) => {
+          const valorTotal = parseDecimal(row.valor_total);
+          const percentual = currentTotalComprado ? (valorTotal / currentTotalComprado) * 100 : null;
+
+          return {
+            key: `${row.produto}-${index}`,
+            title: row.produto,
+            subtitle: `Qtd. ${parseDecimal(row.quantidade_total).toFixed(2)}`,
+            value: formatCurrency(valorTotal),
+            rawValue: valorTotal,
+            percent: percentual,
+          };
+        }),
+        loadingMessage: 'Carregando ranking de produtos...',
+      },
+      {
+        title: 'Top Produtos por Quantidade',
+        description: 'Produtos mais comprados no periodo',
+        items: (currentData?.top_produtos_quantidade ?? []).map((row, index) => {
+          const quantidade = parseDecimal(row.quantidade_total);
+          const percentual = currentItemCount ? (quantidade / currentItemCount) * 100 : null;
+          const valorTotal = parseDecimal(row.valor_total);
+
+          return {
+            key: `${row.produto}-${index}-quantidade`,
+            title: row.produto,
+            subtitle: `${quantidade.toFixed(2)} itens comprados`,
+            value: formatCurrency(valorTotal),
+            rawValue: valorTotal,
+            percent: percentual,
+          };
+        }),
+        loadingMessage: 'Carregando ranking de produtos por quantidade...',
+      },
+    ],
+    [currentData, currentItemCount, currentTotalComprado],
+  );
+
+  const hasDetalhamentoCompras = purchasePanels.some((panel) => panel.items.length > 0);
 
   return (
     <div className="space-y-6 py-6">
@@ -222,7 +205,7 @@ export default function DetalhamentoCompras() {
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <StatCard key={stat.title} {...stat} isLoading={notasQuery.isLoading && !isSped} />
+          <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />
         ))}
       </div>
 
@@ -235,7 +218,8 @@ export default function DetalhamentoCompras() {
               </Badge>
               <h2 className="text-2xl font-semibold tracking-tight">Expansao em 4 niveis</h2>
               <p className="max-w-3xl text-sm text-slate-300">
-                A leitura segue a mesma estrutura do detalhamento de vendas, adaptada para mostrar apenas compras.
+                Esta tela usa exatamente os dados disponiveis no painel de compras. Quando um nivel nao existe nessa
+                fonte, ele nao e exibido aqui.
               </p>
             </div>
             <Button asChild variant="secondary" className="gap-2 bg-white text-slate-900 hover:bg-slate-100">
@@ -258,60 +242,43 @@ export default function DetalhamentoCompras() {
         </Alert>
       )}
 
-      {!isSped && notasQuery.isError && (
+      {dashboardQuery.isError && (
         <Alert variant="destructive">
-          <AlertTitle>Erro ao carregar notas detalhadas</AlertTitle>
+          <AlertTitle>Erro ao carregar detalhamento de compras</AlertTitle>
           <AlertDescription>
-            {notasQuery.error instanceof Error
-              ? notasQuery.error.message
-              : 'Nao foi possivel consultar as notas detalhadas deste periodo.'}
+            {dashboardQuery.error instanceof Error
+              ? dashboardQuery.error.message
+              : 'Nao foi possivel consultar os dados detalhados de compras deste periodo.'}
           </AlertDescription>
         </Alert>
       )}
 
-      {!isSped && (
-        <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
-          <CardContent className="p-0">
-            <div className="border-b border-slate-800/80 px-6 py-4">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {levelButtons.map((button) => (
-                  <Button
-                    key={button.key}
-                    type="button"
-                    variant="outline"
-                    onClick={button.onClick}
-                    className="h-auto justify-start border-slate-700 bg-slate-900/80 px-4 py-3 text-left text-slate-100 hover:border-sky-500/60 hover:bg-slate-800"
-                  >
-                    <span className="flex flex-col items-start gap-1">
-                      <span className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                        {button.title}
-                      </span>
-                      <span className="text-sm font-medium text-slate-100">
-                        {button.isOpen ? 'Fechar visualizacao detalhada' : 'Abrir visualizacao detalhada'}
-                      </span>
-                    </span>
-                  </Button>
-                ))}
-              </div>
-            </div>
+      {!dashboardQuery.isLoading && !dashboardQuery.isError && !hasDetalhamentoCompras && (
+        <Alert>
+          <AlertTitle>Detalhamento indisponivel para compras neste periodo</AlertTitle>
+          <AlertDescription>
+            Nao existem visoes detalhadas de compras disponiveis na fonte atual para o recorte selecionado.
+          </AlertDescription>
+        </Alert>
+      )}
 
-            {notas.length ? (
-              <DetalhamentoComprasNotaMode
-                notas={notas}
-                openNoteValues={openNoteValues}
-                onOpenNoteValuesChange={setOpenNoteValues}
-                openSupplierValues={openSupplierValues}
-                onOpenSupplierValuesChange={setOpenSupplierValues}
-                openNcmValues={openNcmValues}
-                onOpenNcmValuesChange={setOpenNcmValues}
-              />
-            ) : (
-              <div className="p-6 text-sm text-slate-300">
-                Nenhuma nota de compra encontrada para o periodo selecionado.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {hasDetalhamentoCompras && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          {purchasePanels.map((panel) => (
+            <RankingCard
+              key={panel.title}
+              title={panel.title}
+              description={panel.description}
+              items={panel.items}
+              isLoading={dashboardQuery.isLoading}
+              loadingMessage={panel.loadingMessage}
+              emptyMessage="Sem dados para o periodo selecionado."
+              totalValue={formatCurrency(currentTotalComprado)}
+              showAbcReport={false}
+              showAbcClassification={false}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

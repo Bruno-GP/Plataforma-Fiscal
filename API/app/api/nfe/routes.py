@@ -756,11 +756,12 @@ def consultar_notas_detalhadas(
 
   try:
     with psycopg.connect(**notas_service.conn_params) as conn:
-      notas = notas_service.listar_notas_periodo_para_kpi(
+      notas = notas_service.listar_notas_periodo_para_operacao(
         conn=conn,
-        cnpj_emitente=emitente_resolvido,
+        cnpj_empresa=emitente_resolvido,
         periodo_ano=periodo_ano,
         periodo_mes=periodo_mes,
+        tipo_operacao=tipo_operacao,
       )
   except psycopg.Error as exc:
     raise HTTPException(
@@ -768,8 +769,7 @@ def consultar_notas_detalhadas(
       detail="NÃ£o foi possÃ­vel consultar as notas deste perÃ­odo.",
     ) from exc
 
-  notas_filtradas = [nota for nota in notas if _nota_possui_tipo_operacao(nota, tipo_operacao)]
-  total = len(notas_filtradas)
+  total = len(notas)
   notas_paginadas = [
     NFeNota(
       numero_nf=str(nota.numero_nf),
@@ -804,7 +804,7 @@ def consultar_notas_detalhadas(
         for item in nota.itens
       ],
     )
-    for nota in notas_filtradas[offset:offset + limite]
+    for nota in notas[offset:offset + limite]
   ]
 
   return ConsultaNFeResponse(status="ok", total=total, notas=notas_paginadas)

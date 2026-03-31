@@ -285,6 +285,122 @@ class NFeNotasService:
             cur.execute(sql_itens, (cnpj_normalizado, nota_ids))
             itens_rows = cur.fetchall()
 
+        return self._montar_notas_extraidas(
+            notas_rows=notas_rows,
+            itens_rows=itens_rows,
+            cnpj_padrao=cnpj_normalizado,
+        )
+
+    def listar_notas_periodo_para_operacao(
+        self,
+        conn,
+        cnpj_empresa: str,
+        periodo_ano: int,
+        periodo_mes: int,
+        tipo_operacao: str,
+    ) -> list[NotaExtraida]:
+        cnpj_normalizado = normalizar_cnpj(cnpj_empresa)
+        if not cnpj_normalizado:
+            return []
+
+        filtros = [
+            "EXTRACT(YEAR FROM n.data_emissao) = %s",
+            "EXTRACT(MONTH FROM n.data_emissao) = %s",
+        ]
+        parametros: list[object] = [periodo_ano, periodo_mes]
+
+        if tipo_operacao == "compras":
+            filtros.extend([
+                "("
+                "regexp_replace(COALESCE(n.destinatario_documento, ''), '\\D', '', 'g') = %s "
+                "OR regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s"
+                ")",
+                "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('1','2','3')",
+            ])
+            parametros.extend([cnpj_normalizado, cnpj_normalizado])
+        elif tipo_operacao == "vendas":
+            filtros.extend([
+                "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+                "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
+            ])
+            parametros.append(cnpj_normalizado)
+        else:
+            filtros.append(
+                "("
+                "regexp_replace(COALESCE(n.destinatario_documento, ''), '\\D', '', 'g') = %s "
+                "OR regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s"
+                ")"
+            )
+            parametros.extend([cnpj_normalizado, cnpj_normalizado])
+
+        where_clause = " AND ".join(filtros)
+
+        sql_notas = f"""
+            SELECT DISTINCT
+                n.id,
+                n.numero_nf,
+                n.emitente_cnpj,
+                n.modelo,
+                n.data_emissao,
+                n.natureza_operacao,
+                n.destinatario_documento,
+                n.destinatario_nome,
+                n.destinatario_cidade,
+                n.destinatario_uf,
+                n.valor_total_nf,
+                n.valor_icms,
+                n.valor_ipi,
+                n.valor_pis,
+                n.valor_cofins,
+                n.valor_produtos,
+                n.valor_desconto,
+                n.valor_frete
+            FROM public.notas AS n
+            JOIN public.notas_itens AS i
+              ON i.nota_id = n.id
+            WHERE {where_clause}
+            ORDER BY n.data_emissao, n.numero_nf;
+        """
+
+        sql_itens = """
+            SELECT
+                nota_id,
+                item_numero,
+                produto_codigo,
+                descricao,
+                ncm,
+                cfop,
+                quantidade,
+                valor_unitario,
+                valor_total
+            FROM public.notas_itens
+            WHERE nota_id = ANY(%s)
+            ORDER BY nota_id, item_numero;
+        """
+
+        with conn.cursor() as cur:
+            cur.execute(sql_notas, parametros)
+            notas_rows = cur.fetchall()
+
+            if not notas_rows:
+                return []
+
+            nota_ids = [row[0] for row in notas_rows]
+            cur.execute(sql_itens, (nota_ids,))
+            itens_rows = cur.fetchall()
+
+        return self._montar_notas_extraidas(
+            notas_rows=notas_rows,
+            itens_rows=itens_rows,
+            cnpj_padrao=cnpj_normalizado,
+        )
+
+    def _montar_notas_extraidas(
+        self,
+        notas_rows,
+        itens_rows,
+        cnpj_padrao: str,
+    ) -> list[NotaExtraida]:
         itens_por_nota: dict[int, list[ItemNota]] = {}
         for row in itens_rows:
             nota_id = row[0]
@@ -309,7 +425,7 @@ class NFeNotasService:
                 NotaExtraida(
                     chave="",
                     numero_nf=int(row[1] or 0),
-                    emitente_cnpj=row[2] or cnpj_normalizado,
+                    emitente_cnpj=row[2] or cnpj_padrao,
                     modelo=row[3] or "",
                     data_emissao=row[4] if isinstance(row[4], date) else date.today(),
                     natureza_operacao=row[5] or "",

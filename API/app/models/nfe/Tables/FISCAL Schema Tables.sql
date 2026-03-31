@@ -180,9 +180,6 @@ CREATE TABLE IF NOT EXISTS SPED_participantes (
     tipo          VARCHAR(20)
 );
 
-ALTER TABLE SPED_participantes
-ADD COLUMN municipio_nome VARCHAR(120);
-
 CREATE TABLE IF NOT EXISTS SPED_produtos (
     id            SERIAL PRIMARY KEY,
     empresa_cnpj  CHAR(14) REFERENCES SPED_empresas(cnpj),
@@ -324,3 +321,60 @@ CREATE TABLE IF NOT EXISTS SPED_kpis_sped_fiscal (
     data_calculo                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (cnpj_emitente, periodo_ano, periodo_mes)
 );
+
+CREATE TABLE IF NOT EXISTS municipios_catalogo (
+    codigo_ibge CHAR(7) PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    uf CHAR(2) NOT NULL,
+    regiao VARCHAR(20),
+    mesorregiao VARCHAR(100),
+    microrregiao VARCHAR(100),
+    capital BOOLEAN,
+    codigo_uf CHAR(2),
+    fonte_arquivo VARCHAR(255),
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_municipios_catalogo_uf
+ON municipios_catalogo (uf);
+
+CREATE INDEX IF NOT EXISTS idx_municipios_catalogo_nome
+ON municipios_catalogo (nome);
+
+CREATE INDEX IF NOT EXISTS idx_municipios_catalogo_codigo_uf
+ON municipios_catalogo (codigo_uf);
+
+COMMENT ON TABLE municipios_catalogo IS 'Catálogo de municípios para consultas por código IBGE, nome e UF.';
+COMMENT ON COLUMN municipios_catalogo.codigo_ibge IS 'Código IBGE do município com 7 dígitos.';
+COMMENT ON COLUMN municipios_catalogo.nome IS 'Nome do município.';
+COMMENT ON COLUMN municipios_catalogo.uf IS 'Sigla da unidade federativa.';
+COMMENT ON COLUMN municipios_catalogo.regiao IS 'Região geográfica do município, quando disponível.';
+COMMENT ON COLUMN municipios_catalogo.mesorregiao IS 'Mesorregião do município, quando disponível.';
+COMMENT ON COLUMN municipios_catalogo.microrregiao IS 'Microrregião do município, quando disponível.';
+COMMENT ON COLUMN municipios_catalogo.capital IS 'Indica se o município é capital.';
+COMMENT ON COLUMN municipios_catalogo.codigo_uf IS 'Prefixo/código IBGE da UF, quando disponível.';
+COMMENT ON COLUMN municipios_catalogo.fonte_arquivo IS 'Nome do arquivo JSON usado na carga.';
+
+CREATE TABLE IF NOT EXISTS ncm_catalogo (
+    codigo CHAR(8) PRIMARY KEY,
+    descricao TEXT NOT NULL,
+    codigo_formatado VARCHAR(20),
+    vigencia DATE,
+    fonte_arquivo VARCHAR(255),
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ncm_catalogo_descricao
+ON ncm_catalogo (descricao);
+
+CREATE INDEX IF NOT EXISTS idx_ncm_catalogo_vigencia
+ON ncm_catalogo (vigencia);
+
+COMMENT ON TABLE ncm_catalogo IS 'Catálogo de códigos NCM carregado a partir de arquivos JSON.';
+COMMENT ON COLUMN ncm_catalogo.codigo IS 'Código NCM normalizado com 8 dígitos.';
+COMMENT ON COLUMN ncm_catalogo.descricao IS 'Descrição oficial do NCM.';
+COMMENT ON COLUMN ncm_catalogo.codigo_formatado IS 'Código NCM no formato original do arquivo, se necessário.';
+COMMENT ON COLUMN ncm_catalogo.vigencia IS 'Data de vigência da tabela importada.';
+COMMENT ON COLUMN ncm_catalogo.fonte_arquivo IS 'Nome do arquivo JSON usado na carga.';

@@ -1,11 +1,13 @@
 import psycopg
 
+from app.services.db_schema_service import ensure_empresas_tem_sped_column
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
 
 
 class CompanyProfileService:
   def __init__(self) -> None:
+    ensure_empresas_tem_sped_column()
     config = carregar_config_postgres()
     self.conn_params = {
       "host": config["host"],

@@ -8,6 +8,7 @@ import psycopg
 
 from app.services.nfe.postres_config import carregar_config_postgres
 from app.services.nfe.empresa_service import normalizar_cnpj
+from app.services.db_schema_service import ensure_empresas_tem_sped_column
 
 logger = logging.getLogger("LoginService")
 logger.setLevel(logging.INFO)
@@ -24,6 +25,7 @@ class LoginResult:
 
 class LoginService:
     def __init__(self) -> None:
+        ensure_empresas_tem_sped_column()
         config = carregar_config_postgres()
 
         self.conn_params = {

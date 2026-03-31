@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
 from app.core.logger import configure_logging, log_request_cycle
+from app.services.db_schema_service import ensure_empresas_tem_sped_column
 
 # Instância principal da API (metadados aparecem no /docs automaticamente).
 configure_logging()
@@ -77,6 +78,10 @@ app.add_middleware(
 app.middleware("http")(log_request_cycle)
 
 app.include_router(api_router, prefix="/api")
+
+@app.on_event("startup")
+def ensure_database_schema() -> None:
+    ensure_empresas_tem_sped_column()
 
 @app.get("/health")
 def health_check():

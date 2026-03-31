@@ -31,10 +31,16 @@ Observação:
 
 ## Ambiente
 
-Crie `Painel/.env`:
+Para desenvolvimento local, crie `Painel/.env`:
 
 ```env
 VITE_API_URL=http://localhost:8000
+```
+
+Para producao, o projeto pode usar `Painel/.env.production`:
+
+```env
+VITE_API_URL=https://api-plataforma-fiscal.onrender.com
 ```
 
 Normalização automática:

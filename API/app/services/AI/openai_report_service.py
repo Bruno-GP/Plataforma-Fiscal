@@ -46,30 +46,65 @@ class OpenAIReportService:
 
   def _gerar_relatorio(self, categoria: ReportCategory, formato: ReportFormat, prompt: str) -> str:
     if not self.api_key:
-      raise ValueError("OPENAI_API_KEY não configurada.")
+      raise ValueError("OPENAI_API_KEY nao configurada.")
 
-    cliente = OpenAI(api_key=self.api_key)
-    system_prompt = self._carregar_prompt_agente(categoria, formato)
+    try:
+      cliente = OpenAI(api_key=self.api_key)
+      system_prompt = self._carregar_prompt_agente(categoria, formato)
+      texto = self._gerar_texto_resposta(cliente, system_prompt, prompt, formato)
+    except Exception:
+      logger.exception(
+        "Falha ao gerar relatorio com OpenAI",
+        extra={"categoria": categoria, "formato": formato, "model": self.model},
+      )
+      raise
 
-    resposta = cliente.responses.create(
+    if not texto:
+      logger.warning("OpenAI nao retornou conteudo textual no relatorio.")
+      return "Nao foi possivel gerar o relatorio em linguagem natural para este periodo."
+
+    return texto
+
+  def _gerar_texto_resposta(
+    self,
+    cliente: OpenAI,
+    system_prompt: str,
+    prompt: str,
+    formato: ReportFormat,
+  ) -> str:
+    max_tokens = 4000 if formato == "analitico" else 1400
+
+    if hasattr(cliente, "responses"):
+      resposta = cliente.responses.create(
+        model=self.model,
+        input=[
+          {
+            "role": "system",
+            "content": system_prompt,
+          },
+          {"role": "user", "content": prompt},
+        ],
+        temperature=0.3,
+        max_output_tokens=max_tokens,
+      )
+      return (getattr(resposta, "output_text", "") or "").strip()
+
+    resposta = cliente.chat.completions.create(
       model=self.model,
-      input=[
-        {
-          "role": "system",
-          "content": system_prompt,
-        },
+      messages=[
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": prompt},
       ],
       temperature=0.3,
-      max_output_tokens=4000 if formato == "analitico" else 1400,
+      max_tokens=max_tokens,
     )
-
-    texto = (resposta.output_text or "").strip()
-    if not texto:
-      logger.warning("OpenAI não retornou conteúdo textual no relatório.")
-      return "Não foi possível gerar o relatório em linguagem natural para este período."
-
-    return texto
+    mensagem = resposta.choices[0].message.content if resposta.choices else ""
+    if isinstance(mensagem, list):
+      return "".join(
+        parte.get("text", "") if isinstance(parte, dict) else str(parte)
+        for parte in mensagem
+      ).strip()
+    return (mensagem or "").strip()
 
   def _montar_prompt_compras(
     self,
@@ -84,7 +119,7 @@ class OpenAIReportService:
 
     linhas_fornecedores = [
       (
-        f"- {item.get('fornecedor', 'Fornecedor não identificado')}: "
+        f"- {item.get('fornecedor', 'Fornecedor nao identificado')}: "
         f"R$ {self._formatar_decimal(item.get('valor_total'))} "
         f"em {item.get('quantidade_documentos', 0)} documentos"
       )
@@ -93,7 +128,7 @@ class OpenAIReportService:
 
     linhas_produtos = [
       (
-        f"- {item.get('produto', 'Produto não identificado')}: "
+        f"- {item.get('produto', 'Produto nao identificado')}: "
         f"R$ {self._formatar_decimal(item.get('valor_total'))}, "
         f"quantidade {self._formatar_decimal(item.get('quantidade_total'))}"
       )
@@ -105,15 +140,15 @@ class OpenAIReportService:
     periodo = (
       f"{periodo_mes:02d}/{periodo_ano}"
       if periodo_ano and periodo_mes
-      else "todos os períodos disponíveis"
+      else "todos os periodos disponiveis"
     )
 
     return (
-      f"Categoria do relatório: compras\n"
+      f"Categoria do relatorio: compras\n"
       f"Formato solicitado: {formato}\n"
       f"{self._obter_instrucoes_formato(formato)}\n\n"
-      f"CNPJ emitente: {analise.get('emitente_cnpj', 'não informado')}\n"
-      f"Período: {periodo}\n"
+      f"CNPJ emitente: {analise.get('emitente_cnpj', 'nao informado')}\n"
+      f"Periodo: {periodo}\n"
       f"Total comprado: R$ {total_comprado}\n\n"
       "Top fornecedores por valor:\n"
       f"{chr(10).join(linhas_fornecedores) if linhas_fornecedores else '- Sem dados'}\n\n"
@@ -132,40 +167,40 @@ class OpenAIReportService:
 
     linhas_clientes = [
       (
-        f"- {item.get('cliente', 'Cliente não identificado')}: "
+        f"- {item.get('cliente', 'Cliente nao identificado')}: "
         f"faturamento R$ {self._formatar_decimal(item.get('valor_total'))} | "
-        f"ticket médio R$ {self._formatar_decimal(self._calcular_ticket_medio(item.get('valor_total'), item.get('quantidade_documentos')))} | "
-        f"participação {self._formatar_percentual(self._calcular_percentual_participacao(item.get('valor_total'), total_vendido_bruto))}%"
+        f"ticket medio R$ {self._formatar_decimal(self._calcular_ticket_medio(item.get('valor_total'), item.get('quantidade_documentos')))} | "
+        f"participacao {self._formatar_percentual(self._calcular_percentual_participacao(item.get('valor_total'), total_vendido_bruto))}%"
       )
       for item in top_clientes
     ]
 
     linhas_produtos = [
       (
-        f"- {item.get('produto', 'Produto não identificado')}: "
+        f"- {item.get('produto', 'Produto nao identificado')}: "
         f"faturamento R$ {self._formatar_decimal(item.get('valor_total'))} | "
-        f"ticket médio R$ {self._formatar_decimal(self._calcular_ticket_medio(item.get('valor_total'), item.get('quantidade_total')))} | "
-        f"participação {self._formatar_percentual(self._calcular_percentual_participacao(item.get('valor_total'), total_vendido_bruto))}%"
+        f"ticket medio R$ {self._formatar_decimal(self._calcular_ticket_medio(item.get('valor_total'), item.get('quantidade_total')))} | "
+        f"participacao {self._formatar_percentual(self._calcular_percentual_participacao(item.get('valor_total'), total_vendido_bruto))}%"
       )
       for item in top_produtos
     ]
 
     linhas_regioes = [
       (
-        f"- {item.get('regiao', 'Região não identificada')}: "
+        f"- {item.get('regiao', 'Regiao nao identificada')}: "
         f"faturamento R$ {self._formatar_decimal(item.get('valor_total'))} | "
-        f"ticket médio R$ {self._formatar_decimal(self._calcular_ticket_medio(item.get('valor_total'), item.get('quantidade_documentos')))} | "
-        f"participação {self._formatar_percentual(self._calcular_percentual_participacao(item.get('valor_total'), total_vendido_bruto))}%"
+        f"ticket medio R$ {self._formatar_decimal(self._calcular_ticket_medio(item.get('valor_total'), item.get('quantidade_documentos')))} | "
+        f"participacao {self._formatar_percentual(self._calcular_percentual_participacao(item.get('valor_total'), total_vendido_bruto))}%"
       )
       for item in top_regioes
     ]
 
     linhas_cidades = [
       (
-        f"- {item.get('cidade', 'Cidade não identificada')}: "
+        f"- {item.get('cidade', 'Cidade nao identificada')}: "
         f"faturamento R$ {self._formatar_decimal(item.get('valor_total'))} | "
-        f"ticket médio R$ {self._formatar_decimal(self._calcular_ticket_medio(item.get('valor_total'), item.get('quantidade_documentos')))} | "
-        f"participação {self._formatar_percentual(self._calcular_percentual_participacao(item.get('valor_total'), total_vendido_bruto))}%"
+        f"ticket medio R$ {self._formatar_decimal(self._calcular_ticket_medio(item.get('valor_total'), item.get('quantidade_documentos')))} | "
+        f"participacao {self._formatar_percentual(self._calcular_percentual_participacao(item.get('valor_total'), total_vendido_bruto))}%"
       )
       for item in top_cidades
     ]
@@ -175,17 +210,17 @@ class OpenAIReportService:
     periodo = (
       f"{periodo_mes:02d}/{periodo_ano}"
       if periodo_ano and periodo_mes
-      else "todos os períodos disponíveis"
+      else "todos os periodos disponiveis"
     )
 
     return (
-      f"Categoria do relatório: vendas\n"
+      f"Categoria do relatorio: vendas\n"
       f"Formato solicitado: {formato}\n"
       f"{self._obter_instrucoes_formato(formato)}\n\n"
-      f"CNPJ emitente: {analise.get('emitente_cnpj', 'não informado')}\n"
-      f"Período: {periodo}\n"
+      f"CNPJ emitente: {analise.get('emitente_cnpj', 'nao informado')}\n"
+      f"Periodo: {periodo}\n"
       f"Total vendido: R$ {total_vendido}\n\n"
-      "Top regiões por valor:\n"
+      "Top regioes por valor:\n"
       f"{chr(10).join(linhas_regioes) if linhas_regioes else '- Sem dados'}\n\n"
       "Top cidades por valor:\n"
       f"{chr(10).join(linhas_cidades) if linhas_cidades else '- Sem dados'}\n\n"
@@ -202,10 +237,10 @@ class OpenAIReportService:
 
     linhas_clientes = [
       (
-        f"- {item.get('cliente', 'Cliente não identificado')}: "
+        f"- {item.get('cliente', 'Cliente nao identificado')}: "
         f"R$ {self._formatar_decimal(item.get('valor_total'))} | "
-        f"ticket médio R$ {self._formatar_decimal(item.get('ticket_medio'))} | "
-        f"participação {self._formatar_decimal(item.get('percentual_participacao'))}%"
+        f"ticket medio R$ {self._formatar_decimal(item.get('ticket_medio'))} | "
+        f"participacao {self._formatar_decimal(item.get('percentual_participacao'))}%"
       )
       for item in top_clientes_valor
     ]
@@ -215,17 +250,17 @@ class OpenAIReportService:
     periodo = (
       f"{periodo_mes:02d}/{periodo_ano}"
       if periodo_ano and periodo_mes
-      else "todos os períodos disponíveis"
+      else "todos os periodos disponiveis"
     )
 
     return (
-      f"Categoria do relatório: clientes\n"
+      f"Categoria do relatorio: clientes\n"
       f"Formato solicitado: {formato}\n"
       f"{self._obter_instrucoes_formato(formato)}\n\n"
-      f"CNPJ emitente: {analise.get('emitente_cnpj', 'não informado')}\n"
-      f"Período: {periodo}\n"
+      f"CNPJ emitente: {analise.get('emitente_cnpj', 'nao informado')}\n"
+      f"Periodo: {periodo}\n"
       f"Total vendido: R$ {total_vendido}\n"
-      f"Total de clientes no período: {total_clientes}\n\n"
+      f"Total de clientes no periodo: {total_clientes}\n\n"
       "Top clientes por valor:\n"
       f"{chr(10).join(linhas_clientes) if linhas_clientes else '- Sem dados'}"
     )
@@ -234,9 +269,9 @@ class OpenAIReportService:
     caminho_prompt = Path(__file__).resolve().parent / "Agents" / f"{categoria}_{formato}.txt"
     if not caminho_prompt.exists():
       raise ValueError(
-        "Arquivo de prompt não encontrado: "
+        "Arquivo de prompt nao encontrado: "
         f"{caminho_prompt}. "
-        "Verifique se o arquivo de prompt da categoria e formato está presente."
+        "Verifique se o arquivo de prompt da categoria e formato esta presente."
       )
 
     try:
@@ -245,7 +280,7 @@ class OpenAIReportService:
         raise ValueError(
           "Arquivo de prompt vazio: "
           f"{caminho_prompt}. "
-          "Preencha o arquivo de prompt correspondente para gerar o relatório de IA."
+          "Preencha o arquivo de prompt correspondente para gerar o relatorio de IA."
         )
 
       return conteudo
@@ -258,19 +293,19 @@ class OpenAIReportService:
       raise ValueError(
         "Falha ao carregar arquivo de prompt do agente: "
         f"{caminho_prompt}. "
-        "Verifique permissões e encoding do arquivo."
+        "Verifique permissoes e encoding do arquivo."
       ) from exc
 
   def _obter_instrucoes_formato(self, formato: ReportFormat) -> str:
     if formato == "analitico":
       return (
-        "Produza uma resposta mais detalhada, aprofundando a leitura dos números, "
-        "concentrações, riscos, oportunidades e recomendações."
+        "Produza uma resposta mais detalhada, aprofundando a leitura dos numeros, "
+        "concentracoes, riscos, oportunidades e recomendacoes."
       )
 
     return (
-      "Produza uma resposta mais enxuta, priorizando síntese executiva, "
-      "riscos, oportunidades e ações de maior impacto."
+      "Produza uma resposta mais enxuta, priorizando sintese executiva, "
+      "riscos, oportunidades e acoes de maior impacto."
     )
 
   def _aplicar_layout_ao_prompt(self, prompt: str, layout: str | None = None) -> str:
@@ -280,9 +315,9 @@ class OpenAIReportService:
 
     return (
       f"{prompt}\n\n"
-      "Layout solicitado para a saída:\n"
+      "Layout solicitado para a saida:\n"
       f"{layout_normalizado}\n\n"
-      "Siga esse layout com prioridade na organização da resposta, "
+      "Siga esse layout com prioridade na organizacao da resposta, "
       "sem inventar dados fora da base recebida."
     )
 
@@ -291,7 +326,11 @@ class OpenAIReportService:
       return Decimal("0.00")
     return Decimal(str(valor))
 
-  def _calcular_ticket_medio(self, valor_total: Decimal | str | int | float | None, divisor: Decimal | str | int | float | None) -> Decimal:
+  def _calcular_ticket_medio(
+    self,
+    valor_total: Decimal | str | int | float | None,
+    divisor: Decimal | str | int | float | None,
+  ) -> Decimal:
     total = self._to_decimal(valor_total)
     base = self._to_decimal(divisor)
     if base <= 0:

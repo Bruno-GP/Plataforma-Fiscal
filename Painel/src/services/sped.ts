@@ -199,6 +199,12 @@ export interface AnaliseVendasResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_vendido: number | string;
+  top_cfops_valor: Array<{
+    cfop: string;
+    descricao: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+  }>;
   top_regioes_valor: Array<{ regiao: string; valor_total: number | string; quantidade_documentos: number }>;
   top_cidades_valor: Array<{ cidade: string; uf?: string; valor_total: number | string; quantidade_documentos: number }>;
   top_clientes_valor: Array<{ cliente: string; valor_total: number | string; quantidade_documentos: number }>;

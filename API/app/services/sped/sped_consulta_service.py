@@ -539,6 +539,37 @@ class SpedConsultaService:
 
         cur.execute(
           f"""
+          SELECT COALESCE(NULLIF(TRIM(i.cfop), ''), '0000') AS cfop,
+                COALESCE(NULLIF(TRIM(cf.descricao), ''), 'CFOP sem descrição') AS descricao,
+                COALESCE(SUM(i.valor_total), 0) AS valor_total
+          FROM public.sped_documentos_fiscais d
+          JOIN public.sped_documento_itens i ON i.documento_id = d.id
+          LEFT JOIN public.notas_cfops cf
+            ON regexp_replace(COALESCE(cf.codigo, ''), '\\D', '', 'g')
+               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+          WHERE {where_clause}
+          GROUP BY 1, 2
+          ORDER BY 3 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+        top_cfops_valor = [
+          {
+            "cfop": cfop,
+            "descricao": descricao,
+            "valor_total": valor_total or Decimal("0.00"),
+            "participacao_percentual": (
+              ((valor_total or Decimal("0.00")) / total_vendido) * Decimal("100")
+              if total_vendido
+              else Decimal("0.00")
+            ),
+          }
+          for cfop, descricao, valor_total in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
           SELECT CONCAT(
                   COALESCE(
                     NULLIF(TRIM(p.municipio_nome), ''),
@@ -617,6 +648,7 @@ class SpedConsultaService:
           "top_clientes_quantidade": top_clientes_quantidade,
           "top_produtos_valor": top_produtos_valor,
           "top_produtos_quantidade": top_produtos_quantidade,
+          "top_cfops_valor": top_cfops_valor,
           "top_regioes_valor": top_regioes_valor,
           "top_cidades_valor": top_cidades_valor,
         }

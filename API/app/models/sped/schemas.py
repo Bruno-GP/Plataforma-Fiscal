@@ -121,6 +121,13 @@ class RankingCidadeVenda(BaseModel):
   quantidade_documentos: int = 0
 
 
+class RankingCfopVenda(BaseModel):
+  cfop: str
+  descricao: str
+  valor_total: Decimal = Decimal("0.00")
+  participacao_percentual: Decimal = Decimal("0.00")
+
+
 class AnaliseVendasResponse(BaseModel):
   status: str
   emitente_cnpj: str
@@ -133,6 +140,7 @@ class AnaliseVendasResponse(BaseModel):
   top_clientes_quantidade: list[RankingClienteVenda] = Field(default_factory=list)
   top_produtos_valor: list[RankingProdutoVenda] = Field(default_factory=list)
   top_produtos_quantidade: list[RankingProdutoVenda] = Field(default_factory=list)
+  top_cfops_valor: list[RankingCfopVenda] = Field(default_factory=list)
   relatorio_ia: str | None = None
 
 class SerieMensalVendasItem(BaseModel):

@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Header } from './components/Header';
+import { CfopAnalysisTable } from './components/CfopAnalysisTable';
 import { RankingCard } from './components/RankingCard';
 import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
@@ -268,6 +269,14 @@ export default function Dashboard({
     rawValue: parseDecimal(regiao.valor_total ?? 0),
   }));
 
+  const cfopItems = (mapQuery.data?.top_cfops_valor ?? []).map((cfop, index) => ({
+    key: `${cfop.cfop}-${index}`,
+    cfop: cfop.cfop || '0000',
+    descricao: cfop.descricao || 'CFOP sem descrição',
+    valorTotal: parseDecimal(cfop.valor_total ?? 0),
+    participacao: parseDecimal(cfop.participacao_percentual ?? 0),
+  }));
+
   return (
     <div className="space-y-6 py-6">
       <Header
@@ -355,6 +364,13 @@ export default function Dashboard({
         topCidadesItems={mapTopCidadesItems.length ? mapTopCidadesItems : topCidadesItems}
         topRegioesItems={mapTopRegioesItems}
         totalFaturamento={totalFaturamento}
+        formatCurrency={formatCurrency}
+      />
+
+      <CfopAnalysisTable
+        items={cfopItems}
+        isLoading={mapQuery.isLoading}
+        isError={mapQuery.isError}
         formatCurrency={formatCurrency}
       />
     </div>

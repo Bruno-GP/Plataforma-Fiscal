@@ -749,6 +749,39 @@ class NFeConsultaService:
         cur.execute(
           f"""
           SELECT
+            COALESCE(NULLIF(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), ''), '0000') AS cfop,
+            COALESCE(NULLIF(TRIM(c.descricao), ''), 'CFOP sem descrição') AS descricao,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          LEFT JOIN public.notas_cfops AS c
+            ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
+               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+          WHERE {where_clause}
+          GROUP BY 1, 2
+          ORDER BY 3 DESC, 1 ASC
+          LIMIT %s
+          """,
+          [*parametros, limite],
+        )
+        top_cfops_valor = [
+          {
+            "cfop": cfop,
+            "descricao": descricao,
+            "valor_total": valor_total or Decimal("0.00"),
+            "participacao_percentual": (
+              ((valor_total or Decimal("0.00")) / total_vendido) * Decimal("100")
+              if total_vendido
+              else Decimal("0.00")
+            ),
+          }
+          for cfop, descricao, valor_total in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT
             COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nÃ£o identificada') AS cidade,
             COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
             COALESCE(SUM(i.valor_total), 0) AS valor_total,
@@ -820,6 +853,7 @@ class NFeConsultaService:
       "top_clientes_quantidade": top_clientes_quantidade,
       "top_produtos_valor": top_produtos_valor,
       "top_produtos_quantidade": top_produtos_quantidade,
+      "top_cfops_valor": top_cfops_valor,
       "top_regioes_valor": top_regioes_valor,
       "top_cidades_valor": top_cidades_valor,
     }

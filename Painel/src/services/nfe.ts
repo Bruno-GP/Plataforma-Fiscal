@@ -517,3 +517,42 @@ export const fetchNfeNotasDetalhadas = async (
 
   return response.json() as Promise<ConsultaNotasDetalhadasResponse>;
 };
+
+export const fetchAllNfeNotasDetalhadas = async (
+  params: {
+    emitente_cnpj?: string;
+    email?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    tipo_operacao?: 'todas' | 'vendas' | 'compras';
+  } = {},
+  options: RequestOptions = {},
+): Promise<ConsultaNotasDetalhadasResponse> => {
+  const pageSize = 500;
+  let offset = 0;
+  let total = 0;
+  const notas: NfeNotaDetalhada[] = [];
+
+  do {
+    const page = await fetchNfeNotasDetalhadas(
+      {
+        ...params,
+        limite: pageSize,
+        offset,
+      },
+      options,
+    );
+
+    total = page.total;
+    notas.push(...page.notas);
+    offset += page.notas.length;
+
+    if (page.notas.length === 0) break;
+  } while (offset < total);
+
+  return {
+    status: 'ok',
+    total,
+    notas,
+  };
+};

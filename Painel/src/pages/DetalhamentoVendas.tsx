@@ -18,9 +18,9 @@ import {
 import { Header } from '@/pages/components/Header';
 import { StatCard } from '@/pages/components/StatCard';
 import {
+  fetchAllNfeNotasDetalhadas,
   fetchNfeDashboardVendas,
   fetchNfeKpis,
-  fetchNfeNotasDetalhadas,
   parseDecimal,
 } from '@/services/nfe';
 import { fetchSpedDashboardVendas, fetchSpedKpis } from '@/services/sped';
@@ -85,13 +85,12 @@ export default function DetalhamentoVendas() {
   const notasQuery = useQuery({
     queryKey: ['detalhamento-vendas-notas', emitenteCnpj, selectedYear, selectedMonth],
     queryFn: () =>
-      fetchNfeNotasDetalhadas({
+      fetchAllNfeNotasDetalhadas({
         emitente_cnpj: emitenteCnpj,
         email: user?.email,
         periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
         periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
         tipo_operacao: 'vendas',
-        limite: 100,
       }),
     enabled: hasEmitenteCnpj && !isSped,
     staleTime: 5 * 60 * 1000,
@@ -167,6 +166,10 @@ export default function DetalhamentoVendas() {
   ] as const;
 
   const notas = useMemo(() => notasQuery.data?.notas ?? [], [notasQuery.data?.notas]);
+  const totalDetalhado = useMemo(
+    () => notas.reduce((total, nota) => total + parseDecimal(nota.valor_total_nf), 0),
+    [notas],
+  );
   const regionHierarchy = useMemo(() => buildRegionHierarchy(notas), [notas]);
 
   const noteAccordionValues = useMemo(

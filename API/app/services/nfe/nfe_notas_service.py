@@ -296,18 +296,19 @@ class NFeNotasService:
         conn,
         cnpj_empresa: str,
         periodo_ano: int,
-        periodo_mes: int,
+        periodo_mes: int | None,
         tipo_operacao: str,
     ) -> list[NotaExtraida]:
         cnpj_normalizado = normalizar_cnpj(cnpj_empresa)
         if not cnpj_normalizado:
             return []
 
-        filtros = [
-            "EXTRACT(YEAR FROM n.data_emissao) = %s",
-            "EXTRACT(MONTH FROM n.data_emissao) = %s",
-        ]
-        parametros: list[object] = [periodo_ano, periodo_mes]
+        filtros = ["EXTRACT(YEAR FROM n.data_emissao) = %s"]
+        parametros: list[object] = [periodo_ano]
+
+        if periodo_mes is not None:
+            filtros.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
+            parametros.append(periodo_mes)
 
         if tipo_operacao == "compras":
             filtros.extend([

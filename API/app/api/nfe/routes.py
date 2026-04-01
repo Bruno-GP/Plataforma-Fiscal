@@ -741,9 +741,17 @@ def consultar_notas_detalhadas(
       detail="Informe um emitente_cnpj vÃ¡lido ou um email cadastrado.",
     )
 
-  if periodo_ano is None or periodo_mes is None:
+  if periodo_ano is None and periodo_mes is None:
     try:
       periodo_ano, periodo_mes = service.obter_ultimo_periodo(emitente_resolvido)
+    except ValueError as exc:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=str(exc),
+      ) from exc
+  elif periodo_ano is None:
+    try:
+      periodo_ano, _ = service.obter_ultimo_periodo(emitente_resolvido)
     except ValueError as exc:
       raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,

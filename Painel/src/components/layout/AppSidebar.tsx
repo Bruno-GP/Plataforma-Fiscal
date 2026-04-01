@@ -35,7 +35,7 @@ const menuItemsBase = [
 const menuItemImportacaoXml = { title: 'Importacao XML', url: '/importacao-xml', icon: FileUp };
 const menuItemImportacaoSped = { title: 'Importacoes SPED', url: '/importacao-sped', icon: FileDigit };
 const menuItemAnaliseCompras = { title: 'Compras', url: '/analise-compras', icon: FileSearch };
-const menuItemDetalhamentoCompras = { title: 'Detalhe compras', url: '/detalhamento-compras', icon: ListTree };
+// const menuItemDetalhamentoCompras = { title: 'Detalhe compras', url: '/detalhamento-compras', icon: ListTree };
 const menuItemRelatoriosIA = { title: 'Relatorios com IA', url: '/relatorios-ia', icon: Sparkles };
 const menuItemInconsistencias = { title: 'Inconsistencias', url: '/inconsistencias', icon: AlertTriangle };
 
@@ -48,7 +48,7 @@ export function AppSidebar() {
     ? [
         ...menuItemsBase,
         menuItemAnaliseCompras,
-        menuItemDetalhamentoCompras,
+        // menuItemDetalhamentoCompras,
         menuItemRelatoriosIA,
         menuItemInconsistencias,
         menuItemImportacaoSped,
@@ -56,7 +56,7 @@ export function AppSidebar() {
     : [
         ...menuItemsBase,
         menuItemAnaliseCompras,
-        menuItemDetalhamentoCompras,
+        // menuItemDetalhamentoCompras,
         menuItemRelatoriosIA,
         menuItemInconsistencias,
         menuItemImportacaoXml,

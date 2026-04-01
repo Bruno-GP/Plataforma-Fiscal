@@ -33,6 +33,7 @@ export function DetalhamentoVendasNotaMode({
       {notas.map((nota) => {
         const notaValue = `${nota.numero_nf}-${nota.data_emissao}`;
         const clientValue = `cliente-${nota.numero_nf}-${nota.data_emissao}`;
+        const isNfse = (nota.modelo || '').trim().toUpperCase() === 'NFSE';
         const noteTotal = parseDecimal(nota.valor_total_nf);
         const itemBaseTotal = nota.itens.reduce((total, item) => total + parseDecimal(item.valor_total), 0);
 
@@ -57,7 +58,7 @@ export function DetalhamentoVendasNotaMode({
                   <p className="text-base font-semibold text-white">{nota.numero_nf}</p>
                 </div>
                 <div>
-                  <p className={hierarchyLabelClass}>Valor total da nota</p>
+                  <p className={hierarchyLabelClass}>{isNfse ? 'Valor liquido da nota' : 'Valor total da nota'}</p>
                   <p className="text-base font-semibold text-white">{formatCurrency(noteTotal)}</p>
                 </div>
               </div>
@@ -128,11 +129,15 @@ export function DetalhamentoVendasNotaMode({
                                     <TableHead className="text-slate-300">Cod do produto</TableHead>
                                     <TableHead className="text-slate-300">Nome do produto</TableHead>
                                     <TableHead className="text-slate-300">QTD vendida</TableHead>
-                                    <TableHead className="text-right text-slate-300">Valor total</TableHead>
-                                    <TableHead className="text-right text-slate-300">ICMS</TableHead>
-                                    <TableHead className="text-right text-slate-300">IPI</TableHead>
-                                    <TableHead className="text-right text-slate-300">PIS</TableHead>
-                                    <TableHead className="text-right text-slate-300">Cofins</TableHead>
+                                    <TableHead className="text-right text-slate-300">
+                                      {isNfse ? 'Valor liquido' : 'Valor total'}
+                                    </TableHead>
+                                    <TableHead className="text-right text-slate-300">
+                                      {isNfse ? 'Retencoes' : 'ICMS'}
+                                    </TableHead>
+                                    {!isNfse && <TableHead className="text-right text-slate-300">IPI</TableHead>}
+                                    {!isNfse && <TableHead className="text-right text-slate-300">PIS</TableHead>}
+                                    {!isNfse && <TableHead className="text-right text-slate-300">Cofins</TableHead>}
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -152,9 +157,21 @@ export function DetalhamentoVendasNotaMode({
                                           <TableCell className="text-slate-300">{parseDecimal(item.quantidade).toFixed(2)}</TableCell>
                                           <TableCell className="text-right font-medium text-slate-100">{formatCurrency(itemTotal)}</TableCell>
                                           <TableCell className="text-right text-slate-300">{formatCurrency(parseDecimal(nota.valor_icms) * proportion)}</TableCell>
-                                          <TableCell className="text-right text-slate-300">{formatCurrency(parseDecimal(nota.valor_ipi) * proportion)}</TableCell>
-                                          <TableCell className="text-right text-slate-300">{formatCurrency(parseDecimal(nota.valor_pis) * proportion)}</TableCell>
-                                          <TableCell className="text-right text-slate-300">{formatCurrency(parseDecimal(nota.valor_cofins) * proportion)}</TableCell>
+                                          {!isNfse && (
+                                            <TableCell className="text-right text-slate-300">
+                                              {formatCurrency(parseDecimal(nota.valor_ipi) * proportion)}
+                                            </TableCell>
+                                          )}
+                                          {!isNfse && (
+                                            <TableCell className="text-right text-slate-300">
+                                              {formatCurrency(parseDecimal(nota.valor_pis) * proportion)}
+                                            </TableCell>
+                                          )}
+                                          {!isNfse && (
+                                            <TableCell className="text-right text-slate-300">
+                                              {formatCurrency(parseDecimal(nota.valor_cofins) * proportion)}
+                                            </TableCell>
+                                          )}
                                         </TableRow>
                                       );
                                     })}

@@ -13,7 +13,7 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isReady, user } = useAuth();
   const location = useLocation();
   const [totalPendentes, setTotalPendentes] = useState(0);
 
@@ -34,6 +34,10 @@ export function MainLayout({ children }: MainLayoutProps) {
 
     void carregarPendencias();
   }, [location.pathname, user?.emitente_cnpj, user?.tem_sped]);
+
+  if (!isReady) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

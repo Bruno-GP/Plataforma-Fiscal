@@ -15,8 +15,6 @@ const makeSession = (expiresAt: number): AuthSession => ({
     emitente_cnpj: '12345678000199',
     tem_sped: false,
   },
-  accessToken: 'token-teste',
-  tokenType: 'Bearer',
   expiresAt,
 });
 

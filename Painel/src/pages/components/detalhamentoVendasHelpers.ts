@@ -1,4 +1,4 @@
-import type { NfeNotaDetalhada } from '@/services/nfe';
+import type { NfeItemDetalhado, NfeNotaDetalhada } from '@/services/nfe';
 import { parseDecimal } from '@/services/nfe';
 
 export const hierarchyLabelClass = 'text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400';
@@ -76,6 +76,91 @@ export const getRegionByUf = (uf: string) => {
 
 export const getNcmDescription = (descricaoNcm?: string | null) =>
   (descricaoNcm ?? '').trim() || 'Descricao NCM nao informada';
+
+const normalizeSearchValue = (value: string | number | null | undefined) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const includesSearch = (values: Array<string | number | null | undefined>, query: string) =>
+  values.some((value) => normalizeSearchValue(value).includes(query));
+
+const noteMatchesSearch = (nota: NfeNotaDetalhada, query: string) =>
+  includesSearch(
+    [
+      nota.numero_nf,
+      nota.data_emissao,
+      nota.modelo,
+      nota.natureza_operacao,
+      nota.destinatario_nome,
+      nota.destinatario_documento,
+      nota.destinatario_cidade,
+      nota.destinatario_uf,
+      getRegionByUf(nota.destinatario_uf || ''),
+    ],
+    query,
+  );
+
+const itemMatchesSearch = (item: NfeItemDetalhado, query: string) =>
+  includesSearch(
+    [
+      item.produto_codigo,
+      item.descricao,
+      item.ncm,
+      item.descricao_ncm,
+      item.cfop,
+      item.quantidade,
+      item.valor_total,
+    ],
+    query,
+  );
+
+export const filterNotasBySearch = (notas: NfeNotaDetalhada[], search: string) => {
+  const query = normalizeSearchValue(search);
+  if (!query) return notas;
+
+  return notas.reduce<NfeNotaDetalhada[]>((filtered, nota) => {
+    if (noteMatchesSearch(nota, query)) {
+      filtered.push(nota);
+      return filtered;
+    }
+
+    const filteredItems = nota.itens.filter((item) => itemMatchesSearch(item, query));
+    if (filteredItems.length > 0) {
+      filtered.push({ ...nota, itens: filteredItems });
+    }
+
+    return filtered;
+  }, []);
+};
+
+const buildFilteredClient = (client: RegionClient, products: RegionProduct[]): RegionClient => {
+  const total = products.reduce((sum, product) => sum + product.totalValue, 0);
+  const noteCount = new Set(products.flatMap((product) => product.noteNumbers)).size;
+
+  return {
+    ...client,
+    total,
+    noteCount,
+    products,
+  };
+};
+
+const buildFilteredCity = (city: RegionCity, clients: RegionClient[]): RegionCity => ({
+  ...city,
+  total: clients.reduce((sum, client) => sum + client.total, 0),
+  noteCount: clients.reduce((sum, client) => sum + client.noteCount, 0),
+  clients,
+});
+
+const buildFilteredState = (state: RegionState, cities: RegionCity[]): RegionState => ({
+  ...state,
+  total: cities.reduce((sum, city) => sum + city.total, 0),
+  noteCount: cities.reduce((sum, city) => sum + city.noteCount, 0),
+  cities,
+});
 
 export const buildRegionHierarchy = (notas: NfeNotaDetalhada[]): RegionState[] => {
   const stateMap = new Map<string, RegionState>();
@@ -165,4 +250,61 @@ export const buildRegionHierarchy = (notas: NfeNotaDetalhada[]): RegionState[] =
         .sort((a, b) => b.total - a.total),
     }))
     .sort((a, b) => b.total - a.total);
+};
+
+export const filterRegionHierarchyBySearch = (regionHierarchy: RegionState[], search: string) => {
+  const query = normalizeSearchValue(search);
+  if (!query) return regionHierarchy;
+
+  return regionHierarchy.reduce<RegionState[]>((filteredStates, stateEntry) => {
+    const stateMatches = includesSearch([stateEntry.uf, getRegionByUf(stateEntry.uf)], query);
+
+    if (stateMatches) {
+      filteredStates.push(stateEntry);
+      return filteredStates;
+    }
+
+    const filteredCities = stateEntry.cities.reduce<RegionCity[]>((cities, cityEntry) => {
+      const cityMatches = includesSearch([cityEntry.city, stateEntry.uf, getRegionByUf(stateEntry.uf)], query);
+
+      if (cityMatches) {
+        cities.push(cityEntry);
+        return cities;
+      }
+
+      const filteredClients = cityEntry.clients.reduce<RegionClient[]>((clients, clientEntry) => {
+        const clientMatches = includesSearch([clientEntry.name, clientEntry.document], query);
+
+        if (clientMatches) {
+          clients.push(clientEntry);
+          return clients;
+        }
+
+        const filteredProducts = clientEntry.products.filter((productEntry) =>
+          includesSearch(
+            [productEntry.code, productEntry.description, productEntry.noteNumbers.join(', '), productEntry.totalQuantity],
+            query,
+          ),
+        );
+
+        if (filteredProducts.length > 0) {
+          clients.push(buildFilteredClient(clientEntry, filteredProducts));
+        }
+
+        return clients;
+      }, []);
+
+      if (filteredClients.length > 0) {
+        cities.push(buildFilteredCity(cityEntry, filteredClients));
+      }
+
+      return cities;
+    }, []);
+
+    if (filteredCities.length > 0) {
+      filteredStates.push(buildFilteredState(stateEntry, filteredCities));
+    }
+
+    return filteredStates;
+  }, []);
 };

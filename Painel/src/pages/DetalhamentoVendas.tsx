@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Percent, TrendingDown, TrendingUp, Users } from 'lucide-react';
+import { ArrowRight, Percent, Search, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { DetalhamentoVendasModeSelector } from '@/pages/components/DetalhamentoVendasModeSelector';
 import { DetalhamentoVendasNotaMode } from '@/pages/components/DetalhamentoVendasNotaMode';
@@ -14,6 +15,8 @@ import { DetalhamentoVendasRegiaoMode } from '@/pages/components/DetalhamentoVen
 import {
   buildRegionHierarchy,
   type DetailMode,
+  filterNotasBySearch,
+  filterRegionHierarchyBySearch,
 } from '@/pages/components/detalhamentoVendasHelpers';
 import { Header } from '@/pages/components/Header';
 import { StatCard } from '@/pages/components/StatCard';
@@ -44,6 +47,7 @@ export default function DetalhamentoVendas() {
   const [openRegionStateValues, setOpenRegionStateValues] = useState<string[]>([]);
   const [openRegionCityValues, setOpenRegionCityValues] = useState<string[]>([]);
   const [openRegionClientValues, setOpenRegionClientValues] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
@@ -171,38 +175,48 @@ export default function DetalhamentoVendas() {
     [notas],
   );
   const regionHierarchy = useMemo(() => buildRegionHierarchy(notas), [notas]);
+  const filteredNotas = useMemo(() => filterNotasBySearch(notas, searchTerm), [notas, searchTerm]);
+  const filteredRegionHierarchy = useMemo(
+    () => filterRegionHierarchyBySearch(regionHierarchy, searchTerm),
+    [regionHierarchy, searchTerm],
+  );
+  const activeHasResults = detailMode === 'nota' ? filteredNotas.length > 0 : filteredRegionHierarchy.length > 0;
+  const searchPlaceholder =
+    detailMode === 'nota'
+      ? 'Pesquisar por nota, cliente, documento, NCM ou produto'
+      : 'Pesquisar por estado, cidade, cliente ou produto';
 
   const noteAccordionValues = useMemo(
-    () => notas.map((nota) => `${nota.numero_nf}-${nota.data_emissao}`),
-    [notas],
+    () => filteredNotas.map((nota) => `${nota.numero_nf}-${nota.data_emissao}`),
+    [filteredNotas],
   );
   const noteClientAccordionValues = useMemo(
-    () => notas.map((nota) => `cliente-${nota.numero_nf}-${nota.data_emissao}`),
-    [notas],
+    () => filteredNotas.map((nota) => `cliente-${nota.numero_nf}-${nota.data_emissao}`),
+    [filteredNotas],
   );
   const ncmAccordionValues = useMemo(
     () =>
-      notas.flatMap((nota) =>
+      filteredNotas.flatMap((nota) =>
         Array.from(new Set(nota.itens.map((item) => item.ncm || 'sem-ncm'))).map(
           (ncm) => `ncm-${nota.numero_nf}-${nota.data_emissao}-${ncm}`,
         ),
       ),
-    [notas],
+    [filteredNotas],
   );
   const regionStateAccordionValues = useMemo(
-    () => regionHierarchy.map((stateEntry) => stateEntry.key),
-    [regionHierarchy],
+    () => filteredRegionHierarchy.map((stateEntry) => stateEntry.key),
+    [filteredRegionHierarchy],
   );
   const regionCityAccordionValues = useMemo(
-    () => regionHierarchy.flatMap((stateEntry) => stateEntry.cities.map((cityEntry) => cityEntry.key)),
-    [regionHierarchy],
+    () => filteredRegionHierarchy.flatMap((stateEntry) => stateEntry.cities.map((cityEntry) => cityEntry.key)),
+    [filteredRegionHierarchy],
   );
   const regionClientAccordionValues = useMemo(
     () =>
-      regionHierarchy.flatMap((stateEntry) =>
+      filteredRegionHierarchy.flatMap((stateEntry) =>
         stateEntry.cities.flatMap((cityEntry) => cityEntry.clients.map((clientEntry) => clientEntry.key)),
       ),
-    [regionHierarchy],
+    [filteredRegionHierarchy],
   );
 
   useEffect(() => {
@@ -379,6 +393,21 @@ export default function DetalhamentoVendas() {
         <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
           <CardContent className="p-0">
             <div className="border-b border-slate-800/80 px-6 py-4">
+              <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative w-full max-w-xl">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder={searchPlaceholder}
+                    className="border-slate-700 bg-slate-900/80 pl-10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-500"
+                  />
+                </div>
+                <div className="text-xs uppercase tracking-[0.24em] text-slate-400">
+                  Busca aplicada em: {detailMode === 'nota' ? 'detalhamento por nota' : 'detalhamento por regiao'}
+                </div>
+              </div>
+
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {levelButtons.map((button) => (
                   <Button
@@ -401,10 +430,10 @@ export default function DetalhamentoVendas() {
               </div>
             </div>
 
-            {notas.length ? (
+            {activeHasResults ? (
               detailMode === 'nota' ? (
                 <DetalhamentoVendasNotaMode
-                  notas={notas}
+                  notas={filteredNotas}
                   openNoteValues={openNoteValues}
                   onOpenNoteValuesChange={setOpenNoteValues}
                   openNoteClientValues={openNoteClientValues}
@@ -414,7 +443,7 @@ export default function DetalhamentoVendas() {
                 />
               ) : (
                 <DetalhamentoVendasRegiaoMode
-                  regionHierarchy={regionHierarchy}
+                  regionHierarchy={filteredRegionHierarchy}
                   openRegionStateValues={openRegionStateValues}
                   onOpenRegionStateValuesChange={setOpenRegionStateValues}
                   openRegionCityValues={openRegionCityValues}
@@ -425,7 +454,9 @@ export default function DetalhamentoVendas() {
               )
             ) : (
               <div className="p-6 text-sm text-slate-300">
-                Nenhuma nota de venda encontrada para o periodo selecionado.
+                {searchTerm.trim()
+                  ? 'Nenhum detalhamento encontrado para a pesquisa informada neste modo.'
+                  : 'Nenhuma nota de venda encontrada para o periodo selecionado.'}
               </div>
             )}
           </CardContent>

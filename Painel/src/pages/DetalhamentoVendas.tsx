@@ -432,15 +432,17 @@ export default function DetalhamentoVendas() {
 
             {activeHasResults ? (
               detailMode === 'nota' ? (
-                <DetalhamentoVendasNotaMode
-                  notas={filteredNotas}
-                  openNoteValues={openNoteValues}
-                  onOpenNoteValuesChange={setOpenNoteValues}
-                  openNoteClientValues={openNoteClientValues}
-                  onOpenNoteClientValuesChange={setOpenNoteClientValues}
-                  openNcmValues={openNcmValues}
-                  onOpenNcmValuesChange={setOpenNcmValues}
-                />
+                <div className="max-h-[70vh] overflow-y-auto">
+                  <DetalhamentoVendasNotaMode
+                    notas={filteredNotas}
+                    openNoteValues={openNoteValues}
+                    onOpenNoteValuesChange={setOpenNoteValues}
+                    openNoteClientValues={openNoteClientValues}
+                    onOpenNoteClientValuesChange={setOpenNoteClientValues}
+                    openNcmValues={openNcmValues}
+                    onOpenNcmValuesChange={setOpenNcmValues}
+                  />
+                </div>
               ) : (
                 <DetalhamentoVendasRegiaoMode
                   regionHierarchy={filteredRegionHierarchy}

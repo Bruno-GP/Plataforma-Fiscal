@@ -123,7 +123,7 @@ export function DetalhamentoVendasNotaMode({
 
                           <AccordionContent className="pb-4">
                             <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/85">
-                              <Table>
+                              <Table className="min-w-[920px]">
                                 <TableHeader>
                                   <TableRow className="border-slate-800 bg-slate-950/80 hover:bg-slate-950/80">
                                     <TableHead className="text-slate-300">Cod do produto</TableHead>

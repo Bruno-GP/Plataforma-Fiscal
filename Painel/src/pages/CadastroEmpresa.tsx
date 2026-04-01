@@ -117,7 +117,7 @@ export default function CadastroEmpresaInterno() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
+                minLength={12}
                 required
               />
             </div>

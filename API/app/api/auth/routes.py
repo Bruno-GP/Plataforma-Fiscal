@@ -1,17 +1,25 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 import psycopg
 
-from app.core.security import AuthenticatedUser, create_access_token
+from app.core.audit import log_security_event
+from app.core.security import (
+    AuthenticatedUser,
+    clear_auth_cookie,
+    create_access_token,
+    get_current_user,
+    get_session_expires_in,
+    set_auth_cookie,
+)
 from app.models.nfe.auth.schemas import (
     LoginCadastroRequest,
     LoginCadastroResponse,
     LoginRequest,
     LoginResponse,
+    SessaoResponse,
 )
 from app.services.nfe.auth.login_service import LoginService
 
 router = APIRouter()
-
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
@@ -28,12 +36,25 @@ def _build_auth_payload(resultado) -> tuple[AuthenticatedUser, str, int]:
     return user, access_token, expires_in
 
 
+def _build_response_payload(user: AuthenticatedUser, expires_in: int, status_value: str) -> dict:
+    return {
+        "status": status_value,
+        "login_id": user.login_id,
+        "empresa_id": user.empresa_id,
+        "cnpj": user.cnpj,
+        "email": user.email,
+        "empresa_nome": user.empresa_nome,
+        "tem_sped": user.tem_sped,
+        "expires_in": expires_in,
+    }
+
+
 @auth_router.post(
     "/registrar",
     response_model=LoginCadastroResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def registrar_login(request: LoginCadastroRequest):
+def registrar_login(request: LoginCadastroRequest, response: Response):
     try:
         resultado = LoginService().registrar(
             empresa_nome=request.empresa_nome,
@@ -54,23 +75,12 @@ def registrar_login(request: LoginCadastroRequest):
         ) from exc
 
     user, access_token, expires_in = _build_auth_payload(resultado)
-
-    return LoginCadastroResponse(
-        status="cadastrado",
-        login_id=user.login_id,
-        empresa_id=user.empresa_id,
-        cnpj=user.cnpj,
-        email=user.email,
-        empresa_nome=user.empresa_nome,
-        tem_sped=user.tem_sped,
-        access_token=access_token,
-        token_type="Bearer",
-        expires_in=expires_in,
-    )
+    set_auth_cookie(response, access_token, expires_in)
+    return LoginCadastroResponse(**_build_response_payload(user, expires_in, "cadastrado"))
 
 
 @auth_router.post("/entrar", response_model=LoginResponse)
-def autenticar_login(request: LoginRequest):
+def autenticar_login(request: LoginRequest, response: Response):
     try:
         resultado = LoginService().autenticar(
             email=request.email,
@@ -88,19 +98,21 @@ def autenticar_login(request: LoginRequest):
         ) from exc
 
     user, access_token, expires_in = _build_auth_payload(resultado)
+    set_auth_cookie(response, access_token, expires_in)
+    return LoginResponse(**_build_response_payload(user, expires_in, "ok"))
 
-    return LoginResponse(
-        status="ok",
-        login_id=user.login_id,
-        empresa_id=user.empresa_id,
-        cnpj=user.cnpj,
-        email=user.email,
-        empresa_nome=user.empresa_nome,
-        tem_sped=user.tem_sped,
-        access_token=access_token,
-        token_type="Bearer",
-        expires_in=expires_in,
-    )
+
+@auth_router.get("/sessao", response_model=SessaoResponse)
+def obter_sessao_atual(current_user: AuthenticatedUser = Depends(get_current_user)):
+    return SessaoResponse(**_build_response_payload(current_user, get_session_expires_in(), "ok"))
+
+
+@auth_router.post("/sair", status_code=status.HTTP_204_NO_CONTENT)
+def sair(response: Response):
+    clear_auth_cookie(response)
+    log_security_event("logout", outcome="success", reason="user_logout")
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 
 router.include_router(auth_router)

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   API_BASE_URL,
   apiFetch,
@@ -35,6 +35,7 @@ interface AuthResult {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isReady: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (empresaNome: string, email: string, password: string, cnpj: string, temSped: boolean, autoLogin?: boolean) => Promise<AuthResult>;
   logout: () => void;
@@ -48,8 +49,6 @@ interface LoginResponse {
   email: string;
   empresa_nome: string;
   tem_sped?: boolean;
-  access_token: string;
-  token_type: string;
   expires_in: number;
 }
 
@@ -99,6 +98,7 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [isReady, setIsReady] = useState(false);
   const [user, setUser] = useState<User | null>(() => {
     const session = readAuthSession();
     if (!session) {
@@ -133,17 +133,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return '';
     }
 
-    const normalizedName = trimmed.split('/').pop()?.trim() ?? trimmed;
-
-    return normalizedName;
+    return trimmed.split('/').pop()?.trim() ?? trimmed;
   };
 
   const persistAuthenticatedUser = (data: LoginResponse, fallbackId: string) => {
     const resolvedId = data.login_id ?? data.empresa_id ?? fallbackId;
-    const displayName = resolveDisplayName(data.empresa_nome, data.email);
     const nextUser: SessionUser = {
       id: String(resolvedId),
-      name: displayName,
+      name: resolveDisplayName(data.empresa_nome, data.email),
       email: data.email,
       emitente_cnpj: normalizeSessionCnpj(data.cnpj),
       avatar: undefined,
@@ -153,11 +150,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(nextUser);
     saveAuthSession({
       user: nextUser,
-      accessToken: data.access_token,
-      tokenType: data.token_type,
       expiresAt: Date.now() + data.expires_in * 1000,
     });
   };
+
+  useEffect(() => {
+    const hydrateSession = async () => {
+      try {
+        const response = await apiFetch(`${API_BASE_URL}/auth/sessao`);
+        if (!response.ok) {
+          setUser(null);
+          return;
+        }
+
+        const data = (await response.json()) as LoginResponse;
+        persistAuthenticatedUser(data, data.email);
+      } catch {
+        setUser(null);
+      } finally {
+        setIsReady(true);
+      }
+    };
+
+    void hydrateSession();
+  }, []);
 
   const login = async (email: string, password: string): Promise<AuthResult> => {
     if (!email || !password) {
@@ -206,8 +222,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, message: 'Informe empresa, email, senha e CNPJ.' };
     }
 
-    if (senhaParaValidacao.length < 8) {
-      return { ok: false, message: 'A senha deve ter no mínimo 8 caracteres.' };
+    if (senhaParaValidacao.length < 12) {
+      return { ok: false, message: 'A senha deve ter no mínimo 12 caracteres, com maiúscula, minúscula, número e símbolo.' };
     }
 
     if (cnpjNormalizado.length !== 14) {
@@ -237,7 +253,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const data = (await response.json()) as LoginResponse;
-    
+
     if (autoLogin) {
       persistAuthenticatedUser(data, emailNormalizado);
     }
@@ -246,6 +262,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    void apiFetch(`${API_BASE_URL}/auth/sair`, { method: 'POST' });
     setUser(null);
     clearAuthSession();
   };
@@ -255,6 +272,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{
         user,
         isAuthenticated: !!user,
+        isReady,
         login,
         register,
         logout,

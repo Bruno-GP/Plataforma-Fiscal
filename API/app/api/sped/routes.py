@@ -3,6 +3,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
+from app.core.upload_security import validate_txt_uploads
 from app.models.nfe.schemas import ConsultaKPIResponse
 from app.models.sped.schemas import (
   ImportacaoSpedArquivoResultado,
@@ -56,11 +57,8 @@ async def importar_sped(
       detail="O limite máximo por importação é de 500 arquivos SPED.",
     )
 
-  conteudos: list[tuple[str, bytes]] = []
-  for arquivo in arquivos:
-    if not arquivo.filename.lower().endswith(".txt"):
-      continue
-    conteudos.append((arquivo.filename, await arquivo.read()))
+  uploads_validados = await validate_txt_uploads(arquivos)
+  conteudos = [(arquivo.filename, arquivo.content) for arquivo in uploads_validados]
 
   if not conteudos:
     raise HTTPException(

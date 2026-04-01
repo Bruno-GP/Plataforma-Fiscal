@@ -18,8 +18,6 @@ export interface SessionUser {
 
 export interface AuthSession {
   user: SessionUser;
-  accessToken: string;
-  tokenType: string;
   expiresAt: number;
 }
 
@@ -31,7 +29,7 @@ export const readAuthSession = (): AuthSession | null => {
 
   try {
     const parsed = JSON.parse(rawValue) as AuthSession;
-    if (!parsed?.accessToken || !parsed?.user?.email || !parsed?.expiresAt) {
+    if (!parsed?.user?.email || !parsed?.expiresAt) {
       clearAuthSession();
       return null;
     }
@@ -58,25 +56,13 @@ export const clearAuthSession = () => {
   localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
 };
 
-export const getAccessToken = (): string | null => readAuthSession()?.accessToken ?? null;
-
-export const getAuthorizationHeader = (): Record<string, string> => {
-  const token = getAccessToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 export const apiFetch = (input: string, init: RequestInit = {}) => {
   const headers = new Headers(init.headers);
-
-  Object.entries(getAuthorizationHeader()).forEach(([key, value]) => {
-    if (!headers.has(key)) {
-      headers.set(key, value);
-    }
-  });
 
   return fetch(input, {
     ...init,
     headers,
+    credentials: init.credentials ?? 'include',
   }).then((response) => {
     if (response.status === 401) {
       clearAuthSession();

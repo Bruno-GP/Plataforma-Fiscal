@@ -5,6 +5,7 @@ import psycopg
 from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File
 
 from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
+from app.core.upload_security import validate_xml_uploads
 from app.core.security import require_company_scope
 from app.services.nfe.process_nfe import ProcessarNFeService
 from app.services.nfe.nfe_consulta_service import NFeConsultaService
@@ -88,11 +89,8 @@ async def importar_xml(
     )
     # `conteudos` mantém apenas nome + bytes dos arquivos válidos para o serviço de importação.
 
-  conteudos: list[tuple[str, bytes]] = []
-  for arquivo in arquivos:
-    if not arquivo.filename.lower().endswith(".xml"):
-      continue
-    conteudos.append((arquivo.filename, await arquivo.read()))
+  uploads_validados = await validate_xml_uploads(arquivos)
+  conteudos = [(arquivo.filename, arquivo.content) for arquivo in uploads_validados]
 
   if not conteudos:
     raise HTTPException(

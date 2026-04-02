@@ -4,6 +4,46 @@ from typing import List
 from app.domain.nfe.xml_models import XmlNFe
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
+AUTORIZADOS_NFE = {"100", "150"}
+
+def _local_name(tag: str) -> str:
+    return (tag or "").split("}")[-1]
+
+def _eh_xml_evento(root: ET.Element) -> bool:
+    nomes_evento = {
+        "procEventoNFe",
+        "evento",
+        "envEvento",
+        "retEvento",
+        "procCCeNFe",
+    }
+    if _local_name(root.tag) in nomes_evento:
+        return True
+
+    return root.find(".//nfe:infEvento", NS) is not None
+
+def _eh_xml_nfse(root: ET.Element) -> bool:
+    nomes_nfse = {"CompNfse", "Nfse", "NFS-e", "GerarNfseResposta", "ConsultarNfseResposta"}
+    if _local_name(root.tag) in nomes_nfse:
+        return True
+
+    return root.find(".//InfNfse") is not None or root.find(".//CompNfse") is not None
+
+def classificar_xml_processavel(root: ET.Element) -> tuple[bool, str]:
+    if _eh_xml_evento(root):
+        return False, "XML de evento (ex.: CCe/cancelamento) não é processável como documento fiscal."
+
+    inf_nfe = root.find(".//nfe:infNFe", NS)
+    if inf_nfe is not None:
+        cstat = (root.findtext(".//nfe:protNFe/nfe:infProt/nfe:cStat", default="", namespaces=NS) or "").strip()
+        if cstat not in AUTORIZADOS_NFE:
+            return False, "NFe/NFCe sem protocolo autorizado."
+        return True, "NFe/NFCe autorizada."
+
+    if _eh_xml_nfse(root):
+        return True, "NFSe identificada."
+
+    return False, "XML não corresponde a um documento fiscal autorizado suportado."
 
 def extrair_emitente_xml(root: ET.Element) -> tuple[str | None, str | None]:
     emit = root.find(".//nfe:emit", NS)
@@ -50,6 +90,11 @@ class XmlReader:
             try:
                 tree = ET.parse(caminho)
                 root = tree.getroot()
+
+                processavel, motivo = classificar_xml_processavel(root)
+                if not processavel:
+                    print(f"[XML IGNORADO] {arquivo}: {motivo}")
+                    continue
 
                 cnpj, nome = extrair_emitente_xml(root)
                 

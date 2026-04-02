@@ -199,6 +199,12 @@ export interface AnaliseVendasResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_vendido: number | string;
+  top_cfops_valor: Array<{
+    cfop: string;
+    descricao: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+  }>;
   top_regioes_valor: Array<{ regiao: string; valor_total: number | string; quantidade_documentos: number }>;
   top_cidades_valor: Array<{ cidade: string; uf?: string; valor_total: number | string; quantidade_documentos: number }>;
   top_clientes_valor: Array<{ cliente: string; valor_total: number | string; quantidade_documentos: number }>;
@@ -206,6 +212,28 @@ export interface AnaliseVendasResponse {
   top_produtos_valor: RankingProdutoCompra[];
   top_produtos_quantidade: RankingProdutoCompra[];
   relatorio_ia?: string | null;
+}
+
+export interface AnaliseFiscalCfopResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  total_movimentado: number | string;
+  quantidade_documentos: number;
+  quantidade_cfops: number;
+  top_categorias: Array<{
+    categoria: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+    quantidade_documentos: number;
+  }>;
+  top_cfops: Array<{
+    cfop: string;
+    descricao: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+  }>;
 }
 
 export interface SerieMensalVendasItem {
@@ -259,6 +287,27 @@ export const fetchSpedAnaliseVendas = async (params: {
   }
 
   return response.json() as Promise<AnaliseVendasResponse>;
+};
+
+export const fetchSpedAnaliseFiscalCfop = async (params: {
+    emitente_cnpj?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {}, options: RequestOptions = {}): Promise<AnaliseFiscalCfopResponse> => {
+
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/fiscal/cfop?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise fiscal por CFOP.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar análise fiscal por CFOP.');
+  }
+
+  return response.json() as Promise<AnaliseFiscalCfopResponse>;
 };
 
 export const fetchSpedDashboardVendas = async (

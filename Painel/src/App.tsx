@@ -19,6 +19,7 @@ import DetalhamentoVendas from "./pages/DetalhamentoVendas";
 import ImportacaoXML from "./pages/ImportacaoXML";
 import ImportacaoSPED from "./pages/ImportacaoSPED";
 import AnaliseCompras from "./pages/AnaliseCompras";
+import AnaliseFiscalCfop from "./pages/AnaliseFiscalCfop";
 import Inconsistencias from "./pages/Inconsistencias";
 import RelatoriosIA from "./pages/RelatoriosIA";
 
@@ -96,6 +97,14 @@ const App = () => (
                 element={
                   <MainLayout>
                     <AnaliseComprasRoute />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/analise-fiscal-cfop"
+                element={
+                  <MainLayout>
+                    <AnaliseFiscalCfop />
                   </MainLayout>
                 }
               />

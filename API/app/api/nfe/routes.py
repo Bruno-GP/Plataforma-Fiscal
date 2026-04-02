@@ -28,6 +28,7 @@ from app.models.nfe.schemas import (
   ProcessarNFeResponse,
   AnaliseComprasResponse,
   AnaliseVendasResponse,
+  AnaliseFiscalCfopResponse,
   AnaliseClientesResponse,
   DashboardComprasResponse,
   DashboardVendasResponse,
@@ -330,6 +331,42 @@ def consultar_analise_vendas_nfe(
 
   return AnaliseVendasResponse(status="ok", **resultado)
 
+@nfe_router.get("/analise/fiscal/cfop", response_model=AnaliseFiscalCfopResponse)
+def consultar_analise_fiscal_cfop_nfe(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int | None = Query(default=100000, ge=1),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj válido ou um email cadastrado.",
+    )
+
+  try:
+    resultado = service.analisar_fiscal_cfop(
+      emitente_cnpj=emitente_resolvido,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  return AnaliseFiscalCfopResponse(status="ok", **resultado)
+
 @nfe_router.get("/analise/compras/dashboard", response_model=DashboardComprasResponse)
 def consultar_dashboard_compras_nfe(
   emitente_cnpj: str | None = Query(default=None),
@@ -456,10 +493,10 @@ def consultar_dashboard_vendas_nfe(
     periodo_ano=ano_referencia - 1,
     limite=120,
   )
+  ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
 
   if periodo_mes is not None:
     resultados_filtrados = [item for item in resultados_ano_atual if item.periodo_mes == periodo_mes]
-    ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
     resultados_anteriores = (
       [item for item in resultados_ano_atual if item.periodo_mes == mes_anterior]
       if ano_anterior == ano_referencia
@@ -469,11 +506,35 @@ def consultar_dashboard_vendas_nfe(
     resultados_filtrados = resultados_ano_atual
     resultados_anteriores = resultados_ano_anterior
 
+  total_vendido_atual = service.obter_total_vendido_bruto(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+    periodo_mes=periodo_mes,
+  )
+  total_vendido_anterior = service.obter_total_vendido_bruto(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_anterior,
+    periodo_mes=mes_anterior,
+  )
+  totais_mensais_brutos = service.listar_totais_vendas_mensais_bruto(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+  )
+  resumo_atual = resumir_vendas_por_kpis(resultados_filtrados, DashboardVendasResumo, limite).model_copy(
+    update={"total_vendido": total_vendido_atual},
+  )
+  resumo_anterior = resumir_vendas_por_kpis(resultados_anteriores, DashboardVendasResumo, limite).model_copy(
+    update={"total_vendido": total_vendido_anterior},
+  )
+
   serie_mensal = [
     SerieMensalVendasItem(
       periodo_ano=ano_referencia,
       periodo_mes=item.periodo_mes or 0,
-      total_vendido=Decimal(str(item.kpis.total_vendas or 0)),
+      total_vendido=totais_mensais_brutos.get(
+        item.periodo_mes or 0,
+        Decimal(str(item.kpis.total_vendas or 0)),
+      ),
       quantidade_notas=int(item.kpis.quantidade_notas or 0),
       total_impostos=(
         Decimal(str(item.kpis.total_icms or 0))
@@ -492,8 +553,8 @@ def consultar_dashboard_vendas_nfe(
     periodo_ano=ano_referencia,
     periodo_mes=periodo_mes,
     anos_disponiveis=anos_disponiveis,
-    resumo_atual=resumir_vendas_por_kpis(resultados_filtrados, DashboardVendasResumo, limite),
-    resumo_anterior=resumir_vendas_por_kpis(resultados_anteriores, DashboardVendasResumo, limite),
+    resumo_atual=resumo_atual,
+    resumo_anterior=resumo_anterior,
     serie_mensal=serie_mensal,
   )
 

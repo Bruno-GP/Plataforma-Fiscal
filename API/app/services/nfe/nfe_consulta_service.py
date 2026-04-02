@@ -115,6 +115,96 @@ class NFeConsultaService:
       return cnpj_filtrado
 
     return self.obter_cnpj_por_email(email)
+
+  def _montar_filtros_vendas_itens(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+  ) -> tuple[str, list[object]]:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+    if not cnpj_filtrado:
+      raise ValueError("Informe um emitente_cnpj válido.")
+
+    filtros_docs = [
+      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
+    ]
+    parametros: list[object] = [cnpj_filtrado]
+
+    if periodo_ano:
+      filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
+      parametros.append(periodo_ano)
+
+    if periodo_mes:
+      filtros_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
+      parametros.append(periodo_mes)
+
+    return " AND ".join(filtros_docs), parametros
+
+  def obter_total_vendido_bruto(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+  ) -> Decimal:
+    where_clause, parametros = self._montar_filtros_vendas_itens(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          f"""
+          SELECT COALESCE(SUM(i.valor_total), 0) AS total_vendido
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          """,
+          parametros,
+        )
+        row = cur.fetchone()
+
+    return row[0] if row else Decimal("0.00")
+
+  def listar_totais_vendas_mensais_bruto(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: int,
+  ) -> dict[int, Decimal]:
+    where_clause, parametros = self._montar_filtros_vendas_itens(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=periodo_ano,
+    )
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          f"""
+          SELECT
+            EXTRACT(MONTH FROM n.data_emissao)::int AS periodo_mes,
+            COALESCE(SUM(i.valor_total), 0) AS total_vendido
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 1
+          """,
+          parametros,
+        )
+        rows = cur.fetchall()
+
+    return {
+      int(periodo_mes): valor_total or Decimal("0.00")
+      for periodo_mes, valor_total in rows
+    }
     
   def _filtro_vendas(self) -> str:
     return """
@@ -134,6 +224,29 @@ class NFeConsultaService:
           AND COALESCE(c.descricao, '') ILIKE 'venda%%'
         LIMIT 1
       )
+    """
+
+  def _categoria_fiscal_case(self) -> str:
+    return """
+      CASE
+        WHEN LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')
+          THEN 'Venda'
+        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%devol%%' THEN 'Devolução'
+        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%bonific%%'
+          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%brinde%%'
+          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%doaç%%'
+          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%doac%%' THEN 'Bonificação'
+        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%remessa%%'
+          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%demonstra%%'
+          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%conserto%%'
+          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%comodato%%'
+          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%industrializa%%' THEN 'Remessa'
+        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%transfer%%' THEN 'Transferência'
+        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%substitui%%'
+          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%subst. trib%%'
+          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%st%%' THEN 'Substituição Tributária'
+        ELSE 'Outras operações'
+      END
     """
     
   def obter_ultimo_periodo(
@@ -615,21 +728,11 @@ class NFeConsultaService:
     if not cnpj_filtrado:
       raise ValueError("Informe um emitente_cnpj válido.")
 
-    filtros_docs = [
-      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
-      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
-    ]
-    parametros: list[object] = [cnpj_filtrado]
-
-    if periodo_ano:
-      filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
-      parametros.append(periodo_ano)
-
-    if periodo_mes:
-      filtros_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
-      parametros.append(periodo_mes)
-
-    where_clause = " AND ".join(filtros_docs)
+    where_clause, parametros = self._montar_filtros_vendas_itens(
+      emitente_cnpj=cnpj_filtrado,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
@@ -749,6 +852,39 @@ class NFeConsultaService:
         cur.execute(
           f"""
           SELECT
+            COALESCE(NULLIF(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), ''), '0000') AS cfop,
+            COALESCE(NULLIF(TRIM(c.descricao), ''), 'CFOP sem descrição') AS descricao,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          LEFT JOIN public.notas_cfops AS c
+            ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
+               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+          WHERE {where_clause}
+          GROUP BY 1, 2
+          ORDER BY 3 DESC, 1 ASC
+          LIMIT %s
+          """,
+          [*parametros, limite],
+        )
+        top_cfops_valor = [
+          {
+            "cfop": cfop,
+            "descricao": descricao,
+            "valor_total": valor_total or Decimal("0.00"),
+            "participacao_percentual": (
+              ((valor_total or Decimal("0.00")) / total_vendido) * Decimal("100")
+              if total_vendido
+              else Decimal("0.00")
+            ),
+          }
+          for cfop, descricao, valor_total in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT
             COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nÃ£o identificada') AS cidade,
             COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
             COALESCE(SUM(i.valor_total), 0) AS valor_total,
@@ -820,8 +956,138 @@ class NFeConsultaService:
       "top_clientes_quantidade": top_clientes_quantidade,
       "top_produtos_valor": top_produtos_valor,
       "top_produtos_quantidade": top_produtos_quantidade,
+      "top_cfops_valor": top_cfops_valor,
       "top_regioes_valor": top_regioes_valor,
       "top_cidades_valor": top_cidades_valor,
+    }
+
+  def analisar_fiscal_cfop(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+    if not cnpj_filtrado:
+      raise ValueError("Informe um emitente_cnpj válido.")
+
+    filtros_docs = [
+      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+    ]
+    parametros: list[object] = [cnpj_filtrado]
+
+    if periodo_ano:
+      filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
+      parametros.append(periodo_ano)
+
+    if periodo_mes:
+      filtros_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
+      parametros.append(periodo_mes)
+
+    where_clause = " AND ".join(filtros_docs)
+    categoria_case = self._categoria_fiscal_case()
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(SUM(i.valor_total), 0) AS total_movimentado,
+            COUNT(DISTINCT n.id) AS quantidade_documentos,
+            COUNT(DISTINCT regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')) AS quantidade_cfops
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE {where_clause}
+          """,
+          parametros,
+        )
+        resumo_row = cur.fetchone()
+        total_movimentado = resumo_row[0] if resumo_row else Decimal("0.00")
+        quantidade_documentos = resumo_row[1] if resumo_row else 0
+        quantidade_cfops = resumo_row[2] if resumo_row else 0
+
+        categorias_sql = f"""
+          SELECT
+            {categoria_case} AS categoria,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total,
+            COUNT(DISTINCT n.id) AS quantidade_documentos
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          LEFT JOIN public.notas_cfops AS c
+            ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
+               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+        """
+        categorias_params = [*parametros]
+        if limite:
+          categorias_sql += "\n          LIMIT %s"
+          categorias_params.append(limite)
+
+        cur.execute(categorias_sql, categorias_params)
+        top_categorias = [
+          {
+            "categoria": categoria,
+            "valor_total": valor_total or Decimal("0.00"),
+            "participacao_percentual": (
+              ((valor_total or Decimal("0.00")) / total_movimentado) * Decimal("100")
+              if total_movimentado
+              else Decimal("0.00")
+            ),
+            "quantidade_documentos": quantidade_docs or 0,
+          }
+          for categoria, valor_total, quantidade_docs in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(NULLIF(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), ''), '0000') AS cfop,
+            COALESCE(NULLIF(TRIM(c.descricao), ''), 'CFOP sem descrição') AS descricao,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          LEFT JOIN public.notas_cfops AS c
+            ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
+               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+          WHERE {where_clause}
+          GROUP BY 1, 2
+          ORDER BY 3 DESC, 1 ASC
+          LIMIT %s
+          """,
+          [*parametros, limite],
+        )
+        top_cfops = [
+          {
+            "cfop": cfop,
+            "descricao": descricao,
+            "valor_total": valor_total or Decimal("0.00"),
+            "participacao_percentual": (
+              ((valor_total or Decimal("0.00")) / total_movimentado) * Decimal("100")
+              if total_movimentado
+              else Decimal("0.00")
+            ),
+          }
+          for cfop, descricao, valor_total in cur.fetchall()
+        ]
+
+    return {
+      "emitente_cnpj": cnpj_filtrado,
+      "periodo_ano": periodo_ano,
+      "periodo_mes": periodo_mes,
+      "total_movimentado": total_movimentado or Decimal("0.00"),
+      "quantidade_documentos": quantidade_documentos or 0,
+      "quantidade_cfops": quantidade_cfops or 0,
+      "top_categorias": top_categorias,
+      "top_cfops": top_cfops,
     }
 
   def analisar_clientes(

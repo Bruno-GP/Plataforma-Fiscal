@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Header } from './components/Header';
+import { CfopAnalysisTable } from './components/CfopAnalysisTable';
 import { RankingCard } from './components/RankingCard';
 import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
@@ -105,7 +106,7 @@ export default function Dashboard({
 
   const currentData = dashboardQuery.data?.resumo_atual;
   const previousData = dashboardQuery.data?.resumo_anterior;
-  const totalFaturamento = parseDecimal(currentData?.total_vendido ?? 0);
+  const totalFaturamento = parseDecimal(mapQuery.data?.total_vendido ?? currentData?.total_vendido ?? 0);
 
   const totalSalesChange = parseDecimal(previousData?.total_vendido ?? 0)
     ? ((totalFaturamento - parseDecimal(previousData?.total_vendido ?? 0)) / parseDecimal(previousData?.total_vendido ?? 0)) * 100
@@ -192,7 +193,11 @@ export default function Dashboard({
     return (valor / totalFaturamento) * 100;
   };
 
-  const topClientesItems = (currentData?.top_clientes ?? []).map((cliente, index) => {
+  const topClientesBase = mapQuery.data?.top_clientes_valor?.length
+    ? mapQuery.data.top_clientes_valor
+    : currentData?.top_clientes ?? [];
+
+  const topClientesItems = topClientesBase.slice(0, 5).map((cliente, index) => {
     const percentual = resolvePercentual(cliente.valor_total);
     const valorTotal = parseDecimal(cliente.valor_total ?? 0);
 
@@ -209,7 +214,11 @@ export default function Dashboard({
     };
   });
 
-  const topProdutosItems = (currentData?.top_produtos ?? []).map((produto, index) => {
+  const topProdutosBase = mapQuery.data?.top_produtos_valor?.length
+    ? mapQuery.data.top_produtos_valor
+    : currentData?.top_produtos ?? [];
+
+  const topProdutosItems = topProdutosBase.slice(0, 5).map((produto, index) => {
     const percentual = resolvePercentual(produto.valor_total);
     const valorTotal = parseDecimal(produto.valor_total ?? 0);
 
@@ -226,12 +235,16 @@ export default function Dashboard({
     };
   });
 
-  const topCidadesItems = (currentData?.top_cidades ?? []).map((cidade, index) => {
+  const topCidadesBase = mapQuery.data?.top_cidades_valor?.length
+    ? mapQuery.data.top_cidades_valor
+    : currentData?.top_cidades ?? [];
+
+  const topCidadesItems = topCidadesBase.slice(0, 5).map((cidade, index) => {
     const percentual = resolvePercentual(cidade.valor_total);
     const valorTotal = parseDecimal(cidade.valor_total ?? 0);
 
     return {
-      key: `${cidade.cidade}-${index}`,
+      key: `${cidade.cidade}-${'uf' in cidade ? cidade.uf ?? 'sem-uf' : 'sem-uf'}-${index}`,
       title: cidade.cidade ?? 'Cidade não identificada',
       subtitle:
         percentual !== null
@@ -266,6 +279,14 @@ export default function Dashboard({
   const mapTopRegioesItems = (mapQuery.data?.top_regioes_valor ?? []).map((regiao) => ({
     regiao: regiao.regiao,
     rawValue: parseDecimal(regiao.valor_total ?? 0),
+  }));
+
+  const cfopItems = (mapQuery.data?.top_cfops_valor ?? []).map((cfop, index) => ({
+    key: `${cfop.cfop}-${index}`,
+    cfop: cfop.cfop || '0000',
+    descricao: cfop.descricao || 'CFOP sem descrição',
+    valorTotal: parseDecimal(cfop.valor_total ?? 0),
+    participacao: parseDecimal(cfop.participacao_percentual ?? 0),
   }));
 
   return (

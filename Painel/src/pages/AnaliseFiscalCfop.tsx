@@ -53,14 +53,14 @@ export default function AnaliseFiscalCfop() {
             emitente_cnpj: emitenteCnpj,
             periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
             periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 20,
+            limite: 100000,
           })
         : fetchNfeAnaliseFiscalCfop({
             emitente_cnpj: emitenteCnpj,
             email: user?.email,
             periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
             periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 20,
+            limite: 100000,
           }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
@@ -201,8 +201,8 @@ export default function AnaliseFiscalCfop() {
         isLoading={fiscalQuery.isLoading}
         isError={fiscalQuery.isError}
         formatCurrency={formatCurrency}
-        title="CFOPs com maior impacto"
-        description="CFOP, descrição, valor movimentado e participação no total fiscal."
+        title="Todos os CFOPs com valor"
+        description="CFOPs ordenados por impacto no período, com uma faixa maior de registros para evitar divergências ao conferir as somas."
         emptyMessage="Nenhum CFOP fiscal encontrado para o período selecionado."
       />
     </div>

@@ -229,6 +229,8 @@ class NFeConsultaService:
   def _categoria_fiscal_case(self) -> str:
     return """
       CASE
+        WHEN LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')
+          THEN 'Venda'
         WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%devol%%' THEN 'Devolução'
         WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%bonific%%'
           OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%brinde%%'
@@ -243,8 +245,6 @@ class NFeConsultaService:
         WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%substitui%%'
           OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%subst. trib%%'
           OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%st%%' THEN 'Substituição Tributária'
-        WHEN LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')
-          AND COALESCE(c.descricao, n.natureza_operacao, '') ILIKE 'venda%%' THEN 'Venda'
         ELSE 'Outras operações'
       END
     """
@@ -1011,8 +1011,7 @@ class NFeConsultaService:
         quantidade_documentos = resumo_row[1] if resumo_row else 0
         quantidade_cfops = resumo_row[2] if resumo_row else 0
 
-        cur.execute(
-          f"""
+        categorias_sql = f"""
           SELECT
             {categoria_case} AS categoria,
             COALESCE(SUM(i.valor_total), 0) AS valor_total,
@@ -1026,10 +1025,13 @@ class NFeConsultaService:
           WHERE {where_clause}
           GROUP BY 1
           ORDER BY 2 DESC, 1 ASC
-          LIMIT %s
-          """,
-          [*parametros, limite],
-        )
+        """
+        categorias_params = [*parametros]
+        if limite:
+          categorias_sql += "\n          LIMIT %s"
+          categorias_params.append(limite)
+
+        cur.execute(categorias_sql, categorias_params)
         top_categorias = [
           {
             "categoria": categoria,

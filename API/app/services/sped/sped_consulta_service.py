@@ -49,6 +49,9 @@ def _obter_regiao_por_uf(uf: object) -> str | None:
 def _categoria_fiscal_case_sped() -> str:
   return """
     CASE
+      WHEN d.tipo_operacao = 'saida'
+        AND LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')
+        THEN 'Venda'
       WHEN COALESCE(cf.descricao, '') ILIKE '%%devol%%' THEN 'Devolução'
       WHEN COALESCE(cf.descricao, '') ILIKE '%%bonific%%'
         OR COALESCE(cf.descricao, '') ILIKE '%%brinde%%'
@@ -63,9 +66,6 @@ def _categoria_fiscal_case_sped() -> str:
       WHEN COALESCE(cf.descricao, '') ILIKE '%%substitui%%'
         OR COALESCE(cf.descricao, '') ILIKE '%%subst. trib%%'
         OR COALESCE(cf.descricao, '') ILIKE '%%st%%' THEN 'Substituição Tributária'
-      WHEN d.tipo_operacao = 'saida'
-        AND LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')
-        AND COALESCE(cf.descricao, '') ILIKE 'venda%%' THEN 'Venda'
       ELSE 'Outras operações'
     END
   """

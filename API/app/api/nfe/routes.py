@@ -337,7 +337,7 @@ def consultar_analise_fiscal_cfop_nfe(
   email: str | None = Query(default=None),
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
-  limite: int | None = Query(default=20, ge=1),
+  limite: int | None = Query(default=100000, ge=1),
 ):
   service = NFeConsultaService()
 

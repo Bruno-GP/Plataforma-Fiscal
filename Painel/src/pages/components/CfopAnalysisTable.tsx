@@ -14,6 +14,9 @@ interface CfopAnalysisTableProps {
   isLoading: boolean;
   isError: boolean;
   formatCurrency: (value: number) => string;
+  title?: string;
+  description?: string;
+  emptyMessage?: string;
 }
 
 export function CfopAnalysisTable({
@@ -21,12 +24,15 @@ export function CfopAnalysisTable({
   isLoading,
   isError,
   formatCurrency,
+  title = 'Análise de vendas por CFOP',
+  description = 'Faturamento e participação de cada CFOP no período selecionado.',
+  emptyMessage = 'Nenhum CFOP encontrado para o período selecionado.',
 }: CfopAnalysisTableProps) {
   return (
     <Card className="rounded-2xl border-slate-800/70 bg-gradient-to-br from-slate-950/80 via-slate-900/85 to-slate-950/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_45px_-30px_rgba(0,0,0,0.9)] backdrop-blur">
       <CardHeader>
-        <CardTitle>Análise de vendas por CFOP</CardTitle>
-        <CardDescription>Faturamento e participação de cada CFOP no período selecionado.</CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -59,7 +65,7 @@ export function CfopAnalysisTable({
             </TableBody>
           </Table>
         ) : (
-          <p className="text-sm text-muted-foreground">Nenhum CFOP de venda encontrado para o período selecionado.</p>
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         )}
       </CardContent>
     </Card>

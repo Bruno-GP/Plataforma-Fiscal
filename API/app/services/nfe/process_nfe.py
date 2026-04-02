@@ -13,7 +13,7 @@ from app.models.nfe.schemas import (
     KPIPorPeriodo
 )
 
-from app.domain.nfe.xml_reader import XmlReader, extrair_emitente_xml
+from app.domain.nfe.xml_reader import XmlReader, extrair_emitente_xml, classificar_xml_processavel
 from app.domain.nfe.xml_models import XmlNFe
 from app.domain.nfe.extractor import NFeExtractor
 from app.domain.nfe.consolidator import NFeConsolidator
@@ -54,10 +54,6 @@ class ProcessarNFeService:
             NFeItensService().registrar_itens(
                 conn=conn,
                 notas=notas_demais_modelos,
-            )
-            notas_service.remover_notas_sem_cfop_venda(
-                conn=conn,
-                processamento_id=processamento_id,
             )
 
         if notas_nfse:
@@ -100,6 +96,10 @@ class ProcessarNFeService:
             try:
                 root = ET.fromstring(conteudo)
             except ET.ParseError:
+                continue
+
+            processavel, _ = classificar_xml_processavel(root)
+            if not processavel:
                 continue
 
             cnpj_extraido, nome_emitente = extrair_emitente_xml(root)
@@ -270,7 +270,11 @@ class ProcessarNFeService:
                             periodo_ano=ano,
                             periodo_mes=mes,
                         )
-                        kpis_periodo = kpi_calculator.calcular(notas_para_kpi)
+                        notas_venda_para_kpi = notas_service.filtrar_notas_com_cfop_venda(
+                            conn=conn,
+                            notas=notas_para_kpi,
+                        )
+                        kpis_periodo = kpi_calculator.calcular(notas_venda_para_kpi)
 
                         kpi_calculator.registrar_kpis(
                             processamento_id=processamento_id,

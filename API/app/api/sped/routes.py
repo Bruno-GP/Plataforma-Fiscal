@@ -17,6 +17,7 @@ from app.models.sped.schemas import (
   AnaliseClientesResponse,
   ConsultaClientesSpedResponse,
   AnaliseVendasResponse,
+  AnaliseFiscalCfopResponse,
   DashboardComprasResponse,
   DashboardVendasResponse,
   DashboardVendasResumo,
@@ -215,6 +216,30 @@ def consultar_analise_vendas_sped(
     ) from exc
 
   return AnaliseVendasResponse(status="ok", **resultado)
+
+@sped_router.get("/analise/fiscal/cfop", response_model=AnaliseFiscalCfopResponse)
+def consultar_analise_fiscal_cfop_sped(
+  emitente_cnpj: str = Query(..., min_length=14, max_length=20),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int | None = Query(default=20, ge=1),
+):
+  _validar_empresa_sped(emitente_cnpj)
+
+  try:
+    resultado = SpedConsultaService().analisar_fiscal_cfop(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  return AnaliseFiscalCfopResponse(status="ok", **resultado)
 
 @sped_router.get("/analise/compras/dashboard", response_model=DashboardComprasResponse)
 def consultar_dashboard_compras_sped(

@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import {
+  API_BASE_URL,
+  apiFetch,
+  clearAuthSession,
+  readAuthSession,
+  saveAuthSession,
+  type SessionUser,
+} from '@/services/api';
 
 interface User {
   id: string;
@@ -27,6 +35,7 @@ interface AuthResult {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isReady: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (empresaNome: string, email: string, password: string, cnpj: string, temSped: boolean, autoLogin?: boolean) => Promise<AuthResult>;
   logout: () => void;
@@ -40,6 +49,7 @@ interface LoginResponse {
   email: string;
   empresa_nome: string;
   tem_sped?: boolean;
+  expires_in: number;
 }
 
 interface ApiErrorDetail {
@@ -77,11 +87,6 @@ const normalizeSessionCnpj = (value: string | null | undefined): string => {
   return digits;
 };
 
-const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-const API_BASE_URL = RAW_API_BASE_URL.endsWith('/api')
-  ? RAW_API_BASE_URL
-  : `${RAW_API_BASE_URL.replace(/\/$/, '')}/api`;
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
@@ -93,14 +98,14 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [isReady, setIsReady] = useState(false);
   const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem('user');
-
-    if (!stored) {
+    const session = readAuthSession();
+    if (!session) {
       return null;
     }
 
-    const parsed = JSON.parse(stored) as StoredUserLegacy;
+    const parsed = session.user as StoredUserLegacy;
     const emitenteCnpj = (parsed.emitente_cnpj ?? parsed.cnpj ?? '').replace(/\D/g, '');
 
     if (!parsed.id || !parsed.email || !emitenteCnpj) {
@@ -117,28 +122,65 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   });
 
-    const resolveDisplayName = (empresaNome: string | null | undefined, email: string) => {
-      const trimmed = empresaNome?.trim() ?? '';
-      if (!trimmed) {
-        return '';
-      }
+  const resolveDisplayName = (empresaNome: string | null | undefined, email: string) => {
+    const trimmed = empresaNome?.trim() ?? '';
+    if (!trimmed) {
+      return '';
+    }
 
-      const emailNormalizado = email.trim().toLowerCase();
-      if (emailNormalizado && trimmed.toLowerCase() === emailNormalizado) {
-        return '';
-      }
+    const emailNormalizado = email.trim().toLowerCase();
+    if (emailNormalizado && trimmed.toLowerCase() === emailNormalizado) {
+      return '';
+    }
 
-      const normalizedName = trimmed.split('/').pop()?.trim() ?? trimmed;
+    return trimmed.split('/').pop()?.trim() ?? trimmed;
+  };
 
-      return normalizedName;
+  const persistAuthenticatedUser = (data: LoginResponse, fallbackId: string) => {
+    const resolvedId = data.login_id ?? data.empresa_id ?? fallbackId;
+    const nextUser: SessionUser = {
+      id: String(resolvedId),
+      name: resolveDisplayName(data.empresa_nome, data.email),
+      email: data.email,
+      emitente_cnpj: normalizeSessionCnpj(data.cnpj),
+      avatar: undefined,
+      tem_sped: Boolean(data.tem_sped),
     };
+
+    setUser(nextUser);
+    saveAuthSession({
+      user: nextUser,
+      expiresAt: Date.now() + data.expires_in * 1000,
+    });
+  };
+
+  useEffect(() => {
+    const hydrateSession = async () => {
+      try {
+        const response = await apiFetch(`${API_BASE_URL}/auth/sessao`);
+        if (!response.ok) {
+          setUser(null);
+          return;
+        }
+
+        const data = (await response.json()) as LoginResponse;
+        persistAuthenticatedUser(data, data.email);
+      } catch {
+        setUser(null);
+      } finally {
+        setIsReady(true);
+      }
+    };
+
+    void hydrateSession();
+  }, []);
 
   const login = async (email: string, password: string): Promise<AuthResult> => {
     if (!email || !password) {
       return { ok: false, message: 'Informe email e senha.' };
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/entrar`, {
+    const response = await apiFetch(`${API_BASE_URL}/auth/entrar`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -158,19 +200,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const data = (await response.json()) as LoginResponse;
-    const resolvedId = data.login_id ?? data.empresa_id ?? email;
-    const displayName = resolveDisplayName(data.empresa_nome, data.email);
-    const nextUser: User = {
-      id: String(resolvedId),
-      name: displayName,
-      email: data.email,
-      emitente_cnpj: normalizeSessionCnpj(data.cnpj),
-      avatar: undefined,
-      tem_sped: Boolean(data.tem_sped),
-    };
-
-    setUser(nextUser);
-    localStorage.setItem('user', JSON.stringify(nextUser));
+    persistAuthenticatedUser(data, email);
     return { ok: true };
   };
 
@@ -192,15 +222,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, message: 'Informe empresa, email, senha e CNPJ.' };
     }
 
-    if (senhaParaValidacao.length < 8) {
-      return { ok: false, message: 'A senha deve ter no mínimo 8 caracteres.' };
+    if (senhaParaValidacao.length < 12) {
+      return { ok: false, message: 'A senha deve ter no mínimo 12 caracteres, com maiúscula, minúscula, número e símbolo.' };
     }
 
     if (cnpjNormalizado.length !== 14) {
       return { ok: false, message: 'Informe um CNPJ válido com 14 dígitos.' };
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/registrar`, {
+    const response = await apiFetch(`${API_BASE_URL}/auth/registrar`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -223,29 +253,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const data = (await response.json()) as LoginResponse;
-    
-    if (autoLogin) {
-      const resolvedId = data.login_id ?? data.empresa_id ?? emailNormalizado;
-      const displayName = resolveDisplayName(data.empresa_nome, data.email);
-      const nextUser: User = {
-        id: String(resolvedId),
-        name: displayName,
-        email: data.email,
-        emitente_cnpj: normalizeSessionCnpj(data.cnpj),
-        avatar: undefined,
-        tem_sped: Boolean(data.tem_sped),
-      };
 
-      setUser(nextUser);
-      localStorage.setItem('user', JSON.stringify(nextUser));
+    if (autoLogin) {
+      persistAuthenticatedUser(data, emailNormalizado);
     }
 
     return { ok: true };
   };
 
   const logout = () => {
+    void apiFetch(`${API_BASE_URL}/auth/sair`, { method: 'POST' });
     setUser(null);
-    localStorage.removeItem('user');
+    clearAuthSession();
   };
 
   return (
@@ -253,6 +272,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{
         user,
         isAuthenticated: !!user,
+        isReady,
         login,
         register,
         logout,

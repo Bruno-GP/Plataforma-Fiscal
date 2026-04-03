@@ -7,14 +7,7 @@ from app.services.nfe.postres_config import carregar_config_postgres
 # LOG CONFIG
 # =========================
 logger = logging.getLogger("EmpresaService")
-logger.setLevel(logging.DEBUG)
-
-handler = logging.StreamHandler()
-formatter = logging.Formatter(
-    "[%(asctime)s] [%(levelname)s] %(message)s"
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+logger.disabled = True
 
 # =========================
 # UTILS

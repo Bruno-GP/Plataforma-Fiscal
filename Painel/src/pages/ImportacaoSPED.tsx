@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText, FileUp, Upload, Database } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { saveFiscalOperation } from '@/services/operations';
 import {
   consultarPendenciasSped,
   importarSpedArquivo,
@@ -47,7 +48,7 @@ export default function ImportacaoSPED() {
     return `${size} B`;
   };
 
-  const carregarPendencias = async () => {
+  const carregarPendencias = useCallback(async () => {
     if (!user?.emitente_cnpj) return;
 
     try {
@@ -56,11 +57,11 @@ export default function ImportacaoSPED() {
     } catch {
       setPendencias(null);
     }
-  };
+  }, [user?.emitente_cnpj]);
 
   useEffect(() => {
     void carregarPendencias();
-  }, [user?.emitente_cnpj]);
+  }, [carregarPendencias]);
 
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return;
@@ -103,7 +104,21 @@ export default function ImportacaoSPED() {
         title: 'Importação concluída',
         description: `Arquivos importados com sucesso. Total: ${importResults.length}.`,
       });
+      saveFiscalOperation({
+        type: 'sped-import',
+        status: importResults.some((item) => item.status !== 'importado') ? 'warning' : 'success',
+        title: 'Importacao SPED concluida',
+        description: `Arquivos avaliados: ${importResults.length}.`,
+        cnpj: user.emitente_cnpj,
+      });
     } catch (error) {
+      saveFiscalOperation({
+        type: 'sped-import',
+        status: 'error',
+        title: 'Falha na importacao SPED',
+        description: error instanceof Error ? error.message : 'Nao foi possivel importar os SPEDs.',
+        cnpj: user?.emitente_cnpj ?? '',
+      });
       toast({
         title: 'Falha na importação',
         description: error instanceof Error ? error.message : 'Não foi possível importar os SPEDs.',
@@ -133,7 +148,21 @@ export default function ImportacaoSPED() {
         title: 'Processamento concluído',
         description: `Foram processados ${response.total_arquivos_processados} arquivo(s) SPED.`,
       });
+      saveFiscalOperation({
+        type: 'sped-process',
+        status: 'success',
+        title: 'Processamento SPED concluido',
+        description: `Arquivos processados: ${response.total_arquivos_processados}.`,
+        cnpj: user.emitente_cnpj,
+      });
     } catch (error) {
+      saveFiscalOperation({
+        type: 'sped-process',
+        status: 'error',
+        title: 'Falha no processamento SPED',
+        description: error instanceof Error ? error.message : 'Nao foi possivel processar os SPEDs.',
+        cnpj: user?.emitente_cnpj ?? '',
+      });
       toast({
         title: 'Falha no processamento',
         description: error instanceof Error ? error.message : 'Não foi possível processar os SPEDs.',

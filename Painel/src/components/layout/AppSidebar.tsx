@@ -1,100 +1,128 @@
-import { BellRing, FileUp, LayoutDashboard, Receipt } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import {
+  AlertTriangle,
+  BarChart3,
+  FileDigit,
+  FileSearch,
+  FileUp,
+  LayoutDashboard,
+  ListTree,
+  LogOut,
+  Sparkles,
+  Users,
+} from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { NavLink } from '@/components/NavLink';
+import { Button } from '@/components/ui/button';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarHeader,
-  useSidebar,
 } from '@/components/ui/sidebar';
-import { hasUnreadUpdates } from '@/constants/updates';
 import { useAuth } from '@/contexts/AuthContext';
 
-const menuItems = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-  { title: 'Faturamento', url: '/faturamento', icon: Receipt },
-  { title: 'Importação XML', url: '/importacao-xml', icon: FileUp },
-  { title: 'Atualizações', url: '/atualizacoes', icon: BellRing },
-  // { title: 'Clientes', url: '/clientes', icon: Users },
-  // { title: 'Configurações', url: '/configuracoes', icon: Settings },
+const menuItemsBase = [
+  { title: 'Vendas', url: '/analise-vendas', icon: LayoutDashboard },
+  { title: 'Detalhe Vendas', url: '/detalhamento-vendas', icon: ListTree },
+  { title: 'Análise Fiscal', url: '/analise-fiscal-cfop', icon: BarChart3 },
+  { title: 'Clientes', url: '/analise-clientes', icon: Users },
 ];
 
+const menuItemImportacaoXml = { title: 'Importacao XML', url: '/importacao-xml', icon: FileUp };
+const menuItemImportacaoSped = { title: 'Importacoes SPED', url: '/importacao-sped', icon: FileDigit };
+const menuItemAnaliseCompras = { title: 'Compras', url: '/analise-compras', icon: FileSearch };
+// const menuItemDetalhamentoCompras = { title: 'Detalhe compras', url: '/detalhamento-compras', icon: ListTree };
+const menuItemRelatoriosIA = { title: 'Relatorios com IA', url: '/relatorios-ia', icon: Sparkles };
+const menuItemInconsistencias = { title: 'Inconsistencias', url: '/inconsistencias', icon: AlertTriangle };
+
 export function AppSidebar() {
-  const { state } = useSidebar();
-  const collapsed = state === 'collapsed';
   const location = useLocation();
-  const { user } = useAuth();
-  const hasUnreadUpdateLog = hasUnreadUpdates();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const menuItems = user?.tem_sped
+    ? [
+        ...menuItemsBase,
+        menuItemAnaliseCompras,
+        // menuItemDetalhamentoCompras,
+        menuItemRelatoriosIA,
+        menuItemInconsistencias,
+        menuItemImportacaoSped,
+      ]
+    : [
+        ...menuItemsBase,
+        menuItemAnaliseCompras,
+        // menuItemDetalhamentoCompras,
+        menuItemRelatoriosIA,
+        menuItemInconsistencias,
+        menuItemImportacaoXml,
+      ];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <Sidebar
       variant="sidebar"
-      collapsible="icon"
-      className="shrink-0 bg-[#0E1525] text-white border-r border-white/10"
+      collapsible="none"
+      className="
+        sticky top-0
+        h-svh
+        w-56
+        shrink-0
+        border-r border-white/10
+        bg-[#0E1525]
+        text-white
+      "
     >
-      <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2 bg-[#0E1525]">
-        <div className="flex min-w-0 items-center gap-2 group-data-[collapsible=icon]:justify-center">
+      <SidebarHeader className="gap-3 bg-[#0E1525] p-3">
+        <div className="flex items-center justify-between gap-2">
           <div
             className="
-              flex min-w-0 items-center rounded-md bg-[#0E1525] text-white text-sm font-semibold
-              border border-white/10 overflow-hidden
-              px-3 py-2 w-full
-              group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:h-10
-              group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0
-              group-data-[collapsible=icon]:justify-center
+              flex min-w-0 w-full items-center overflow-hidden rounded-md border border-white/10
+              bg-[#0E1525] px-2.5 py-1.5 text-sm font-semibold text-white
             "
             title={user?.name ?? 'Empresa'}
           >
-            <span className="block w-full truncate whitespace-nowrap group-data-[collapsible=icon]:hidden">
+            <span className="block w-full truncate whitespace-nowrap text-xs">
               {user?.name ?? 'Empresa'}
-            </span>
-
-            <span className="hidden group-data-[collapsible=icon]:block">
-              {(user?.name ?? 'E').slice(0, 1).toUpperCase()}
             </span>
           </div>
         </div>
       </SidebarHeader>
 
       <SidebarContent className="bg-[#0E1525]">
-        <SidebarGroup className="px-4 group-data-[collapsible=icon]:px-2">
+        <SidebarGroup className="px-2.5">
           <SidebarGroupContent className="flex justify-center">
             <SidebarMenu className="w-full">
               {menuItems.map((item) => {
                 const isActive = location.pathname === item.url;
-                const isUpdatesItem = item.url === '/atualizacoes';
 
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild
                       size="sm"
+                      className="h-9 text-sm hover:bg-transparent hover:text-inherit data-[active=true]:bg-white data-[active=true]:text-[#0E1525] data-[active=true]:hover:bg-white/90 data-[active=true]:hover:text-[#0E1525]"
                       isActive={isActive}
-                      tooltip={collapsed ? item.title : undefined}
                     >
                       <NavLink
                         to={item.url}
-                        className="flex items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center text-sm text-white/80 hover:text-white"
-                        activeClassName="bg-white/10 text-white"
+                        className="flex items-center justify-between gap-2 text-sm text-white/80"
+                        activeClassName="bg-white text-[#0E1525] hover:bg-white/90"
                       >
                         <span className="flex items-center gap-2">
                           <item.icon className="h-4 w-4" />
-                          <span className="group-data-[collapsible=icon]:hidden">
-                            {item.title}
-                          </span>
+                          <span>{item.title}</span>
                         </span>
-
-                        {isUpdatesItem && hasUnreadUpdateLog && !collapsed && (
-                          <span className="rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-semibold uppercase text-yellow-950">
-                            Novo
-                          </span>
-                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -104,6 +132,13 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className="bg-[#0E1525] p-3">
+        <Button variant="outline" onClick={handleLogout} title="Sair">
+          <LogOut className="h-4 w-4" />
+          <span>Sair</span>
+        </Button>
+      </SidebarFooter>
     </Sidebar>
   );
 }

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FileUp, FileText, Upload, Trash2 } from 'lucide-react';
+import { FileText, FileUp, Loader2, Upload, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,10 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-
+import { saveFiscalOperation } from '@/services/operations';
 import {
   consultarPendenciasXmlImportados,
-  importarXmlArquivo,
+  importarXmlArquivos,
   processarXmlsImportados,
   type ImportacaoXmlArquivoResultado,
   type ImportacaoXmlPendenciasResponse,
@@ -22,8 +22,13 @@ interface XmlFileItem {
   file: File;
 }
 
-// Limite alinhado com a API para evitar tentativa de envio acima do aceito no backend.
+type OperationStage = 'idle' | 'importing' | 'processing' | 'completed' | 'cancelled' | 'error';
+
 const MAX_XML_FILES = 10000;
+const XML_IMPORT_BATCH_SIZE = 200;
+const IMPORT_PROGRESS_MAX = 55;
+const PROCESS_PROGRESS_START = 55;
+const PROCESS_PROGRESS_END = 100;
 
 const formatFileSize = (size: number): string => {
   if (size >= 1024 * 1024) {
@@ -37,26 +42,135 @@ const formatFileSize = (size: number): string => {
   return `${size} B`;
 };
 
-// Fluxo da tela: selecionar XMLs -> importar para staging -> processar para gerar KPIs.
+const formatElapsedTime = (seconds: number): string => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}m ${remainingSeconds}s`;
+};
+
+const chunkFiles = (files: XmlFileItem[], size: number): XmlFileItem[][] => {
+  const chunks: XmlFileItem[][] = [];
+
+  for (let index = 0; index < files.length; index += size) {
+    chunks.push(files.slice(index, index + size));
+  }
+
+  return chunks;
+};
+
 export default function ImportacaoXML() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { user } = useAuth();
+
   const [selectedFiles, setSelectedFiles] = useState<XmlFileItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
   const [results, setResults] = useState<ImportacaoXmlArquivoResultado[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendenciasXml, setPendenciasXml] = useState<ImportacaoXmlPendenciasResponse | null>(null);
-  const [isLoadingPendencias, setIsLoadingPendencias] = useState(false);
-  const { toast } = useToast();
-  const { user } = useAuth();
+  const [operationStage, setOperationStage] = useState<OperationStage>('idle');
+  const [operationProgress, setOperationProgress] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  const operationAbortRef = useRef<AbortController | null>(null);
+  const elapsedIntervalRef = useRef<number | null>(null);
+  const processingAnimationRef = useRef<number | null>(null);
 
   const totalSize = useMemo(
     () => selectedFiles.reduce((acc, item) => acc + item.file.size, 0),
-    [selectedFiles]
+    [selectedFiles],
   );
 
+  const progressLabel = useMemo(() => {
+    const progressText = `${Math.round(operationProgress)}% - ${formatElapsedTime(elapsedSeconds)}`;
+
+    switch (operationStage) {
+      case 'importing':
+        return `Importando XMLs - ${progressText}`;
+      case 'processing':
+        return `Processando - ${progressText}`;
+      case 'completed':
+        return `Processamento terminado - 100% - ${formatElapsedTime(elapsedSeconds)}`;
+      case 'cancelled':
+        return `Operação cancelada - ${progressText}`;
+      case 'error':
+        return `Falha no processamento - ${progressText}`;
+      default:
+        return `0% - ${formatElapsedTime(elapsedSeconds)}`;
+    }
+  }, [elapsedSeconds, operationProgress, operationStage]);
+
+  const cnpjsImportados = useMemo(() => {
+    const cnpjs = new Set(
+      results
+        .filter((item) => item.status === 'importado' && item.cnpj_emitente)
+        .map((item) => item.cnpj_emitente as string),
+    );
+
+    return Array.from(cnpjs);
+  }, [results]);
+
+  const possuiPendenciasNaoProcessadas = (pendenciasXml?.total_pendentes ?? 0) > 0;
+
+  const carregarPendenciasXml = useCallback(async () => {
+    if (!user?.emitente_cnpj) {
+      setPendenciasXml(null);
+      return;
+    }
+
+    try {
+      const response = await consultarPendenciasXmlImportados(user.emitente_cnpj);
+      setPendenciasXml(response);
+    } catch {
+      setPendenciasXml(null);
+    }
+  }, [user?.emitente_cnpj]);
+
+  useEffect(() => {
+    void carregarPendenciasXml();
+  }, [carregarPendenciasXml]);
+
+  useEffect(() => {
+    if (!isImporting && !isProcessing) {
+      if (elapsedIntervalRef.current !== null) {
+        window.clearInterval(elapsedIntervalRef.current);
+        elapsedIntervalRef.current = null;
+      }
+      return;
+    }
+
+    if (elapsedIntervalRef.current !== null) {
+      return;
+    }
+
+    elapsedIntervalRef.current = window.setInterval(() => {
+      setElapsedSeconds((current) => current + 1);
+    }, 1000);
+
+    return () => {
+      if (elapsedIntervalRef.current !== null) {
+        window.clearInterval(elapsedIntervalRef.current);
+        elapsedIntervalRef.current = null;
+      }
+    };
+  }, [isImporting, isProcessing]);
+
+  useEffect(() => {
+    return () => {
+      operationAbortRef.current?.abort();
+
+      if (elapsedIntervalRef.current !== null) {
+        window.clearInterval(elapsedIntervalRef.current);
+      }
+
+      if (processingAnimationRef.current !== null) {
+        window.clearInterval(processingAnimationRef.current);
+      }
+    };
+  }, []);
+
   const addFiles = (files: FileList | null) => {
-    // Mantém apenas .xml e remove duplicidades por nome para reduzir erro operacional.
     if (!files?.length) {
       return;
     }
@@ -97,77 +211,79 @@ export default function ImportacaoXML() {
     setSelectedFiles([]);
     setImportedCount(0);
     setResults([]);
+    setOperationStage('idle');
+    setOperationProgress(0);
+    setElapsedSeconds(0);
   };
 
-  const progressValue = selectedFiles.length ? (importedCount / selectedFiles.length) * 100 : 0;
-
-  const cnpjsImportados = useMemo(() => {
-    const cnpjs = new Set(
-      results
-        .filter((item) => item.status === 'importado' && item.cnpj_emitente)
-        .map((item) => item.cnpj_emitente as string)
-    );
-
-    return Array.from(cnpjs);
-  }, [results]);
-
-  const carregarPendenciasXml = async () => {
-    // Consulta pendências sempre com base no CNPJ da empresa logada.
-    if (!user?.emitente_cnpj) {
-      setPendenciasXml(null);
-      return;
-    }
-
-    setIsLoadingPendencias(true);
-
-    try {
-      const response = await consultarPendenciasXmlImportados(user.emitente_cnpj);
-      setPendenciasXml(response);
-    } catch {
-      setPendenciasXml(null);
-    } finally {
-      setIsLoadingPendencias(false);
+  const stopProcessingAnimation = () => {
+    if (processingAnimationRef.current !== null) {
+      window.clearInterval(processingAnimationRef.current);
+      processingAnimationRef.current = null;
     }
   };
 
-  useEffect(() => {
-    void carregarPendenciasXml();
-  }, [user?.emitente_cnpj]);
+  const startProcessingAnimation = (start: number, max: number) => {
+    stopProcessingAnimation();
+    processingAnimationRef.current = window.setInterval(() => {
+      setOperationProgress((current) => {
+        const next = Math.min(current + 1, max);
+        return Math.max(next, start);
+      });
+    }, 900);
+  };
 
-  const cnpjsParaProcessar = useMemo(() => {
-    if (cnpjsImportados.length) {
-      return cnpjsImportados;
-    }
+  const cancelOperation = () => {
+    operationAbortRef.current?.abort();
+  };
 
-    if (pendenciasXml?.possui_pendentes && user?.emitente_cnpj) {
-      return [user.emitente_cnpj];
-    }
-
-    return [] as string[];
-  }, [cnpjsImportados, pendenciasXml?.possui_pendentes, user?.emitente_cnpj]);
-
-  const possuiPendenciasNaoProcessadas = (pendenciasXml?.total_pendentes ?? 0) > 0;
-
-  const processImportedXml = async () => {
-    // Processa por CNPJ para suportar importações misturadas no mesmo lote.
-    if (!cnpjsParaProcessar.length || isProcessing || isImporting) {
+  const processImportedXml = async (
+    cnpjs: string[],
+    abortController: AbortController,
+  ) => {
+    if (!cnpjs.length) {
+      setOperationStage('completed');
+      setOperationProgress(100);
       return;
     }
 
     setIsProcessing(true);
+    setOperationStage('processing');
+    setOperationProgress((current) => Math.max(current, PROCESS_PROGRESS_START));
 
     try {
-      for (const cnpj of cnpjsParaProcessar) {
-        const response = await processarXmlsImportados(cnpj);
+      for (const [index, cnpj] of cnpjs.entries()) {
+        const rangeStart =
+          PROCESS_PROGRESS_START + (index / cnpjs.length) * (PROCESS_PROGRESS_END - PROCESS_PROGRESS_START);
+        const rangeEnd =
+          PROCESS_PROGRESS_START + ((index + 1) / cnpjs.length) * (PROCESS_PROGRESS_END - PROCESS_PROGRESS_START);
+
+        setOperationProgress((current) => Math.max(current, Math.round(rangeStart)));
+        startProcessingAnimation(Math.round(rangeStart), Math.max(Math.round(rangeEnd) - 3, Math.round(rangeStart)));
+
+        const response = await processarXmlsImportados(cnpj, { signal: abortController.signal });
 
         if (response.status !== 'processado') {
           throw new Error(response.erros?.[0]?.mensagem ?? 'Falha ao processar XMLs importados.');
         }
+
+        stopProcessingAnimation();
+        setOperationProgress(Math.round(rangeEnd));
       }
+
+      setOperationStage('completed');
+      setOperationProgress(100);
 
       toast({
         title: 'Processamento concluído',
         description: 'Itens, notas e KPIs foram registrados com sucesso.',
+      });
+      saveFiscalOperation({
+        type: 'xml-process',
+        status: 'success',
+        title: 'Processamento XML concluido',
+        description: `Foram processados ${cnpjs.length} CNPJ(s) com sucesso.`,
+        cnpj: user?.emitente_cnpj ?? '',
       });
 
       await Promise.all([
@@ -177,20 +293,14 @@ export default function ImportacaoXML() {
       ]);
 
       await carregarPendenciasXml();
-    } catch (error) {
-      toast({
-        title: 'Falha no processamento',
-        description: error instanceof Error ? error.message : 'Não foi possível processar os XMLs importados.',
-        variant: 'destructive',
-      });
     } finally {
+      stopProcessingAnimation();
       setIsProcessing(false);
     }
   };
 
   const startImport = async () => {
-    // Importação é sequencial para atualizar progresso visual e facilitar troubleshooting por arquivo.
-    if (!selectedFiles.length || isImporting) {
+    if (!selectedFiles.length || isImporting || isProcessing) {
       return;
     }
 
@@ -203,18 +313,36 @@ export default function ImportacaoXML() {
       return;
     }
 
+    operationAbortRef.current?.abort();
+    const abortController = new AbortController();
+    operationAbortRef.current = abortController;
+
     setIsImporting(true);
+    setIsProcessing(false);
     setImportedCount(0);
     setResults([]);
+    setElapsedSeconds(0);
+    setOperationProgress(0);
+    setOperationStage('importing');
 
     const importResults: ImportacaoXmlArquivoResultado[] = [];
+    const batches = chunkFiles(selectedFiles, XML_IMPORT_BATCH_SIZE);
 
     try {
-      for (const item of selectedFiles) {
-        const response = await importarXmlArquivo(item.file, user.emitente_cnpj);
+      for (const batch of batches) {
+        const response = await importarXmlArquivos(
+          batch.map((item) => item.file),
+          user.emitente_cnpj,
+          { signal: abortController.signal },
+        );
+
         importResults.push(...response.resultados);
         setResults([...importResults]);
-        setImportedCount((count) => count + 1);
+        setImportedCount((count) => count + batch.length);
+
+        const importedFiles = Math.min(importedCount + batch.length, selectedFiles.length);
+        const importProgress = Math.round((importedFiles / selectedFiles.length) * IMPORT_PROGRESS_MAX);
+        setOperationProgress(importProgress);
       }
 
       const duplicados = importResults.filter((item) => item.status === 'duplicado').length;
@@ -224,26 +352,88 @@ export default function ImportacaoXML() {
         title: 'Importação concluída',
         description: `Importação finalizada com sucesso. Duplicados: ${duplicados}. Erros: ${erros}.`,
       });
+      saveFiscalOperation({
+        type: 'xml-import',
+        status: erros > 0 || duplicados > 0 ? 'warning' : 'success',
+        title: 'Importacao XML concluida',
+        description: `Importados: ${importResults.filter((item) => item.status === 'importado').length}. Duplicados: ${duplicados}. Erros: ${erros}.`,
+        cnpj: user.emitente_cnpj,
+      });
 
       setSelectedFiles([]);
       await carregarPendenciasXml();
+
+      const cnpjsProcessaveis =
+        cnpjsImportados.length > 0
+          ? cnpjsImportados
+          : importResults
+              .filter((item) => item.status === 'importado' && item.cnpj_emitente)
+              .map((item) => item.cnpj_emitente as string);
+
+      const cnpjsParaProcessar = Array.from(new Set(cnpjsProcessaveis));
+      const fallbackCnpj =
+        !cnpjsParaProcessar.length && user.emitente_cnpj && (pendenciasXml?.possui_pendentes ?? true)
+          ? [user.emitente_cnpj]
+          : cnpjsParaProcessar;
+
+      await processImportedXml(fallbackCnpj, abortController);
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        stopProcessingAnimation();
+        setOperationStage('cancelled');
+        toast({
+          title: 'Operação cancelada',
+          description: 'A importação/processamento dos XMLs foi cancelada na tela.',
+        });
+        saveFiscalOperation({
+          type: isProcessing ? 'xml-process' : 'xml-import',
+          status: 'cancelled',
+          title: 'Operacao XML cancelada',
+          description: 'A operacao foi interrompida antes da conclusao.',
+          cnpj: user?.emitente_cnpj ?? '',
+        });
+        return;
+      }
+
+      setOperationStage('error');
+      saveFiscalOperation({
+        type: isProcessing ? 'xml-process' : 'xml-import',
+        status: 'error',
+        title: 'Falha no fluxo XML',
+        description: error instanceof Error ? error.message : 'Nao foi possivel importar e processar os XMLs.',
+        cnpj: user?.emitente_cnpj ?? '',
+      });
       toast({
         title: 'Falha na importação',
-        description: error instanceof Error ? error.message : 'Não foi possível importar os XMLs.',
+        description:
+          error instanceof Error ? error.message : 'Não foi possível importar e processar os XMLs.',
         variant: 'destructive',
       });
     } finally {
+      if (operationAbortRef.current === abortController) {
+        operationAbortRef.current = null;
+      }
+
       setIsImporting(false);
+      setIsProcessing(false);
+      stopProcessingAnimation();
     }
   };
+
+  const hasOperationFeedback =
+    isImporting ||
+    isProcessing ||
+    operationStage === 'completed' ||
+    operationStage === 'cancelled' ||
+    operationStage === 'error';
 
   return (
     <div className="space-y-6 py-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Importação de XML</h1>
         <p className="text-muted-foreground">
-          Selecione os XMLs da NFe/NFCe e importe em lotes de até 1000 arquivos. Depois da importação, execute a fase de processamento para registrar notas, itens e KPIs.
+          Selecione os XMLs da NFe/NFCe/NFSe e inicie a operação. A tela importa os arquivos e já dispara o
+          processamento automaticamente em sequência.
         </p>
       </div>
 
@@ -254,7 +444,8 @@ export default function ImportacaoXML() {
             Enviar arquivos XML
           </CardTitle>
           <CardDescription>
-            Clique no botão central para adicionar os XMLs, acompanhe o contador e depois inicie a importação.
+            Clique no botão central para adicionar os XMLs, acompanhe o progresso e, ao final da importação, o
+            processamento continua automaticamente.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -270,7 +461,12 @@ export default function ImportacaoXML() {
                 event.currentTarget.value = '';
               }}
             />
-            <Button asChild variant="secondary" size="lg" disabled={isImporting || selectedFiles.length >= MAX_XML_FILES}>
+            <Button
+              asChild
+              variant="secondary"
+              size="lg"
+              disabled={isImporting || isProcessing || selectedFiles.length >= MAX_XML_FILES}
+            >
               <label htmlFor="xml-files" className="cursor-pointer">
                 <FileUp className="mr-2 h-4 w-4" />
                 Importar arquivos XMLs
@@ -283,37 +479,56 @@ export default function ImportacaoXML() {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <Button variant="outline" onClick={clearList} disabled={!selectedFiles.length || isImporting}>
-              <Trash2 className="mr-2 h-4 w-4" />
+            <Button
+              variant="outline"
+              onClick={clearList}
+              disabled={!selectedFiles.length || isImporting || isProcessing}
+            >
+              <X className="mr-2 h-4 w-4" />
               Limpar lista
             </Button>
+
             <Button onClick={startImport} disabled={!selectedFiles.length || isImporting || isProcessing}>
-              <Upload className="mr-2 h-4 w-4" />
-              {isImporting ? 'Importando...' : 'Iniciar importação'}
+              {isImporting || isProcessing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              {isImporting ? 'Importando...' : isProcessing ? 'Processando...' : 'Importar e processar'}
             </Button>
 
-            <Button
-              variant="default"
-              onClick={processImportedXml}
-              disabled={!cnpjsParaProcessar.length || isImporting || isProcessing || isLoadingPendencias}
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              {isProcessing ? 'Processando NFe...' : 'Processar NFe (itens, notas e KPIs)'}
-            </Button>
+            {(isImporting || isProcessing) && (
+              <Button variant="destructive" onClick={cancelOperation}>
+                <X className="mr-2 h-4 w-4" />
+                Cancelar operação
+              </Button>
+            )}
           </div>
 
-          {(isImporting || importedCount > 0) && (
+          {hasOperationFeedback && (
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Progresso da importação: {importedCount}/{Math.max(selectedFiles.length, importedCount)} XMLs processados
-              </p>
-              <Progress value={progressValue} />
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <p className="font-medium text-foreground">
+                  {operationStage === 'processing'
+                    ? 'Processando'
+                    : operationStage === 'completed'
+                      ? 'Processamento terminado'
+                      : operationStage === 'cancelled'
+                        ? 'Operação cancelada'
+                        : operationStage === 'error'
+                          ? 'Falha no processamento'
+                          : 'Início do processamento'}
+                </p>
+                <span className="text-muted-foreground">{progressLabel}</span>
+              </div>
+              <Progress value={operationProgress} />
             </div>
           )}
 
           {possuiPendenciasNaoProcessadas && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Ainda faltam XMLs a serem processados ({pendenciasXml?.total_pendentes}). O botão <strong>Processar NFe</strong> permanece habilitado até concluir todos.
+              Ainda faltam XMLs a serem processados ({pendenciasXml?.total_pendentes}). Uma nova operação volta a
+              processar os pendentes automaticamente.
             </div>
           )}
 
@@ -338,6 +553,12 @@ export default function ImportacaoXML() {
           {!!results.length && (
             <div className="space-y-2 rounded-lg border p-4">
               <h2 className="font-medium">Resultado da importação</h2>
+              <p className="text-sm text-muted-foreground">
+                XMLs avaliados: {Math.max(importedCount, results.length)} • Importados:{' '}
+                {results.filter((item) => item.status === 'importado').length} • Duplicados:{' '}
+                {results.filter((item) => item.status === 'duplicado').length} • Erros:{' '}
+                {results.filter((item) => item.status === 'erro').length}
+              </p>
               <ul className="max-h-40 space-y-1 overflow-auto text-sm text-muted-foreground">
                 {results.map((result, index) => (
                   <li key={`${result.arquivo}-${index}`}>

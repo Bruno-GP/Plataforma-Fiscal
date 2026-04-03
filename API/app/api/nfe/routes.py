@@ -1,12 +1,23 @@
-from fastapi import APIRouter, Query, HTTPException, status, UploadFile, File
+from decimal import Decimal
 
+import psycopg
+
+from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File
+
+from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
+from app.core.upload_security import validate_xml_uploads
+from app.core.security import require_company_scope
 from app.services.nfe.process_nfe import ProcessarNFeService
 from app.services.nfe.nfe_consulta_service import NFeConsultaService
+from app.services.nfe.nfe_notas_service import NFeNotasService
+from app.services.NCM.ncm_catalog_service import NCMCatalogService
 from app.services.company_profile_service import CompanyProfileService
 from app.services.nfe.xml_importacao_service import XMLImportacaoService
 from app.services.AI.openai_report_service import OpenAIReportService
 from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
+  NFeItem,
+  NFeNota,
   ConsultaNFeResponse,
   ConsultaKPIResponse,
   ImportacaoXMLResponse,
@@ -17,14 +28,20 @@ from app.models.nfe.schemas import (
   ProcessarNFeResponse,
   AnaliseComprasResponse,
   AnaliseVendasResponse,
-  AnaliseClientesResponse
+  AnaliseFiscalCfopResponse,
+  AnaliseClientesResponse,
+  DashboardComprasResponse,
+  DashboardVendasResponse,
+  DashboardVendasResumo,
+  SerieMensalComprasItem,
+  SerieMensalVendasItem,
 )
 
 router = APIRouter()
 
 # Sub-roteador de NFe/NFCe. Centraliza upload, processamento e consultas analíticas.
 
-nfe_router = APIRouter(prefix="/nfe", tags=["NFe"])
+nfe_router = APIRouter(prefix="/nfe", tags=["NFe"], dependencies=[Depends(require_company_scope)])
 
 def _validar_empresa_xml(cnpj: str):
   if CompanyProfileService().empresa_tem_sped(cnpj):
@@ -32,6 +49,22 @@ def _validar_empresa_xml(cnpj: str):
       status_code=status.HTTP_400_BAD_REQUEST,
       detail="Esta empresa está configurada para SPED Fiscal e não para XML.",
     )
+
+def _nota_possui_tipo_operacao(nota, tipo_operacao: str) -> bool:
+  if tipo_operacao == "todas":
+    return True
+
+  prefixos = {"vendas": {"5", "6", "7"}, "compras": {"1", "2", "3"}}.get(tipo_operacao, set())
+  if not prefixos:
+    return True
+
+  for item in nota.itens:
+    cfop = "".join(ch for ch in str(item.cfop or "") if ch.isdigit())
+    if cfop and cfop[0] in prefixos:
+      return True
+
+  return False
+
 
 # -------------------------
 # Processamento
@@ -57,11 +90,8 @@ async def importar_xml(
     )
     # `conteudos` mantém apenas nome + bytes dos arquivos válidos para o serviço de importação.
 
-  conteudos: list[tuple[str, bytes]] = []
-  for arquivo in arquivos:
-    if not arquivo.filename.lower().endswith(".xml"):
-      continue
-    conteudos.append((arquivo.filename, await arquivo.read()))
+  uploads_validados = await validate_xml_uploads(arquivos)
+  conteudos = [(arquivo.filename, arquivo.content) for arquivo in uploads_validados]
 
   if not conteudos:
     raise HTTPException(
@@ -175,8 +205,10 @@ def consultar_analise_compras_nfe(
   email: str | None = Query(default=None),
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
-  limite: int = Query(default=5, ge=1, le=20),
+  limite: int | None = Query(default=None, ge=1),
   gerar_relatorio_ia: bool = Query(default=False),
+  formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
+  layout: str | None = Query(default=None),
 ):
   service = NFeConsultaService()
 
@@ -210,7 +242,11 @@ def consultar_analise_compras_nfe(
           ),
         )
 
-      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(resultado)
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(
+        resultado,
+        formato_relatorio,
+        layout,
+      )
     
   except ValueError as exc:
     raise HTTPException(
@@ -235,8 +271,10 @@ def consultar_analise_vendas_nfe(
   email: str | None = Query(default=None),
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
-  limite: int = Query(default=5, ge=1, le=20),
+  limite: int | None = Query(default=None, ge=1),
   gerar_relatorio_ia: bool = Query(default=False),
+  formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
+  layout: str | None = Query(default=None),
 ):
   service = NFeConsultaService()
 
@@ -270,7 +308,11 @@ def consultar_analise_vendas_nfe(
           ),
         )
 
-      resultado["relatorio_ia"] = ia_service.gerar_relatorio_vendas(resultado)
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_vendas(
+        resultado,
+        formato_relatorio,
+        layout,
+      )
 
   except ValueError as exc:
     raise HTTPException(
@@ -289,14 +331,242 @@ def consultar_analise_vendas_nfe(
 
   return AnaliseVendasResponse(status="ok", **resultado)
 
+@nfe_router.get("/analise/fiscal/cfop", response_model=AnaliseFiscalCfopResponse)
+def consultar_analise_fiscal_cfop_nfe(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int | None = Query(default=100000, ge=1),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj válido ou um email cadastrado.",
+    )
+
+  try:
+    resultado = service.analisar_fiscal_cfop(
+      emitente_cnpj=emitente_resolvido,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  return AnaliseFiscalCfopResponse(status="ok", **resultado)
+
+@nfe_router.get("/analise/compras/dashboard", response_model=DashboardComprasResponse)
+def consultar_dashboard_compras_nfe(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=5, ge=1, le=20),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj vÃ¡lido ou um email cadastrado.",
+    )
+
+  anos_disponiveis = sorted(
+    {
+      item.periodo_ano
+      for item in service.listar_kpis(emitente_cnpj=emitente_resolvido, limite=120)
+      if item.periodo_ano
+    },
+    reverse=True,
+  )
+
+  ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
+  if ano_referencia is None:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Nenhum perÃ­odo disponÃ­vel para o emitente informado.",
+    )
+
+  ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
+
+  try:
+    resumo_atual = service.analisar_compras(
+      emitente_cnpj=emitente_resolvido,
+      periodo_ano=ano_referencia,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+    resumo_anterior = service.analisar_compras(
+      emitente_cnpj=emitente_resolvido,
+      periodo_ano=ano_anterior,
+      periodo_mes=mes_anterior,
+      limite=limite,
+    )
+    serie_mensal = [
+      SerieMensalComprasItem(
+        periodo_ano=ano_referencia,
+        periodo_mes=mes,
+        total_comprado=service.analisar_compras(
+          emitente_cnpj=emitente_resolvido,
+          periodo_ano=ano_referencia,
+          periodo_mes=mes,
+          limite=limite,
+        )["total_comprado"],
+      )
+      for mes in range(1, 13)
+    ]
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  return DashboardComprasResponse(
+    status="ok",
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+    periodo_mes=periodo_mes,
+    anos_disponiveis=anos_disponiveis,
+    resumo_atual=AnaliseComprasResponse(status="ok", **resumo_atual),
+    resumo_anterior=AnaliseComprasResponse(status="ok", **resumo_anterior),
+    serie_mensal=serie_mensal,
+  )
+
+@nfe_router.get("/analise/vendas/dashboard", response_model=DashboardVendasResponse)
+def consultar_dashboard_vendas_nfe(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int = Query(default=5, ge=1, le=20),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj vÃ¡lido ou um email cadastrado.",
+    )
+
+  resultados_anos = service.listar_kpis(emitente_cnpj=emitente_resolvido, limite=120)
+  anos_disponiveis = sorted(
+    {item.periodo_ano for item in resultados_anos if item.periodo_ano},
+    reverse=True,
+  )
+  ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
+
+  if ano_referencia is None:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="Nenhum perÃ­odo disponÃ­vel para o emitente informado.",
+    )
+
+  resultados_ano_atual = service.listar_kpis(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+    limite=120,
+  )
+  resultados_ano_anterior = service.listar_kpis(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia - 1,
+    limite=120,
+  )
+  ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
+
+  if periodo_mes is not None:
+    resultados_filtrados = [item for item in resultados_ano_atual if item.periodo_mes == periodo_mes]
+    resultados_anteriores = (
+      [item for item in resultados_ano_atual if item.periodo_mes == mes_anterior]
+      if ano_anterior == ano_referencia
+      else [item for item in resultados_ano_anterior if item.periodo_mes == mes_anterior]
+    )
+  else:
+    resultados_filtrados = resultados_ano_atual
+    resultados_anteriores = resultados_ano_anterior
+
+  total_vendido_atual = service.obter_total_vendido_bruto(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+    periodo_mes=periodo_mes,
+  )
+  total_vendido_anterior = service.obter_total_vendido_bruto(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_anterior,
+    periodo_mes=mes_anterior,
+  )
+  totais_mensais_brutos = service.listar_totais_vendas_mensais_bruto(
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+  )
+  resumo_atual = resumir_vendas_por_kpis(resultados_filtrados, DashboardVendasResumo, limite).model_copy(
+    update={"total_vendido": total_vendido_atual},
+  )
+  resumo_anterior = resumir_vendas_por_kpis(resultados_anteriores, DashboardVendasResumo, limite).model_copy(
+    update={"total_vendido": total_vendido_anterior},
+  )
+
+  serie_mensal = [
+    SerieMensalVendasItem(
+      periodo_ano=ano_referencia,
+      periodo_mes=item.periodo_mes or 0,
+      total_vendido=totais_mensais_brutos.get(
+        item.periodo_mes or 0,
+        Decimal(str(item.kpis.total_vendas or 0)),
+      ),
+      quantidade_notas=int(item.kpis.quantidade_notas or 0),
+      total_impostos=(
+        Decimal(str(item.kpis.total_icms or 0))
+        + Decimal(str(item.kpis.total_ipi or 0))
+        + Decimal(str(item.kpis.total_pis or 0))
+        + Decimal(str(item.kpis.total_cofins or 0))
+      ),
+    )
+    for item in sorted(resultados_ano_atual, key=lambda resultado: resultado.periodo_mes or 0)
+    if item.periodo_mes
+  ]
+
+  return DashboardVendasResponse(
+    status="ok",
+    emitente_cnpj=emitente_resolvido,
+    periodo_ano=ano_referencia,
+    periodo_mes=periodo_mes,
+    anos_disponiveis=anos_disponiveis,
+    resumo_atual=resumo_atual,
+    resumo_anterior=resumo_anterior,
+    serie_mensal=serie_mensal,
+  )
+
 @nfe_router.get("/analise/clientes", response_model=AnaliseClientesResponse)
 def consultar_analise_clientes_nfe(
   emitente_cnpj: str | None = Query(default=None),
   email: str | None = Query(default=None),
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
-  limite: int = Query(default=5, ge=1, le=20),
+  limite: int | None = Query(default=None, ge=1),
   gerar_relatorio_ia: bool = Query(default=False),
+  formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
 ):
   service = NFeConsultaService()
 
@@ -330,7 +600,7 @@ def consultar_analise_clientes_nfe(
           ),
         )
 
-      resultado["relatorio_ia"] = ia_service.gerar_relatorio_clientes(resultado)
+      resultado["relatorio_ia"] = ia_service.gerar_relatorio_clientes(resultado, formato_relatorio)
 
   except ValueError as exc:
     raise HTTPException(
@@ -506,5 +776,105 @@ def consultar_notas(
     status_code=status.HTTP_501_NOT_IMPLEMENTED,
     detail="Consulta detalhada de notas ainda não implementada. Use GET /nfe/kpis para KPIs consolidados.",
   )
+
+@nfe_router.get("/notas/detalhado", response_model=ConsultaNFeResponse)
+def consultar_notas_detalhadas(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None, ge=2000, le=2100),
+  periodo_mes: int | None = Query(default=None, ge=1, le=12),
+  tipo_operacao: str = Query(default="todas", pattern="^(todas|vendas|compras)$"),
+  limite: int = Query(default=100, ge=1, le=500),
+  offset: int = Query(default=0, ge=0),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj vÃ¡lido ou um email cadastrado.",
+    )
+
+  if periodo_ano is None and periodo_mes is None:
+    try:
+      periodo_ano, periodo_mes = service.obter_ultimo_periodo(emitente_resolvido)
+    except ValueError as exc:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=str(exc),
+      ) from exc
+  elif periodo_ano is None:
+    try:
+      periodo_ano, _ = service.obter_ultimo_periodo(emitente_resolvido)
+    except ValueError as exc:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=str(exc),
+      ) from exc
+
+  _validar_empresa_xml(emitente_resolvido)
+  notas_service = NFeNotasService()
+  ncm_catalog_service = NCMCatalogService()
+
+  try:
+    with psycopg.connect(**notas_service.conn_params) as conn:
+      notas = notas_service.listar_notas_periodo_para_operacao(
+        conn=conn,
+        cnpj_empresa=emitente_resolvido,
+        periodo_ano=periodo_ano,
+        periodo_mes=periodo_mes,
+        tipo_operacao=tipo_operacao,
+      )
+  except psycopg.Error as exc:
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail="NÃ£o foi possÃ­vel consultar as notas deste perÃ­odo.",
+    ) from exc
+
+  total = len(notas)
+  notas_paginadas = [
+    NFeNota(
+      numero_nf=str(nota.numero_nf),
+      emitente_cnpj=nota.emitente_cnpj,
+      modelo=nota.modelo,
+      data_emissao=nota.data_emissao,
+      natureza_operacao=nota.natureza_operacao,
+      destinatario_documento=nota.destinatario_documento,
+      destinatario_nome=nota.destinatario_nome,
+      destinatario_cidade=nota.destinatario_cidade,
+      destinatario_uf=nota.destinatario_uf,
+      valor_produtos=nota.valor_produtos,
+      valor_desconto=nota.valor_desconto,
+      valor_frete=nota.valor_frete,
+      valor_icms=nota.valor_icms,
+      valor_ipi=nota.valor_ipi,
+      valor_pis=nota.valor_pis,
+      valor_cofins=nota.valor_cofins,
+      valor_total_nf=nota.valor_total_nf,
+      itens=[
+        NFeItem(
+          item_numero=item.numero_item,
+          produto_codigo=item.codigo_produto,
+          descricao=item.descricao,
+          ncm=item.ncm,
+          descricao_ncm=ncm_catalog_service.obter_descricao(item.ncm),
+          cfop=item.cfop,
+          quantidade=item.quantidade,
+          valor_unitario=item.valor_unitario,
+          valor_total=item.valor_total,
+        )
+        for item in nota.itens
+      ],
+    )
+    for nota in notas[offset:offset + limite]
+  ]
+
+  return ConsultaNFeResponse(status="ok", total=total, notas=notas_paginadas)
+
 
 router.include_router(nfe_router)

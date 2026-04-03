@@ -8,15 +8,22 @@ from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("NFeItensService")
-logger.setLevel(logging.DEBUG)
+logger.disabled = True
 
-handler = logging.StreamHandler()
-formatter = logging.Formatter(
-    "[%(asctime)s] [%(levelname)s] %(message)s"
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+def _limitar_texto(valor: str | None, limite: int) -> str:
+    if valor is None:
+        return ""
 
+    texto = str(valor).strip()
+    if len(texto) <= limite:
+        return texto
+
+    logger.warning(
+        "Campo textual truncado de %s para %s caracteres",
+        len(texto),
+        limite,
+    )
+    return texto[:limite]
 
 class NFeItensService:
     def __init__(self):
@@ -56,11 +63,28 @@ class NFeItensService:
               ON p.id = n.processamento_id
             WHERE n.numero_nf = %s
               AND n.emitente_cnpj = %s
+              AND COALESCE(n.modelo, '') = COALESCE(%s, '')
               AND n.data_emissao = %s
             LIMIT 1;
         """
 
         sql_insert_item = """
+            WITH atualizacao AS (
+                UPDATE public.notas_itens
+                SET
+                    empresa_id = %s,
+                    cnpj = %s,
+                    descricao = %s,
+                    ncm = %s,
+                    cfop = %s,
+                    quantidade = %s,
+                    valor_unitario = %s,
+                    valor_total = %s
+                WHERE nota_id = %s
+                  AND item_numero = %s
+                  AND produto_codigo = %s
+                RETURNING id
+            )
             INSERT INTO public.notas_itens (
                 nota_id,
                 empresa_id,
@@ -78,13 +102,7 @@ class NFeItensService:
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, 
                 %s
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM public.notas_itens
-                WHERE nota_id = %s
-                  AND item_numero = %s
-                  AND produto_codigo = %s
-            );
+            WHERE NOT EXISTS (SELECT 1 FROM atualizacao);
         """
 
         try:
@@ -99,6 +117,7 @@ class NFeItensService:
                         (
                             str(nota.numero_nf),
                             emitente_cnpj,
+                            nota.modelo,
                             nota.data_emissao,
                         ),
                     )
@@ -114,23 +133,37 @@ class NFeItensService:
 
                     nota_id, empresa_id, cnpj = resultado
                     for item in nota.itens:
+                        
+                        codigo_produto = _limitar_texto(item.codigo_produto, 120)
+                        descricao = _limitar_texto(item.descricao, 255)
+                        ncm = _limitar_texto(item.ncm, 20)
+                        cfop = _limitar_texto(item.cfop, 10)
+                    
                         cur.execute(
                             sql_insert_item,
                             (
-                                nota_id,
                                 empresa_id,
                                 cnpj,
-                                item.numero_item,
-                                item.codigo_produto,
-                                item.descricao,
-                                item.ncm,
-                                item.cfop,
+                                descricao,
+                                ncm,
+                                cfop,
                                 item.quantidade,
                                 item.valor_unitario,
                                 item.valor_total,
                                 nota_id,
                                 item.numero_item,
-                                item.codigo_produto,
+                                codigo_produto,
+                                nota_id,
+                                empresa_id,
+                                cnpj,
+                                item.numero_item,
+                                codigo_produto,
+                                descricao,
+                                ncm,
+                                cfop,
+                                item.quantidade,
+                                item.valor_unitario,
+                                item.valor_total,
                             ),
                         )
                         inseridos += cur.rowcount

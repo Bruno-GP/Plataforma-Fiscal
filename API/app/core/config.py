@@ -1,0 +1,126 @@
+import os
+
+
+def get_auth_secret_key() -> str:
+    return os.getenv("AUTH_SECRET_KEY", "dev-secret-change-me")
+
+
+def get_auth_token_expire_minutes() -> int:
+    raw_value = os.getenv("AUTH_TOKEN_EXPIRE_MINUTES", "480").strip()
+
+    try:
+        expire_minutes = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("AUTH_TOKEN_EXPIRE_MINUTES deve ser um inteiro.") from exc
+
+    return max(expire_minutes, 5)
+
+
+def get_app_env() -> str:
+    return os.getenv("APP_ENV", "development").strip().lower()
+
+
+def is_production() -> bool:
+    return get_app_env() == "production"
+
+
+def get_session_cookie_name() -> str:
+    return os.getenv("AUTH_COOKIE_NAME", "plataforma_fiscal_session").strip() or "plataforma_fiscal_session"
+
+
+def get_session_cookie_domain() -> str | None:
+    raw_value = os.getenv("AUTH_COOKIE_DOMAIN", "").strip()
+    return raw_value or None
+
+
+def get_session_cookie_path() -> str:
+    return os.getenv("AUTH_COOKIE_PATH", "/").strip() or "/"
+
+
+def get_session_cookie_samesite() -> str:
+    raw_value = os.getenv("AUTH_COOKIE_SAMESITE", "lax").strip().lower()
+    if raw_value not in {"lax", "strict", "none"}:
+        return "lax"
+    return raw_value
+
+
+def get_session_cookie_secure() -> bool:
+    raw_value = os.getenv("AUTH_COOKIE_SECURE", "").strip().lower()
+    if raw_value in {"true", "1", "yes"}:
+        return True
+    if raw_value in {"false", "0", "no"}:
+        return False
+    return is_production()
+
+
+def get_cors_allow_origins() -> str:
+    default_value = "http://localhost:5173"
+    if is_production():
+        default_value = ""
+    return os.getenv("CORS_ALLOW_ORIGINS", default_value)
+
+
+def get_cors_allow_origin_regex() -> str:
+    if is_production():
+        default_value = ""
+    else:
+        default_value = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+    return os.getenv("CORS_ALLOW_ORIGIN_REGEX", default_value).strip()
+
+
+def get_cors_allow_credentials() -> bool:
+    return os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() == "true"
+
+
+def get_login_max_failed_attempts() -> int:
+    raw_value = os.getenv("AUTH_MAX_FAILED_ATTEMPTS", "5").strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("AUTH_MAX_FAILED_ATTEMPTS deve ser um inteiro.") from exc
+    return max(parsed, 1)
+
+
+def get_login_lockout_minutes() -> int:
+    raw_value = os.getenv("AUTH_LOCKOUT_MINUTES", "15").strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("AUTH_LOCKOUT_MINUTES deve ser um inteiro.") from exc
+    return max(parsed, 1)
+
+
+def get_password_min_length() -> int:
+    raw_value = os.getenv("AUTH_PASSWORD_MIN_LENGTH", "12").strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("AUTH_PASSWORD_MIN_LENGTH deve ser um inteiro.") from exc
+    return max(parsed, 8)
+
+
+def get_upload_max_xml_bytes() -> int:
+    raw_value = os.getenv("UPLOAD_MAX_XML_BYTES", str(5 * 1024 * 1024)).strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("UPLOAD_MAX_XML_BYTES deve ser um inteiro.") from exc
+    return max(parsed, 1024)
+
+
+def get_upload_max_txt_bytes() -> int:
+    raw_value = os.getenv("UPLOAD_MAX_TXT_BYTES", str(20 * 1024 * 1024)).strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("UPLOAD_MAX_TXT_BYTES deve ser um inteiro.") from exc
+    return max(parsed, 1024)
+
+
+def get_upload_max_total_bytes() -> int:
+    raw_value = os.getenv("UPLOAD_MAX_TOTAL_BYTES", str(50 * 1024 * 1024)).strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("UPLOAD_MAX_TOTAL_BYTES deve ser um inteiro.") from exc
+    return max(parsed, 1024)

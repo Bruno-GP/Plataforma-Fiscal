@@ -7,6 +7,15 @@ from app.models.nfe.schemas import NFeKPI, NFeKPIConsulta
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.sped.postgres_config import carregar_config_postgres_sped
 
+UF_PARA_REGIAO = {
+  "AC": "Norte", "AL": "Nordeste", "AP": "Norte", "AM": "Norte", "BA": "Nordeste",
+  "CE": "Nordeste", "DF": "Centro-Oeste", "ES": "Sudeste", "GO": "Centro-Oeste",
+  "MA": "Nordeste", "MT": "Centro-Oeste", "MS": "Centro-Oeste", "MG": "Sudeste",
+  "PA": "Norte", "PB": "Nordeste", "PR": "Sul", "PE": "Nordeste", "PI": "Nordeste",
+  "RJ": "Sudeste", "RN": "Nordeste", "RS": "Sul", "RO": "Norte", "RR": "Norte",
+  "SC": "Sul", "SP": "Sudeste", "SE": "Nordeste", "TO": "Norte",
+}
+
 def _parece_codigo_municipio(valor: object) -> bool:
   codigo = "".join(ch for ch in str(valor or "") if ch.isdigit())
   return len(codigo) in {6, 7}
@@ -32,6 +41,34 @@ def _normalizar_nome_cidade(valor: object) -> str:
           return f"{partes[0]} - {ultimo}"
 
   return cidade
+
+def _obter_regiao_por_uf(uf: object) -> str | None:
+  uf_normalizada = str(uf or "").strip().upper()
+  return UF_PARA_REGIAO.get(uf_normalizada)
+
+def _categoria_fiscal_case_sped() -> str:
+  return """
+    CASE
+      WHEN d.tipo_operacao = 'saida'
+        AND LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')
+        THEN 'Venda'
+      WHEN COALESCE(cf.descricao, '') ILIKE '%%devol%%' THEN 'Devolução'
+      WHEN COALESCE(cf.descricao, '') ILIKE '%%bonific%%'
+        OR COALESCE(cf.descricao, '') ILIKE '%%brinde%%'
+        OR COALESCE(cf.descricao, '') ILIKE '%%doaç%%'
+        OR COALESCE(cf.descricao, '') ILIKE '%%doac%%' THEN 'Bonificação'
+      WHEN COALESCE(cf.descricao, '') ILIKE '%%remessa%%'
+        OR COALESCE(cf.descricao, '') ILIKE '%%demonstra%%'
+        OR COALESCE(cf.descricao, '') ILIKE '%%conserto%%'
+        OR COALESCE(cf.descricao, '') ILIKE '%%comodato%%'
+        OR COALESCE(cf.descricao, '') ILIKE '%%industrializa%%' THEN 'Remessa'
+      WHEN COALESCE(cf.descricao, '') ILIKE '%%transfer%%' THEN 'Transferência'
+      WHEN COALESCE(cf.descricao, '') ILIKE '%%substitui%%'
+        OR COALESCE(cf.descricao, '') ILIKE '%%subst. trib%%'
+        OR COALESCE(cf.descricao, '') ILIKE '%%st%%' THEN 'Substituição Tributária'
+      ELSE 'Outras operações'
+    END
+  """
 
 class SpedConsultaService:
   def __init__(self) -> None:
@@ -431,10 +468,10 @@ class SpedConsultaService:
     emitente_cnpj: str,
     periodo_ano: Optional[int] = None,
     periodo_mes: Optional[int] = None,
-    limite: int = 5,
+    limite: Optional[int] = None,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = ["regexp_replace(d.empresa_cnpj, '\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
+    filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
     params: list[object] = [cnpj]
 
     if periodo_ano:
@@ -524,6 +561,108 @@ class SpedConsultaService:
           tuple([*params, limite]),
         )
 
+        cur.execute(
+          f"""
+          SELECT COALESCE(NULLIF(TRIM(i.cfop), ''), '0000') AS cfop,
+                COALESCE(NULLIF(TRIM(cf.descricao), ''), 'CFOP sem descrição') AS descricao,
+                COALESCE(SUM(i.valor_total), 0) AS valor_total
+          FROM public.sped_documentos_fiscais d
+          JOIN public.sped_documento_itens i ON i.documento_id = d.id
+          LEFT JOIN public.notas_cfops cf
+            ON regexp_replace(COALESCE(cf.codigo, ''), '\\D', '', 'g')
+               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+          WHERE {where_clause}
+          GROUP BY 1, 2
+          ORDER BY 3 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+        top_cfops_valor = [
+          {
+            "cfop": cfop,
+            "descricao": descricao,
+            "valor_total": valor_total or Decimal("0.00"),
+            "participacao_percentual": (
+              ((valor_total or Decimal("0.00")) / total_vendido) * Decimal("100")
+              if total_vendido
+              else Decimal("0.00")
+            ),
+          }
+          for cfop, descricao, valor_total in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT CONCAT(
+                  COALESCE(
+                    NULLIF(TRIM(p.municipio_nome), ''),
+                    NULLIF(TRIM(p.municipio), ''),
+                    'Cidade não identificada'
+                  ),
+                  CASE
+                    WHEN NULLIF(TRIM(p.uf), '') IS NOT NULL THEN CONCAT(' - ', UPPER(TRIM(p.uf)))
+                    ELSE ''
+                  END
+                ) AS cidade,
+                COALESCE(NULLIF(TRIM(p.uf), ''), '') AS uf,
+                COALESCE(SUM(d.valor_total), 0) AS valor_total,
+                COUNT(*) AS quantidade_documentos
+          FROM public.sped_documentos_fiscais d
+          LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+          WHERE {where_clause}
+          GROUP BY 1, 2
+          ORDER BY 3 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+        top_cidades_valor = [
+          {
+            "cidade": _normalizar_nome_cidade(cidade),
+            "uf": uf,
+            "valor_total": valor_total or Decimal("0.00"),
+            "quantidade_documentos": quantidade_documentos or 0,
+          }
+          for cidade, uf, valor_total, quantidade_documentos in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT COALESCE(NULLIF(TRIM(p.uf), ''), '') AS uf,
+                COALESCE(SUM(d.valor_total), 0) AS valor_total,
+                COUNT(*) AS quantidade_documentos
+          FROM public.sped_documentos_fiscais d
+          LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+          """,
+          tuple(params),
+        )
+        top_regioes_map: dict[str, dict[str, Decimal | int | str]] = {}
+        for uf, valor_total, quantidade_documentos in cur.fetchall():
+          regiao = _obter_regiao_por_uf(uf)
+          if not regiao:
+            continue
+
+          acumulado = top_regioes_map.setdefault(
+            regiao,
+            {
+              "regiao": regiao,
+              "valor_total": Decimal("0.00"),
+              "quantidade_documentos": 0,
+            },
+          )
+          acumulado["valor_total"] = Decimal(str(acumulado["valor_total"])) + (valor_total or Decimal("0.00"))
+          acumulado["quantidade_documentos"] = int(acumulado["quantidade_documentos"]) + (quantidade_documentos or 0)
+
+        top_regioes_valor = sorted(
+          top_regioes_map.values(),
+          key=lambda item: Decimal(str(item["valor_total"])),
+          reverse=True,
+        )[:limite]
+
         return {
           "emitente_cnpj": cnpj,
           "periodo_ano": periodo_ano,
@@ -533,6 +672,245 @@ class SpedConsultaService:
           "top_clientes_quantidade": top_clientes_quantidade,
           "top_produtos_valor": top_produtos_valor,
           "top_produtos_quantidade": top_produtos_quantidade,
+          "top_cfops_valor": top_cfops_valor,
+          "top_regioes_valor": top_regioes_valor,
+          "top_cidades_valor": top_cidades_valor,
+        }
+
+  def analisar_fiscal_cfop(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s"]
+    params: list[object] = [cnpj]
+
+    if periodo_ano:
+      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
+      params.append(periodo_ano)
+    if periodo_mes:
+      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
+      params.append(periodo_mes)
+
+    where_clause = " AND ".join(filtros)
+    categoria_case = _categoria_fiscal_case_sped()
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(SUM(i.valor_total), 0) AS total_movimentado,
+            COUNT(DISTINCT d.id) AS quantidade_documentos,
+            COUNT(DISTINCT regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')) AS quantidade_cfops
+          FROM public.sped_documentos_fiscais d
+          JOIN public.sped_documento_itens i ON i.documento_id = d.id
+          WHERE {where_clause}
+          """,
+          tuple(params),
+        )
+        resumo_row = cur.fetchone()
+        total_movimentado = resumo_row[0] if resumo_row else Decimal("0.00")
+        quantidade_documentos = resumo_row[1] if resumo_row else 0
+        quantidade_cfops = resumo_row[2] if resumo_row else 0
+
+        cur.execute(
+          f"""
+          SELECT
+            {categoria_case} AS categoria,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total,
+            COUNT(DISTINCT d.id) AS quantidade_documentos
+          FROM public.sped_documentos_fiscais d
+          JOIN public.sped_documento_itens i ON i.documento_id = d.id
+          LEFT JOIN public.notas_cfops cf
+            ON regexp_replace(COALESCE(cf.codigo, ''), '\\D', '', 'g')
+               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+          WHERE {where_clause}
+          GROUP BY 1
+          ORDER BY 2 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+        top_categorias = [
+          {
+            "categoria": categoria,
+            "valor_total": valor_total or Decimal("0.00"),
+            "participacao_percentual": (
+              ((valor_total or Decimal("0.00")) / total_movimentado) * Decimal("100")
+              if total_movimentado
+              else Decimal("0.00")
+            ),
+            "quantidade_documentos": quantidade_docs or 0,
+          }
+          for categoria, valor_total, quantidade_docs in cur.fetchall()
+        ]
+
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(NULLIF(TRIM(i.cfop), ''), '0000') AS cfop,
+            COALESCE(NULLIF(TRIM(cf.descricao), ''), 'CFOP sem descrição') AS descricao,
+            COALESCE(SUM(i.valor_total), 0) AS valor_total
+          FROM public.sped_documentos_fiscais d
+          JOIN public.sped_documento_itens i ON i.documento_id = d.id
+          LEFT JOIN public.notas_cfops cf
+            ON regexp_replace(COALESCE(cf.codigo, ''), '\\D', '', 'g')
+               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+          WHERE {where_clause}
+          GROUP BY 1, 2
+          ORDER BY 3 DESC, 1 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite]),
+        )
+        top_cfops = [
+          {
+            "cfop": cfop,
+            "descricao": descricao,
+            "valor_total": valor_total or Decimal("0.00"),
+            "participacao_percentual": (
+              ((valor_total or Decimal("0.00")) / total_movimentado) * Decimal("100")
+              if total_movimentado
+              else Decimal("0.00")
+            ),
+          }
+          for cfop, descricao, valor_total in cur.fetchall()
+        ]
+
+        return {
+          "emitente_cnpj": cnpj,
+          "periodo_ano": periodo_ano,
+          "periodo_mes": periodo_mes,
+          "total_movimentado": total_movimentado,
+          "quantidade_documentos": quantidade_documentos,
+          "quantidade_cfops": quantidade_cfops,
+          "top_categorias": top_categorias,
+          "top_cfops": top_cfops,
+        }
+
+  def analisar_clientes(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
+    params: list[object] = [cnpj]
+
+    if periodo_ano:
+      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
+      params.append(periodo_ano)
+    if periodo_mes:
+      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
+      params.append(periodo_mes)
+
+    where_clause = " AND ".join(filtros)
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        total_vendido = self._safe_scalar_query(
+          cur,
+          f"""
+          SELECT COALESCE(SUM(d.valor_total), 0)
+          FROM public.sped_documentos_fiscais d
+          WHERE {where_clause}
+          """,
+          tuple(params),
+        )
+
+        total_clientes = self._safe_scalar_query(
+          cur,
+          f"""
+          SELECT COUNT(*)
+          FROM (
+            SELECT 1
+            FROM public.sped_documentos_fiscais d
+            LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+            WHERE {where_clause}
+            GROUP BY COALESCE(NULLIF(TRIM(p.nome), ''), 'Cliente nÃ£o identificado')
+          ) clientes
+          """,
+          tuple(params),
+        )
+
+        top_clientes_valor = self._safe_top_cliente_analise_query(
+          cur,
+          f"""
+          SELECT
+            cliente,
+            valor_total,
+            quantidade_documentos,
+            ticket_medio,
+            CASE
+              WHEN %s = 0 THEN 0
+              ELSE ROUND((valor_total * 100.0) / %s, 2)
+            END AS percentual_participacao
+          FROM (
+            SELECT
+              COALESCE(NULLIF(TRIM(p.nome), ''), 'Cliente nÃ£o identificado') AS cliente,
+              COALESCE(SUM(d.valor_total), 0) AS valor_total,
+              COUNT(*) AS quantidade_documentos,
+              CASE
+                WHEN COUNT(*) = 0 THEN 0
+                ELSE COALESCE(SUM(d.valor_total), 0) / COUNT(*)
+              END AS ticket_medio
+            FROM public.sped_documentos_fiscais d
+            LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+            WHERE {where_clause}
+            GROUP BY 1
+          ) base
+          ORDER BY valor_total DESC, cliente ASC
+          LIMIT %s
+          """,
+          tuple([total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *params, limite]),
+        )
+
+        top_clientes_quantidade = self._safe_top_cliente_analise_query(
+          cur,
+          f"""
+          SELECT
+            cliente,
+            valor_total,
+            quantidade_documentos,
+            ticket_medio,
+            CASE
+              WHEN %s = 0 THEN 0
+              ELSE ROUND((valor_total * 100.0) / %s, 2)
+            END AS percentual_participacao
+          FROM (
+            SELECT
+              COALESCE(NULLIF(TRIM(p.nome), ''), 'Cliente nÃ£o identificado') AS cliente,
+              COALESCE(SUM(d.valor_total), 0) AS valor_total,
+              COUNT(*) AS quantidade_documentos,
+              CASE
+                WHEN COUNT(*) = 0 THEN 0
+                ELSE COALESCE(SUM(d.valor_total), 0) / COUNT(*)
+              END AS ticket_medio
+            FROM public.sped_documentos_fiscais d
+            LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
+            WHERE {where_clause}
+            GROUP BY 1
+          ) base
+          ORDER BY quantidade_documentos DESC, valor_total DESC, cliente ASC
+          LIMIT %s
+          """,
+          tuple([total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *params, limite]),
+        )
+
+        return {
+          "emitente_cnpj": cnpj,
+          "periodo_ano": periodo_ano,
+          "periodo_mes": periodo_mes,
+          "total_vendido": total_vendido or Decimal("0.00"),
+          "total_clientes": int(total_clientes or 0),
+          "top_clientes_valor": top_clientes_valor,
+          "top_clientes_quantidade": top_clientes_quantidade,
         }
 
   def _safe_scalar_query(self, cur, sql: str, params: tuple[object, ...]) -> Decimal:
@@ -581,6 +959,22 @@ class SpedConsultaService:
           "quantidade_total": quantidade_total or Decimal("0.00"),
         }
         for produto, valor_total, quantidade_total in cur.fetchall()
+      ]
+    except psycopg.errors.UndefinedTable:
+      return []
+
+  def _safe_top_cliente_analise_query(self, cur, sql: str, params: tuple[object, ...]) -> list[dict]:
+    try:
+      cur.execute(sql, params)
+      return [
+        {
+          "cliente": cliente,
+          "valor_total": valor_total or Decimal("0.00"),
+          "quantidade_documentos": quantidade_documentos or 0,
+          "ticket_medio": ticket_medio or Decimal("0.00"),
+          "percentual_participacao": percentual_participacao or Decimal("0.00"),
+        }
+        for cliente, valor_total, quantidade_documentos, ticket_medio, percentual_participacao in cur.fetchall()
       ]
     except psycopg.errors.UndefinedTable:
       return []

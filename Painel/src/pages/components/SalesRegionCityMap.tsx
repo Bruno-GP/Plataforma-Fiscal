@@ -190,14 +190,21 @@ interface TopCityItem {
   percent: number | null;
 }
 
+interface TopRegionItem {
+  regiao: string;
+  rawValue: number;
+}
+
 interface SalesRegionCityMapProps {
   topCidadesItems: TopCityItem[];
+  topRegioesItems?: TopRegionItem[];
   totalFaturamento: number;
   formatCurrency: (value: number) => string;
 }
 
 export function SalesRegionCityMap({
   topCidadesItems,
+  topRegioesItems = [],
   totalFaturamento,
   formatCurrency,
 }: SalesRegionCityMapProps) {
@@ -260,6 +267,50 @@ export function SalesRegionCityMap({
       }))
       .sort((a, b) => b.valor - a.valor);
   }, [topCidades, totalFaturamento]);
+
+  const possuiTotaisRegionais = topRegioesItems.length > 0;
+  const unidentifiedRegionLabel = 'Não identificado';
+
+  const vendasPorRegiaoNormalizadas = useMemo(() => {
+    if (!possuiTotaisRegionais) {
+      return vendasPorRegiao;
+    }
+
+    const regiaoMap = new Map<string, number>([
+      ['Norte', 0],
+      ['Nordeste', 0],
+      ['Centro-Oeste', 0],
+      ['Sudeste', 0],
+      ['Sul', 0],
+      ['Outras localidades', 0],
+      ['NÃ£o identificado', 0],
+    ]);
+
+    regiaoMap.set(unidentifiedRegionLabel, regiaoMap.get(unidentifiedRegionLabel) ?? 0);
+
+    topRegioesItems.forEach((item) => {
+      if (!regiaoMap.has(item.regiao)) return;
+      regiaoMap.set(item.regiao, item.rawValue);
+    });
+
+    const totalRegional = Math.max(totalFaturamento, 0);
+    const totalMapeado = [...regiaoMap.values()].reduce((acc, valor) => acc + valor, 0);
+    const totalNaoIdentificado = Math.max(totalRegional - totalMapeado, 0);
+
+    if (totalNaoIdentificado > 0) {
+      regiaoMap.set('Não identificado', (regiaoMap.get('Não identificado') ?? 0) + totalNaoIdentificado);
+    }
+
+    regiaoMap.set(unidentifiedRegionLabel, totalNaoIdentificado);
+
+    return [...regiaoMap.entries()]
+      .map(([regiao, valor]) => ({
+        regiao,
+        valor,
+        percentual: totalRegional > 0 ? (valor / totalRegional) * 100 : 0,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [possuiTotaisRegionais, topRegioesItems, totalFaturamento, vendasPorRegiao]);
 
   const geoJsonPorEstado = useMemo(() => {
     const data = brazilMapQuery.data;
@@ -559,7 +610,7 @@ export function SalesRegionCityMap({
         centroidY: number;
         projectedRings: number[][][];
       } => Boolean(item));
-  }, [cidadesGeoJsonQuery.data, mapViewMode, projectionConfig, topCidadesItems, totalFaturamento]);
+  }, [cidadesGeoJsonQuery.data, estadoFocoCidade, mapViewMode, projectionConfig, topCidadesItems, totalFaturamento]);
 
   const cidadesComVendasOrdenadas = useMemo(
     () => [...cityGeoJsonProjetado].filter((city) => city.value > 0).sort((a, b) => b.value - a.value),
@@ -611,7 +662,7 @@ export function SalesRegionCityMap({
     ];
 
     const dadosOrdenados = ordemRegioes
-      .map((regiao) => vendasPorRegiao.find((item) => item.regiao === regiao) ?? {
+      .map((regiao) => vendasPorRegiaoNormalizadas.find((item) => item.regiao === regiao) ?? {
         regiao,
         valor: 0,
         percentual: 0,
@@ -619,10 +670,11 @@ export function SalesRegionCityMap({
       .filter((item) => item.valor > 0 || item.regiao !== 'Não identificado');
 
     return dadosOrdenados.sort((a, b) => b.percentual - a.percentual);
-  }, [vendasPorRegiao]);
+  }, [vendasPorRegiaoNormalizadas]);
 
   const diagnosticoRegioes = useMemo(() => {
     const totalTopCidades = topCidadesItems.reduce((acc, item) => acc + item.rawValue, 0);
+    const totalRegioes = topRegioesItems.reduce((acc, item) => acc + item.rawValue, 0);
 
     const cidadesSemUf = topCidadesItems
       .filter((item) => !extractUfFromCity(item.title))
@@ -633,8 +685,10 @@ export function SalesRegionCityMap({
       }))
       .sort((a, b) => b.rawValue - a.rawValue);
 
-    const totalSemUf = cidadesSemUf.reduce((acc, item) => acc + item.rawValue, 0);
-    const totalOutrasLocalidades = Math.max(totalFaturamento - totalTopCidades, 0);
+    const totalSemUf = possuiTotaisRegionais
+      ? Math.max(totalFaturamento - totalRegioes, 0)
+      : cidadesSemUf.reduce((acc, item) => acc + item.rawValue, 0);
+    const totalOutrasLocalidades = possuiTotaisRegionais ? 0 : Math.max(totalFaturamento - totalTopCidades, 0);
 
     return {
       totalTopCidades,
@@ -642,7 +696,7 @@ export function SalesRegionCityMap({
       totalSemUf,
       cidadesSemUf,
     };
-  }, [topCidadesItems, totalFaturamento]);
+  }, [possuiTotaisRegionais, topCidadesItems, topRegioesItems, totalFaturamento]);
 
   const maiorPercentualRegiao = useMemo(
     () => Math.max(...dadosRegiaoMapa.map((item) => item.percentual), 0),

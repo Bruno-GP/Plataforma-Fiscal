@@ -1,0 +1,89 @@
+<GENERATED_PROMPT>
+  <goal>
+    Gerar um relatório executivo de compras com foco em análise gerencial e apoio à tomada de decisão, avaliando o desempenho das compras por meio de indicadores-chave como valor total comprado, quantidade comprada, ticket médio por compra, frequência de compras, variação ao longo do tempo, participação por fornecedor, categorias e demais métricas relevantes identificadas nos dados.
+  </goal>
+
+  <PlanningAndVerification>
+    Antes de elaborar o relatório:
+    1. Validar se os dados contêm colunas suficientes para análise, como data da compra, valor da compra, quantidade, fornecedor, categoria, centro de custo, comprador ou unidade.
+    2. Identificar inconsistências, valores nulos, duplicidades e possíveis outliers que possam distorcer os indicadores.
+    3. Confirmar o período analisado e, se possível, comparar com períodos anteriores.
+    4. Calcular os principais indicadores e verificar se os resultados são coerentes entre si.
+    5. Priorizar uma leitura executiva, destacando descobertas acionáveis, riscos, oportunidades e recomendações.
+  </PlanningAndVerification>
+
+  <return_format>
+    Estruture a resposta como um relatório executivo profissional, em português do Brasil, com linguagem clara, objetiva e voltada para gestores.
+
+    O relatório deve conter obrigatoriamente:
+    1. Resumo executivo com os principais achados.
+    2. Visão geral dos dados analisados, incluindo período, volume total e cobertura da base.
+    3. Indicadores principais, incluindo:
+       - Valor total comprado
+       - Quantidade total comprada
+       - Ticket médio por compra
+       - Número total de compras
+       - Valor médio por item, se aplicável
+       - Frequência de compras
+       - Variação por período
+       - Participação por fornecedor
+       - Participação por categoria
+       - Concentração de compras
+    4. Análise de tendências e padrões relevantes.
+    5. Principais desvios, anomalias ou pontos de atenção.
+    6. Insights executivos orientados a negócio.
+    7. Recomendações práticas e priorizadas.
+    8. Conclusão executiva.
+
+    Regras de apresentação:
+    - Use títulos e subtítulos bem definidos.
+    - Sempre explique o que cada indicador representa no contexto da análise.
+    - Destaque os pontos mais relevantes para a gestão.
+    - Sempre que possível, apresente comparações percentuais e absolutas.
+    - Caso algum dado essencial não exista, informe explicitamente a limitação e adapte a análise.
+    - Não invente dados ausentes.
+  </return_format>
+
+  <ReasoningSteps>
+    1. Entender a estrutura da base de compras e os campos disponíveis.
+    2. Identificar o período da análise e o nível de granularidade dos dados.
+    3. Calcular os indicadores principais.
+    4. Comparar desempenho entre períodos, fornecedores, categorias ou unidades, quando disponível.
+    5. Detectar concentrações, variações abruptas, desvios e comportamentos fora do padrão.
+    6. Traduzir os resultados em linguagem executiva, com foco em impacto, eficiência, risco e oportunidade.
+    7. Finalizar com recomendações objetivas e acionáveis para a gestão.
+  </ReasoningSteps>
+
+  <AgenticEagerness>
+    - Modo: Extendido
+    - Reasoning Effort: High
+    - Verbosity: High
+    - Primeira execução de forma autônoma; parar ou escalar para o usuário se faltar informação crítica ou se conflitos excederem o limite.
+  </AgenticEagerness>
+
+  <warnings>
+    - Não gerar interpretações sem respaldo nos dados.
+    - Não confundir quantidade comprada com número de pedidos.
+    - Não tratar ticket médio sem deixar claro o critério de cálculo.
+    - Não apresentar conclusões genéricas; toda conclusão deve estar conectada aos indicadores observados.
+    - Ter cuidado com outliers que possam distorcer médias.
+    - Caso haja poucos dados ou baixa qualidade da base, deixar isso explícito no relatório.
+    - Se houver sazonalidade ou variações de período, considerar esse contexto antes de concluir.
+  </warnings>
+
+  <context_dump>
+    O objetivo deste relatório é analisar dados de compras sob uma ótica executiva. A base poderá conter informações como valor comprado, quantidade comprada, ticket médio por compra e outros indicadores relacionados ao processo de compras. O público-alvo é gerencial ou executivo, portanto a resposta deve ir além da simples descrição numérica e apresentar leitura estratégica, tendências, pontos de atenção e recomendações. A análise deve priorizar clareza, objetividade e utilidade para tomada de decisão.
+  </context_dump>
+
+  <StopConditions>
+    - Pare e sinalize ao usuário se os dados não permitirem calcular os principais indicadores.
+    - Pare e informe limitações relevantes se faltarem colunas críticas, como valor, quantidade ou data.
+    - Pare para solicitar esclarecimento apenas se houver ambiguidade crítica que impeça a análise correta.
+  </StopConditions>
+
+  <Tools>
+    - Ferramenta de leitura e análise de dados tabulares
+    - Ferramenta de cálculo estatístico
+    - Ferramenta de sumarização executiva
+  </Tools>
+</GENERATED_PROMPT>

@@ -15,6 +15,8 @@ interface RankingItem {
   value: string;
   rawValue: number;
   percent: number | null;
+  badgeLabel?: string;
+  badgeClassName?: string;
 }
 
 interface RankingCardProps {
@@ -146,6 +148,14 @@ export function RankingCard({
                               className={`h-5 rounded-md px-1.5 py-0 text-[10px] ${abcBadgeClassName}`}
                             >
                               Classe {abcData.abcClass}
+                            </Badge>
+                          )}
+                          {item.badgeLabel && (
+                            <Badge
+                              variant="outline"
+                              className={`h-5 rounded-md px-1.5 py-0 text-[10px] ${item.badgeClassName ?? ''}`}
+                            >
+                              {item.badgeLabel}
                             </Badge>
                           )}
                         </div>

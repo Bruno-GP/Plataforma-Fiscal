@@ -1,9 +1,10 @@
 import type { ConsultaKpiResponse } from './nfe';
+import { API_BASE_URL, apiFetch } from './api';
+import { buildFiscalSearchParams } from './fiscal';
 
-const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-const API_BASE_URL = RAW_API_BASE_URL.endsWith('/api')
-  ? RAW_API_BASE_URL
-  : `${RAW_API_BASE_URL.replace(/\/$/, '')}/api`;
+interface RequestOptions {
+  signal?: AbortSignal;
+}
 
 export interface ImportacaoSpedArquivoResultado {
   arquivo: string;
@@ -45,7 +46,7 @@ export const importarSpedArquivo = async (file: File, cnpjEmpresaOrigem: string)
   const cnpjDigits = cnpjEmpresaOrigem.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_empresa_origem: cnpjDigits });
 
-  const response = await fetch(`${API_BASE_URL}/sped/importar?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/sped/importar?${searchParams.toString()}`, {
     method: 'POST',
     body: formData,
   });
@@ -62,7 +63,7 @@ export const consultarPendenciasSped = async (cnpjEmitente: string): Promise<Imp
   const digits = cnpjEmitente.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
-  const response = await fetch(`${API_BASE_URL}/sped/pendencias?${searchParams.toString()}`);
+  const response = await apiFetch(`${API_BASE_URL}/sped/pendencias?${searchParams.toString()}`);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar pendências do SPED.' }));
@@ -76,7 +77,7 @@ export const processarSpedsImportados = async (cnpjEmitente: string): Promise<Pr
   const digits = cnpjEmitente.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
-  const response = await fetch(`${API_BASE_URL}/sped/processar-importados?${searchParams.toString()}`, {
+  const response = await apiFetch(`${API_BASE_URL}/sped/processar-importados?${searchParams.toString()}`, {
     method: 'POST',
   });
 
@@ -91,19 +92,9 @@ export const processarSpedsImportados = async (cnpjEmitente: string): Promise<Pr
 export type ConsultaSpedKpiResponse = ConsultaKpiResponse;
 
 export const fetchSpedKpis = async (params: { emitente_cnpj?: string; periodo_ano?: number; periodo_mes?: number; limite?: number; offset?: number } = {}): Promise<ConsultaSpedKpiResponse> => {
-  const searchParams = new URLSearchParams();
-  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (digits.length === 14) {
-    searchParams.set('emitente_cnpj', digits);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.offset) searchParams.set('offset', String(params.offset));
-
-  const response = await fetch(`${API_BASE_URL}/sped/kpis?${searchParams.toString()}`);
+  const response = await apiFetch(`${API_BASE_URL}/sped/kpis?${searchParams.toString()}`);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar KPIs do SPED.' }));
@@ -138,27 +129,38 @@ export interface AnaliseComprasResponse {
   relatorio_ia?: string | null;
 }
 
+export interface SerieMensalComprasItem {
+  periodo_ano: number;
+  periodo_mes: number;
+  total_comprado: number | string;
+}
+
+export interface DashboardComprasResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  anos_disponiveis: number[];
+  resumo_atual: AnaliseComprasResponse;
+  resumo_anterior: AnaliseComprasResponse;
+  serie_mensal: SerieMensalComprasItem[];
+}
+
 export const fetchSpedAnaliseCompras = async (params: { 
     emitente_cnpj?: string; 
     periodo_ano?: number; 
     periodo_mes?: number; 
     limite?: number; 
-    gerar_relatorio_ia?: boolean 
-  } = {}): Promise<AnaliseComprasResponse> => {
+    gerar_relatorio_ia?: boolean;
+    formato_relatorio?: 'executivo' | 'analitico';
+    layout?: string;
+  } = {}, options: RequestOptions = {}): Promise<AnaliseComprasResponse> => {
 
-  const searchParams = new URLSearchParams();
-  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (digits.length === 14) {
-    searchParams.set('emitente_cnpj', digits);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
-
-  const response = await fetch(`${API_BASE_URL}/sped/analise/compras?${searchParams.toString()}`);
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/compras?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de compras.' }));
@@ -168,12 +170,43 @@ export const fetchSpedAnaliseCompras = async (params: {
   return response.json() as Promise<AnaliseComprasResponse>;
 };
 
+export const fetchSpedDashboardCompras = async (
+  params: {
+    emitente_cnpj?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<DashboardComprasResponse> => {
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/compras/dashboard?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar dashboard de compras.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar dashboard de compras.');
+  }
+
+  return response.json() as Promise<DashboardComprasResponse>;
+};
+
 export interface AnaliseVendasResponse {
   status: string;
   emitente_cnpj: string;
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_vendido: number | string;
+  top_cfops_valor: Array<{
+    cfop: string;
+    descricao: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+  }>;
+  top_regioes_valor: Array<{ regiao: string; valor_total: number | string; quantidade_documentos: number }>;
+  top_cidades_valor: Array<{ cidade: string; uf?: string; valor_total: number | string; quantidade_documentos: number }>;
   top_clientes_valor: Array<{ cliente: string; valor_total: number | string; quantidade_documentos: number }>;
   top_clientes_quantidade: Array<{ cliente: string; valor_total: number | string; quantidade_documentos: number }>;
   top_produtos_valor: RankingProdutoCompra[];
@@ -181,27 +214,72 @@ export interface AnaliseVendasResponse {
   relatorio_ia?: string | null;
 }
 
+export interface AnaliseFiscalCfopResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  total_movimentado: number | string;
+  quantidade_documentos: number;
+  quantidade_cfops: number;
+  top_categorias: Array<{
+    categoria: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+    quantidade_documentos: number;
+  }>;
+  top_cfops: Array<{
+    cfop: string;
+    descricao: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+  }>;
+}
+
+export interface SerieMensalVendasItem {
+  periodo_ano: number;
+  periodo_mes: number;
+  total_vendido: number | string;
+  quantidade_notas: number;
+  total_impostos: number | string;
+}
+
+export interface DashboardVendasResumo {
+  total_vendido: number | string;
+  quantidade_notas: number;
+  total_impostos: number | string;
+  ticket_medio: number | string;
+  top_clientes: Array<{ cliente?: string; valor_total?: number | string }>;
+  top_produtos: Array<{ produto?: string; valor_total?: number | string }>;
+  top_cidades: Array<{ cidade?: string; valor_total?: number | string }>;
+}
+
+export interface DashboardVendasResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  anos_disponiveis: number[];
+  resumo_atual: DashboardVendasResumo;
+  resumo_anterior: DashboardVendasResumo;
+  serie_mensal: SerieMensalVendasItem[];
+}
+
 export const fetchSpedAnaliseVendas = async (params: {
     emitente_cnpj?: string;
     periodo_ano?: number;
     periodo_mes?: number;
     limite?: number;
-    gerar_relatorio_ia?: boolean
-  } = {}): Promise<AnaliseVendasResponse> => {
+    gerar_relatorio_ia?: boolean;
+    formato_relatorio?: 'executivo' | 'analitico';
+    layout?: string;
+  } = {}, options: RequestOptions = {}): Promise<AnaliseVendasResponse> => {
 
-  const searchParams = new URLSearchParams();
-  const digits = params.emitente_cnpj?.replace(/\D/g, '') ?? '';
+  const searchParams = buildFiscalSearchParams(params);
 
-  if (digits.length === 14) {
-    searchParams.set('emitente_cnpj', digits);
-  }
-
-  if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
-  if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
-  if (params.limite) searchParams.set('limite', String(params.limite));
-  if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
-
-  const response = await fetch(`${API_BASE_URL}/sped/analise/vendas?${searchParams.toString()}`);
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/vendas?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise de vendas.' }));
@@ -209,4 +287,95 @@ export const fetchSpedAnaliseVendas = async (params: {
   }
 
   return response.json() as Promise<AnaliseVendasResponse>;
+};
+
+export const fetchSpedAnaliseFiscalCfop = async (params: {
+    emitente_cnpj?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {}, options: RequestOptions = {}): Promise<AnaliseFiscalCfopResponse> => {
+
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/fiscal/cfop?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise fiscal por CFOP.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar análise fiscal por CFOP.');
+  }
+
+  return response.json() as Promise<AnaliseFiscalCfopResponse>;
+};
+
+export const fetchSpedDashboardVendas = async (
+  params: {
+    emitente_cnpj?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<DashboardVendasResponse> => {
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/vendas/dashboard?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar dashboard de vendas.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar dashboard de vendas.');
+  }
+
+  return response.json() as Promise<DashboardVendasResponse>;
+};
+
+export interface AnaliseClientesResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  total_vendido: number | string;
+  total_clientes: number;
+  top_clientes_valor: Array<{
+    cliente: string;
+    valor_total: number | string;
+    quantidade_documentos: number;
+    ticket_medio: number | string;
+    percentual_participacao: number | string;
+  }>;
+  top_clientes_quantidade: Array<{
+    cliente: string;
+    valor_total: number | string;
+    quantidade_documentos: number;
+    ticket_medio: number | string;
+    percentual_participacao: number | string;
+  }>;
+  relatorio_ia?: string | null;
+}
+
+export const fetchSpedAnaliseClientes = async (params: {
+    emitente_cnpj?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+    gerar_relatorio_ia?: boolean;
+    formato_relatorio?: 'executivo' | 'analitico';
+  } = {}, options: RequestOptions = {}): Promise<AnaliseClientesResponse> => {
+
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/clientes?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar anÃ¡lise de clientes.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar anÃ¡lise de clientes.');
+  }
+
+  return response.json() as Promise<AnaliseClientesResponse>;
 };

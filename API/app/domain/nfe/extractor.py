@@ -1,13 +1,50 @@
 from typing import List
 from datetime import datetime, date
 from decimal import Decimal
-
 import re
 import logging
+import unicodedata
 
+from app.domain.nfe.normalization import (
+    normalizar_descricao_produto,
+    normalizar_nome_cliente,
+)
 from app.domain.nfe.xml_models import XmlNFe
+from app.services.Municipios.municipios_catalog_service import MunicipiosCatalogService
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
+
+_IBGE_PREFIXO_POR_UF = {
+    "RO": "11",
+    "AC": "12",
+    "AM": "13",
+    "RR": "14",
+    "PA": "15",
+    "AP": "16",
+    "TO": "17",
+    "MA": "21",
+    "PI": "22",
+    "CE": "23",
+    "RN": "24",
+    "PB": "25",
+    "PE": "26",
+    "AL": "27",
+    "SE": "28",
+    "BA": "29",
+    "MG": "31",
+    "ES": "32",
+    "RJ": "33",
+    "SP": "35",
+    "PR": "41",
+    "SC": "42",
+    "RS": "43",
+    "MS": "50",
+    "MT": "51",
+    "GO": "52",
+    "DF": "53",
+}
+
+_UF_POR_IBGE_PREFIXO = {valor: chave for chave, valor in _IBGE_PREFIXO_POR_UF.items()}
 
 logger = logging.getLogger("NFeExtractor")
 
@@ -118,6 +155,221 @@ class NotaExtraida:
 # =========================
 
 """Converte XMLs já carregados em objetos de domínio usados no processamento."""
+
+def _encontrar_texto_xml(root, nome_tag: str) -> str:
+    elemento = next(
+        (element for element in root.iter() if element.tag.split("}")[-1] == nome_tag),
+        None,
+    )
+    if elemento is None or elemento.text is None:
+        return ""
+    return elemento.text.strip()
+
+def _encontrar_elemento(root, nome_tag: str):
+    return next(
+        (element for element in root.iter() if element.tag.split("}")[-1] == nome_tag),
+        None,
+    )
+
+def _extrair_descricao_servico(discriminacao: str) -> str:
+    if not discriminacao:
+        return "Serviço NFSe"
+
+    match = re.search(r"Descricao\s*=\s*([^\]]+)", discriminacao, flags=re.IGNORECASE)
+    if match:
+        descricao = " ".join(match.group(1).strip().split())
+        descricao = re.sub(r"^\d+\s+", "", descricao)
+
+        partes = re.split(
+            r"\s+-\s+|\s+(?=Relat[oó]rio\b)|\s+(?=Relatorio\b)|\s+(?=Pedido\b)|\s+(?=Banco\b)|\s+(?=Agencia\b)|\s+(?=Operacao\b)|\s+(?=Conta\b)|\s+(?=Qtde\b)|\s+(?=Valor\b)",
+            descricao,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )
+        descricao = partes[0].strip(" -")
+        
+        descricao_normalizada = _normalizar_chave_municipio(descricao)
+        if descricao_normalizada.startswith("MAO DE OBRA"):
+            return "Mão de Obra"
+
+        return descricao or "Serviço NFSe"
+
+    descricao = discriminacao.strip()
+    descricao_normalizada = _normalizar_chave_municipio(descricao)
+    if descricao_normalizada.startswith("MAO DE OBRA"):
+        return "Mão de Obra"
+
+    return descricao or "Serviço NFSe"
+
+def _normalizar_chave_municipio(valor: str) -> str:
+    texto = " ".join((valor or "").strip().upper().split())
+    if not texto:
+        return ""
+    sem_acentos = unicodedata.normalize("NFD", texto)
+    return "".join(ch for ch in sem_acentos if unicodedata.category(ch) != "Mn")
+
+def _carregar_municipios() -> tuple[dict[str, tuple[str, str]], dict[str, str], dict[str, str]]:
+    return MunicipiosCatalogService.carregar_mapas()
+
+def _resolver_nome_municipio(codigo_ou_nome: str) -> str:
+    valor = (codigo_ou_nome or "").strip()
+    if not valor:
+        return ""
+    
+    municipios_por_codigo, municipios_por_nome, _ = _carregar_municipios()
+
+    codigo = "".join(ch for ch in valor if ch.isdigit())
+    if len(codigo) >= 6:
+        municipio = municipios_por_codigo.get(codigo)
+        return municipio[0] if municipio else valor
+
+    nome_normalizado = _normalizar_chave_municipio(valor)
+    return municipios_por_nome.get(nome_normalizado, valor)
+
+def _resolver_uf_municipio(codigo_ou_nome: str, uf_atual: str = "") -> str:
+    uf_normalizada = (uf_atual or "").strip().upper()
+    if uf_normalizada:
+        return uf_normalizada
+
+    valor = (codigo_ou_nome or "").strip()
+    if not valor:
+        return ""
+
+    municipios_por_codigo, _, uf_por_nome = _carregar_municipios()
+
+    codigo = "".join(ch for ch in valor if ch.isdigit())
+    if len(codigo) >= 2:
+        municipio = municipios_por_codigo.get(codigo)
+        if municipio and municipio[1]:
+            return municipio[1]
+        return _UF_POR_IBGE_PREFIXO.get(codigo[:2], "")
+
+    nome_normalizado = _normalizar_chave_municipio(valor)
+    return uf_por_nome.get(nome_normalizado, "")
+
+def _resolver_municipio_e_uf(codigo_ou_nome: str, uf_atual: str = "") -> tuple[str, str]:
+    nome_padrao = _resolver_nome_municipio(codigo_ou_nome)
+    uf_padrao = _resolver_uf_municipio(codigo_ou_nome or nome_padrao, uf_atual)
+
+    if not nome_padrao:
+        return "", uf_padrao
+
+    _, municipios_por_nome, uf_por_nome = _carregar_municipios()
+    nome_normalizado = _normalizar_chave_municipio(nome_padrao)
+
+    return (
+        municipios_por_nome.get(nome_normalizado, nome_padrao),
+        uf_padrao or uf_por_nome.get(nome_normalizado, ""),
+    )
+
+def _encontrar_textos_por_tag(root, nome_tag: str) -> list[str]:
+    if root is None:
+        return []
+
+    textos: list[str] = []
+    for element in root.iter():
+        if element.tag.split("}")[-1] != nome_tag:
+            continue
+        if element.text and element.text.strip():
+            textos.append(element.text.strip())
+    return textos
+
+
+def _extrair_nome_tomador(tomador) -> str:
+    if tomador is None:
+        return ""
+
+    for valor in _encontrar_textos_por_tag(tomador, "RazaoSocial"):
+        if valor:
+            return valor
+    return ""
+
+
+def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
+    root = xml_nfe.xml
+    numero_nf = int(_encontrar_texto_xml(root, "Numero") or "0")
+    data_emissao_str = _encontrar_texto_xml(root, "DataEmissao")
+    if not data_emissao_str:
+        return None
+
+    data_emissao = datetime.fromisoformat(data_emissao_str).date()
+
+    valor_total_servicos = Decimal(_encontrar_texto_xml(root, "ValorServicos") or "0")
+    valor_total_nf = Decimal(_encontrar_texto_xml(root, "ValorLiquidoNfse") or "0")
+    valor_iss_retido = Decimal(_encontrar_texto_xml(root, "ValorIssRetido") or "0")
+    outras_retencoes = Decimal(_encontrar_texto_xml(root, "OutrasRetencoes") or "0")
+    valor_impostos_servico = valor_iss_retido + outras_retencoes
+    valor_desconto = Decimal(_encontrar_texto_xml(root, "DescontoIncondicionado") or "0")
+
+    tomador = _encontrar_elemento(root, "TomadorServico")
+
+    destinatario_nome = normalizar_nome_cliente(_extrair_nome_tomador(tomador))
+    destinatario_cidade_codigo = _encontrar_texto_xml(tomador, "CodigoMunicipio") if tomador is not None else ""
+    destinatario_cidade_nome = (
+        _encontrar_texto_xml(tomador, "Municipio")
+        or _encontrar_texto_xml(tomador, "Cidade")
+        if tomador is not None
+        else ""
+    )
+    destinatario_uf_informada = (
+        _encontrar_texto_xml(tomador, "Uf")
+        or _encontrar_texto_xml(tomador, "UF")
+        if tomador is not None
+        else ""
+    )
+
+    destinatario_cidade, destinatario_uf = _resolver_municipio_e_uf(
+        destinatario_cidade_codigo or destinatario_cidade_nome,
+        destinatario_uf_informada,
+    )
+
+    tomador_doc = ""
+    if tomador is not None:
+        tomador_doc = (
+            _encontrar_texto_xml(tomador, "Cnpj")
+            or _encontrar_texto_xml(tomador, "CNPJ")
+            or _encontrar_texto_xml(tomador, "Cpf")
+            or _encontrar_texto_xml(tomador, "CPF")
+        )
+
+    descricao_servico = normalizar_descricao_produto(
+        _extrair_descricao_servico(_encontrar_texto_xml(root, "Discriminacao"))
+    )
+
+    return NotaExtraida(
+        chave=str(numero_nf),
+        numero_nf=numero_nf,
+        emitente_cnpj=xml_nfe.emitente_cnpj,
+        modelo="NFSE",
+        data_emissao=data_emissao,
+        natureza_operacao="SERVICO",
+        destinatario_documento=tomador_doc,
+        destinatario_nome=destinatario_nome,
+        destinatario_cidade=destinatario_cidade,
+        destinatario_uf=destinatario_uf,
+        valor_total_nf=valor_total_nf,
+        valor_icms=valor_impostos_servico,
+        valor_ipi=Decimal("0"),
+        valor_pis=Decimal("0"),
+        valor_cofins=Decimal("0"),
+        valor_produtos=valor_total_nf,
+        valor_desconto=valor_desconto,
+        valor_frete=Decimal("0"),
+        itens=[
+            ItemNota(
+                numero_item=1,
+                codigo_produto=_encontrar_texto_xml(root, "ItemListaServico"),
+                descricao=descricao_servico,
+                ncm="00000000",
+                cfop="5933",
+                unidade="UN",
+                quantidade=Decimal("1"),
+                valor_unitario=valor_total_nf,
+                valor_total=valor_total_nf,
+            )
+        ],
+    )
+
 class NFeExtractor:
     def extrair(self, xmls: List[XmlNFe]) -> List[NotaExtraida]:
         notas: List[NotaExtraida] = []
@@ -126,7 +378,9 @@ class NFeExtractor:
             root = xml_nfe.xml
             inf = root.find(".//nfe:infNFe", NS)
             if inf is None:
-                # Sem bloco principal da NFe não há dados mínimos para extração.
+                nota_nfse = _extrair_nfse(xml_nfe)
+                if nota_nfse is not None:
+                    notas.append(nota_nfse)
                 continue
 
             # ===== Identificação =====
@@ -162,21 +416,35 @@ class NFeExtractor:
             dest = inf.find("nfe:dest", NS)
 
             if dest is not None:
-                destinatario_nome = dest.findtext("nfe:xNome", "", NS)
+                destinatario_nome = normalizar_nome_cliente(
+                    dest.findtext("nfe:xNome", "", NS)
+                )
                 destinatario_doc = (
                     dest.findtext("nfe:CNPJ", "", NS) or
                     dest.findtext("nfe:CPF", "", NS)
                 )
 
                 ender = dest.find("nfe:enderDest", NS)
-                destinatario_cidade = ender.findtext("nfe:xMun", "", NS) if ender is not None else ""
-                destinatario_uf = ender.findtext("nfe:UF", "", NS) if ender is not None else ""
+                if ender is not None:
+                    codigo_municipio = (
+                        ender.findtext("nfe:cMun", "", NS)
+                        or ender.findtext("nfe:cMunDest", "", NS)
+                    )
+                    nome_municipio = ender.findtext("nfe:xMun", "", NS)
+                    uf_informada = ender.findtext("nfe:UF", "", NS)
+                    destinatario_cidade, destinatario_uf = _resolver_municipio_e_uf(
+                        codigo_municipio or nome_municipio,
+                        uf_informada,
+                    )
+                else:
+                    destinatario_cidade = ""
+                    destinatario_uf = ""
             else:
                 destinatario_nome = ""
                 destinatario_doc = ""
                 destinatario_cidade = ""
                 destinatario_uf = ""
-                print("[AVISO] XML sem destinatário identificado")
+                logger.warning("XML sem destinatario identificado")
                 
             if modelo == "65" and not destinatario_nome:
                 destinatario_nome = "Consumidor Final"
@@ -202,7 +470,9 @@ class NFeExtractor:
                     ItemNota(
                         numero_item=int(det.attrib.get("nItem", "0")),
                         codigo_produto=prod.findtext("nfe:cProd", "", NS),
-                        descricao=prod.findtext("nfe:xProd", "", NS),
+                        descricao=normalizar_descricao_produto(
+                            prod.findtext("nfe:xProd", "", NS)
+                        ),
                         ncm=prod.findtext("nfe:NCM", "", NS),
                         cfop=prod.findtext("nfe:CFOP", "", NS),
                         unidade=prod.findtext("nfe:uCom", "", NS),

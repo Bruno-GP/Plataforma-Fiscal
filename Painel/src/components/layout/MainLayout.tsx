@@ -3,8 +3,9 @@ import { Link, Navigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { consultarPendenciasXmlImportados } from '@/services/nfe';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
-import { AppHeader } from './AppHeader';
+import { AppSidebar } from './AppSidebar';
 // import { ChatWidget } from '@/components/chat/ChatWidget';
 
 interface MainLayoutProps {
@@ -12,7 +13,7 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isReady, user } = useAuth();
   const location = useLocation();
   const [totalPendentes, setTotalPendentes] = useState(0);
 
@@ -34,32 +35,44 @@ export function MainLayout({ children }: MainLayoutProps) {
     void carregarPendencias();
   }, [location.pathname, user?.emitente_cnpj, user?.tem_sped]);
 
+  if (!isReady) {
+    return null;
+  }
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
   return (
-    <div className="min-h-screen w-full bg-background">
-      <AppHeader />
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full">
+        <AppSidebar />
 
-      {totalPendentes > 0 && !user?.tem_sped && (
-        <div className="border-b border-amber-200 bg-amber-50">
-          <div className="mx-auto flex min-h-11 max-w-[1700px] items-center gap-2 px-4 py-2 text-sm text-amber-900 md:px-8">
-            <span>
-              Ainda faltam XMLs a serem processados ({totalPendentes}). O botão <strong>Processar NFe</strong> continua habilitado.
-            </span>
-            <Link to="/importacao-xml" className="ml-auto whitespace-nowrap font-medium underline">
-              Ir para Importação XML
-            </Link>
+          <SidebarInset className="min-w-0 flex-1">
+            <div className="min-h-screen w-full bg-background">
+              {/* <AppHeader /> */}
+
+            {totalPendentes > 0 && !user?.tem_sped && (
+              <div className="border-b border-amber-200 bg-amber-50">
+                <div className="mx-auto flex min-h-11 max-w-[1700px] items-center gap-2 py-2 pr-4 pl-8 text-sm text-amber-900 md:pr-8 md:pl-14">
+                  <span>
+                    Ainda faltam XMLs a serem processados ({totalPendentes}). O botão <strong>Processar NFe</strong> continua habilitado.
+                  </span>
+                  <Link to="/inconsistencias" className="ml-auto whitespace-nowrap font-medium underline">
+                    Abrir central
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            <main className="min-w-0 overflow-x-hidden">
+              <div className="mx-auto min-w-0 max-w-[1700px] pr-4 pl-8 md:pr-8 md:pl-14">
+                {children}
+              </div>
+            </main>
           </div>
-        </div>
-      )}
-
-      <main className="min-w-0 overflow-x-hidden">
-        <div className="mx-auto min-w-0 max-w-[1700px] px-4 md:px-8">
-          {children}
-        </div>
-      </main>
-    </div>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 }

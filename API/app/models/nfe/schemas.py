@@ -28,6 +28,7 @@ class NFeItem(BaseModel):
   produto_codigo: str
   descricao: str
   ncm: str
+  descricao_ncm: Optional[str] = None
   cfop: str
 
   quantidade: Decimal
@@ -298,6 +299,21 @@ class AnaliseComprasResponse(BaseModel):
   top_produtos_valor: list[RankingProdutoCompra] = Field(default_factory=list)
   top_produtos_quantidade: list[RankingProdutoCompra] = Field(default_factory=list)
   relatorio_ia: str | None = None
+
+class SerieMensalComprasItem(BaseModel):
+  periodo_ano: int
+  periodo_mes: int
+  total_comprado: Decimal = Decimal("0.00")
+
+class DashboardComprasResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  anos_disponiveis: list[int] = Field(default_factory=list)
+  resumo_atual: AnaliseComprasResponse
+  resumo_anterior: AnaliseComprasResponse
+  serie_mensal: list[SerieMensalComprasItem] = Field(default_factory=list)
   
 class RankingClienteVenda(BaseModel):
   cliente: str
@@ -311,17 +327,85 @@ class RankingProdutoVenda(BaseModel):
   quantidade_total: Decimal = Decimal("0.00")
 
 
+class RankingRegiaoVenda(BaseModel):
+  regiao: str
+  valor_total: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+
+
+class RankingCidadeVenda(BaseModel):
+  cidade: str
+  uf: str = ""
+  valor_total: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+
+
+class RankingCfopVenda(BaseModel):
+  cfop: str
+  descricao: str
+  valor_total: Decimal = Decimal("0.00")
+  participacao_percentual: Decimal = Decimal("0.00")
+
+
+class RankingCategoriaFiscal(BaseModel):
+  categoria: str
+  valor_total: Decimal = Decimal("0.00")
+  participacao_percentual: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+
+
+class AnaliseFiscalCfopResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  total_movimentado: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+  quantidade_cfops: int = 0
+  top_categorias: list[RankingCategoriaFiscal] = Field(default_factory=list)
+  top_cfops: list[RankingCfopVenda] = Field(default_factory=list)
+
+
 class AnaliseVendasResponse(BaseModel):
   status: str
   emitente_cnpj: str
   periodo_ano: int | None = None
   periodo_mes: int | None = None
   total_vendido: Decimal = Decimal("0.00")
+  top_regioes_valor: list[RankingRegiaoVenda] = Field(default_factory=list)
+  top_cidades_valor: list[RankingCidadeVenda] = Field(default_factory=list)
   top_clientes_valor: list[RankingClienteVenda] = Field(default_factory=list)
   top_clientes_quantidade: list[RankingClienteVenda] = Field(default_factory=list)
   top_produtos_valor: list[RankingProdutoVenda] = Field(default_factory=list)
   top_produtos_quantidade: list[RankingProdutoVenda] = Field(default_factory=list)
+  top_cfops_valor: list[RankingCfopVenda] = Field(default_factory=list)
   relatorio_ia: str | None = None
+
+class SerieMensalVendasItem(BaseModel):
+  periodo_ano: int
+  periodo_mes: int
+  total_vendido: Decimal = Decimal("0.00")
+  quantidade_notas: int = 0
+  total_impostos: Decimal = Decimal("0.00")
+
+class DashboardVendasResumo(BaseModel):
+  total_vendido: Decimal = Decimal("0.00")
+  quantidade_notas: int = 0
+  total_impostos: Decimal = Decimal("0.00")
+  ticket_medio: Decimal = Decimal("0.00")
+  top_clientes: list[dict] = Field(default_factory=list)
+  top_produtos: list[dict] = Field(default_factory=list)
+  top_cidades: list[dict] = Field(default_factory=list)
+
+class DashboardVendasResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  anos_disponiveis: list[int] = Field(default_factory=list)
+  resumo_atual: DashboardVendasResumo
+  resumo_anterior: DashboardVendasResumo
+  serie_mensal: list[SerieMensalVendasItem] = Field(default_factory=list)
   
 class RankingClienteAnalise(BaseModel):
   cliente: str

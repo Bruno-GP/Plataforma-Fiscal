@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_serializer
 from typing import List, Optional, Dict
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 # =========================
@@ -347,6 +347,13 @@ class RankingCfopVenda(BaseModel):
   participacao_percentual: Decimal = Decimal("0.00")
 
 
+class RankingNcmFiscal(BaseModel):
+  ncm: str
+  descricao: str
+  valor_total: Decimal = Decimal("0.00")
+  participacao_percentual: Decimal = Decimal("0.00")
+
+
 class RankingCategoriaFiscal(BaseModel):
   categoria: str
   valor_total: Decimal = Decimal("0.00")
@@ -364,6 +371,17 @@ class AnaliseFiscalCfopResponse(BaseModel):
   quantidade_cfops: int = 0
   top_categorias: list[RankingCategoriaFiscal] = Field(default_factory=list)
   top_cfops: list[RankingCfopVenda] = Field(default_factory=list)
+
+
+class AnaliseFiscalNcmResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  total_movimentado: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+  quantidade_ncms: int = 0
+  top_ncms: list[RankingNcmFiscal] = Field(default_factory=list)
 
 
 class AnaliseVendasResponse(BaseModel):
@@ -425,3 +443,39 @@ class AnaliseClientesResponse(BaseModel):
   top_clientes_valor: list[RankingClienteAnalise] = Field(default_factory=list)
   top_clientes_quantidade: list[RankingClienteAnalise] = Field(default_factory=list)
   relatorio_ia: str | None = None
+
+
+class IBPTSyncRequest(BaseModel):
+  uf: str = Field(default="SC", min_length=2, max_length=2)
+  todas_ufs: bool = False
+  ncm: str | None = Field(default=None, min_length=2, max_length=20)
+
+
+class IBPTSyncUFResultado(BaseModel):
+  uf: str
+  registros_recebidos: int = 0
+  catalogo_sincronizado: int = 0
+  tributacao_sincronizada: int = 0
+
+
+class IBPTSyncResponse(BaseModel):
+  status: str
+  executado_por: str
+  total_ufs: int
+  resultados: list[IBPTSyncUFResultado] = Field(default_factory=list)
+
+
+class NCMTributacaoResponse(BaseModel):
+  status: str
+  ncm_codigo: str
+  descricao: str | None = None
+  uf: str
+  nacional_federal: Decimal = Decimal("0.00")
+  importados_federal: Decimal = Decimal("0.00")
+  estadual: Decimal = Decimal("0.00")
+  municipal: Decimal = Decimal("0.00")
+  vigencia_inicio: date | None = None
+  vigencia_fim: date | None = None
+  versao: str | None = None
+  fonte: str | None = None
+  atualizado_em: datetime | None = None

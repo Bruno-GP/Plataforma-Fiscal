@@ -108,6 +108,7 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `/api/nfe`
 - `/api/sped`
 - `/api/geo`
+- `/api/ncm`
 
 ## Endpoints principais
 
@@ -149,6 +150,11 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 
 - `GET /api/geo/municipios`
 - `GET /api/geo/municipios/{uf}`
+
+### NCM / IBPT
+
+- `POST /api/ncm/ibpt/sincronizar`
+- `GET /api/ncm/tributacao`
 
 ## Regras de negócio
 

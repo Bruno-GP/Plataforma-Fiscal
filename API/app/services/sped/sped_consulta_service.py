@@ -37,6 +37,33 @@ SPED_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
   unknown_description="CFOP sem descrião",
 )
 
+SPED_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
+  from_clause="""
+    public.sped_documentos_fiscais d
+    JOIN public.sped_documento_itens i ON i.documento_id = d.id
+    LEFT JOIN public.sped_produtos pr ON pr.id = i.produto_id
+  """,
+  company_filter_expr="regexp_replace(d.empresa_cnpj, '\\D', '', 'g')",
+  date_expr="d.data_emissao",
+  document_id_expr="d.id",
+  amount_expr="i.valor_total",
+  dimension_code_count_expr="regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g')",
+  dimension_code_display_expr="regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g')",
+  dimension_description_expr="nc.descricao",
+  category_description_expr="d.natureza_operacao",
+  sale_condition_expr=(
+    "d.tipo_operacao = 'saida' "
+    "AND LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')"
+  ),
+  reference_join_clause="""
+    LEFT JOIN public.ncm_catalogo nc
+      ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
+         = regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g')
+  """,
+  unknown_code="00000000",
+  unknown_description="NCM sem descrição",
+)
+
 def _parece_codigo_municipio(valor: object) -> bool:
   codigo = "".join(ch for ch in str(valor or "") if ch.isdigit())
   return len(codigo) in {6, 7}
@@ -722,6 +749,41 @@ class SpedConsultaService:
       "top_cfops": [
         {
           "cfop": item["codigo"],
+          "descricao": item["descricao"],
+          "valor_total": item["valor_total"],
+          "participacao_percentual": item["participacao_percentual"],
+        }
+        for item in resultado["top_dimensoes"]
+      ],
+    }
+
+  def analisar_fiscal_ncm(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    resultado = analisar_fiscal_por_dimensao(
+      conn_params=self.conn_params,
+      config=SPED_NCM_ANALYSIS_CONFIG,
+      emitente_cnpj=cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+
+    return {
+      "emitente_cnpj": cnpj,
+      "periodo_ano": periodo_ano,
+      "periodo_mes": periodo_mes,
+      "total_movimentado": resultado["total_movimentado"],
+      "quantidade_documentos": resultado["quantidade_documentos"],
+      "quantidade_ncms": resultado["quantidade_dimensoes"],
+      "top_ncms": [
+        {
+          "ncm": item["codigo"],
           "descricao": item["descricao"],
           "valor_total": item["valor_total"],
           "participacao_percentual": item["participacao_percentual"],

@@ -236,6 +236,22 @@ export interface AnaliseFiscalCfopResponse {
   }>;
 }
 
+export interface AnaliseFiscalNcmResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  total_movimentado: number | string;
+  quantidade_documentos: number;
+  quantidade_ncms: number;
+  top_ncms: Array<{
+    ncm: string;
+    descricao: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+  }>;
+}
+
 export interface SerieMensalVendasItem {
   periodo_ano: number;
   periodo_mes: number;
@@ -308,6 +324,27 @@ export const fetchSpedAnaliseFiscalCfop = async (params: {
   }
 
   return response.json() as Promise<AnaliseFiscalCfopResponse>;
+};
+
+export const fetchSpedAnaliseFiscalNcm = async (params: {
+    emitente_cnpj?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {}, options: RequestOptions = {}): Promise<AnaliseFiscalNcmResponse> => {
+
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/sped/analise/fiscal/ncm?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise fiscal por NCM.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar análise fiscal por NCM.');
+  }
+
+  return response.json() as Promise<AnaliseFiscalNcmResponse>;
 };
 
 export const fetchSpedDashboardVendas = async (

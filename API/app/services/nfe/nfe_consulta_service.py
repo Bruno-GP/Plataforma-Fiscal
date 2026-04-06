@@ -53,6 +53,30 @@ NFE_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
   unknown_description="CFOP sem descrião",
 )
 
+NFE_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
+  from_clause="""
+    public.notas AS n
+    JOIN public.notas_itens AS i
+      ON i.nota_id = n.id
+  """,
+  company_filter_expr="regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')",
+  date_expr="n.data_emissao",
+  document_id_expr="n.id",
+  amount_expr="i.valor_total",
+  dimension_code_count_expr="regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g')",
+  dimension_code_display_expr="regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g')",
+  dimension_description_expr="nc.descricao",
+  category_description_expr="n.natureza_operacao",
+  sale_condition_expr="LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
+  reference_join_clause="""
+    LEFT JOIN public.ncm_catalogo nc
+      ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
+         = regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g')
+  """,
+  unknown_code="00000000",
+  unknown_description="NCM sem descrição",
+)
+
 class NFeConsultaService:
   def __init__(self):
     logger.debug("Inicializando NFeConsultaService")
@@ -988,6 +1012,47 @@ class NFeConsultaService:
       "top_cfops": [
         {
           "cfop": item["codigo"],
+          "descricao": item["descricao"],
+          "valor_total": item["valor_total"],
+          "participacao_percentual": item["participacao_percentual"],
+        }
+        for item in resultado["top_dimensoes"]
+      ],
+    }
+
+  def analisar_fiscal_ncm(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+    if not cnpj_filtrado:
+      raise ValueError("Informe um emitente_cnpj válido.")
+
+    resultado = analisar_fiscal_por_dimensao(
+      conn_params=self.conn_params,
+      config=NFE_NCM_ANALYSIS_CONFIG,
+      emitente_cnpj=cnpj_filtrado,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+
+    return {
+      "emitente_cnpj": cnpj_filtrado,
+      "periodo_ano": periodo_ano,
+      "periodo_mes": periodo_mes,
+      "total_movimentado": resultado["total_movimentado"],
+      "quantidade_documentos": resultado["quantidade_documentos"],
+      "quantidade_ncms": resultado["quantidade_dimensoes"],
+      "top_ncms": [
+        {
+          "ncm": item["codigo"],
           "descricao": item["descricao"],
           "valor_total": item["valor_total"],
           "participacao_percentual": item["participacao_percentual"],

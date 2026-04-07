@@ -12,6 +12,11 @@ from app.models.nfe.schemas import (
   NFeKPIConsulta,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
+from app.services.fiscal_analysis import (
+  FiscalDimensionConfig,
+  analisar_fiscal_por_dimensao,
+  obter_regiao_por_uf,
+)
 from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("NFeConsultaService")
@@ -24,14 +29,53 @@ formatter = logging.Formatter(
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-UF_PARA_REGIAO = {
-  "AC": "Norte", "AL": "Nordeste", "AP": "Norte", "AM": "Norte", "BA": "Nordeste",
-  "CE": "Nordeste", "DF": "Centro-Oeste", "ES": "Sudeste", "GO": "Centro-Oeste",
-  "MA": "Nordeste", "MT": "Centro-Oeste", "MS": "Centro-Oeste", "MG": "Sudeste",
-  "PA": "Norte", "PB": "Nordeste", "PR": "Sul", "PE": "Nordeste", "PI": "Nordeste",
-  "RJ": "Sudeste", "RN": "Nordeste", "RS": "Sul", "RO": "Norte", "RR": "Norte",
-  "SC": "Sul", "SP": "Sudeste", "SE": "Nordeste", "TO": "Norte",
-}
+NFE_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
+  from_clause="""
+    public.notas AS n
+    JOIN public.notas_itens AS i
+      ON i.nota_id = n.id
+  """,
+  company_filter_expr="regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')",
+  date_expr="n.data_emissao",
+  document_id_expr="n.id",
+  amount_expr="i.valor_total",
+  dimension_code_count_expr="regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')",
+  dimension_code_display_expr="regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')",
+  dimension_description_expr="c.descricao",
+  category_description_expr="c.descricao",
+  category_fallback_description_expr="n.natureza_operacao",
+  sale_condition_expr="LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
+  reference_join_clause="""
+    LEFT JOIN public.notas_cfops AS c
+      ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
+         = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
+  """,
+  unknown_description="CFOP sem descrião",
+)
+
+NFE_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
+  from_clause="""
+    public.notas AS n
+    JOIN public.notas_itens AS i
+      ON i.nota_id = n.id
+  """,
+  company_filter_expr="regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')",
+  date_expr="n.data_emissao",
+  document_id_expr="n.id",
+  amount_expr="i.valor_total",
+  dimension_code_count_expr="regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g')",
+  dimension_code_display_expr="regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g')",
+  dimension_description_expr="nc.descricao",
+  category_description_expr="n.natureza_operacao",
+  sale_condition_expr="LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
+  reference_join_clause="""
+    LEFT JOIN public.ncm_catalogo nc
+      ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
+         = regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g')
+  """,
+  unknown_code="00000000",
+  unknown_description="NCM sem descrição",
+)
 
 class NFeConsultaService:
   def __init__(self):
@@ -65,10 +109,6 @@ class NFeConsultaService:
       return None
 
     return cnpj  
-
-  def _obter_regiao_por_uf(self, uf: object) -> str | None:
-    uf_normalizada = str(uf or "").strip().upper()
-    return UF_PARA_REGIAO.get(uf_normalizada)
 
   def obter_cnpj_por_email(
     self,
@@ -129,21 +169,21 @@ class NFeConsultaService:
     if not cnpj_filtrado:
       raise ValueError("Informe um emitente_cnpj válido.")
 
-    filtros_docs = [
+    filtros_vendas_docs = [
       "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
       "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
     ]
     parametros: list[object] = [cnpj_filtrado]
 
     if periodo_ano:
-      filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
+      filtros_vendas_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
       parametros.append(periodo_ano)
 
     if periodo_mes:
-      filtros_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
+      filtros_vendas_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
       parametros.append(periodo_mes)
 
-    return " AND ".join(filtros_docs), parametros
+    return " AND ".join(filtros_vendas_docs), parametros
 
   def obter_total_vendido_bruto(
     self,
@@ -226,29 +266,6 @@ class NFeConsultaService:
       )
     """
 
-  def _categoria_fiscal_case(self) -> str:
-    return """
-      CASE
-        WHEN LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')
-          THEN 'Venda'
-        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%devol%%' THEN 'Devolução'
-        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%bonific%%'
-          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%brinde%%'
-          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%doaç%%'
-          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%doac%%' THEN 'Bonificação'
-        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%remessa%%'
-          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%demonstra%%'
-          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%conserto%%'
-          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%comodato%%'
-          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%industrializa%%' THEN 'Remessa'
-        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%transfer%%' THEN 'Transferência'
-        WHEN COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%substitui%%'
-          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%subst. trib%%'
-          OR COALESCE(c.descricao, n.natureza_operacao, '') ILIKE '%%st%%' THEN 'Substituição Tributária'
-        ELSE 'Outras operações'
-      END
-    """
-    
   def obter_ultimo_periodo(
     self,
     emitente_cnpj: Optional[str] = None,
@@ -926,7 +943,7 @@ class NFeConsultaService:
         )
         top_regioes_map: dict[str, dict[str, Decimal | int | str]] = {}
         for uf, valor_total, quantidade_documentos in cur.fetchall():
-          regiao = self._obter_regiao_por_uf(uf)
+          regiao = obter_regiao_por_uf(uf)
           if not regiao:
             continue
 
@@ -975,119 +992,373 @@ class NFeConsultaService:
     if not cnpj_filtrado:
       raise ValueError("Informe um emitente_cnpj válido.")
 
-    filtros_docs = [
-      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
-    ]
-    parametros: list[object] = [cnpj_filtrado]
-
-    if periodo_ano:
-      filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
-      parametros.append(periodo_ano)
-
-    if periodo_mes:
-      filtros_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
-      parametros.append(periodo_mes)
-
-    where_clause = " AND ".join(filtros_docs)
-    categoria_case = self._categoria_fiscal_case()
-
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(SUM(i.valor_total), 0) AS total_movimentado,
-            COUNT(DISTINCT n.id) AS quantidade_documentos,
-            COUNT(DISTINCT regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')) AS quantidade_cfops
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          """,
-          parametros,
-        )
-        resumo_row = cur.fetchone()
-        total_movimentado = resumo_row[0] if resumo_row else Decimal("0.00")
-        quantidade_documentos = resumo_row[1] if resumo_row else 0
-        quantidade_cfops = resumo_row[2] if resumo_row else 0
-
-        categorias_sql = f"""
-          SELECT
-            {categoria_case} AS categoria,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COUNT(DISTINCT n.id) AS quantidade_documentos
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          LEFT JOIN public.notas_cfops AS c
-            ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
-               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 2 DESC, 1 ASC
-        """
-        categorias_params = [*parametros]
-        if limite:
-          categorias_sql += "\n          LIMIT %s"
-          categorias_params.append(limite)
-
-        cur.execute(categorias_sql, categorias_params)
-        top_categorias = [
-          {
-            "categoria": categoria,
-            "valor_total": valor_total or Decimal("0.00"),
-            "participacao_percentual": (
-              ((valor_total or Decimal("0.00")) / total_movimentado) * Decimal("100")
-              if total_movimentado
-              else Decimal("0.00")
-            ),
-            "quantidade_documentos": quantidade_docs or 0,
-          }
-          for categoria, valor_total, quantidade_docs in cur.fetchall()
-        ]
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), ''), '0000') AS cfop,
-            COALESCE(NULLIF(TRIM(c.descricao), ''), 'CFOP sem descrição') AS descricao,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          LEFT JOIN public.notas_cfops AS c
-            ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
-               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
-          WHERE {where_clause}
-          GROUP BY 1, 2
-          ORDER BY 3 DESC, 1 ASC
-          LIMIT %s
-          """,
-          [*parametros, limite],
-        )
-        top_cfops = [
-          {
-            "cfop": cfop,
-            "descricao": descricao,
-            "valor_total": valor_total or Decimal("0.00"),
-            "participacao_percentual": (
-              ((valor_total or Decimal("0.00")) / total_movimentado) * Decimal("100")
-              if total_movimentado
-              else Decimal("0.00")
-            ),
-          }
-          for cfop, descricao, valor_total in cur.fetchall()
-        ]
+    resultado = analisar_fiscal_por_dimensao(
+      conn_params=self.conn_params,
+      config=NFE_CFOP_ANALYSIS_CONFIG,
+      emitente_cnpj=cnpj_filtrado,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
 
     return {
       "emitente_cnpj": cnpj_filtrado,
       "periodo_ano": periodo_ano,
       "periodo_mes": periodo_mes,
-      "total_movimentado": total_movimentado or Decimal("0.00"),
-      "quantidade_documentos": quantidade_documentos or 0,
-      "quantidade_cfops": quantidade_cfops or 0,
-      "top_categorias": top_categorias,
-      "top_cfops": top_cfops,
+      "total_movimentado": resultado["total_movimentado"],
+      "quantidade_documentos": resultado["quantidade_documentos"],
+      "quantidade_cfops": resultado["quantidade_dimensoes"],
+      "top_categorias": resultado["top_categorias"],
+      "top_cfops": [
+        {
+          "cfop": item["codigo"],
+          "descricao": item["descricao"],
+          "valor_total": item["valor_total"],
+          "participacao_percentual": item["participacao_percentual"],
+        }
+        for item in resultado["top_dimensoes"]
+      ],
+    }
+
+  def analisar_fiscal_ncm(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+    if not cnpj_filtrado:
+      raise ValueError("Informe um emitente_cnpj válido.")
+
+    resultado = analisar_fiscal_por_dimensao(
+      conn_params=self.conn_params,
+      config=NFE_NCM_ANALYSIS_CONFIG,
+      emitente_cnpj=cnpj_filtrado,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+
+    return {
+      "emitente_cnpj": cnpj_filtrado,
+      "periodo_ano": periodo_ano,
+      "periodo_mes": periodo_mes,
+      "total_movimentado": resultado["total_movimentado"],
+      "quantidade_documentos": resultado["quantidade_documentos"],
+      "quantidade_ncms": resultado["quantidade_dimensoes"],
+      "top_ncms": [
+        {
+          "ncm": item["codigo"],
+          "descricao": item["descricao"],
+          "valor_total": item["valor_total"],
+          "participacao_percentual": item["participacao_percentual"],
+        }
+        for item in resultado["top_dimensoes"]
+      ],
+    }
+
+  def analisar_fiscal_hierarquia(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    nivel_atual: Optional[str] = None,
+    estado: Optional[str] = None,
+    cidade: Optional[str] = None,
+    ncm: Optional[str] = None,
+    produto_codigo: Optional[str] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+    if not cnpj_filtrado:
+      raise ValueError("Informe um emitente_cnpj valido.")
+
+    filtros = [
+      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
+    ]
+    parametros: list[object] = [cnpj_filtrado]
+
+    if periodo_ano is not None:
+      filtros.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
+      parametros.append(periodo_ano)
+
+    if periodo_mes is not None:
+      filtros.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
+      parametros.append(periodo_mes)
+
+    if estado and estado.strip():
+      filtros.append("UPPER(COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), 'Sem UF')) = %s")
+      parametros.append(estado.strip().upper())
+
+    if cidade and cidade.strip():
+      filtros.append("UPPER(COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nao identificada')) = %s")
+      parametros.append(cidade.strip().upper())
+
+    if ncm and ncm.strip():
+      filtros.append("regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g') = %s")
+      parametros.append("".join(ch for ch in ncm if ch.isdigit()))
+
+    if produto_codigo and produto_codigo.strip():
+      filtros.append("COALESCE(NULLIF(TRIM(i.produto_codigo), ''), 'SEM-CODIGO') = %s")
+      parametros.append(produto_codigo.strip())
+
+    where_clause = " AND ".join(filtros)
+    limite_consulta = limite if limite is not None else 100000
+
+    base_cte = f"""
+      WITH itens_filtrados AS (
+        SELECT
+          n.id AS documento_id,
+          COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), 'Sem UF') AS estado,
+          COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nao identificada') AS cidade,
+          COALESCE(NULLIF(TRIM(i.produto_codigo), ''), 'SEM-CODIGO') AS produto_codigo,
+          COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto sem descricao') AS produto_descricao,
+          regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g') AS ncm_codigo,
+          COALESCE(i.valor_total, 0) AS faturamento,
+          (
+            COALESCE(n.valor_icms, 0)
+            + COALESCE(n.valor_ipi, 0)
+            + COALESCE(n.valor_pis, 0)
+            + COALESCE(n.valor_cofins, 0)
+          ) AS imposto_total_nota
+        FROM public.notas AS n
+        JOIN public.notas_itens AS i
+          ON i.nota_id = n.id
+        WHERE {where_clause}
+      ),
+      notas_rateio AS (
+        SELECT
+          documento_id,
+          COALESCE(SUM(faturamento), 0) AS faturamento_total_nota,
+          MAX(imposto_total_nota) AS imposto_total_nota
+        FROM itens_filtrados
+        GROUP BY documento_id
+      ),
+      base AS (
+        SELECT
+          itens.documento_id,
+          itens.estado,
+          itens.cidade,
+          COALESCE(NULLIF(itens.ncm_codigo, ''), '00000000') AS ncm,
+          COALESCE(NULLIF(TRIM(nc.descricao), ''), 'NCM sem descricao') AS descricao_ncm,
+          itens.produto_codigo,
+          itens.produto_descricao,
+          itens.faturamento,
+          CASE
+            WHEN COALESCE(rateio.faturamento_total_nota, 0) > 0 THEN
+              (itens.faturamento / rateio.faturamento_total_nota) * rateio.imposto_total_nota
+            ELSE 0::numeric
+          END AS imposto_valor
+        FROM itens_filtrados AS itens
+        JOIN notas_rateio AS rateio
+          ON rateio.documento_id = itens.documento_id
+        LEFT JOIN public.ncm_catalogo AS nc
+          ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
+             = COALESCE(NULLIF(itens.ncm_codigo, ''), '00000000')
+      )
+    """
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          f"""
+          {base_cte}
+          SELECT
+            COALESCE(SUM(faturamento), 0) AS total_faturamento,
+            COALESCE(SUM(imposto_valor), 0) AS total_impostos,
+            COUNT(DISTINCT documento_id) AS quantidade_documentos,
+            COUNT(DISTINCT estado) AS total_estados,
+            COUNT(DISTINCT CONCAT(cidade, '::', estado)) AS total_cidades,
+            COUNT(DISTINCT ncm) AS total_ncms,
+            COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) AS total_produtos
+          FROM base
+          """,
+          tuple(parametros),
+        )
+        resumo_row = cur.fetchone()
+
+        total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
+        total_impostos = resumo_row[1] if resumo_row else Decimal("0.00")
+        percentual_total = (
+          (total_impostos / total_faturamento) * Decimal("100")
+          if total_faturamento
+          else Decimal("0.00")
+        )
+        cur.execute(
+          f"""
+          {base_cte}
+          SELECT
+            estado,
+            cidade,
+            ncm,
+            descricao_ncm,
+            produto_codigo,
+            produto_descricao,
+            COALESCE(SUM(faturamento), 0) AS faturamento,
+            COALESCE(SUM(imposto_valor), 0) AS imposto_valor
+          FROM base
+          GROUP BY 1, 2, 3, 4, 5, 6
+          ORDER BY 1 ASC, 2 ASC, 7 DESC, 5 ASC
+          LIMIT %s
+          """,
+          tuple([*parametros, limite_consulta]),
+        )
+        hierarquia = [
+          {
+            "estado": uf_item,
+            "cidade": cidade_item,
+            "uf": uf_item,
+            "ncm": ncm_item,
+            "descricao_ncm": descricao_item,
+            "produto_codigo": codigo_item,
+            "produto": produto_item,
+            "faturamento": faturamento or Decimal("0.00"),
+            "imposto_valor": imposto_valor or Decimal("0.00"),
+            "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
+          }
+          for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor in cur.fetchall()
+        ]
+        nivel_resolvido = nivel_atual or ("produto" if ncm else "ncm" if cidade else "cidade" if estado else "estado")
+        itens_nivel_atual: list[dict] = []
+        por_estado: list[dict] = []
+        por_cidade: list[dict] = []
+        por_ncm: list[dict] = []
+        por_produto: list[dict] = []
+
+        if nivel_resolvido == "estado":
+          cur.execute(
+            f"""
+            {base_cte}
+            SELECT
+              estado,
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
+            FROM base
+            GROUP BY 1
+            ORDER BY 2 DESC, 1 ASC
+            LIMIT %s
+            """,
+            tuple([*parametros, limite_consulta]),
+          )
+          por_estado = [
+            {
+              "estado": uf_item,
+              "faturamento": faturamento or Decimal("0.00"),
+              "imposto_valor": imposto_valor or Decimal("0.00"),
+              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
+            }
+            for uf_item, faturamento, imposto_valor in cur.fetchall()
+          ]
+          itens_nivel_atual = por_estado
+        elif nivel_resolvido == "cidade":
+          cur.execute(
+            f"""
+            {base_cte}
+            SELECT
+              cidade,
+              estado,
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
+            FROM base
+            GROUP BY 1, 2
+            ORDER BY 3 DESC, 1 ASC, 2 ASC
+            LIMIT %s
+            """,
+            tuple([*parametros, limite_consulta]),
+          )
+          por_cidade = [
+            {
+              "cidade": cidade_item,
+              "uf": uf_item,
+              "faturamento": faturamento or Decimal("0.00"),
+              "imposto_valor": imposto_valor or Decimal("0.00"),
+              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
+            }
+            for cidade_item, uf_item, faturamento, imposto_valor in cur.fetchall()
+          ]
+          itens_nivel_atual = por_cidade
+        elif nivel_resolvido == "ncm":
+          cur.execute(
+            f"""
+            {base_cte}
+            SELECT
+              ncm,
+              descricao_ncm,
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
+            FROM base
+            GROUP BY 1, 2
+            ORDER BY 3 DESC, 1 ASC
+            LIMIT %s
+            """,
+            tuple([*parametros, limite_consulta]),
+          )
+          por_ncm = [
+            {
+              "ncm": ncm_item,
+              "descricao": descricao_item,
+              "faturamento": faturamento or Decimal("0.00"),
+              "imposto_valor": imposto_valor or Decimal("0.00"),
+              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
+            }
+            for ncm_item, descricao_item, faturamento, imposto_valor in cur.fetchall()
+          ]
+          itens_nivel_atual = por_ncm
+        else:
+          cur.execute(
+            f"""
+            {base_cte}
+            SELECT
+              produto_codigo,
+              produto_descricao,
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
+            FROM base
+            GROUP BY 1, 2
+            ORDER BY 3 DESC, 1 ASC, 2 ASC
+            LIMIT %s
+            """,
+            tuple([*parametros, limite_consulta]),
+          )
+          por_produto = [
+            {
+              "produto_codigo": codigo_item,
+              "produto": produto_item,
+              "faturamento": faturamento or Decimal("0.00"),
+              "imposto_valor": imposto_valor or Decimal("0.00"),
+              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
+            }
+            for codigo_item, produto_item, faturamento, imposto_valor in cur.fetchall()
+          ]
+          itens_nivel_atual = por_produto
+
+    return {
+      "emitente_cnpj": cnpj_filtrado,
+      "periodo_ano": periodo_ano,
+      "periodo_mes": periodo_mes,
+      "nivel_atual": nivel_resolvido,
+      "total_faturamento": total_faturamento or Decimal("0.00"),
+      "total_impostos": total_impostos or Decimal("0.00"),
+      "percentual_impostos_sobre_faturamento": percentual_total,
+      "quantidade_documentos": resumo_row[2] if resumo_row else 0,
+      "total_estados": resumo_row[3] if resumo_row else 0,
+      "total_cidades": resumo_row[4] if resumo_row else 0,
+      "total_ncms": resumo_row[5] if resumo_row else 0,
+      "total_produtos": resumo_row[6] if resumo_row else 0,
+      "hierarquia": hierarquia,
+      "itens_nivel_atual": itens_nivel_atual,
+      "por_estado": por_estado,
+      "por_cidade": por_cidade,
+      "por_ncm": por_ncm,
+      "por_produto": por_produto,
     }
 
   def analisar_clientes(

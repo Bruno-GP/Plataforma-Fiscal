@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { ArrowRight, Percent, Search, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -21,13 +21,15 @@ import {
 import { Header } from '@/pages/components/Header';
 import { StatCard } from '@/pages/components/StatCard';
 import {
-  fetchAllNfeNotasDetalhadas,
+  fetchNfeNotasDetalhadas,
   fetchNfeDashboardVendas,
   fetchNfeKpis,
   parseDecimal,
 } from '@/services/nfe';
 import { fetchSpedDashboardVendas, fetchSpedKpis } from '@/services/sped';
 import { formatCurrency, monthLabels } from '@/services/utils';
+
+const NOTAS_PAGE_SIZE = 100;
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
   const digits = (value ?? '').replace(/\D/g, '');
@@ -48,6 +50,7 @@ export default function DetalhamentoVendas() {
   const [openRegionCityValues, setOpenRegionCityValues] = useState<string[]>([]);
   const [openRegionClientValues, setOpenRegionClientValues] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
@@ -86,17 +89,68 @@ export default function DetalhamentoVendas() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const notasQuery = useQuery({
+  const notasInfiniteQuery = useInfiniteQuery({
     queryKey: ['detalhamento-vendas-notas', emitenteCnpj, selectedYear, selectedMonth],
-    queryFn: () =>
-      fetchAllNfeNotasDetalhadas({
+    queryFn: ({ pageParam = 0 }) =>
+      fetchNfeNotasDetalhadas({
         emitente_cnpj: emitenteCnpj,
         email: user?.email,
         periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
         periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
         tipo_operacao: 'vendas',
+        limite: NOTAS_PAGE_SIZE,
+        offset: pageParam,
       }),
-    enabled: hasEmitenteCnpj && !isSped,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedCount = allPages.reduce((total, page) => total + page.notas.length, 0);
+      return loadedCount < lastPage.total ? loadedCount : undefined;
+    },
+    enabled: hasEmitenteCnpj && !isSped && detailMode === 'nota',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const notasRegionQuery = useQuery({
+    queryKey: ['detalhamento-vendas-notas-regiao', emitenteCnpj, selectedYear, selectedMonth],
+    queryFn: () =>
+      fetchNfeNotasDetalhadas({
+        emitente_cnpj: emitenteCnpj,
+        email: user?.email,
+        periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+        periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+        tipo_operacao: 'vendas',
+        limite: 500,
+        offset: 0,
+      }).then(async (firstPage) => {
+        if (firstPage.total <= firstPage.notas.length) return firstPage;
+
+        let offset = firstPage.notas.length;
+        const notas = [...firstPage.notas];
+
+        while (offset < firstPage.total) {
+          const nextPage = await fetchNfeNotasDetalhadas({
+            emitente_cnpj: emitenteCnpj,
+            email: user?.email,
+            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
+            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+            tipo_operacao: 'vendas',
+            limite: 500,
+            offset,
+          });
+
+          notas.push(...nextPage.notas);
+          offset += nextPage.notas.length;
+
+          if (nextPage.notas.length === 0) break;
+        }
+
+        return {
+          status: firstPage.status,
+          total: firstPage.total,
+          notas,
+        };
+      }),
+    enabled: hasEmitenteCnpj && !isSped && detailMode === 'regiao',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -169,7 +223,42 @@ export default function DetalhamentoVendas() {
     },
   ] as const;
 
-  const notas = useMemo(() => notasQuery.data?.notas ?? [], [notasQuery.data?.notas]);
+  useEffect(() => {
+    if (detailMode !== 'nota') return;
+    if (!notasInfiniteQuery.hasNextPage) return;
+    if (notasInfiniteQuery.isFetchingNextPage) return;
+
+    const sentinel = loadMoreRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting) {
+          notasInfiniteQuery.fetchNextPage();
+        }
+      },
+      {
+        rootMargin: '240px 0px',
+      },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [
+    detailMode,
+    notasInfiniteQuery.fetchNextPage,
+    notasInfiniteQuery.hasNextPage,
+    notasInfiniteQuery.isFetchingNextPage,
+  ]);
+
+  const notas = useMemo(() => {
+    if (detailMode === 'regiao') {
+      return notasRegionQuery.data?.notas ?? [];
+    }
+
+    return notasInfiniteQuery.data?.pages.flatMap((page) => page.notas) ?? [];
+  }, [detailMode, notasInfiniteQuery.data?.pages, notasRegionQuery.data?.notas]);
   const totalDetalhado = useMemo(
     () => notas.reduce((total, nota) => total + parseDecimal(nota.valor_total_nf), 0),
     [notas],
@@ -181,6 +270,11 @@ export default function DetalhamentoVendas() {
     [regionHierarchy, searchTerm],
   );
   const activeHasResults = detailMode === 'nota' ? filteredNotas.length > 0 : filteredRegionHierarchy.length > 0;
+  const notasTotal = detailMode === 'regiao'
+    ? notasRegionQuery.data?.total ?? notas.length
+    : notasInfiniteQuery.data?.pages[0]?.total ?? notas.length;
+  const isNotasLoading = detailMode === 'regiao' ? notasRegionQuery.isLoading : notasInfiniteQuery.isLoading;
+  const notasError = detailMode === 'regiao' ? notasRegionQuery.error : notasInfiniteQuery.error;
   const searchPlaceholder =
     detailMode === 'nota'
       ? 'Pesquisar por nota, cliente, documento, NCM ou produto'
@@ -378,12 +472,12 @@ export default function DetalhamentoVendas() {
         </Alert>
       )}
 
-      {!isSped && notasQuery.isError && (
+      {!isSped && notasError && (
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar notas detalhadas</AlertTitle>
           <AlertDescription>
-            {notasQuery.error instanceof Error
-              ? notasQuery.error.message
+            {notasError instanceof Error
+              ? notasError.message
               : 'Nao foi possivel consultar as notas detalhadas deste periodo.'}
           </AlertDescription>
         </Alert>
@@ -407,6 +501,12 @@ export default function DetalhamentoVendas() {
                   Busca aplicada em: {detailMode === 'nota' ? 'detalhamento por nota' : 'detalhamento por regiao'}
                 </div>
               </div>
+
+              {detailMode === 'nota' && (
+                <div className="mb-4 text-xs text-slate-400">
+                  Exibindo {filteredNotas.length} de {notasTotal} notas carregadas em blocos de {NOTAS_PAGE_SIZE}.
+                </div>
+              )}
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {levelButtons.map((button) => (
@@ -442,6 +542,15 @@ export default function DetalhamentoVendas() {
                     openNcmValues={openNcmValues}
                     onOpenNcmValuesChange={setOpenNcmValues}
                   />
+                  <div ref={loadMoreRef} className="px-6 py-4 text-center text-sm text-slate-400">
+                    {notasInfiniteQuery.isFetchingNextPage
+                      ? 'Carregando mais notas...'
+                      : notasInfiniteQuery.hasNextPage
+                        ? 'Role para baixo para carregar mais 100 notas.'
+                        : notas.length > 0
+                          ? 'Todas as notas carregadas.'
+                          : null}
+                  </div>
                 </div>
               ) : (
                 <DetalhamentoVendasRegiaoMode
@@ -456,7 +565,9 @@ export default function DetalhamentoVendas() {
               )
             ) : (
               <div className="p-6 text-sm text-slate-300">
-                {searchTerm.trim()
+                {isNotasLoading
+                  ? 'Carregando notas detalhadas...'
+                  : searchTerm.trim()
                   ? 'Nenhum detalhamento encontrado para a pesquisa informada neste modo.'
                   : 'Nenhuma nota de venda encontrada para o periodo selecionado.'}
               </div>

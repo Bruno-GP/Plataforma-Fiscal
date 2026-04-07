@@ -359,6 +359,78 @@ export interface AnaliseFiscalCfopResponse {
   }>;
 }
 
+export interface AnaliseFiscalNcmResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  total_movimentado: number | string;
+  quantidade_documentos: number;
+  quantidade_ncms: number;
+  top_ncms: Array<{
+    ncm: string;
+    descricao: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+  }>;
+}
+
+export interface AnaliseFiscalHierarquicaResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  nivel_atual: string;
+  total_faturamento: number | string;
+  total_impostos: number | string;
+  percentual_impostos_sobre_faturamento: number | string;
+  quantidade_documentos: number;
+  total_estados: number;
+  total_cidades: number;
+  total_ncms: number;
+  total_produtos: number;
+  hierarquia: Array<{
+    estado: string;
+    cidade: string;
+    uf?: string;
+    ncm: string;
+    descricao_ncm: string;
+    produto_codigo: string;
+    produto: string;
+    faturamento: number | string;
+    imposto_valor: number | string;
+    imposto_percentual: number | string;
+  }>;
+  itens_nivel_atual: Array<Record<string, unknown>>;
+  por_estado: Array<{
+    estado: string;
+    faturamento: number | string;
+    imposto_valor: number | string;
+    imposto_percentual: number | string;
+  }>;
+  por_cidade: Array<{
+    cidade: string;
+    uf?: string;
+    faturamento: number | string;
+    imposto_valor: number | string;
+    imposto_percentual: number | string;
+  }>;
+  por_ncm: Array<{
+    ncm: string;
+    descricao: string;
+    faturamento: number | string;
+    imposto_valor: number | string;
+    imposto_percentual: number | string;
+  }>;
+  por_produto: Array<{
+    produto_codigo: string;
+    produto: string;
+    faturamento: number | string;
+    imposto_valor: number | string;
+    imposto_percentual: number | string;
+  }>;
+}
+
 export interface AnaliseClientesResponse {
   status: string;
   emitente_cnpj: string;
@@ -484,6 +556,11 @@ export const fetchNfeAnaliseFiscalCfop = async (
     email?: string;
     periodo_ano?: number;
     periodo_mes?: number;
+    nivel_atual?: string;
+    estado?: string;
+    cidade?: string;
+    ncm?: string;
+    produto_codigo?: string;
     limite?: number;
   } = {},
   options: RequestOptions = {},
@@ -500,6 +577,59 @@ export const fetchNfeAnaliseFiscalCfop = async (
   }
 
   return response.json() as Promise<AnaliseFiscalCfopResponse>;
+};
+
+export const fetchNfeAnaliseFiscalNcm = async (
+  params: {
+    emitente_cnpj?: string;
+    email?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<AnaliseFiscalNcmResponse> => {
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/nfe/analise/fiscal/ncm?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise fiscal por NCM da NFe.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar análise fiscal por NCM da NFe.');
+  }
+
+  return response.json() as Promise<AnaliseFiscalNcmResponse>;
+};
+
+export const fetchNfeAnaliseFiscalHierarquica = async (
+  params: {
+    emitente_cnpj?: string;
+    email?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    nivel_atual?: string;
+    estado?: string;
+    cidade?: string;
+    ncm?: string;
+    produto_codigo?: string;
+    limite?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<AnaliseFiscalHierarquicaResponse> => {
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/nfe/analise/fiscal/hierarquia?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar analise fiscal hierarquica da NFe.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar analise fiscal hierarquica da NFe.');
+  }
+
+  return response.json() as Promise<AnaliseFiscalHierarquicaResponse>;
 };
 
 export const fetchNfeDashboardVendas = async (

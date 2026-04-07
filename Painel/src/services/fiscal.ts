@@ -3,6 +3,11 @@ export interface FiscalQueryParams {
   email?: string;
   periodo_ano?: number;
   periodo_mes?: number;
+  nivel_atual?: string;
+  estado?: string;
+  cidade?: string;
+  ncm?: string;
+  produto_codigo?: string;
   limite?: number;
   offset?: number;
   gerar_relatorio_ia?: boolean;
@@ -74,6 +79,11 @@ export const buildFiscalSearchParams = (params: FiscalQueryParams = {}) => {
 
   if (params.periodo_ano) searchParams.set('periodo_ano', String(params.periodo_ano));
   if (params.periodo_mes) searchParams.set('periodo_mes', String(params.periodo_mes));
+  if (params.nivel_atual?.trim()) searchParams.set('nivel_atual', params.nivel_atual.trim());
+  if (params.estado?.trim()) searchParams.set('estado', params.estado.trim());
+  if (params.cidade?.trim()) searchParams.set('cidade', params.cidade.trim());
+  if (params.ncm?.trim()) searchParams.set('ncm', params.ncm.trim());
+  if (params.produto_codigo?.trim()) searchParams.set('produto_codigo', params.produto_codigo.trim());
   if (params.limite) searchParams.set('limite', String(params.limite));
   if (params.offset) searchParams.set('offset', String(params.offset));
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');

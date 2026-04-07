@@ -165,6 +165,59 @@ class AnaliseFiscalNcmResponse(BaseModel):
   top_ncms: list[RankingNcmFiscal] = Field(default_factory=list)
 
 
+class FiscalHierarquiaEstadoItem(BaseModel):
+  estado: str
+  faturamento: Decimal = Decimal("0.00")
+  imposto_valor: Decimal = Decimal("0.00")
+  imposto_percentual: Decimal = Decimal("0.00")
+
+
+class FiscalHierarquiaCidadeItem(BaseModel):
+  cidade: str
+  uf: str = ""
+  faturamento: Decimal = Decimal("0.00")
+  imposto_valor: Decimal = Decimal("0.00")
+  imposto_percentual: Decimal = Decimal("0.00")
+
+
+class FiscalHierarquiaNcmItem(BaseModel):
+  ncm: str
+  descricao: str
+  faturamento: Decimal = Decimal("0.00")
+  imposto_valor: Decimal = Decimal("0.00")
+  imposto_percentual: Decimal = Decimal("0.00")
+
+
+class FiscalHierarquiaProdutoItem(BaseModel):
+  produto_codigo: str
+  produto: str
+  faturamento: Decimal = Decimal("0.00")
+  imposto_valor: Decimal = Decimal("0.00")
+  imposto_percentual: Decimal = Decimal("0.00")
+
+
+class AnaliseFiscalHierarquicaResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  nivel_atual: str = "estado"
+  total_faturamento: Decimal = Decimal("0.00")
+  total_impostos: Decimal = Decimal("0.00")
+  percentual_impostos_sobre_faturamento: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+  total_estados: int = 0
+  total_cidades: int = 0
+  total_ncms: int = 0
+  total_produtos: int = 0
+  hierarquia: list[dict] = Field(default_factory=list)
+  itens_nivel_atual: list[dict] = Field(default_factory=list)
+  por_estado: list[FiscalHierarquiaEstadoItem] = Field(default_factory=list)
+  por_cidade: list[FiscalHierarquiaCidadeItem] = Field(default_factory=list)
+  por_ncm: list[FiscalHierarquiaNcmItem] = Field(default_factory=list)
+  por_produto: list[FiscalHierarquiaProdutoItem] = Field(default_factory=list)
+
+
 class AnaliseVendasResponse(BaseModel):
   status: str
   emitente_cnpj: str

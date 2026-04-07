@@ -1,26 +1,42 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileBarChart2, Files, ReceiptText, Scale } from 'lucide-react';
+import { ArrowRight, Percent, Search, TrendingUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { Header } from '@/pages/components/Header';
-import { RankingCard } from '@/pages/components/RankingCard';
-import { StatCard } from '@/pages/components/StatCard';
-import { CfopAnalysisTable } from '@/pages/components/CfopAnalysisTable';
-import { NcmAnalysisTable } from '@/pages/components/NcmAnalysisTable';
 import {
-  fetchNfeAnaliseFiscalCfop,
-  fetchNfeAnaliseFiscalNcm,
+  DetalhamentoFiscalHierarquiaMode,
+  type FiscalHierarchyState,
+} from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
+import { StatCard } from '@/pages/components/StatCard';
+import {
+  fetchNfeAnaliseFiscalHierarquica,
   fetchNfeKpis,
   parseDecimal,
+  type AnaliseFiscalHierarquicaResponse as AnaliseFiscalHierarquicaNfeResponse,
 } from '@/services/nfe';
 import {
-  fetchSpedAnaliseFiscalCfop,
-  fetchSpedAnaliseFiscalNcm,
+  fetchSpedAnaliseFiscalHierarquica,
   fetchSpedKpis,
+  type AnaliseFiscalHierarquicaResponse as AnaliseFiscalHierarquicaSpedResponse,
 } from '@/services/sped';
 import { formatCurrency, monthLabels } from '@/services/utils';
+
+type HierarquiaResponse =
+  | AnaliseFiscalHierarquicaNfeResponse
+  | AnaliseFiscalHierarquicaSpedResponse;
+
+type DrillState = {
+  estado?: string;
+  cidade?: string;
+  ncm?: string;
+};
 
 const hasValidEmitenteCnpj = (value: string | undefined) => {
   const digits = (value ?? '').replace(/\D/g, '');
@@ -31,7 +47,10 @@ export default function AnaliseFiscalCfop() {
   const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
-  const [selectedView, setSelectedView] = useState<'cfop' | 'ncm'>('cfop');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [openStateValues, setOpenStateValues] = useState<string[]>([]);
+  const [openCityValues, setOpenCityValues] = useState<string[]>([]);
+  const [openNcmValues, setOpenNcmValues] = useState<string[]>([]);
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
@@ -49,45 +68,24 @@ export default function AnaliseFiscalCfop() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const fiscalCfopQuery = useQuery({
-    queryKey: ['analise-fiscal-cfop', emitenteCnpj, isSped, yearNumber, selectedMonth],
+  const analiseQuery = useQuery<HierarquiaResponse>({
+    queryKey: ['analise-fiscal-drilldown', emitenteCnpj, isSped, selectedYear, selectedMonth],
     queryFn: () =>
       isSped
-        ? fetchSpedAnaliseFiscalCfop({
+        ? fetchSpedAnaliseFiscalHierarquica({
             emitente_cnpj: emitenteCnpj,
             periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
             periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 100000,
+            limite: 5000,
           })
-        : fetchNfeAnaliseFiscalCfop({
+        : fetchNfeAnaliseFiscalHierarquica({
             emitente_cnpj: emitenteCnpj,
             email: user?.email,
             periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
             periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 100000,
+            limite: 5000,
           }),
-    enabled: hasEmitenteCnpj && selectedView === 'cfop',
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const fiscalNcmQuery = useQuery({
-    queryKey: ['analise-fiscal-ncm', emitenteCnpj, isSped, yearNumber, selectedMonth],
-    queryFn: () =>
-      isSped
-        ? fetchSpedAnaliseFiscalNcm({
-            emitente_cnpj: emitenteCnpj,
-            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 100000,
-          })
-        : fetchNfeAnaliseFiscalNcm({
-            emitente_cnpj: emitenteCnpj,
-            email: user?.email,
-            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 100000,
-          }),
-    enabled: hasEmitenteCnpj && selectedView === 'ncm',
+    enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -106,127 +104,184 @@ export default function AnaliseFiscalCfop() {
     }
   }, [availableYears, selectedYear]);
 
-  const totalMovimentadoCfop = parseDecimal(fiscalCfopQuery.data?.total_movimentado ?? 0);
-  const quantidadeDocumentosCfop = fiscalCfopQuery.data?.quantidade_documentos ?? 0;
-  const quantidadeCfops = fiscalCfopQuery.data?.quantidade_cfops ?? 0;
-  const categoriasAtivas = (fiscalCfopQuery.data?.top_categorias ?? []).length;
+  useEffect(() => {
+    setSearchTerm('');
+    setOpenStateValues([]);
+    setOpenCityValues([]);
+    setOpenNcmValues([]);
+  }, [selectedMonth, selectedYear, emitenteCnpj, isSped]);
 
-  const cfopStats = [
+  const totalFaturamento = parseDecimal(analiseQuery.data?.total_faturamento ?? 0);
+  const totalImpostos = parseDecimal(analiseQuery.data?.total_impostos ?? 0);
+  const percentualTotal = parseDecimal(analiseQuery.data?.percentual_impostos_sobre_faturamento ?? 0);
+
+  const stats = [
     {
-      title: 'Total movimentado',
-      value: formatCurrency(totalMovimentadoCfop),
-      description: 'Somatorio fiscal do periodo',
-      icon: Scale,
+      title: 'Faturamento',
+      value: formatCurrency(totalFaturamento),
+      description: 'Base total do periodo filtrado',
+      icon: TrendingUp,
       trend: 'up' as const,
       accentClass: 'border-l-sky-500',
     },
     {
-      title: 'Documentos fiscais',
-      value: quantidadeDocumentosCfop.toString(),
-      description: 'Documentos com itens e CFOP',
-      icon: Files,
+      title: 'Impostos',
+      value: formatCurrency(totalImpostos),
+      description: 'Valor total sobre o faturamento',
+      icon: Percent,
       trend: 'up' as const,
-      accentClass: 'border-l-emerald-500',
+      accentClass: 'border-l-violet-500',
     },
     {
-      title: 'CFOPs distintos',
-      value: quantidadeCfops.toString(),
-      description: 'Variedade de operacoes no periodo',
-      icon: ReceiptText,
+      title: 'Percentual',
+      value: `${percentualTotal.toFixed(2)}%`,
+      description: 'Impostos sobre faturamento',
+      icon: Percent,
       trend: 'up' as const,
       accentClass: 'border-l-amber-400',
     },
     {
-      title: 'Categorias ativas',
-      value: categoriasAtivas.toString(),
-      description: 'Grupos fiscais identificados',
-      icon: FileBarChart2,
-      trend: 'up' as const,
-      accentClass: 'border-l-violet-500',
-    },
-  ];
-
-  const categoriaItems = (fiscalCfopQuery.data?.top_categorias ?? []).map((categoria, index) => {
-    const valorTotal = parseDecimal(categoria.valor_total ?? 0);
-    const percentual = parseDecimal(categoria.participacao_percentual ?? 0);
-
-    return {
-      key: `${categoria.categoria}-${index}`,
-      title: categoria.categoria,
-      subtitle: `${categoria.quantidade_documentos} documentos`,
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
-
-  const cfopItems = (fiscalCfopQuery.data?.top_cfops ?? []).map((cfop, index) => ({
-    key: `${cfop.cfop}-${index}`,
-    cfop: cfop.cfop || '0000',
-    descricao: cfop.descricao || 'CFOP sem descricao',
-    valorTotal: parseDecimal(cfop.valor_total ?? 0),
-    participacao: parseDecimal(cfop.participacao_percentual ?? 0),
-  }));
-
-  const totalMovimentadoNcm = parseDecimal(fiscalNcmQuery.data?.total_movimentado ?? 0);
-  const quantidadeDocumentosNcm = fiscalNcmQuery.data?.quantidade_documentos ?? 0;
-  const quantidadeNcms = fiscalNcmQuery.data?.quantidade_ncms ?? 0;
-
-  const ncmStats = [
-    {
-      title: 'Total movimentado',
-      value: formatCurrency(totalMovimentadoNcm),
-      description: 'Somatorio fiscal do periodo',
-      icon: Scale,
-      trend: 'up' as const,
-      accentClass: 'border-l-sky-500',
-    },
-    {
-      title: 'Documentos fiscais',
-      value: quantidadeDocumentosNcm.toString(),
-      description: 'Documentos com itens classificados',
-      icon: Files,
+      title: 'Documentos',
+      value: String(analiseQuery.data?.quantidade_documentos ?? 0),
+      description: 'Documentos considerados',
+      icon: TrendingUp,
       trend: 'up' as const,
       accentClass: 'border-l-emerald-500',
     },
-    {
-      title: 'NCMs distintos',
-      value: quantidadeNcms.toString(),
-      description: 'Classificacoes fiscais no periodo',
-      icon: ReceiptText,
-      trend: 'up' as const,
-      accentClass: 'border-l-amber-400',
-    },
-    {
-      title: 'Ticket medio por NCM',
-      value: formatCurrency(quantidadeNcms ? totalMovimentadoNcm / quantidadeNcms : 0),
-      description: 'Media de valor por classificacao',
-      icon: FileBarChart2,
-      trend: 'up' as const,
-      accentClass: 'border-l-violet-500',
-    },
-  ];
+  ] as const;
 
-  const ncmItems = (fiscalNcmQuery.data?.top_ncms ?? []).map((ncm, index) => ({
-    key: `${ncm.ncm}-${index}`,
-    ncm: ncm.ncm || '00000000',
-    descricao: ncm.descricao || 'NCM sem descricao',
-    valorTotal: parseDecimal(ncm.valor_total ?? 0),
-    participacao: parseDecimal(ncm.participacao_percentual ?? 0),
-  }));
+  const hierarchyRows = useMemo(() => {
+    const baseItems = analiseQuery.data?.hierarquia ?? [];
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return baseItems;
 
-  const viewTitle =
-    selectedView === 'cfop' ? 'Analise Fiscal por CFOP' : 'Analise Fiscal por NCM';
-  const viewSubtitle =
-    selectedView === 'cfop'
-      ? 'Visao ampla das operacoes fiscais autorizadas do periodo'
-      : 'Visao consolidada por classificacao fiscal dos produtos no periodo';
+    return baseItems.filter((item) =>
+      Object.values(item).some((value) => String(value ?? '').toLowerCase().includes(query)),
+    );
+  }, [analiseQuery.data?.hierarquia, searchTerm]);
+
+  const hierarchy = useMemo<FiscalHierarchyState[]>(() => {
+    const states = new Map<string, FiscalHierarchyState>();
+
+    for (const row of hierarchyRows) {
+      const uf = String(row.estado ?? 'Sem UF');
+      const city = String(row.cidade ?? 'Cidade nao identificada');
+      const ncm = String(row.ncm ?? '00000000');
+      const ncmDescription = String(row.descricao_ncm ?? 'NCM sem descricao');
+      const productCode = String(row.produto_codigo ?? 'SEM-CODIGO');
+      const productName = String(row.produto ?? 'Produto sem descricao');
+      const faturamento = parseDecimal(row.faturamento ?? 0);
+      const impostoValor = parseDecimal(row.imposto_valor ?? 0);
+      const impostoPercentual = parseDecimal(row.imposto_percentual ?? 0);
+
+      let stateEntry = states.get(uf);
+      if (!stateEntry) {
+        stateEntry = { key: `uf-${uf}`, uf, total: 0, taxValue: 0, taxPercent: 0, cities: [] };
+        states.set(uf, stateEntry);
+      }
+      stateEntry.total += faturamento;
+      stateEntry.taxValue += impostoValor;
+
+      let cityEntry = stateEntry.cities.find((item) => item.city === city);
+      if (!cityEntry) {
+        cityEntry = { key: `city-${uf}-${city}`, city, uf, total: 0, taxValue: 0, taxPercent: 0, ncms: [] };
+        stateEntry.cities.push(cityEntry);
+      }
+      cityEntry.total += faturamento;
+      cityEntry.taxValue += impostoValor;
+
+      let ncmEntry = cityEntry.ncms.find((item) => item.ncm === ncm);
+      if (!ncmEntry) {
+        ncmEntry = {
+          key: `ncm-${uf}-${city}-${ncm}`,
+          ncm,
+          description: ncmDescription,
+          total: 0,
+          taxValue: 0,
+          taxPercent: 0,
+          products: [],
+        };
+        cityEntry.ncms.push(ncmEntry);
+      }
+      ncmEntry.total += faturamento;
+      ncmEntry.taxValue += impostoValor;
+
+      ncmEntry.products.push({
+        key: `product-${uf}-${city}-${ncm}-${productCode}-${productName}`,
+        code: productCode,
+        description: productName,
+        totalValue: faturamento,
+        taxValue: impostoValor,
+        taxPercent: impostoPercentual,
+      });
+    }
+
+    const result = [...states.values()];
+    for (const stateEntry of result) {
+      stateEntry.taxPercent = stateEntry.total ? (stateEntry.taxValue / stateEntry.total) * 100 : 0;
+      for (const cityEntry of stateEntry.cities) {
+        cityEntry.taxPercent = cityEntry.total ? (cityEntry.taxValue / cityEntry.total) * 100 : 0;
+        for (const ncmEntry of cityEntry.ncms) {
+          ncmEntry.taxPercent = ncmEntry.total ? (ncmEntry.taxValue / ncmEntry.total) * 100 : 0;
+          ncmEntry.products.sort((a, b) => b.totalValue - a.totalValue);
+        }
+        cityEntry.ncms.sort((a, b) => b.total - a.total);
+      }
+      stateEntry.cities.sort((a, b) => b.total - a.total);
+    }
+    return result.sort((a, b) => b.total - a.total);
+  }, [hierarchyRows]);
+
+  const stateAccordionValues = useMemo(() => hierarchy.map((item) => item.key), [hierarchy]);
+  const cityAccordionValues = useMemo(
+    () => hierarchy.flatMap((stateEntry) => stateEntry.cities.map((item) => item.key)),
+    [hierarchy],
+  );
+  const ncmAccordionValues = useMemo(
+    () => hierarchy.flatMap((stateEntry) => stateEntry.cities.flatMap((cityEntry) => cityEntry.ncms.map((item) => item.key))),
+    [hierarchy],
+  );
+
+  useEffect(() => {
+    setOpenStateValues((current) => current.filter((value) => stateAccordionValues.includes(value)));
+  }, [stateAccordionValues]);
+
+  useEffect(() => {
+    setOpenCityValues((current) => current.filter((value) => cityAccordionValues.includes(value)));
+  }, [cityAccordionValues]);
+
+  useEffect(() => {
+    setOpenNcmValues((current) => current.filter((value) => ncmAccordionValues.includes(value)));
+  }, [ncmAccordionValues]);
+
+  const allStatesOpen = stateAccordionValues.length > 0 && stateAccordionValues.every((value) => openStateValues.includes(value));
+  const allCitiesOpen = cityAccordionValues.length > 0 && cityAccordionValues.every((value) => openCityValues.includes(value));
+  const allNcmsOpen = ncmAccordionValues.length > 0 && ncmAccordionValues.every((value) => openNcmValues.includes(value));
+
+  const toggleStates = () => setOpenStateValues(allStatesOpen ? [] : stateAccordionValues);
+  const toggleCities = () => {
+    if (allCitiesOpen) {
+      setOpenCityValues([]);
+      return;
+    }
+    setOpenStateValues(stateAccordionValues);
+    setOpenCityValues(cityAccordionValues);
+  };
+  const toggleNcms = () => {
+    if (allNcmsOpen) {
+      setOpenNcmValues([]);
+      return;
+    }
+    setOpenStateValues(stateAccordionValues);
+    setOpenCityValues(cityAccordionValues);
+    setOpenNcmValues(ncmAccordionValues);
+  };
 
   return (
     <div className="space-y-6 py-6">
       <Header
-        title={viewTitle}
-        subtitle={viewSubtitle}
+        title="Analise fiscal"
+        subtitle="Drill-down hierarquico no mesmo padrao visual do detalhamento de vendas."
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
         availableYears={availableYears}
@@ -235,72 +290,103 @@ export default function AnaliseFiscalCfop() {
         onYearChange={setSelectedYear}
       />
 
-      <div className="flex flex-wrap gap-3">
-        <Button
-          type="button"
-          variant={selectedView === 'cfop' ? 'default' : 'outline'}
-          onClick={() => setSelectedView('cfop')}
-        >
-          Analise Fiscal por CFOP
-        </Button>
-        <Button
-          type="button"
-          variant={selectedView === 'ncm' ? 'default' : 'outline'}
-          onClick={() => setSelectedView('ncm')}
-        >
-          Analise Fiscal por NCM
-        </Button>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <StatCard key={stat.title} {...stat} isLoading={analiseQuery.isLoading} />
+        ))}
       </div>
 
-      {selectedView === 'cfop' ? (
-        <>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {cfopStats.map((stat) => (
-              <StatCard key={stat.title} {...stat} isLoading={fiscalCfopQuery.isLoading} />
-            ))}
+      <Card className="border border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_28px_90px_-52px_rgba(15,23,42,1)]">
+        <CardContent className="space-y-5 p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
+              <Badge className="border border-sky-400/20 bg-sky-400/10 text-sky-100 hover:bg-sky-400/10">
+                Drill-down hierarquico
+              </Badge>
+              <h2 className="text-2xl font-semibold tracking-tight">Estado {'>'} Cidade {'>'} NCM {'>'} Produto</h2>
+              <p className="max-w-3xl text-sm text-slate-300">
+                Estrutura igual ao detalhamento de vendas, mas aplicada ao faturamento e imposto sobre faturamento.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" className="gap-2 bg-white text-slate-900 hover:bg-slate-100" asChild>
+                <Link to="/detalhamento-vendas">
+                  Abrir detalhamento de vendas
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
           </div>
+        </CardContent>
+      </Card>
 
-          <RankingCard
-            title="Categorias fiscais"
-            description="Distribuicao das principais naturezas de operacao no periodo"
-            items={categoriaItems}
-            isLoading={fiscalCfopQuery.isLoading}
-            loadingMessage="Carregando categorias fiscais..."
-            emptyMessage="Nenhuma categoria fiscal encontrada."
-            totalValue={formatCurrency(totalMovimentadoCfop)}
-            showAbcReport={false}
-            showAbcClassification={false}
-          />
-
-          <CfopAnalysisTable
-            items={cfopItems}
-            isLoading={fiscalCfopQuery.isLoading}
-            isError={fiscalCfopQuery.isError}
-            formatCurrency={formatCurrency}
-            title="Todos os CFOPs com valor"
-            description="CFOPs ordenados por impacto no periodo, com uma faixa maior de registros para evitar divergencias ao conferir as somas."
-            emptyMessage="Nenhum CFOP fiscal encontrado para o periodo selecionado."
-          />
-        </>
-      ) : (
-        <>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {ncmStats.map((stat) => (
-              <StatCard key={stat.title} {...stat} isLoading={fiscalNcmQuery.isLoading} />
-            ))}
-          </div>
-
-          <NcmAnalysisTable
-            items={ncmItems}
-            isLoading={fiscalNcmQuery.isLoading}
-            isError={fiscalNcmQuery.isError}
-            formatCurrency={formatCurrency}
-            title="Todos os NCMs com valor"
-            description="Classificacoes fiscais ordenadas por impacto no periodo para facilitar uma primeira leitura da carteira."
-            emptyMessage="Nenhum NCM fiscal encontrado para o periodo selecionado."
-          />
-        </>
+      {analiseQuery.isError && (
+        <Alert variant="destructive">
+          <AlertTitle>Erro ao carregar analise fiscal</AlertTitle>
+          <AlertDescription>
+            {analiseQuery.error instanceof Error
+              ? analiseQuery.error.message
+              : 'Nao foi possivel consultar o drill-down fiscal.'}
+          </AlertDescription>
+        </Alert>
       )}
+
+      <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
+        <CardContent className="p-0">
+          <div className="border-b border-slate-800/80 px-6 py-4">
+            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative w-full max-w-xl">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Pesquisar no nivel atual"
+                  className="border-slate-700 bg-slate-900/80 pl-10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-500"
+                />
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={toggleStates}
+                  className="h-auto justify-start border-slate-700 bg-slate-900/80 px-4 py-3 text-left text-slate-100 hover:border-sky-500/60 hover:bg-slate-800"
+                >
+                  Estado
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={toggleCities}
+                  className="h-auto justify-start border-slate-700 bg-slate-900/80 px-4 py-3 text-left text-slate-100 hover:border-sky-500/60 hover:bg-slate-800"
+                >
+                  Cidade
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={toggleNcms}
+                  className="h-auto justify-start border-slate-700 bg-slate-900/80 px-4 py-3 text-left text-slate-100 hover:border-sky-500/60 hover:bg-slate-800"
+                >
+                  NCM
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400">
+              Exibindo {hierarchyRows.length} produtos agregados na hierarquia.
+            </div>
+          </div>
+          <DetalhamentoFiscalHierarquiaMode
+            hierarchy={hierarchy}
+            openStateValues={openStateValues}
+            onOpenStateValuesChange={setOpenStateValues}
+            openCityValues={openCityValues}
+            onOpenCityValuesChange={setOpenCityValues}
+            openNcmValues={openNcmValues}
+            onOpenNcmValuesChange={setOpenNcmValues}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

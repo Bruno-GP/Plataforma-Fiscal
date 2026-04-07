@@ -16,7 +16,7 @@ from app.core.config import (
     is_production,
 )
 from app.core.logger import configure_logging, log_request_cycle
-from app.services.db_schema_service import ensure_empresas_tem_sped_column
+from app.services.db_schema_service import ensure_empresas_tem_sped_column, ensure_ncm_ibpt_tables
 
 configure_logging()
 
@@ -78,6 +78,7 @@ app.include_router(api_router, prefix="/api")
 @app.on_event("startup")
 def ensure_database_schema() -> None:
     ensure_empresas_tem_sped_column()
+    ensure_ncm_ibpt_tables()
 
 
 @app.get("/health")

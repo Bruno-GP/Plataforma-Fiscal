@@ -29,6 +29,7 @@ from app.models.nfe.schemas import (
   AnaliseComprasResponse,
   AnaliseVendasResponse,
   AnaliseFiscalCfopResponse,
+  AnaliseFiscalNcmResponse,
   AnaliseClientesResponse,
   DashboardComprasResponse,
   DashboardVendasResponse,
@@ -366,6 +367,42 @@ def consultar_analise_fiscal_cfop_nfe(
     ) from exc
 
   return AnaliseFiscalCfopResponse(status="ok", **resultado)
+
+@nfe_router.get("/analise/fiscal/ncm", response_model=AnaliseFiscalNcmResponse)
+def consultar_analise_fiscal_ncm_nfe(
+  emitente_cnpj: str | None = Query(default=None),
+  email: str | None = Query(default=None),
+  periodo_ano: int | None = Query(default=None),
+  periodo_mes: int | None = Query(default=None),
+  limite: int | None = Query(default=100000, ge=1),
+):
+  service = NFeConsultaService()
+
+  emitente_resolvido = service.resolver_emitente_cnpj(
+    emitente_cnpj=emitente_cnpj,
+    email=email,
+  )
+
+  if not emitente_resolvido:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Informe um emitente_cnpj válido ou um email cadastrado.",
+    )
+
+  try:
+    resultado = service.analisar_fiscal_ncm(
+      emitente_cnpj=emitente_resolvido,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      limite=limite,
+    )
+  except ValueError as exc:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail=str(exc),
+    ) from exc
+
+  return AnaliseFiscalNcmResponse(status="ok", **resultado)
 
 @nfe_router.get("/analise/compras/dashboard", response_model=DashboardComprasResponse)
 def consultar_dashboard_compras_nfe(

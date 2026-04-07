@@ -128,6 +128,13 @@ class RankingCfopVenda(BaseModel):
   participacao_percentual: Decimal = Decimal("0.00")
 
 
+class RankingNcmFiscal(BaseModel):
+  ncm: str
+  descricao: str
+  valor_total: Decimal = Decimal("0.00")
+  participacao_percentual: Decimal = Decimal("0.00")
+
+
 class RankingCategoriaFiscal(BaseModel):
   categoria: str
   valor_total: Decimal = Decimal("0.00")
@@ -145,6 +152,17 @@ class AnaliseFiscalCfopResponse(BaseModel):
   quantidade_cfops: int = 0
   top_categorias: list[RankingCategoriaFiscal] = Field(default_factory=list)
   top_cfops: list[RankingCfopVenda] = Field(default_factory=list)
+
+
+class AnaliseFiscalNcmResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  periodo_ano: int | None = None
+  periodo_mes: int | None = None
+  total_movimentado: Decimal = Decimal("0.00")
+  quantidade_documentos: int = 0
+  quantidade_ncms: int = 0
+  top_ncms: list[RankingNcmFiscal] = Field(default_factory=list)
 
 
 class AnaliseVendasResponse(BaseModel):

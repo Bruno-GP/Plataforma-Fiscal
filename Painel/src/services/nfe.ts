@@ -359,6 +359,22 @@ export interface AnaliseFiscalCfopResponse {
   }>;
 }
 
+export interface AnaliseFiscalNcmResponse {
+  status: string;
+  emitente_cnpj: string;
+  periodo_ano?: number | null;
+  periodo_mes?: number | null;
+  total_movimentado: number | string;
+  quantidade_documentos: number;
+  quantidade_ncms: number;
+  top_ncms: Array<{
+    ncm: string;
+    descricao: string;
+    valor_total: number | string;
+    participacao_percentual: number | string;
+  }>;
+}
+
 export interface AnaliseClientesResponse {
   status: string;
   emitente_cnpj: string;
@@ -500,6 +516,30 @@ export const fetchNfeAnaliseFiscalCfop = async (
   }
 
   return response.json() as Promise<AnaliseFiscalCfopResponse>;
+};
+
+export const fetchNfeAnaliseFiscalNcm = async (
+  params: {
+    emitente_cnpj?: string;
+    email?: string;
+    periodo_ano?: number;
+    periodo_mes?: number;
+    limite?: number;
+  } = {},
+  options: RequestOptions = {},
+): Promise<AnaliseFiscalNcmResponse> => {
+  const searchParams = buildFiscalSearchParams(params);
+
+  const response = await apiFetch(`${API_BASE_URL}/nfe/analise/fiscal/ncm?${searchParams.toString()}`, {
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Falha ao consultar análise fiscal por NCM da NFe.' }));
+    throw new Error(error.detail ?? 'Falha ao consultar análise fiscal por NCM da NFe.');
+  }
+
+  return response.json() as Promise<AnaliseFiscalNcmResponse>;
 };
 
 export const fetchNfeDashboardVendas = async (

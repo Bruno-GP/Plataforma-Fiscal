@@ -3,13 +3,18 @@ from typing import List, Optional
 from decimal import Decimal
 
 import psycopg
+from fastapi import HTTPException, status
 
+from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
 from app.models.nfe.schemas import (
+  DashboardVendasResponse,
+  DashboardVendasResumo,
   KPIComparativoQuantidade,
   KPIComparativoValor,
   KPIsComparativo,
   NFeKPI,
   NFeKPIConsulta,
+  SerieMensalVendasItem,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.fiscal_analysis import (
@@ -245,6 +250,106 @@ class NFeConsultaService:
       int(periodo_mes): valor_total or Decimal("0.00")
       for periodo_mes, valor_total in rows
     }
+
+  def consultar_dashboard_vendas(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: int | None = None,
+    periodo_mes: int | None = None,
+    limite: int = 5,
+  ) -> DashboardVendasResponse:
+    resultados_anos = self.listar_kpis(emitente_cnpj=emitente_cnpj, limite=120)
+    anos_disponiveis = sorted(
+      {item.periodo_ano for item in resultados_anos if item.periodo_ano},
+      reverse=True,
+    )
+    ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
+
+    if ano_referencia is None:
+      raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Nenhum período disponível para o emitente informado.",
+      )
+
+    resultados_ano_atual = self.listar_kpis(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia,
+      limite=120,
+    )
+    resultados_ano_anterior = self.listar_kpis(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia - 1,
+      limite=120,
+    )
+    ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
+
+    if periodo_mes is not None:
+      resultados_filtrados = [item for item in resultados_ano_atual if item.periodo_mes == periodo_mes]
+      resultados_anteriores = (
+        [item for item in resultados_ano_atual if item.periodo_mes == mes_anterior]
+        if ano_anterior == ano_referencia
+        else [item for item in resultados_ano_anterior if item.periodo_mes == mes_anterior]
+      )
+    else:
+      resultados_filtrados = resultados_ano_atual
+      resultados_anteriores = resultados_ano_anterior
+
+    total_vendido_atual = self.obter_total_vendido_bruto(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia,
+      periodo_mes=periodo_mes,
+    )
+    total_vendido_anterior = self.obter_total_vendido_bruto(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_anterior,
+      periodo_mes=mes_anterior,
+    )
+    totais_mensais_brutos = self.listar_totais_vendas_mensais_bruto(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia,
+    )
+
+    resumo_atual = resumir_vendas_por_kpis(
+      resultados_filtrados,
+      DashboardVendasResumo,
+      limite,
+    ).model_copy(update={"total_vendido": total_vendido_atual})
+    resumo_anterior = resumir_vendas_por_kpis(
+      resultados_anteriores,
+      DashboardVendasResumo,
+      limite,
+    ).model_copy(update={"total_vendido": total_vendido_anterior})
+
+    serie_mensal = [
+      SerieMensalVendasItem(
+        periodo_ano=ano_referencia,
+        periodo_mes=item.periodo_mes or 0,
+        total_vendido=totais_mensais_brutos.get(
+          item.periodo_mes or 0,
+          Decimal(str(item.kpis.total_vendas or 0)),
+        ),
+        quantidade_notas=int(item.kpis.quantidade_notas or 0),
+        total_impostos=(
+          Decimal(str(item.kpis.total_icms or 0))
+          + Decimal(str(item.kpis.total_ipi or 0))
+          + Decimal(str(item.kpis.total_pis or 0))
+          + Decimal(str(item.kpis.total_cofins or 0))
+        ),
+      )
+      for item in sorted(resultados_ano_atual, key=lambda resultado: resultado.periodo_mes or 0)
+      if item.periodo_mes
+    ]
+
+    return DashboardVendasResponse(
+      status="ok",
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia,
+      periodo_mes=periodo_mes,
+      anos_disponiveis=anos_disponiveis,
+      resumo_atual=resumo_atual,
+      resumo_anterior=resumo_anterior,
+      serie_mensal=serie_mensal,
+    )
     
   def _filtro_vendas(self) -> str:
     return """

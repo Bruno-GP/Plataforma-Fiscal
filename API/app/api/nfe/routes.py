@@ -1,10 +1,7 @@
-from decimal import Decimal
-
 import psycopg
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File
 
-from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
 from app.core.upload_security import validate_xml_uploads
 from app.core.security import require_company_scope
 from app.services.nfe.process_nfe import ProcessarNFeService
@@ -34,9 +31,7 @@ from app.models.nfe.schemas import (
   AnaliseClientesResponse,
   DashboardComprasResponse,
   DashboardVendasResponse,
-  DashboardVendasResumo,
   SerieMensalComprasItem,
-  SerieMensalVendasItem,
 )
 
 router = APIRouter()
@@ -460,93 +455,11 @@ def consultar_dashboard_vendas_nfe(
   limite: int = Query(default=5, ge=1, le=20),
 ):
   service = NFeConsultaService()
-
-  resultados_anos = service.listar_kpis(emitente_cnpj=emitente_resolvido, limite=120)
-  anos_disponiveis = sorted(
-    {item.periodo_ano for item in resultados_anos if item.periodo_ano},
-    reverse=True,
-  )
-  ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
-
-  if ano_referencia is None:
-    raise HTTPException(
-      status_code=status.HTTP_404_NOT_FOUND,
-      detail="Nenhum perÃ­odo disponÃ­vel para o emitente informado.",
-    )
-
-  resultados_ano_atual = service.listar_kpis(
+  return service.consultar_dashboard_vendas(
     emitente_cnpj=emitente_resolvido,
-    periodo_ano=ano_referencia,
-    limite=120,
-  )
-  resultados_ano_anterior = service.listar_kpis(
-    emitente_cnpj=emitente_resolvido,
-    periodo_ano=ano_referencia - 1,
-    limite=120,
-  )
-  ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
-
-  if periodo_mes is not None:
-    resultados_filtrados = [item for item in resultados_ano_atual if item.periodo_mes == periodo_mes]
-    resultados_anteriores = (
-      [item for item in resultados_ano_atual if item.periodo_mes == mes_anterior]
-      if ano_anterior == ano_referencia
-      else [item for item in resultados_ano_anterior if item.periodo_mes == mes_anterior]
-    )
-  else:
-    resultados_filtrados = resultados_ano_atual
-    resultados_anteriores = resultados_ano_anterior
-
-  total_vendido_atual = service.obter_total_vendido_bruto(
-    emitente_cnpj=emitente_resolvido,
-    periodo_ano=ano_referencia,
+    periodo_ano=periodo_ano,
     periodo_mes=periodo_mes,
-  )
-  total_vendido_anterior = service.obter_total_vendido_bruto(
-    emitente_cnpj=emitente_resolvido,
-    periodo_ano=ano_anterior,
-    periodo_mes=mes_anterior,
-  )
-  totais_mensais_brutos = service.listar_totais_vendas_mensais_bruto(
-    emitente_cnpj=emitente_resolvido,
-    periodo_ano=ano_referencia,
-  )
-  resumo_atual = resumir_vendas_por_kpis(resultados_filtrados, DashboardVendasResumo, limite).model_copy(
-    update={"total_vendido": total_vendido_atual},
-  )
-  resumo_anterior = resumir_vendas_por_kpis(resultados_anteriores, DashboardVendasResumo, limite).model_copy(
-    update={"total_vendido": total_vendido_anterior},
-  )
-
-  serie_mensal = [
-    SerieMensalVendasItem(
-      periodo_ano=ano_referencia,
-      periodo_mes=item.periodo_mes or 0,
-      total_vendido=totais_mensais_brutos.get(
-        item.periodo_mes or 0,
-        Decimal(str(item.kpis.total_vendas or 0)),
-      ),
-      quantidade_notas=int(item.kpis.quantidade_notas or 0),
-      total_impostos=(
-        Decimal(str(item.kpis.total_icms or 0))
-        + Decimal(str(item.kpis.total_ipi or 0))
-        + Decimal(str(item.kpis.total_pis or 0))
-        + Decimal(str(item.kpis.total_cofins or 0))
-      ),
-    )
-    for item in sorted(resultados_ano_atual, key=lambda resultado: resultado.periodo_mes or 0)
-    if item.periodo_mes
-  ]
-
-  return DashboardVendasResponse(
-    status="ok",
-    emitente_cnpj=emitente_resolvido,
-    periodo_ano=ano_referencia,
-    periodo_mes=periodo_mes,
-    anos_disponiveis=anos_disponiveis,
-    resumo_atual=resumo_atual,
-    resumo_anterior=resumo_anterior,
-    serie_mensal=serie_mensal,
+    limite=limite,
   )
 
 @nfe_router.get("/analise/clientes", response_model=AnaliseClientesResponse)

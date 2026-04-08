@@ -20,43 +20,40 @@ import {
 } from '@/pages/components/detalhamentoVendasHelpers';
 import { Header } from '@/pages/components/Header';
 import { StatCard } from '@/pages/components/StatCard';
+import { monthLabels } from '@/services/utils';
+
+import { usePeriodFilter } from '@/hooks/usePeriodFilter';
+import { useDashboardVendasQueries } from '@/hooks/useDashboardQueries';
 import {
   fetchNfeNotasDetalhadas,
-  fetchNfeDashboardVendas,
   fetchNfeKpis,
-  parseDecimal,
 } from '@/services/nfe';
-import { fetchSpedDashboardVendas, fetchSpedKpis } from '@/services/sped';
-import { formatCurrency, monthLabels } from '@/services/utils';
+import { fetchSpedKpis } from '@/services/sped';
+import {
+  formatCurrency,
+  formatPercent,
+  hasValidEmitenteCnpj,
+  parseDecimal,
+  calculateChange,
+} from '@/utils/formatters';
 
 const NOTAS_PAGE_SIZE = 100;
 
-const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? '').replace(/\D/g, '');
-  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
-};
-
-const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
-
 export default function DetalhamentoVendas() {
   const { user } = useAuth();
-  const [selectedMonth, setSelectedMonth] = useState('all');
-  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
-  const [detailMode, setDetailMode] = useState<DetailMode>('nota');
-  const [openNoteValues, setOpenNoteValues] = useState<string[]>([]);
-  const [openNoteClientValues, setOpenNoteClientValues] = useState<string[]>([]);
-  const [openNcmValues, setOpenNcmValues] = useState<string[]>([]);
-  const [openRegionStateValues, setOpenRegionStateValues] = useState<string[]>([]);
-  const [openRegionCityValues, setOpenRegionCityValues] = useState<string[]>([]);
-  const [openRegionClientValues, setOpenRegionClientValues] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
-
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const monthNumber = Number.parseInt(selectedMonth, 10);
-  const yearNumber = Number.parseInt(selectedYear, 10);
   const isSped = Boolean(user?.tem_sped);
+
+  const {
+    selectedMonth,
+    setSelectedMonth,
+    selectedYear,
+    setSelectedYear,
+    monthNumber,
+    year: yearNumber,
+    faturamentoPeriodo,
+  } = usePeriodFilter();
 
   const yearsQuery = useQuery({
     queryKey: ['detalhamento-vendas-anos', emitenteCnpj, isSped],
@@ -68,26 +65,25 @@ export default function DetalhamentoVendas() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const dashboardQuery = useQuery({
-    queryKey: ['detalhamento-vendas-dashboard', emitenteCnpj, isSped, yearNumber, selectedMonth],
-    queryFn: () =>
-      isSped
-        ? fetchSpedDashboardVendas({
-            emitente_cnpj: emitenteCnpj,
-            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          })
-        : fetchNfeDashboardVendas({
-            emitente_cnpj: emitenteCnpj,
-            email: user?.email,
-            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          }),
-    enabled: hasEmitenteCnpj,
-    staleTime: 5 * 60 * 1000,
+  const { dashboardQuery, mapQuery } = useDashboardVendasQueries({
+    emitenteCnpj,
+    email: user?.email,
+    temSped: user?.tem_sped,
+    year: yearNumber,
+    selectedMonth,
+    monthNumber,
+    hasEmitenteCnpj,
   });
+
+  const [detailMode, setDetailMode] = useState<DetailMode>('nota');
+  const [openNoteValues, setOpenNoteValues] = useState<string[]>([]);
+  const [openNoteClientValues, setOpenNoteClientValues] = useState<string[]>([]);
+  const [openNcmValues, setOpenNcmValues] = useState<string[]>([]);
+  const [openRegionStateValues, setOpenRegionStateValues] = useState<string[]>([]);
+  const [openRegionCityValues, setOpenRegionCityValues] = useState<string[]>([]);
+  const [openRegionClientValues, setOpenRegionClientValues] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const notasInfiniteQuery = useInfiniteQuery({
     queryKey: ['detalhamento-vendas-notas', emitenteCnpj, selectedYear, selectedMonth],
@@ -169,23 +165,11 @@ export default function DetalhamentoVendas() {
 
   const currentData = dashboardQuery.data?.resumo_atual;
   const previousData = dashboardQuery.data?.resumo_anterior;
-  const totalFaturamento = parseDecimal(currentData?.total_vendido ?? 0);
+  const totalFaturamento = parseDecimal(mapQuery.data?.total_vendido ?? currentData?.total_vendido ?? 0);
 
-  const totalSalesChange = parseDecimal(previousData?.total_vendido ?? 0)
-    ? ((totalFaturamento - parseDecimal(previousData?.total_vendido ?? 0)) /
-        parseDecimal(previousData?.total_vendido ?? 0)) *
-      100
-    : 0;
-  const ticketChange = parseDecimal(previousData?.ticket_medio ?? 0)
-    ? ((parseDecimal(currentData?.ticket_medio ?? 0) - parseDecimal(previousData?.ticket_medio ?? 0)) /
-        parseDecimal(previousData?.ticket_medio ?? 0)) *
-      100
-    : 0;
-  const totalTaxesChange = parseDecimal(previousData?.total_impostos ?? 0)
-    ? ((parseDecimal(currentData?.total_impostos ?? 0) - parseDecimal(previousData?.total_impostos ?? 0)) /
-        parseDecimal(previousData?.total_impostos ?? 0)) *
-      100
-    : 0;
+  const totalSalesChange = calculateChange(totalFaturamento, previousData?.total_vendido ?? 0);
+  const ticketChange = calculateChange(currentData?.ticket_medio ?? 0, previousData?.ticket_medio ?? 0);
+  const totalTaxesChange = calculateChange(currentData?.total_impostos ?? 0, previousData?.total_impostos ?? 0);
 
   const stats = [
     {

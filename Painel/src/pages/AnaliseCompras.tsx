@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency, monthLabels } from '@/services/utils';
 import { Header } from '@/pages/components/Header';
-import { RankingCard } from '@/pages/components/RankingCard';
+import { RankingPanelGroup, RankingConfig } from '@/pages/components/RankingPanelGroup';
 import { StatCard } from '@/pages/components/StatCard';
 import { EvolucaoChart } from '@/pages/components/EvolucaoChart';
 
@@ -184,80 +184,65 @@ export default function AnaliseFiscal() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <RankingCard
-          title="Top Fornecedores"
-          description="Fornecedores com maior valor de compras no período"
-          items={(currentData?.top_fornecedores_valor ?? []).map((row: any, index: number) => {
-            const valorTotal = parseDecimal(row.valor_total);
-            const percentual = safePercentage(valorTotal, currentTotalComprado);
+      <RankingPanelGroup
+        isLoading={dashboardQuery.isLoading}
+        totalValue={formatCurrency(currentTotalComprado)}
+        rankings={[
+          {
+            title: "Top Fornecedores",
+            description: "Fornecedores com maior valor de compras no período",
+            emptyMessage: "Sem dados para o período selecionado.",
+            items: (currentData?.top_fornecedores_valor ?? []).slice(0, 5).map((row: any, index: number) => {
+              const valorTotal = parseDecimal(row.valor_total);
+              const percentual = safePercentage(valorTotal, currentTotalComprado);
+              return {
+                key: `${row.fornecedor}-${index}`,
+                title: row.fornecedor,
+                subtitle: `${row.quantidade_documentos} documentos`,
+                value: formatCurrency(valorTotal),
+                rawValue: valorTotal,
+                percent: percentual,
+              };
+            })
+          },
+          {
+            title: "Top Produtos por Valor",
+            description: "Produtos com maior valor de compra no período",
+            emptyMessage: "Sem dados para o período selecionado.",
+            items: (currentData?.top_produtos_valor ?? []).slice(0, 5).map((row: any, index: number) => {
+              const valorTotal = parseDecimal(row.valor_total);
+              const percentual = safePercentage(valorTotal, currentTotalComprado);
+              return {
+                key: `${row.produto}-${index}`,
+                title: row.produto,
+                subtitle: `Qtd. ${parseDecimal(row.quantidade_total).toFixed(2)}`,
+                value: formatCurrency(valorTotal),
+                rawValue: valorTotal,
+                percent: percentual,
+              };
+            })
+          },
+          {
+            title: "Top Produtos por Quantidade",
+            description: "Produtos mais comprados no período",
+            emptyMessage: "Sem dados para o período selecionado.",
+            items: (currentData?.top_produtos_quantidade ?? []).slice(0, 5).map((row: any, index: number) => {
+              const quantidade = parseDecimal(row.quantidade_total);
+              const percentual = safePercentage(quantidade, currentItemCount);
+              const valorTotal = parseDecimal(row.valor_total);
+              return {
+                key: `${row.produto}-${index}-quantidade`,
+                title: row.produto,
+                subtitle: `${quantidade.toFixed(2)} itens comprados`,
+                value: formatCurrency(valorTotal),
+                rawValue: valorTotal,
+                percent: percentual,
+              };
+            })
+          }
+        ]}
+      />
 
-            return {
-              key: `${row.fornecedor}-${index}`,
-              title: row.fornecedor,
-              subtitle: `${row.quantidade_documentos} documentos`,
-              value: formatCurrency(valorTotal),
-              rawValue: valorTotal,
-              percent: percentual,
-            };
-          })}
-          isLoading={dashboardQuery.isLoading}
-          loadingMessage="Carregando ranking de fornecedores..."
-          emptyMessage="Sem dados para o período selecionado."
-          totalValue={formatCurrency(currentTotalComprado)}
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
-
-        <RankingCard
-          title="Top Produtos por Valor"
-          description="Produtos com maior valor de compra no período"
-          items={(currentData?.top_produtos_valor ?? []).map((row: any, index: number) => {
-            const valorTotal = parseDecimal(row.valor_total);
-            const percentual = safePercentage(valorTotal, currentTotalComprado);
-
-            return {
-              key: `${row.produto}-${index}`,
-              title: row.produto,
-              subtitle: `Qtd. ${parseDecimal(row.quantidade_total).toFixed(2)}`,
-              value: formatCurrency(valorTotal),
-              rawValue: valorTotal,
-              percent: percentual,
-            };
-          })}
-          isLoading={dashboardQuery.isLoading}
-          loadingMessage="Carregando ranking de produtos..."
-          emptyMessage="Sem dados para o período selecionado."
-          totalValue={formatCurrency(currentTotalComprado)}
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
-
-        <RankingCard
-          title="Top Produtos por Quantidade"
-          description="Produtos mais comprados no período"
-          items={(currentData?.top_produtos_quantidade ?? []).map((row: any, index: number) => {
-            const quantidade = parseDecimal(row.quantidade_total);
-            const percentual = safePercentage(quantidade, currentItemCount);
-            const valorTotal = parseDecimal(row.valor_total);
-
-            return {
-              key: `${row.produto}-${index}-quantidade`,
-              title: row.produto,
-              subtitle: `${quantidade.toFixed(2)} itens comprados`,
-              value: formatCurrency(valorTotal),
-              rawValue: valorTotal,
-              percent: percentual,
-            };
-          })}
-          isLoading={dashboardQuery.isLoading}
-          loadingMessage="Carregando ranking de produtos por quantidade..."
-          emptyMessage="Sem dados para o período selecionado."
-          totalValue={formatCurrency(currentTotalComprado)}
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
-      </div>
 
       <EvolucaoChart
         billingData={comprasEvolutionData}

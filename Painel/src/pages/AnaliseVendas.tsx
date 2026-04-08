@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Header } from './components/Header';
-import { RankingCard } from './components/RankingCard';
+import { RankingPanelGroup, RankingConfig } from './components/RankingPanelGroup';
 import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
 import { EvolucaoChart } from './components/EvolucaoChart';
@@ -22,6 +22,7 @@ import {
   safePercentage,
   calculateChange,
 } from '@/utils/formatters';
+import { buildRankingItems } from '@/utils/rankingUtils';
 
 interface DashboardProps {
   title?: string;
@@ -141,68 +142,41 @@ export default function Dashboard({
     ? mapQuery.data.top_clientes_valor
     : currentData?.top_clientes ?? [];
 
-  const topClientesItems = topClientesBase.slice(0, 5).map((cliente: any, index: number) => {
-    const percentual = resolvePercentual(cliente.valor_total);
-    const valorTotal = parseDecimal(cliente.valor_total ?? 0);
-    return {
-      key: `${cliente.cliente}-${index}`,
-      title: cliente.cliente ?? 'Cliente não identificado',
-      subtitle: percentual !== null ? `${percentual.toFixed(1)}% do faturamento` : 'Participação não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
+  const topClientesItems = buildRankingItems(
+    topClientesBase,
+    'cliente',
+    'Cliente não identificado',
+    resolvePercentual
+  );
 
   const topProdutosBase = mapQuery.data?.top_produtos_valor?.length
     ? mapQuery.data.top_produtos_valor
     : currentData?.top_produtos ?? [];
 
-  const topProdutosItems = topProdutosBase.slice(0, 5).map((produto: any, index: number) => {
-    const percentual = resolvePercentual(produto.valor_total);
-    const valorTotal = parseDecimal(produto.valor_total ?? 0);
-    return {
-      key: `${produto.produto}-${index}`,
-      title: produto.produto ?? 'Produto não identificado',
-      subtitle: percentual !== null ? `${percentual.toFixed(1)}% do faturamento` : 'Participação não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
+  const topProdutosItems = buildRankingItems(
+    topProdutosBase,
+    'produto',
+    'Produto não identificado',
+    resolvePercentual
+  );
 
   const topCidadesBase = mapQuery.data?.top_cidades_valor?.length
     ? mapQuery.data.top_cidades_valor
     : currentData?.top_cidades ?? [];
 
-  const topCidadesItems = topCidadesBase.slice(0, 5).map((cidade: any, index: number) => {
-    const percentual = resolvePercentual(cidade.valor_total);
-    const valorTotal = parseDecimal(cidade.valor_total ?? 0);
-    return {
-      key: `${cidade.cidade}-${'uf' in cidade ? cidade.uf ?? 'sem-uf' : 'sem-uf'}-${index}`,
-      title: cidade.cidade ?? 'Cidade não identificada',
-      subtitle: percentual !== null ? `${percentual.toFixed(1)}% do faturamento` : 'Participação não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
+  const topCidadesItems = buildRankingItems(
+    topCidadesBase,
+    'cidade_uf',
+    'Cidade não identificada',
+    resolvePercentual
+  );
 
-  const mapTopCidadesItems = (mapQuery.data?.top_cidades_valor ?? []).map((cidade: any, index: number) => {
-    const valorTotal = parseDecimal(cidade.valor_total ?? 0);
-    const percentual = resolvePercentual(valorTotal);
-    const cidadeComUf = cidade.uf?.trim()
-      ? `${cidade.cidade ?? 'Cidade não identificada'} - ${cidade.uf.trim().toUpperCase()}`
-      : cidade.cidade ?? 'Cidade não identificada';
-    return {
-      key: `${cidade.cidade}-${cidade.uf ?? 'sem-uf'}-${index}`,
-      title: cidadeComUf,
-      subtitle: percentual !== null ? `${percentual.toFixed(1)}% do faturamento` : 'Participção não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
+  const mapTopCidadesItems = buildRankingItems(
+    mapQuery.data?.top_cidades_valor ?? [],
+    'cidade_uf',
+    'Cidade não identificada',
+    resolvePercentual
+  );
 
   const mapTopRegioesItems = (mapQuery.data?.top_regioes_valor ?? []).map((regiao: any) => ({
     regiao: regiao.regiao,
@@ -243,41 +217,15 @@ export default function Dashboard({
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <RankingCard
-          title="Top Clientes"
-          description="Clientes com maior faturamento"
-          items={topClientesItems}
-          isLoading={dashboardQuery.isLoading}
-          loadingMessage="Carregando ranking..."
-          emptyMessage="Nenhum cliente registrado."
-          totalValue={formatCurrency(totalFaturamento)}
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
-        <RankingCard
-          title="Top Produtos"
-          description="Itens com maior faturamento"
-          items={topProdutosItems}
-          isLoading={dashboardQuery.isLoading}
-          loadingMessage="Carregando ranking..."
-          emptyMessage="Nenhum produto registrado."
-          totalValue={formatCurrency(totalFaturamento)}
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
-        <RankingCard
-          title="Top Cidades"
-          description="Cidades com maior faturamento"
-          items={topCidadesItems}
-          isLoading={dashboardQuery.isLoading}
-          loadingMessage="Carregando ranking..."
-          emptyMessage="Nenhuma cidade registrada."
-          totalValue={formatCurrency(totalFaturamento)}
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
-      </div>
+      <RankingPanelGroup
+        rankings={[
+          { title: "Top Clientes", description: "Clientes com maior faturamento", items: topClientesItems, emptyMessage: "Nenhum cliente registrado." },
+          { title: "Top Produtos", description: "Itens com maior faturamento", items: topProdutosItems, emptyMessage: "Nenhum produto registrado." },
+          { title: "Top Cidades", description: "Cidades com maior faturamento", items: topCidadesItems, emptyMessage: "Nenhuma cidade registrada." },
+        ]}
+        isLoading={dashboardQuery.isLoading}
+        totalValue={formatCurrency(totalFaturamento)}
+      />
 
       <EvolucaoChart
         billingData={salesEvolutionData}

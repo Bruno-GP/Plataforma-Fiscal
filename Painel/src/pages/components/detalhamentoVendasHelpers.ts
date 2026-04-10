@@ -3,7 +3,7 @@ import { parseDecimal } from '@/services/nfe';
 
 export const hierarchyLabelClass = 'text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400';
 
-export type DetailMode = 'nota' | 'regiao';
+export type DetailMode = 'nota' | 'regiao' | 'fiscal';
 
 export type RegionProduct = {
   key: string;
@@ -212,25 +212,25 @@ export const buildRegionHierarchy = (notas: NfeNotaDetalhada[]): RegionState[] =
       const productKey = `${clientKey}-produto-${productCode}-${productDescription.toLowerCase()}`;
 
       let productEntry = clientEntry.products.find((entry) => entry.key === productKey);
-        if (!productEntry) {
-          productEntry = {
-            key: productKey,
-            code: productCode,
-            description: productDescription,
-            totalQuantity: 0,
-            totalValue: 0,
-            notesCount: 0,
-            noteNumbers: [],
-          };
-          clientEntry.products.push(productEntry);
-        }
+      if (!productEntry) {
+        productEntry = {
+          key: productKey,
+          code: productCode,
+          description: productDescription,
+          totalQuantity: 0,
+          totalValue: 0,
+          notesCount: 0,
+          noteNumbers: [],
+        };
+        clientEntry.products.push(productEntry);
+      }
 
-        productEntry.totalQuantity += parseDecimal(item.quantidade);
-        productEntry.totalValue += parseDecimal(item.valor_total);
-        productEntry.notesCount += 1;
-        if (!productEntry.noteNumbers.includes(nota.numero_nf)) {
-          productEntry.noteNumbers.push(nota.numero_nf);
-        }
+      productEntry.totalQuantity += parseDecimal(item.quantidade);
+      productEntry.totalValue += parseDecimal(item.valor_total);
+      productEntry.notesCount += 1;
+      if (!productEntry.noteNumbers.includes(nota.numero_nf)) {
+        productEntry.noteNumbers.push(nota.numero_nf);
+      }
     }
   }
 

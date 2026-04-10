@@ -8,21 +8,32 @@ const modeButtonActiveClass =
 const modeButtonInactiveClass =
   'border-slate-700 bg-slate-900/80 text-slate-100 hover:border-sky-500/60 hover:bg-slate-800';
 
+type ModeOption = {
+  key: DetailMode;
+  title: string;
+  description: string;
+};
+
 type Props = {
   detailMode: DetailMode;
   onChange: (mode: DetailMode) => void;
+  options?: ModeOption[];
 };
 
-const modeButtons = [
-  { key: 'nota' as const, title: 'Detalhamento por nota', description: 'Nota > cliente > NCM > produto' },
-  { key: 'regiao' as const, title: 'Detalhamento por regiao', description: 'Estado > cidade > cliente > produto' },
+const defaultModeButtons: ModeOption[] = [
+  { key: 'nota', title: 'Detalhamento por nota', description: 'Nota > cliente > NCM > produto' },
+  { key: 'regiao', title: 'Detalhamento por regiao', description: 'Estado > cidade > cliente > produto' },
 ];
 
-export function DetalhamentoVendasModeSelector({ detailMode, onChange }: Props) {
+export function DetalhamentoVendasModeSelector({
+  detailMode,
+  onChange,
+  options = defaultModeButtons,
+}: Props) {
   return (
     <div className="rounded-2xl border border-slate-800/80 bg-slate-950/40 px-4 py-4">
-      <div className="mx-auto grid max-w-5xl gap-3 md:grid-cols-2">
-        {modeButtons.map((button) => {
+      <div className={`mx-auto grid max-w-5xl gap-3 ${options.length > 1 ? 'md:grid-cols-2' : 'md:grid-cols-1'}`}>
+        {options.map((button) => {
           const isActive = detailMode === button.key;
 
           return (

@@ -4,7 +4,9 @@ import { ArrowRight, Box, Package, ShoppingCart, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Header } from '@/pages/components/Header';
 import { RankingPanelGroup } from '@/pages/components/RankingPanelGroup';
 import { StatCard } from '@/pages/components/StatCard';
@@ -26,6 +28,7 @@ export default function DetalhamentoCompras() {
   const { user } = useAuth();
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
+  const isSped = Boolean(user?.tem_sped);
 
   const {
     selectedMonth,

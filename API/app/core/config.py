@@ -54,10 +54,27 @@ def get_session_cookie_secure() -> bool:
 
 
 def get_cors_allow_origins() -> str:
-    default_value = "http://localhost:5173"
     if is_production():
         default_value = ""
-    return os.getenv("CORS_ALLOW_ORIGINS", default_value)
+    else:
+        default_value = ",".join(
+            [
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
+            ]
+        )
+
+    raw_value = os.getenv("CORS_ALLOW_ORIGINS")
+    if raw_value is None:
+        return default_value
+
+    normalized = raw_value.strip()
+    if not normalized and not is_production():
+        return default_value
+
+    return raw_value
 
 
 def get_cors_allow_origin_regex() -> str:
@@ -65,7 +82,16 @@ def get_cors_allow_origin_regex() -> str:
         default_value = ""
     else:
         default_value = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
-    return os.getenv("CORS_ALLOW_ORIGIN_REGEX", default_value).strip()
+
+    raw_value = os.getenv("CORS_ALLOW_ORIGIN_REGEX")
+    if raw_value is None:
+        return default_value
+
+    normalized = raw_value.strip()
+    if not normalized and not is_production():
+        return default_value
+
+    return normalized
 
 
 def get_cors_allow_credentials() -> bool:

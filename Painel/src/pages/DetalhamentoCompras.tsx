@@ -7,64 +7,59 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { useAuth } from '@/contexts/AuthContext';
 import { Header } from '@/pages/components/Header';
-import { RankingCard } from '@/pages/components/RankingCard';
+import { RankingPanelGroup } from '@/pages/components/RankingPanelGroup';
 import { StatCard } from '@/pages/components/StatCard';
-import {
-  fetchNfeDashboardCompras,
-  parseDecimal,
-} from '@/services/nfe';
-import { fetchSpedDashboardCompras } from '@/services/sped';
-import { formatCurrency, monthLabels } from '@/services/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { monthLabels } from '@/services/utils';
 
-const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? '').replace(/\D/g, '');
-  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
-};
+import { usePeriodFilter } from '@/hooks/usePeriodFilter';
+import { useDashboardComprasQueries } from '@/hooks/useDashboardQueries';
+import {
+  formatCurrency,
+  formatPercent,
+  hasValidEmitenteCnpj,
+  parseDecimal,
+  calculateChange,
+  safePercentage
+} from '@/utils/formatters';
 
 export default function DetalhamentoCompras() {
   const { user } = useAuth();
-  const [selectedMonth, setSelectedMonth] = useState('all');
-  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
-
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const monthNumber = Number.parseInt(selectedMonth, 10);
-  const yearNumber = Number.parseInt(selectedYear, 10);
   const isSped = Boolean(user?.tem_sped);
 
-  const dashboardQuery = useQuery({
-    queryKey: ['detalhamento-compras-dashboard', emitenteCnpj, isSped, yearNumber, selectedMonth],
-    queryFn: () =>
-      isSped
-        ? fetchSpedDashboardCompras({
-            emitente_cnpj: emitenteCnpj,
-            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          })
-        : fetchNfeDashboardCompras({
-            emitente_cnpj: emitenteCnpj,
-            email: user?.email,
-            periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          }),
-    enabled: hasEmitenteCnpj,
-    staleTime: 5 * 60 * 1000,
+  const {
+    selectedMonth,
+    setSelectedMonth,
+    selectedYear,
+    setSelectedYear,
+    monthNumber,
+    year,
+    faturamentoPeriodo,
+  } = usePeriodFilter();
+
+  const { dashboardQuery } = useDashboardComprasQueries({
+    emitenteCnpj,
+    email: user?.email,
+    temSped: user?.tem_sped,
+    year,
+    selectedMonth,
+    monthNumber,
+    hasEmitenteCnpj,
   });
 
   const availableYears = dashboardQuery.data?.anos_disponiveis?.length
     ? dashboardQuery.data.anos_disponiveis
-    : [yearNumber];
+    : [year];
 
   useEffect(() => {
     if (!dashboardQuery.data?.anos_disponiveis?.length) return;
-    if (!dashboardQuery.data.anos_disponiveis.includes(yearNumber)) {
+    if (!dashboardQuery.data.anos_disponiveis.includes(year)) {
       setSelectedYear(String(dashboardQuery.data.anos_disponiveis[0]));
     }
-  }, [dashboardQuery.data?.anos_disponiveis, yearNumber]);
+  }, [dashboardQuery.data?.anos_disponiveis, year, setSelectedYear]);
 
   const currentData = dashboardQuery.data?.resumo_atual;
   const previousData = dashboardQuery.data?.resumo_anterior;
@@ -89,14 +84,11 @@ export default function DetalhamentoCompras() {
   const currentTicketMedio = currentDocCount ? currentTotalComprado / currentDocCount : 0;
   const previousTicketMedio = previousDocCount ? previousTotalComprado / previousDocCount : 0;
 
-  const safePercentage = (current: number, previous: number) =>
-    previous ? ((current - previous) / previous) * 100 : 0;
-
   const stats = [
     {
       title: 'Total Comprado',
       value: formatCurrency(currentTotalComprado),
-      description: `${safePercentage(currentTotalComprado, previousTotalComprado) >= 0 ? '+' : ''}${safePercentage(currentTotalComprado, previousTotalComprado).toFixed(1)}%`,
+      description: formatPercent(calculateChange(currentTotalComprado, previousTotalComprado)),
       icon: ShoppingCart,
       trend: currentTotalComprado >= previousTotalComprado ? 'up' : 'down',
       accentClass: 'border-l-sky-500',
@@ -104,7 +96,7 @@ export default function DetalhamentoCompras() {
     {
       title: 'Documentos de Compra (Top 5 fornecedores)',
       value: currentDocCount.toString(),
-      description: `${safePercentage(currentDocCount, previousDocCount) >= 0 ? '+' : ''}${safePercentage(currentDocCount, previousDocCount).toFixed(1)}%`,
+      description: formatPercent(calculateChange(currentDocCount, previousDocCount)),
       icon: Truck,
       trend: currentDocCount >= previousDocCount ? 'up' : 'down',
       accentClass: 'border-l-emerald-500',
@@ -112,15 +104,15 @@ export default function DetalhamentoCompras() {
     {
       title: 'Quantidade Comprada',
       value: currentItemCount.toFixed(2),
-      description: `${safePercentage(currentItemCount, previousItemCount) >= 0 ? '+' : ''}${safePercentage(currentItemCount, previousItemCount).toFixed(1)}%`,
+      description: formatPercent(calculateChange(currentItemCount, previousItemCount)),
       icon: Package,
       trend: currentItemCount >= previousItemCount ? 'up' : 'down',
       accentClass: 'border-l-amber-400',
     },
     {
-      title: 'Ticket Medio por Compra',
+      title: 'Ticket Médio por Compra',
       value: formatCurrency(currentTicketMedio),
-      description: `${safePercentage(currentTicketMedio, previousTicketMedio) >= 0 ? '+' : ''}${safePercentage(currentTicketMedio, previousTicketMedio).toFixed(1)}%`,
+      description: formatPercent(calculateChange(currentTicketMedio, previousTicketMedio)),
       icon: Box,
       trend: currentTicketMedio >= previousTicketMedio ? 'up' : 'down',
       accentClass: 'border-l-violet-500',
@@ -263,22 +255,14 @@ export default function DetalhamentoCompras() {
       )}
 
       {hasDetalhamentoCompras && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {purchasePanels.map((panel) => (
-            <RankingCard
-              key={panel.title}
-              title={panel.title}
-              description={panel.description}
-              items={panel.items}
-              isLoading={dashboardQuery.isLoading}
-              loadingMessage={panel.loadingMessage}
-              emptyMessage="Sem dados para o periodo selecionado."
-              totalValue={formatCurrency(currentTotalComprado)}
-              showAbcReport={false}
-              showAbcClassification={false}
-            />
-          ))}
-        </div>
+        <RankingPanelGroup
+          rankings={purchasePanels.map(p => ({
+            ...p,
+            emptyMessage: "Sem dados para o periodo selecionado.",
+          }))}
+          isLoading={dashboardQuery.isLoading}
+          totalValue={formatCurrency(currentTotalComprado)}
+        />
       )}
     </div>
   );

@@ -1,6 +1,26 @@
 # API Plataforma Fiscal
 
-Backend em FastAPI responsável por autenticação, importação fiscal, processamento e consultas analíticas.
+Backend em FastAPI responsavel por autenticacao, importacao fiscal, processamento e consultas analiticas.
+
+## Atualizacao da documentacao
+
+### O que foi atualizado
+
+- A lista de endpoints e modulos foi revisada para refletir a API atualmente exposta em `/api`.
+- A secao de regras de negocio agora considera o fluxo separado entre XML/NFe e SPED.
+- A documentacao de ambiente foi ajustada para incluir CORS, banco dedicado para SPED e configuracao opcional de OpenAI.
+
+### O que foi adicionado
+
+- Modulo `/api/ncm` com sincronizacao IBPT e consulta tributaria por NCM/UF.
+- Referencia ao material operacional em `API/docs/ibpt-cron.md`.
+- Registro das migracoes SQL em `API/migrations/`.
+- Registro do startup que garante colunas e tabelas auxiliares no banco.
+
+### O que foi tirado
+
+- A descricao antiga focada apenas em XML/NFe foi substituida por uma visao mais fiel ao backend atual, que cobre tambem SPED e NCM.
+- O README deixou de sugerir que a estrutura SQL esta concentrada em um unico ponto; agora o texto informa a distribuicao real entre scripts, models e migrations.
 
 ## Resumo
 
@@ -26,6 +46,7 @@ API/
 |   |-- api/
 |   |   |-- auth/
 |   |   |-- geo/
+|   |   |-- ncm/
 |   |   |-- nfe/
 |   |   `-- sped/
 |   |-- core/
@@ -35,12 +56,15 @@ API/
 |   |-- file/
 |   |-- requirements.txt
 |   `-- main.py
+|-- docs/
+|-- migrations/
+|-- scripts/
 `-- README.md
 ```
 
 ## Como executar
 
-Na raiz do repositório:
+Na raiz do repositorio:
 
 ```bash
 pip install -r API/app/requirements.txt
@@ -53,9 +77,9 @@ Endpoints locais:
 - `http://127.0.0.1:8000/health`
 - `http://127.0.0.1:8000/docs`
 
-## Configuração de ambiente
+## Configuracao de ambiente
 
-As variáveis são carregadas de `API/app/.env`.
+As variaveis sao carregadas de `API/app/.env`.
 
 ### Banco principal
 
@@ -87,11 +111,11 @@ CORS_ALLOW_CREDENTIALS=true
 CORS_ALLOW_ORIGIN_REGEX=
 ```
 
-Observações:
+Observacoes:
 
-- A aplicação expande automaticamente aliases `localhost` e `127.0.0.1`.
-- Se `CORS_ALLOW_ORIGINS=*`, `allow_credentials` é desativado por segurança.
-- Existe regex local padrão para suportar portas variáveis em desenvolvimento.
+- A aplicacao expande automaticamente aliases `localhost` e `127.0.0.1`.
+- Se `CORS_ALLOW_ORIGINS=*`, `allow_credentials` e desativado por seguranca.
+- Existe regex local padrao para suportar portas variaveis em desenvolvimento.
 
 ### OpenAI
 
@@ -100,9 +124,9 @@ OPENAI_API_KEY=<sua-chave>
 OPENAI_REPORT_MODEL=gpt-4o-mini
 ```
 
-`OPENAI_API_KEY` só é obrigatória quando `gerar_relatorio_ia=true`.
+`OPENAI_API_KEY` so e obrigatoria quando `gerar_relatorio_ia=true`.
 
-## Módulos de rota
+## Modulos de rota
 
 - `/api/auth`
 - `/api/nfe`
@@ -133,6 +157,7 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `GET /api/nfe/analise/compras`
 - `GET /api/nfe/analise/vendas`
 - `GET /api/nfe/analise/clientes`
+- `GET /api/nfe/analise/fiscal/hierarquia`
 
 ### SPED
 
@@ -145,6 +170,7 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `GET /api/sped/analise/compras`
 - `GET /api/sped/analise/vendas`
 - `GET /api/sped/analise/clientes`
+- `GET /api/sped/analise/fiscal/hierarquia`
 
 ### Geo
 
@@ -156,26 +182,26 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `POST /api/ncm/ibpt/sincronizar`
 - `GET /api/ncm/tributacao`
 
-## Regras de negócio
+## Regras de negocio
 
-- Empresa com `tem_sped=true` não pode usar rotas XML.
-- Empresa com `tem_sped=false` não pode usar rotas SPED.
-- NFe aceita até `10.000` arquivos por importação e apenas `.xml`.
-- SPED aceita até `500` arquivos por importação e apenas `.txt`.
-- A validação de CNPJ ocorre em vários endpoints com janela mínima e máxima de tamanho.
+- Empresa com `tem_sped=true` nao pode usar rotas XML.
+- Empresa com `tem_sped=false` nao pode usar rotas SPED.
+- NFe aceita ate `10.000` arquivos por importacao e apenas `.xml`.
+- SPED aceita ate `500` arquivos por importacao e apenas `.txt`.
+- A validacao de CNPJ ocorre em varios endpoints com janela minima e maxima de tamanho.
 
-## Relatórios com IA
+## Relatorios com IA
 
-As rotas de análise aceitam geração opcional de relatório:
+As rotas de analise aceitam geracao opcional de relatorio:
 
 - `gerar_relatorio_ia=true`
 - `formato_relatorio=executivo|analitico`
-- `layout` disponível para compras e vendas
+- `layout` disponivel para compras e vendas
 
-Implementação atual:
+Implementacao atual:
 
-- O serviço usa `OpenAI().responses.create(...)`
-- Modelo padrão: `gpt-4o-mini`
+- O servico usa `OpenAI().responses.create(...)`
+- Modelo padrao: `gpt-4o-mini`
 - Prompts ficam em `API/app/services/AI/Agents/`
 
 ## Arquivos e dados auxiliares
@@ -183,23 +209,26 @@ Implementação atual:
 - Scripts SQL: `API/app/file/sql/`
 - Prompt templates: `API/app/services/AI/Agents/`
 - GeoJSON local: `API/app/services/Municipios/`
-- Arquivos de exemplo e massa de teste: `API/app/file/`
+- Catalogo NCM e arquivos IBPT: `API/app/services/NCM/`
+- Guia operacional: `API/docs/ibpt-cron.md`
+- Script manual de sincronizacao: `API/scripts/sync_ibpt.py`
 
 ## Banco de dados
 
-- Não há mecanismo de migração automatizado no repositório.
-- A estrutura SQL está distribuída entre scripts em `file/sql/` e `models/`.
-- Há suporte para separação entre base NFe e base SPED.
+- Nao ha mecanismo de migracao automatizado no repositorio.
+- A estrutura SQL esta distribuida entre `app/file/sql/`, `app/models/` e `migrations/`.
+- Ha suporte para separacao entre base NFe e base SPED.
+- No startup, a aplicacao tenta garantir a coluna `tem_sped` e as tabelas auxiliares de NCM/IBPT.
 
 ## Respostas e erros comuns
 
-- `400 Bad Request`: parâmetros inválidos, empresa em fluxo errado, arquivo inválido
-- `401 Unauthorized`: falha de autenticação
-- `404 Not Found`: sem dados, sem pendências ou período inexistente
-- `502 Bad Gateway`: falha ao gerar relatório com IA
+- `400 Bad Request`: parametros invalidos, empresa em fluxo errado, arquivo invalido
+- `401 Unauthorized`: falha de autenticacao
+- `404 Not Found`: sem dados, sem pendencias ou periodo inexistente
+- `502 Bad Gateway`: falha ao gerar relatorio com IA ou ao sincronizar dados externos
 - `503 Service Unavailable`: indisponibilidade de banco ou OpenAI
 
-## Observações de manutenção
+## Observacoes de manutencao
 
-- O nome exibido no `FastAPI(...)` ainda está como `API - Agente Extrator NFe`, embora a API hoje cubra NFe e SPED.
+- O nome exibido no `FastAPI(...)` ainda esta como `API - Agente Extrator NFe`, embora a API hoje cubra NFe, SPED e NCM.
 - Consulte sempre `/docs` para confirmar schemas e contratos atualizados.

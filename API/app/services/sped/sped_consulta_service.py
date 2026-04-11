@@ -792,6 +792,282 @@ class SpedConsultaService:
       ],
     }
 
+  def analisar_fiscal_hierarquia(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    nivel_atual: Optional[str] = None,
+    estado: Optional[str] = None,
+    cidade: Optional[str] = None,
+    ncm: Optional[str] = None,
+    produto_codigo: Optional[str] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    filtros = [
+      "regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s",
+      "d.tipo_operacao = 'saida'",
+      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
+    ]
+    params: list[object] = [cnpj]
+
+    filtros_kpis = ["regexp_replace(cnpj_emitente, '\\D', '', 'g') = %s"]
+    params_kpis: list[object] = [cnpj]
+
+    if periodo_ano is not None:
+      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
+      params.append(periodo_ano)
+      filtros_kpis.append("periodo_ano = %s")
+      params_kpis.append(periodo_ano)
+
+    if periodo_mes is not None:
+      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
+      params.append(periodo_mes)
+      filtros_kpis.append("periodo_mes = %s")
+      params_kpis.append(periodo_mes)
+
+    if estado and estado.strip():
+      filtros.append("UPPER(COALESCE(NULLIF(TRIM(p.uf), ''), 'Sem UF')) = %s")
+      params.append(estado.strip().upper())
+
+    if cidade and cidade.strip():
+      filtros.append(
+        "UPPER(COALESCE(NULLIF(TRIM(p.municipio_nome), ''), NULLIF(TRIM(p.municipio), ''), 'Cidade nao identificada')) = %s"
+      )
+      params.append(cidade.strip().upper())
+
+    if ncm and ncm.strip():
+      filtros.append("COALESCE(NULLIF(regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g'), ''), '00000000') = %s")
+      params.append("".join(ch for ch in ncm if ch.isdigit()))
+
+    if produto_codigo and produto_codigo.strip():
+      filtros.append("COALESCE(NULLIF(TRIM(pr.codigo), ''), 'SEM-CODIGO') = %s")
+      params.append(produto_codigo.strip())
+
+    where_clause = " AND ".join(filtros)
+    where_clause_kpis = " AND ".join(filtros_kpis)
+    limite_consulta = limite if limite is not None else 100000
+
+    base_cte = f"""
+      WITH base AS (
+        SELECT
+          d.id AS documento_id,
+          COALESCE(NULLIF(TRIM(p.uf), ''), 'Sem UF') AS estado,
+          COALESCE(
+            NULLIF(TRIM(p.municipio_nome), ''),
+            NULLIF(TRIM(p.municipio), ''),
+            'Cidade nao identificada'
+          ) AS cidade,
+          COALESCE(NULLIF(regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g'), ''), '00000000') AS ncm,
+          COALESCE(NULLIF(TRIM(nc.descricao), ''), 'NCM sem descricao') AS descricao_ncm,
+          COALESCE(NULLIF(TRIM(pr.codigo), ''), 'SEM-CODIGO') AS produto_codigo,
+          COALESCE(NULLIF(TRIM(pr.descricao), ''), 'Produto sem descricao') AS produto_descricao,
+          COALESCE(i.valor_total, 0) AS faturamento
+        FROM public.sped_documentos_fiscais d
+        JOIN public.sped_documento_itens i
+          ON i.documento_id = d.id
+        LEFT JOIN public.sped_participantes p
+          ON p.id = d.participante_id
+        LEFT JOIN public.sped_produtos pr
+          ON pr.id = i.produto_id
+        LEFT JOIN public.ncm_catalogo nc
+          ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
+             = COALESCE(NULLIF(regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g'), ''), '00000000')
+        WHERE {where_clause}
+      )
+    """
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          f"""
+          SELECT
+            COALESCE(SUM(icms_valor_debitado), 0) + COALESCE(SUM(ipi_valor), 0)
+          FROM public.sped_kpis_fiscal
+          WHERE {where_clause_kpis}
+          """,
+          tuple(params_kpis),
+        )
+        row_total_impostos = cur.fetchone()
+        total_impostos = row_total_impostos[0] if row_total_impostos else Decimal("0.00")
+
+        cur.execute(
+          f"""
+          {base_cte}
+          SELECT
+            COALESCE(SUM(faturamento), 0) AS total_faturamento,
+            COUNT(DISTINCT documento_id) AS quantidade_documentos,
+            COUNT(DISTINCT estado) AS total_estados,
+            COUNT(DISTINCT CONCAT(cidade, '::', estado)) AS total_cidades,
+            COUNT(DISTINCT ncm) AS total_ncms,
+            COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) AS total_produtos
+          FROM base
+          """,
+          tuple(params),
+        )
+        resumo_row = cur.fetchone()
+
+        total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
+        percentual_total = (
+          (total_impostos / total_faturamento) * Decimal("100")
+          if total_faturamento
+          else Decimal("0.00")
+        )
+        cur.execute(
+          f"""
+          {base_cte}
+          SELECT
+            estado,
+            cidade,
+            ncm,
+            descricao_ncm,
+            produto_codigo,
+            produto_descricao,
+            COALESCE(SUM(faturamento), 0) AS faturamento
+          FROM base
+          GROUP BY 1, 2, 3, 4, 5, 6
+          ORDER BY 1 ASC, 2 ASC, 7 DESC, 5 ASC
+          LIMIT %s
+          """,
+          tuple([*params, limite_consulta]),
+        )
+        hierarquia = []
+        for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento in cur.fetchall():
+          faturamento_item = faturamento or Decimal("0.00")
+          imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+          hierarquia.append({
+            "estado": uf_item,
+            "cidade": _normalizar_nome_cidade(cidade_item),
+            "uf": uf_item,
+            "ncm": ncm_item,
+            "descricao_ncm": descricao_item,
+            "produto_codigo": codigo_item,
+            "produto": produto_item,
+            "faturamento": faturamento_item,
+            "imposto_valor": imposto_valor,
+            "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+          })
+        nivel_resolvido = nivel_atual or ("produto" if ncm else "ncm" if cidade else "cidade" if estado else "estado")
+        itens_nivel_atual: list[dict] = []
+        por_estado: list[dict] = []
+        por_cidade: list[dict] = []
+        por_ncm: list[dict] = []
+        por_produto: list[dict] = []
+
+        if nivel_resolvido == "estado":
+          cur.execute(
+            f"""
+            {base_cte}
+            SELECT estado, COALESCE(SUM(faturamento), 0) AS faturamento
+            FROM base
+            GROUP BY 1
+            ORDER BY 2 DESC, 1 ASC
+            LIMIT %s
+            """,
+            tuple([*params, limite_consulta]),
+          )
+          for uf_item, faturamento in cur.fetchall():
+            faturamento_item = faturamento or Decimal("0.00")
+            imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+            por_estado.append({
+              "estado": uf_item,
+              "faturamento": faturamento_item,
+              "imposto_valor": imposto_valor,
+              "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+            })
+          itens_nivel_atual = por_estado
+        elif nivel_resolvido == "cidade":
+          cur.execute(
+            f"""
+            {base_cte}
+            SELECT cidade, estado, COALESCE(SUM(faturamento), 0) AS faturamento
+            FROM base
+            GROUP BY 1, 2
+            ORDER BY 3 DESC, 1 ASC, 2 ASC
+            LIMIT %s
+            """,
+            tuple([*params, limite_consulta]),
+          )
+          for cidade_item, uf_item, faturamento in cur.fetchall():
+            faturamento_item = faturamento or Decimal("0.00")
+            imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+            por_cidade.append({
+              "cidade": _normalizar_nome_cidade(cidade_item),
+              "uf": uf_item,
+              "faturamento": faturamento_item,
+              "imposto_valor": imposto_valor,
+              "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+            })
+          itens_nivel_atual = por_cidade
+        elif nivel_resolvido == "ncm":
+          cur.execute(
+            f"""
+            {base_cte}
+            SELECT ncm, descricao_ncm, COALESCE(SUM(faturamento), 0) AS faturamento
+            FROM base
+            GROUP BY 1, 2
+            ORDER BY 3 DESC, 1 ASC
+            LIMIT %s
+            """,
+            tuple([*params, limite_consulta]),
+          )
+          for ncm_item, descricao_item, faturamento in cur.fetchall():
+            faturamento_item = faturamento or Decimal("0.00")
+            imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+            por_ncm.append({
+              "ncm": ncm_item,
+              "descricao": descricao_item,
+              "faturamento": faturamento_item,
+              "imposto_valor": imposto_valor,
+              "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+            })
+          itens_nivel_atual = por_ncm
+        else:
+          cur.execute(
+            f"""
+            {base_cte}
+            SELECT produto_codigo, produto_descricao, COALESCE(SUM(faturamento), 0) AS faturamento
+            FROM base
+            GROUP BY 1, 2
+            ORDER BY 3 DESC, 1 ASC, 2 ASC
+            LIMIT %s
+            """,
+            tuple([*params, limite_consulta]),
+          )
+          for codigo_item, produto_item, faturamento in cur.fetchall():
+            faturamento_item = faturamento or Decimal("0.00")
+            imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+            por_produto.append({
+              "produto_codigo": codigo_item,
+              "produto": produto_item,
+              "faturamento": faturamento_item,
+              "imposto_valor": imposto_valor,
+              "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+            })
+          itens_nivel_atual = por_produto
+
+    return {
+      "emitente_cnpj": cnpj,
+      "periodo_ano": periodo_ano,
+      "periodo_mes": periodo_mes,
+      "nivel_atual": nivel_resolvido,
+      "total_faturamento": total_faturamento or Decimal("0.00"),
+      "total_impostos": total_impostos or Decimal("0.00"),
+      "percentual_impostos_sobre_faturamento": percentual_total,
+      "quantidade_documentos": resumo_row[1] if resumo_row else 0,
+      "total_estados": resumo_row[2] if resumo_row else 0,
+      "total_cidades": resumo_row[3] if resumo_row else 0,
+      "total_ncms": resumo_row[4] if resumo_row else 0,
+      "total_produtos": resumo_row[5] if resumo_row else 0,
+      "hierarquia": hierarquia,
+      "itens_nivel_atual": itens_nivel_atual,
+      "por_estado": por_estado,
+      "por_cidade": por_cidade,
+      "por_ncm": por_ncm,
+      "por_produto": por_produto,
+    }
+
   def analisar_clientes(
     self,
     emitente_cnpj: str,

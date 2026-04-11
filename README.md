@@ -1,27 +1,48 @@
 # Plataforma Fiscal
 
-Repositório com duas aplicações que operam em conjunto:
+Repositorio com duas aplicacoes que operam em conjunto:
 
-- `API/`: backend em FastAPI para autenticação, importação fiscal, processamento e consultas analíticas.
-- `Painel/`: frontend em React + Vite para operação diária, importações, dashboards e relatórios.
+- `API/`: backend em FastAPI para autenticacao, importacao fiscal, processamento e consultas analiticas.
+- `Painel/`: frontend em React + Vite para operacao diaria, importacoes, dashboards e relatorios.
 
-Cada módulo possui seu próprio guia:
+Cada modulo possui seu proprio guia:
 
 - [API/README.md](C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\API\README.md)
 - [Painel/README.md](C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\Painel\README.md)
 
-## Visão geral
+## Atualizacao da documentacao
+
+### O que foi atualizado
+
+- A documentacao foi alinhada com as rotas ativas do painel e com os modulos reais publicados pela API.
+- As secoes de funcionalidades agora refletem o fluxo atual de XML, SPED, analise fiscal, inconsistencias e integracao com NCM/IBPT.
+- As observacoes operacionais foram revisadas para deixar claro o que segue ativo, o que esta desabilitado e o que ficou fora do roteador principal.
+
+### O que foi adicionado
+
+- Registro da pagina de analise fiscal por hierarquia `Estado > Cidade > NCM > Produto`.
+- Registro da central de inconsistencias, com pendencias fiscais e historico local das ultimas operacoes.
+- Registro do modulo NCM/IBPT da API, incluindo consulta tributaria e sincronizacao de catalogo.
+- Referencia ao guia operacional do cron IBPT em `API/docs/ibpt-cron.md`.
+
+### O que foi tirado
+
+- A documentacao antiga deixava implicito que apenas vendas, compras e clientes estavam disponiveis como analise principal; isso foi substituido pela lista real de telas ativas.
+- As paginas `Atualizacoes` e `Configuracoes` continuam no codigo, mas foram retiradas do fluxo ativo do roteador principal e agora isso esta documentado explicitamente.
+- O chat permanece fora do layout principal e foi removido da descricao de funcionalidades ativas.
+
+## Visao geral
 
 Fluxo principal da plataforma:
 
-1. A empresa é cadastrada e passa a ter um perfil fiscal definido por `tem_sped`.
-2. O Painel autentica o usuário e direciona o fluxo conforme o perfil:
-   - `tem_sped=false`: operação com XML/NFe
-   - `tem_sped=true`: operação com SPED Fiscal
-3. Os arquivos são importados para staging.
+1. A empresa e cadastrada e passa a ter um perfil fiscal definido por `tem_sped`.
+2. O Painel autentica o usuario e direciona o fluxo conforme o perfil:
+   - `tem_sped=false`: operacao com XML/NFe
+   - `tem_sped=true`: operacao com SPED Fiscal
+3. Os arquivos sao importados para staging.
 4. A API processa os arquivos pendentes e consolida KPIs.
-5. O Painel exibe dashboards de vendas, compras e clientes.
-6. Relatórios narrativos podem ser gerados via OpenAI nas análises suportadas.
+5. O Painel exibe dashboards, analises fiscais e acompanhamentos operacionais.
+6. Relatorios narrativos podem ser gerados via OpenAI nas analises suportadas.
 
 ## Estrutura
 
@@ -29,8 +50,10 @@ Fluxo principal da plataforma:
 .
 |-- API/
 |   |-- app/
-|   |-- README.md
-|   `-- Arquivo SQL para validacao de dados.sql
+|   |-- docs/
+|   |-- migrations/
+|   |-- scripts/
+|   `-- README.md
 |-- Painel/
 |   |-- src/
 |   |-- public/
@@ -65,11 +88,11 @@ npm install
 npm run dev
 ```
 
-Se preferir, `yarn install` e `yarn dev` também funcionam.
+Se preferir, `yarn install` e `yarn dev` tambem funcionam.
 
 - Painel local: `http://localhost:5173`
 
-### Integração
+### Integracao
 
 Crie `Painel/.env`:
 
@@ -80,40 +103,44 @@ VITE_API_URL=http://localhost:8000
 O frontend normaliza a URL automaticamente:
 
 - `http://localhost:8000` -> `http://localhost:8000/api`
-- `http://localhost:8000/api` -> mantido como está
+- `http://localhost:8000/api` -> mantido como esta
 
 ## Funcionalidades atuais
 
 ### API
 
-- Autenticação com cadastro e login
+- Autenticacao com cadastro e login
 - Processamento de XML/NFe
 - Processamento de SPED Fiscal
-- Importação para staging com consulta de pendências
-- KPIs consolidados por período
-- Análises de compras, vendas e clientes
+- Importacao para staging com consulta de pendencias
+- KPIs consolidados por periodo
+- Analises de compras, vendas e clientes
+- Analise fiscal hierarquica por estado, cidade, NCM e produto
 - Comparativo mensal de KPIs para NFe
-- GeoJSON de municípios
-- Relatórios narrativos via OpenAI
+- GeoJSON de municipios
+- Consulta tributaria NCM/IBPT e sincronizacao de catalogo
+- Relatorios narrativos via OpenAI
 
 ### Painel
 
 - Login e cadastro de empresa
-- Controle de sessão em `localStorage`
-- Navegação condicionada por perfil XML/SPED
-- Importação e processamento de XML
-- Importação e processamento de SPED
+- Controle de sessao em `localStorage`
+- Navegacao condicionada por perfil XML/SPED
+- Importacao e processamento de XML
+- Importacao e processamento de SPED
 - Dashboard de vendas
 - Dashboard de compras
+- Analise fiscal por hierarquia
 - Dashboard de clientes
-- Central de relatórios com IA e exportação para PDF
+- Central de inconsistencias com historico local de operacoes
+- Central de relatorios com IA e exportacao para PDF
 
-## Observações importantes
+## Observacoes importantes
 
-- Empresas configuradas para SPED não devem usar o fluxo XML.
-- Empresas configuradas para XML não devem usar o fluxo SPED.
-- O painel possui páginas de `Atualizações` e `Configurações` implementadas no código, mas elas ainda não estão ativas no roteador principal.
-- O chat do frontend existe como componente/contexto local, porém está desabilitado no layout e hoje não conversa com a API.
+- Empresas configuradas para SPED nao devem usar o fluxo XML.
+- Empresas configuradas para XML nao devem usar o fluxo SPED.
+- O painel possui paginas de `Atualizacoes` e `Configuracoes` implementadas no codigo, mas elas nao estao ativas no roteador principal.
+- O chat do frontend existe como componente/contexto local, porem esta desabilitado no layout e hoje nao conversa com a API.
 
 ## Requisitos
 
@@ -121,9 +148,9 @@ O frontend normaliza a URL automaticamente:
 - Node.js 18+
 - PostgreSQL
 
-## Troubleshooting rápido
+## Troubleshooting rapido
 
 - CORS: revise `CORS_ALLOW_ORIGINS`, `CORS_ALLOW_CREDENTIALS` e `CORS_ALLOW_ORIGIN_REGEX` na API.
-- Tela sem dados: confirme `VITE_API_URL`, API ativa e sessão válida.
-- Importação rejeitada: valide o perfil da empresa (`tem_sped`) e o tipo de arquivo enviado.
-- Relatórios IA indisponíveis: configure `OPENAI_API_KEY` no backend.
+- Tela sem dados: confirme `VITE_API_URL`, API ativa e sessao valida.
+- Importacao rejeitada: valide o perfil da empresa (`tem_sped`) e o tipo de arquivo enviado.
+- Relatorios IA indisponiveis: configure `OPENAI_API_KEY` no backend.

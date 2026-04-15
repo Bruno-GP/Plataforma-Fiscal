@@ -75,10 +75,8 @@ export function DetalhamentoFiscalHierarquiaMode({
                 <p className="text-sm text-slate-300">{getRegionByUf(stateEntry.uf)}</p>
               </div>
               <div>
-                <p className={hierarchyLabelClass}>Imposto</p>
-                <p className="text-sm text-slate-300">
-                  {formatCurrency(stateEntry.taxValue)} ({stateEntry.taxPercent.toFixed(2)}%)
-                </p>
+                <p className={hierarchyLabelClass}>Imposto estimado</p>
+                <p className="text-sm text-slate-300">{formatCurrency(stateEntry.taxValue)}</p>
               </div>
               <div>
                 <p className={hierarchyLabelClass}>Faturamento</p>
@@ -101,10 +99,8 @@ export function DetalhamentoFiscalHierarquiaMode({
                         <p className="mt-1 text-sm text-slate-300">{cityEntry.ncms.length}</p>
                       </div>
                       <div>
-                        <p className={hierarchyLabelClass}>Imposto</p>
-                        <p className="mt-1 text-sm text-slate-300">
-                          {formatCurrency(cityEntry.taxValue)} ({cityEntry.taxPercent.toFixed(2)}%)
-                        </p>
+                        <p className={hierarchyLabelClass}>Imposto estimado</p>
+                        <p className="mt-1 text-sm text-slate-300">{formatCurrency(cityEntry.taxValue)}</p>
                       </div>
                       <div>
                         <p className={hierarchyLabelClass}>Faturamento</p>
@@ -130,10 +126,8 @@ export function DetalhamentoFiscalHierarquiaMode({
                                 <p className="mt-1 text-sm text-slate-300">{ncmEntry.products.length}</p>
                               </div>
                               <div>
-                                <p className={hierarchyLabelClass}>Imposto</p>
-                                <p className="mt-1 text-sm text-slate-300">
-                                  {formatCurrency(ncmEntry.taxValue)} ({ncmEntry.taxPercent.toFixed(2)}%)
-                                </p>
+                                <p className={hierarchyLabelClass}>Imposto estimado</p>
+                                <p className="mt-1 text-sm text-slate-300">{formatCurrency(ncmEntry.taxValue)}</p>
                               </div>
                               <div>
                                 <p className={hierarchyLabelClass}>Faturamento</p>
@@ -159,9 +153,9 @@ export function DetalhamentoFiscalHierarquiaMode({
                                       <TableCell className="font-medium text-slate-100">{productEntry.code}</TableCell>
                                       <TableCell className="text-slate-200">{productEntry.description}</TableCell>
                                       <TableCell className="text-right font-medium text-slate-100">{formatCurrency(productEntry.totalValue)}</TableCell>
-                                      <TableCell className="text-right text-slate-300">{formatCurrency(productEntry.taxValue)}</TableCell>
-                                      <TableCell className="text-right text-slate-300">{productEntry.taxPercent.toFixed(2)}%</TableCell>
-                                    </TableRow>
+                                    <TableCell className="text-right text-slate-300">{formatCurrency(productEntry.taxValue)}</TableCell>
+                                    <TableCell className="text-right text-slate-300">-</TableCell>
+                                  </TableRow>
                                   ))}
                                 </TableBody>
                               </Table>

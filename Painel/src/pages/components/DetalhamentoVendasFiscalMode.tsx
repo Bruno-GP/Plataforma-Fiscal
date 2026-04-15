@@ -51,10 +51,8 @@ export function DetalhamentoVendasFiscalMode({
                 <p className="mt-1 text-sm text-slate-300">{ncmEntry.products.length}</p>
               </div>
               <div>
-                <p className={hierarchyLabelClass}>Imposto</p>
-                <p className="mt-1 text-sm text-slate-300">
-                  {formatCurrency(ncmEntry.taxValue)} ({ncmEntry.taxPercent.toFixed(2)}%)
-                </p>
+                <p className={hierarchyLabelClass}>Imposto estimado</p>
+                <p className="mt-1 text-sm text-slate-300">{formatCurrency(ncmEntry.taxValue)}</p>
               </div>
               <div>
                 <p className={hierarchyLabelClass}>Faturamento</p>
@@ -86,9 +84,7 @@ export function DetalhamentoVendasFiscalMode({
                       <TableCell className="text-right text-slate-300">
                         {formatCurrency(productEntry.taxValue)}
                       </TableCell>
-                      <TableCell className="text-right text-slate-300">
-                        {productEntry.taxPercent.toFixed(2)}%
-                      </TableCell>
+                      <TableCell className="text-right text-slate-300">-</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

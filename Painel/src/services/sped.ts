@@ -277,6 +277,7 @@ export interface AnaliseFiscalHierarquicaResponse {
     faturamento: number | string;
     imposto_valor: number | string;
     imposto_percentual: number | string;
+    sem_item_detalhado?: boolean;
   }>;
   itens_nivel_atual: Array<Record<string, unknown>>;
   por_estado: Array<{

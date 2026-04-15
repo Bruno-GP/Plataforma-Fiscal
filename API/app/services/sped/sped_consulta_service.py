@@ -12,6 +12,12 @@ from app.services.fiscal_analysis import (
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.sped.postgres_config import carregar_config_postgres_sped
 
+def _sped_ncm_expr(alias_produto: str = "pr") -> str:
+  return f"COALESCE(NULLIF(regexp_replace(COALESCE({alias_produto}.ncm, ''), '\\D', '', 'g'), ''), '00000000')"
+
+def _sped_produto_codigo_expr(alias_produto: str = "pr") -> str:
+  return f"COALESCE(NULLIF(TRIM({alias_produto}.codigo), ''), 'SEM-CODIGO')"
+
 SPED_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
   from_clause="""
     public.sped_documentos_fiscais d
@@ -47,8 +53,8 @@ SPED_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
   date_expr="d.data_emissao",
   document_id_expr="d.id",
   amount_expr="i.valor_total",
-  dimension_code_count_expr="regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g')",
-  dimension_code_display_expr="regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g')",
+  dimension_code_count_expr=_sped_ncm_expr(),
+  dimension_code_display_expr=_sped_ncm_expr(),
   dimension_description_expr="nc.descricao",
   category_description_expr="d.natureza_operacao",
   sale_condition_expr=(
@@ -58,7 +64,7 @@ SPED_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
   reference_join_clause="""
     LEFT JOIN public.ncm_catalogo nc
       ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
-         = regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g')
+         = COALESCE(NULLIF(regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g'), ''), '00000000')
   """,
   unknown_code="00000000",
   unknown_description="NCM sem descrição",
@@ -113,6 +119,9 @@ def _categoria_fiscal_case_sped() -> str:
       ELSE 'Outras operações'
     END
   """
+
+def _calcular_percentual_imposto(imposto_valor: Decimal, faturamento: Decimal) -> Decimal:
+  return (imposto_valor / faturamento) * Decimal("100") if faturamento else Decimal("0.00")
 
 class SpedConsultaService:
   def __init__(self) -> None:
@@ -805,48 +814,51 @@ class SpedConsultaService:
     limite: Optional[int] = None,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = [
+    filtros_documentos = [
       "regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s",
       "d.tipo_operacao = 'saida'",
     ]
     params: list[object] = [cnpj]
+    filtros_base: list[str] = []
+    params_base: list[object] = []
 
     filtros_kpis = ["regexp_replace(cnpj_emitente, '\\D', '', 'g') = %s"]
     params_kpis: list[object] = [cnpj]
 
     if periodo_ano is not None:
-      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
+      filtros_documentos.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
       params.append(periodo_ano)
       filtros_kpis.append("periodo_ano = %s")
       params_kpis.append(periodo_ano)
 
     if periodo_mes is not None:
-      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
+      filtros_documentos.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
       params.append(periodo_mes)
       filtros_kpis.append("periodo_mes = %s")
       params_kpis.append(periodo_mes)
 
     if estado and estado.strip():
-      filtros.append("UPPER(COALESCE(NULLIF(TRIM(p.uf), ''), 'Sem UF')) = %s")
-      params.append(estado.strip().upper())
+      filtros_base.append("UPPER(estado) = %s")
+      params_base.append(estado.strip().upper())
 
     if cidade and cidade.strip():
-      filtros.append(
-        "UPPER(COALESCE(NULLIF(TRIM(p.municipio_nome), ''), NULLIF(TRIM(p.municipio), ''), 'Cidade nao identificada')) = %s"
-      )
-      params.append(cidade.strip().upper())
+      filtros_base.append("UPPER(cidade) = %s")
+      params_base.append(cidade.strip().upper())
 
     if ncm and ncm.strip():
-      filtros.append("COALESCE(NULLIF(regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g'), ''), '00000000') = %s")
-      params.append("".join(ch for ch in ncm if ch.isdigit()))
+      filtros_base.append("ncm = %s")
+      params_base.append("".join(ch for ch in ncm if ch.isdigit()) or "00000000")
 
     if produto_codigo and produto_codigo.strip():
-      filtros.append("COALESCE(NULLIF(TRIM(pr.codigo), ''), 'SEM-CODIGO') = %s")
-      params.append(produto_codigo.strip())
+      filtros_base.append("produto_codigo = %s")
+      params_base.append(produto_codigo.strip())
 
-    where_clause = " AND ".join(filtros)
+    where_clause_documentos = " AND ".join(filtros_documentos)
     where_clause_kpis = " AND ".join(filtros_kpis)
+    where_clause_base = " AND ".join(filtros_base) if filtros_base else "1 = 1"
     limite_consulta = limite if limite is not None else 100000
+    params_cte: list[object] = [*params, *params]
+    params_base_cte: list[object] = [*params_cte, *params_base]
 
     base_cte = f"""
       WITH base AS (
@@ -858,13 +870,14 @@ class SpedConsultaService:
             NULLIF(TRIM(p.municipio), ''),
             'Cidade nao identificada'
           ) AS cidade,
-          COALESCE(NULLIF(regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g'), ''), '00000000') AS ncm,
+          {_sped_ncm_expr()} AS ncm,
           COALESCE(NULLIF(TRIM(nc.descricao), ''), 'NCM sem descricao') AS descricao_ncm,
-          COALESCE(NULLIF(TRIM(pr.codigo), ''), 'SEM-CODIGO') AS produto_codigo,
+          {_sped_produto_codigo_expr()} AS produto_codigo,
           COALESCE(NULLIF(TRIM(pr.descricao), ''), 'Produto sem descricao') AS produto_descricao,
-          COALESCE(i.valor_total, d.valor_total, 0) AS faturamento
+          COALESCE(i.valor_total, 0) AS faturamento,
+          FALSE AS sem_item_detalhado
         FROM public.sped_documentos_fiscais d
-        LEFT JOIN public.sped_documento_itens i
+        JOIN public.sped_documento_itens i
           ON i.documento_id = d.id
         LEFT JOIN public.sped_participantes p
           ON p.id = d.participante_id
@@ -872,8 +885,39 @@ class SpedConsultaService:
           ON pr.id = i.produto_id
         LEFT JOIN public.ncm_catalogo nc
           ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
-             = COALESCE(NULLIF(regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g'), ''), '00000000')
-        WHERE {where_clause}
+             = {_sped_ncm_expr()}
+        WHERE {where_clause_documentos}
+
+        UNION ALL
+
+        SELECT
+          d.id AS documento_id,
+          COALESCE(NULLIF(TRIM(p.uf), ''), 'Sem UF') AS estado,
+          COALESCE(
+            NULLIF(TRIM(p.municipio_nome), ''),
+            NULLIF(TRIM(p.municipio), ''),
+            'Cidade nao identificada'
+          ) AS cidade,
+          '00000000' AS ncm,
+          'NCM sem descricao' AS descricao_ncm,
+          'SEM-CODIGO' AS produto_codigo,
+          'Produto sem descricao' AS produto_descricao,
+          COALESCE(d.valor_total, 0) AS faturamento,
+          TRUE AS sem_item_detalhado
+        FROM public.sped_documentos_fiscais d
+        LEFT JOIN public.sped_participantes p
+          ON p.id = d.participante_id
+        WHERE {where_clause_documentos}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM public.sped_documento_itens i
+            WHERE i.documento_id = d.id
+          )
+      ),
+      base_filtrada AS (
+        SELECT *
+        FROM base
+        WHERE {where_clause_base}
       )
     """
 
@@ -889,7 +933,7 @@ class SpedConsultaService:
           tuple(params_kpis),
         )
         row_total_impostos = cur.fetchone()
-        total_impostos = row_total_impostos[0] if row_total_impostos else Decimal("0.00")
+        total_impostos_periodo = row_total_impostos[0] if row_total_impostos else Decimal("0.00")
 
         cur.execute(
           f"""
@@ -899,20 +943,27 @@ class SpedConsultaService:
             COUNT(DISTINCT documento_id) AS quantidade_documentos,
             COUNT(DISTINCT estado) AS total_estados,
             COUNT(DISTINCT CONCAT(cidade, '::', estado)) AS total_cidades,
-            COUNT(DISTINCT ncm) AS total_ncms,
-            COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) AS total_produtos
-          FROM base
+            COUNT(DISTINCT CASE WHEN NOT sem_item_detalhado THEN ncm END) AS total_ncms,
+            COUNT(DISTINCT CASE WHEN NOT sem_item_detalhado THEN CONCAT(produto_codigo, '::', produto_descricao) END) AS total_produtos
+          FROM base_filtrada
           """,
-          tuple(params),
+          tuple(params_base_cte),
         )
         resumo_row = cur.fetchone()
 
         total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
-        percentual_total = (
-          (total_impostos / total_faturamento) * Decimal("100")
-          if total_faturamento
-          else Decimal("0.00")
+        cur.execute(
+          f"""
+          {base_cte}
+          SELECT COALESCE(SUM(faturamento), 0)
+          FROM base
+          """,
+          tuple(params_cte),
         )
+        row_faturamento_periodo = cur.fetchone()
+        total_faturamento_periodo = row_faturamento_periodo[0] if row_faturamento_periodo else Decimal("0.00")
+        percentual_total = _calcular_percentual_imposto(total_impostos_periodo, total_faturamento_periodo)
+        total_impostos = (total_faturamento * percentual_total) / Decimal("100") if total_faturamento else Decimal("0.00")
         cur.execute(
           f"""
           {base_cte}
@@ -923,18 +974,19 @@ class SpedConsultaService:
             descricao_ncm,
             produto_codigo,
             produto_descricao,
+            sem_item_detalhado,
             COALESCE(SUM(faturamento), 0) AS faturamento
-          FROM base
-          GROUP BY 1, 2, 3, 4, 5, 6
-          ORDER BY 1 ASC, 2 ASC, 7 DESC, 5 ASC
+          FROM base_filtrada
+          GROUP BY 1, 2, 3, 4, 5, 6, 7
+          ORDER BY 1 ASC, 2 ASC, 8 DESC, 5 ASC
           LIMIT %s
           """,
-          tuple([*params, limite_consulta]),
+          tuple([*params_base_cte, limite_consulta]),
         )
         hierarquia = []
-        for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento in cur.fetchall():
+        for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, sem_item_detalhado, faturamento in cur.fetchall():
           faturamento_item = faturamento or Decimal("0.00")
-          imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+          imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
           hierarquia.append({
             "estado": uf_item,
             "cidade": _normalizar_nome_cidade(cidade_item),
@@ -945,7 +997,8 @@ class SpedConsultaService:
             "produto": produto_item,
             "faturamento": faturamento_item,
             "imposto_valor": imposto_valor,
-            "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+            "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
+            "sem_item_detalhado": sem_item_detalhado,
           })
         nivel_resolvido = nivel_atual or ("produto" if ncm else "ncm" if cidade else "cidade" if estado else "estado")
         itens_nivel_atual: list[dict] = []
@@ -959,21 +1012,21 @@ class SpedConsultaService:
             f"""
             {base_cte}
             SELECT estado, COALESCE(SUM(faturamento), 0) AS faturamento
-            FROM base
+            FROM base_filtrada
             GROUP BY 1
             ORDER BY 2 DESC, 1 ASC
             LIMIT %s
             """,
-            tuple([*params, limite_consulta]),
+            tuple([*params_base_cte, limite_consulta]),
           )
           for uf_item, faturamento in cur.fetchall():
             faturamento_item = faturamento or Decimal("0.00")
-            imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+            imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
             por_estado.append({
               "estado": uf_item,
               "faturamento": faturamento_item,
               "imposto_valor": imposto_valor,
-              "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+              "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
             })
           itens_nivel_atual = por_estado
         elif nivel_resolvido == "cidade":
@@ -981,22 +1034,22 @@ class SpedConsultaService:
             f"""
             {base_cte}
             SELECT cidade, estado, COALESCE(SUM(faturamento), 0) AS faturamento
-            FROM base
+            FROM base_filtrada
             GROUP BY 1, 2
             ORDER BY 3 DESC, 1 ASC, 2 ASC
             LIMIT %s
             """,
-            tuple([*params, limite_consulta]),
+            tuple([*params_base_cte, limite_consulta]),
           )
           for cidade_item, uf_item, faturamento in cur.fetchall():
             faturamento_item = faturamento or Decimal("0.00")
-            imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+            imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
             por_cidade.append({
               "cidade": _normalizar_nome_cidade(cidade_item),
               "uf": uf_item,
               "faturamento": faturamento_item,
               "imposto_valor": imposto_valor,
-              "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+              "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
             })
           itens_nivel_atual = por_cidade
         elif nivel_resolvido == "ncm":
@@ -1004,22 +1057,23 @@ class SpedConsultaService:
             f"""
             {base_cte}
             SELECT ncm, descricao_ncm, COALESCE(SUM(faturamento), 0) AS faturamento
-            FROM base
+            FROM base_filtrada
+            WHERE NOT sem_item_detalhado
             GROUP BY 1, 2
             ORDER BY 3 DESC, 1 ASC
             LIMIT %s
             """,
-            tuple([*params, limite_consulta]),
+            tuple([*params_base_cte, limite_consulta]),
           )
           for ncm_item, descricao_item, faturamento in cur.fetchall():
             faturamento_item = faturamento or Decimal("0.00")
-            imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+            imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
             por_ncm.append({
               "ncm": ncm_item,
               "descricao": descricao_item,
               "faturamento": faturamento_item,
               "imposto_valor": imposto_valor,
-              "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+              "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
             })
           itens_nivel_atual = por_ncm
         else:
@@ -1027,22 +1081,23 @@ class SpedConsultaService:
             f"""
             {base_cte}
             SELECT produto_codigo, produto_descricao, COALESCE(SUM(faturamento), 0) AS faturamento
-            FROM base
+            FROM base_filtrada
+            WHERE NOT sem_item_detalhado
             GROUP BY 1, 2
             ORDER BY 3 DESC, 1 ASC, 2 ASC
             LIMIT %s
             """,
-            tuple([*params, limite_consulta]),
+            tuple([*params_base_cte, limite_consulta]),
           )
           for codigo_item, produto_item, faturamento in cur.fetchall():
             faturamento_item = faturamento or Decimal("0.00")
-            imposto_valor = (faturamento_item / total_faturamento) * total_impostos if total_faturamento else Decimal("0.00")
+            imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
             por_produto.append({
               "produto_codigo": codigo_item,
               "produto": produto_item,
               "faturamento": faturamento_item,
               "imposto_valor": imposto_valor,
-              "imposto_percentual": percentual_total if faturamento_item else Decimal("0.00"),
+              "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
             })
           itens_nivel_atual = por_produto
 

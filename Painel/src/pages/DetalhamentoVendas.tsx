@@ -65,6 +65,10 @@ const filterSpedHierarchyRows = (rows: SpedHierarchyRow[], search: string) => {
 const buildSpedFiscalHierarchy = (rows: SpedHierarchyRow[]): FiscalNcmSummary[] => {
   const ncmMap = new Map<string, FiscalNcmSummary>();
   rows.forEach((row) => {
+    if (row.sem_item_detalhado) {
+      return;
+    }
+
     const ncm = String(row.ncm ?? '00000000').trim() || '00000000';
     const description = String(row.descricao_ncm ?? 'NCM sem descricao').trim() || 'NCM sem descricao';
     const productCode = String(row.produto_codigo ?? 'SEM-CODIGO').trim() || 'SEM-CODIGO';

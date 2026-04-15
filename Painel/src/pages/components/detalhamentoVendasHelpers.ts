@@ -125,6 +125,7 @@ type SpedHierarchyRow = {
   produto?: string | null;
   faturamento?: string | number | null;
   imposto_valor?: string | number | null;
+  sem_item_detalhado?: boolean | null;
 };
 
 const normalizeSpedCityName = (city?: string | null, uf?: string | null) => {
@@ -166,6 +167,10 @@ export const buildSpedFiscalHierarchyState = <TRow extends SpedHierarchyRow>(row
     }
     cityEntry.total += total;
     cityEntry.taxValue += taxValue;
+
+    if (row.sem_item_detalhado) {
+      return;
+    }
 
     let ncmEntry = cityEntry.ncms.find((item) => item.key === `ncm-${uf}-${city}-${ncm}`);
     if (!ncmEntry) {

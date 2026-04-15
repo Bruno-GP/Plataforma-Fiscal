@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   DetalhamentoFiscalHierarquiaMode,
-  type FiscalHierarchyState,
 } from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
 import {
   DetalhamentoVendasFiscalMode,
@@ -21,6 +20,7 @@ import { DetalhamentoVendasModeSelector } from '@/pages/components/DetalhamentoV
 import { DetalhamentoVendasNotaMode } from '@/pages/components/DetalhamentoVendasNotaMode';
 import { DetalhamentoVendasRegiaoMode } from '@/pages/components/DetalhamentoVendasRegiaoMode';
 import {
+  buildSpedFiscalHierarchyState,
   buildRegionHierarchy,
   type DetailMode,
   filterNotasBySearch,
@@ -45,20 +45,12 @@ import {
   hasValidEmitenteCnpj,
   parseDecimal,
 } from '@/utils/formatters';
-import { normalizeCityUfLabel } from '@/utils/rankingUtils';
 
 const NOTAS_PAGE_SIZE = 100;
 type SpedHierarchyRow = SpedFiscalHierarchyResponse['hierarquia'][number];
 
 const normalizeSearchValue = (value: string | number | null | undefined) =>
   String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-
-const normalizeSpedCityName = (city?: string, uf?: string) => {
-  const label = normalizeCityUfLabel(city, uf);
-  const suffix = (uf ?? '').trim().toUpperCase();
-  if (!suffix) return label;
-  return label.replace(new RegExp(`\\s-\\s${suffix}$`), '').trim() || label;
-};
 
 const filterSpedHierarchyRows = (rows: SpedHierarchyRow[], search: string) => {
   const query = normalizeSearchValue(search);
@@ -68,71 +60,6 @@ const filterSpedHierarchyRows = (rows: SpedHierarchyRow[], search: string) => {
     [row.estado, row.cidade, row.uf, row.ncm, row.descricao_ncm, row.produto_codigo, row.produto, row.faturamento, row.imposto_valor]
       .some((value) => normalizeSearchValue(value).includes(query)),
   );
-};
-
-const buildSpedRegionHierarchy = (rows: SpedHierarchyRow[]): FiscalHierarchyState[] => {
-  const stateMap = new Map<string, FiscalHierarchyState>();
-
-  rows.forEach((row) => {
-    const uf = String(row.uf ?? row.estado ?? 'Sem UF').trim() || 'Sem UF';
-    const city = normalizeSpedCityName(String(row.cidade ?? 'Cidade nao identificada'), uf);
-    const ncm = String(row.ncm ?? '00000000').trim() || '00000000';
-    const description = String(row.descricao_ncm ?? 'NCM sem descricao').trim() || 'NCM sem descricao';
-    const productCode = String(row.produto_codigo ?? 'SEM-CODIGO').trim() || 'SEM-CODIGO';
-    const productDescription = String(row.produto ?? 'Produto sem descricao').trim() || 'Produto sem descricao';
-    const total = parseDecimal(row.faturamento ?? 0);
-    const taxValue = parseDecimal(row.imposto_valor ?? 0);
-
-    let stateEntry = stateMap.get(uf);
-    if (!stateEntry) {
-      stateEntry = { key: `uf-${uf}`, uf, total: 0, taxValue: 0, taxPercent: 0, cities: [] };
-      stateMap.set(uf, stateEntry);
-    }
-    stateEntry.total += total;
-    stateEntry.taxValue += taxValue;
-
-    let cityEntry = stateEntry.cities.find((item) => item.key === `city-${uf}-${city}`);
-    if (!cityEntry) {
-      cityEntry = { key: `city-${uf}-${city}`, city, uf, total: 0, taxValue: 0, taxPercent: 0, ncms: [] };
-      stateEntry.cities.push(cityEntry);
-    }
-    cityEntry.total += total;
-    cityEntry.taxValue += taxValue;
-
-    let ncmEntry = cityEntry.ncms.find((item) => item.key === `ncm-${uf}-${city}-${ncm}`);
-    if (!ncmEntry) {
-      ncmEntry = { key: `ncm-${uf}-${city}-${ncm}`, ncm, description, total: 0, taxValue: 0, taxPercent: 0, products: [] };
-      cityEntry.ncms.push(ncmEntry);
-    }
-    ncmEntry.total += total;
-    ncmEntry.taxValue += taxValue;
-
-    let productEntry = ncmEntry.products.find((item) => item.code === productCode);
-    if (!productEntry) {
-      productEntry = { key: `product-${uf}-${city}-${ncm}-${productCode}`, code: productCode, description: productDescription, totalValue: 0, taxValue: 0, taxPercent: 0 };
-      ncmEntry.products.push(productEntry);
-    }
-
-    productEntry.totalValue += total;
-    productEntry.taxValue += taxValue;
-  });
-
-  return [...stateMap.values()].map((stateEntry) => ({
-    ...stateEntry,
-    taxPercent: stateEntry.total ? (stateEntry.taxValue / stateEntry.total) * 100 : 0,
-    cities: stateEntry.cities.map((cityEntry) => ({
-      ...cityEntry,
-      taxPercent: cityEntry.total ? (cityEntry.taxValue / cityEntry.total) * 100 : 0,
-      ncms: cityEntry.ncms.map((ncmEntry) => ({
-        ...ncmEntry,
-        taxPercent: ncmEntry.total ? (ncmEntry.taxValue / ncmEntry.total) * 100 : 0,
-        products: [...ncmEntry.products].map((productEntry) => ({
-          ...productEntry,
-          taxPercent: productEntry.totalValue ? (productEntry.taxValue / productEntry.totalValue) * 100 : 0,
-        })).sort((a, b) => b.totalValue - a.totalValue),
-      })).sort((a, b) => b.total - a.total),
-    })).sort((a, b) => b.total - a.total),
-  })).sort((a, b) => b.total - a.total);
 };
 
 const buildSpedFiscalHierarchy = (rows: SpedHierarchyRow[]): FiscalNcmSummary[] => {
@@ -288,7 +215,7 @@ export default function DetalhamentoVendas() {
   const filteredRegionHierarchy = useMemo(() => filterRegionHierarchyBySearch(regionHierarchy, searchTerm), [regionHierarchy, searchTerm]);
   const spedRows = useMemo(() => spedHierarchyQuery.data?.hierarquia ?? [], [spedHierarchyQuery.data?.hierarquia]);
   const filteredSpedRows = useMemo(() => filterSpedHierarchyRows(spedRows, searchTerm), [spedRows, searchTerm]);
-  const spedRegionHierarchy = useMemo(() => buildSpedRegionHierarchy(filteredSpedRows), [filteredSpedRows]);
+  const spedRegionHierarchy = useMemo(() => buildSpedFiscalHierarchyState(filteredSpedRows), [filteredSpedRows]);
   const spedFiscalHierarchy = useMemo(() => buildSpedFiscalHierarchy(filteredSpedRows), [filteredSpedRows]);
 
   const noteAccordionValues = useMemo(() => filteredNotas.map((nota) => `${nota.numero_nf}-${nota.data_emissao}`), [filteredNotas]);

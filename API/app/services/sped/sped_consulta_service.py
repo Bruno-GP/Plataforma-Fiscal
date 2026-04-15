@@ -808,7 +808,6 @@ class SpedConsultaService:
     filtros = [
       "regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s",
       "d.tipo_operacao = 'saida'",
-      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
     ]
     params: list[object] = [cnpj]
 
@@ -863,9 +862,9 @@ class SpedConsultaService:
           COALESCE(NULLIF(TRIM(nc.descricao), ''), 'NCM sem descricao') AS descricao_ncm,
           COALESCE(NULLIF(TRIM(pr.codigo), ''), 'SEM-CODIGO') AS produto_codigo,
           COALESCE(NULLIF(TRIM(pr.descricao), ''), 'Produto sem descricao') AS produto_descricao,
-          COALESCE(i.valor_total, 0) AS faturamento
+          COALESCE(i.valor_total, d.valor_total, 0) AS faturamento
         FROM public.sped_documentos_fiscais d
-        JOIN public.sped_documento_itens i
+        LEFT JOIN public.sped_documento_itens i
           ON i.documento_id = d.id
         LEFT JOIN public.sped_participantes p
           ON p.id = d.participante_id

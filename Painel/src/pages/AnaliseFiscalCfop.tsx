@@ -12,8 +12,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Header } from '@/pages/components/Header';
 import {
   DetalhamentoFiscalHierarquiaMode,
-  type FiscalHierarchyState,
 } from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
+import { buildSpedFiscalHierarchyState, type FiscalHierarchyState } from '@/pages/components/detalhamentoVendasHelpers';
 import { StatCard } from '@/pages/components/StatCard';
 import {
   fetchNfeAnaliseFiscalCfop,
@@ -109,65 +109,7 @@ export default function AnaliseFiscalCfop() {
     return baseItems.filter((item) => Object.values(item).some((value) => String(value ?? '').toLowerCase().includes(query)));
   }, [hierarchyQuery.data?.hierarquia, searchTerm]);
 
-  const hierarchy = useMemo<FiscalHierarchyState[]>(() => {
-    const states = new Map<string, FiscalHierarchyState>();
-    for (const row of hierarchyRows as HierarchyRow[]) {
-      const uf = String(row.estado ?? 'Sem UF');
-      const city = String(row.cidade ?? 'Cidade nao identificada');
-      const ncm = String(row.ncm ?? '00000000');
-      const description = String(row.descricao_ncm ?? 'NCM sem descricao');
-      const productCode = String(row.produto_codigo ?? 'SEM-CODIGO');
-      const productName = String(row.produto ?? 'Produto sem descricao');
-      const total = parseDecimal(row.faturamento ?? 0);
-      const taxValue = parseDecimal(row.imposto_valor ?? 0);
-
-      let stateEntry = states.get(uf);
-      if (!stateEntry) {
-        stateEntry = { key: `uf-${uf}`, uf, total: 0, taxValue: 0, taxPercent: 0, cities: [] };
-        states.set(uf, stateEntry);
-      }
-      stateEntry.total += total;
-      stateEntry.taxValue += taxValue;
-
-      let cityEntry = stateEntry.cities.find((item) => item.city === city);
-      if (!cityEntry) {
-        cityEntry = { key: `city-${uf}-${city}`, city, uf, total: 0, taxValue: 0, taxPercent: 0, ncms: [] };
-        stateEntry.cities.push(cityEntry);
-      }
-      cityEntry.total += total;
-      cityEntry.taxValue += taxValue;
-
-      let ncmEntry = cityEntry.ncms.find((item) => item.ncm === ncm);
-      if (!ncmEntry) {
-        ncmEntry = { key: `ncm-${uf}-${city}-${ncm}`, ncm, description, total: 0, taxValue: 0, taxPercent: 0, products: [] };
-        cityEntry.ncms.push(ncmEntry);
-      }
-      ncmEntry.total += total;
-      ncmEntry.taxValue += taxValue;
-
-      const existingProduct = ncmEntry.products.find((item) => item.code === productCode);
-      if (existingProduct) {
-        existingProduct.totalValue += total;
-        existingProduct.taxValue += taxValue;
-      } else {
-        ncmEntry.products.push({ key: `product-${uf}-${city}-${ncm}-${productCode}`, code: productCode, description: productName, totalValue: total, taxValue, taxPercent: 0 });
-      }
-    }
-
-    return [...states.values()].map((stateEntry) => ({
-      ...stateEntry,
-      taxPercent: stateEntry.total ? (stateEntry.taxValue / stateEntry.total) * 100 : 0,
-      cities: stateEntry.cities.map((cityEntry) => ({
-        ...cityEntry,
-        taxPercent: cityEntry.total ? (cityEntry.taxValue / cityEntry.total) * 100 : 0,
-        ncms: cityEntry.ncms.map((ncmEntry) => ({
-          ...ncmEntry,
-          taxPercent: ncmEntry.total ? (ncmEntry.taxValue / ncmEntry.total) * 100 : 0,
-          products: ncmEntry.products.map((productEntry) => ({ ...productEntry, taxPercent: productEntry.totalValue ? (productEntry.taxValue / productEntry.totalValue) * 100 : 0 })).sort((a, b) => b.totalValue - a.totalValue),
-        })).sort((a, b) => b.total - a.total),
-      })).sort((a, b) => b.total - a.total),
-    })).sort((a, b) => b.total - a.total);
-  }, [hierarchyRows]);
+  const hierarchy = useMemo<FiscalHierarchyState[]>(() => buildSpedFiscalHierarchyState(hierarchyRows as HierarchyRow[]), [hierarchyRows]);
 
   const stateAccordionValues = useMemo(() => hierarchy.map((item) => item.key), [hierarchy]);
   const cityAccordionValues = useMemo(() => hierarchy.flatMap((stateEntry) => stateEntry.cities.map((item) => item.key)), [hierarchy]);

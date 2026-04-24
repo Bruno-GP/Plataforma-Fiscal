@@ -1177,6 +1177,7 @@ class NFeConsultaService:
     ncm: Optional[str] = None,
     produto_codigo: Optional[str] = None,
     limite: Optional[int] = None,
+    offset: int = 0,
   ) -> dict:
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
@@ -1217,6 +1218,15 @@ class NFeConsultaService:
 
     where_clause = " AND ".join(filtros)
     limite_consulta = limite if limite is not None else 100000
+    offset_consulta = max(offset, 0)
+    modo_legado_hierarquia_completa = (
+      nivel_atual is None
+      and not estado
+      and not cidade
+      and not ncm
+      and not produto_codigo
+      and offset_consulta == 0
+    )
 
     base_cte = f"""
       WITH itens_filtrados AS (
@@ -1273,9 +1283,20 @@ class NFeConsultaService:
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        cur.execute("DROP TABLE IF EXISTS tmp_nfe_fiscal_hierarquia_base")
         cur.execute(
           f"""
+          CREATE TEMP TABLE tmp_nfe_fiscal_hierarquia_base ON COMMIT DROP AS
           {base_cte}
+          SELECT *
+          FROM base
+          """,
+          tuple(parametros),
+        )
+        cur.execute("ANALYZE tmp_nfe_fiscal_hierarquia_base")
+
+        cur.execute(
+          """
           SELECT
             COALESCE(SUM(faturamento), 0) AS total_faturamento,
             COALESCE(SUM(imposto_valor), 0) AS total_impostos,
@@ -1284,9 +1305,8 @@ class NFeConsultaService:
             COUNT(DISTINCT CONCAT(cidade, '::', estado)) AS total_cidades,
             COUNT(DISTINCT ncm) AS total_ncms,
             COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) AS total_produtos
-          FROM base
+          FROM tmp_nfe_fiscal_hierarquia_base
           """,
-          tuple(parametros),
         )
         resumo_row = cur.fetchone()
 
@@ -1297,61 +1317,65 @@ class NFeConsultaService:
           if total_faturamento
           else Decimal("0.00")
         )
-        cur.execute(
-          f"""
-          {base_cte}
-          SELECT
-            estado,
-            cidade,
-            ncm,
-            descricao_ncm,
-            produto_codigo,
-            produto_descricao,
-            COALESCE(SUM(faturamento), 0) AS faturamento,
-            COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-          FROM base
-          GROUP BY 1, 2, 3, 4, 5, 6
-          ORDER BY 1 ASC, 2 ASC, 7 DESC, 5 ASC
-          LIMIT %s
-          """,
-          tuple([*parametros, limite_consulta]),
-        )
-        hierarquia = [
-          {
-            "estado": uf_item,
-            "cidade": cidade_item,
-            "uf": uf_item,
-            "ncm": ncm_item,
-            "descricao_ncm": descricao_item,
-            "produto_codigo": codigo_item,
-            "produto": produto_item,
-            "faturamento": faturamento or Decimal("0.00"),
-            "imposto_valor": imposto_valor or Decimal("0.00"),
-            "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
-          }
-          for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor in cur.fetchall()
-        ]
+        hierarquia: list[dict] = []
+        if modo_legado_hierarquia_completa:
+          cur.execute(
+            """
+            SELECT
+              estado,
+              cidade,
+              ncm,
+              descricao_ncm,
+              produto_codigo,
+              produto_descricao,
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
+            FROM tmp_nfe_fiscal_hierarquia_base
+            GROUP BY 1, 2, 3, 4, 5, 6
+            ORDER BY 1 ASC, 2 ASC, 7 DESC, 5 ASC
+            LIMIT %s
+            """,
+            (limite_consulta,),
+          )
+          hierarquia = [
+            {
+              "estado": uf_item,
+              "cidade": cidade_item,
+              "uf": uf_item,
+              "ncm": ncm_item,
+              "descricao_ncm": descricao_item,
+              "produto_codigo": codigo_item,
+              "produto": produto_item,
+              "faturamento": faturamento or Decimal("0.00"),
+              "imposto_valor": imposto_valor or Decimal("0.00"),
+              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
+            }
+            for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor in cur.fetchall()
+          ]
         nivel_resolvido = nivel_atual or ("produto" if ncm else "ncm" if cidade else "cidade" if estado else "estado")
         itens_nivel_atual: list[dict] = []
         por_estado: list[dict] = []
         por_cidade: list[dict] = []
         por_ncm: list[dict] = []
         por_produto: list[dict] = []
+        total_registros_nivel = 0
 
         if nivel_resolvido == "estado":
+          cur.execute("SELECT COUNT(DISTINCT estado) FROM tmp_nfe_fiscal_hierarquia_base")
+          total_registros_nivel = (cur.fetchone() or [0])[0] or 0
           cur.execute(
-            f"""
-            {base_cte}
+            """
             SELECT
               estado,
               COALESCE(SUM(faturamento), 0) AS faturamento,
               COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-            FROM base
+            FROM tmp_nfe_fiscal_hierarquia_base
             GROUP BY 1
             ORDER BY 2 DESC, 1 ASC
             LIMIT %s
+            OFFSET %s
             """,
-            tuple([*parametros, limite_consulta]),
+            (limite_consulta, offset_consulta),
           )
           por_estado = [
             {
@@ -1364,20 +1388,22 @@ class NFeConsultaService:
           ]
           itens_nivel_atual = por_estado
         elif nivel_resolvido == "cidade":
+          cur.execute("SELECT COUNT(DISTINCT CONCAT(cidade, '::', estado)) FROM tmp_nfe_fiscal_hierarquia_base")
+          total_registros_nivel = (cur.fetchone() or [0])[0] or 0
           cur.execute(
-            f"""
-            {base_cte}
+            """
             SELECT
               cidade,
               estado,
               COALESCE(SUM(faturamento), 0) AS faturamento,
               COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-            FROM base
+            FROM tmp_nfe_fiscal_hierarquia_base
             GROUP BY 1, 2
             ORDER BY 3 DESC, 1 ASC, 2 ASC
             LIMIT %s
+            OFFSET %s
             """,
-            tuple([*parametros, limite_consulta]),
+            (limite_consulta, offset_consulta),
           )
           por_cidade = [
             {
@@ -1391,47 +1417,53 @@ class NFeConsultaService:
           ]
           itens_nivel_atual = por_cidade
         elif nivel_resolvido == "ncm":
+          cur.execute("SELECT COUNT(DISTINCT ncm) FROM tmp_nfe_fiscal_hierarquia_base")
+          total_registros_nivel = (cur.fetchone() or [0])[0] or 0
           cur.execute(
-            f"""
-            {base_cte}
+            """
             SELECT
               ncm,
               descricao_ncm,
+              COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) AS quantidade_produtos,
               COALESCE(SUM(faturamento), 0) AS faturamento,
               COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-            FROM base
+            FROM tmp_nfe_fiscal_hierarquia_base
             GROUP BY 1, 2
-            ORDER BY 3 DESC, 1 ASC
+            ORDER BY 4 DESC, 1 ASC
             LIMIT %s
+            OFFSET %s
             """,
-            tuple([*parametros, limite_consulta]),
+            (limite_consulta, offset_consulta),
           )
           por_ncm = [
             {
               "ncm": ncm_item,
               "descricao": descricao_item,
+              "quantidade_produtos": quantidade_produtos or 0,
               "faturamento": faturamento or Decimal("0.00"),
               "imposto_valor": imposto_valor or Decimal("0.00"),
               "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
             }
-            for ncm_item, descricao_item, faturamento, imposto_valor in cur.fetchall()
+            for ncm_item, descricao_item, quantidade_produtos, faturamento, imposto_valor in cur.fetchall()
           ]
           itens_nivel_atual = por_ncm
         else:
+          cur.execute("SELECT COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) FROM tmp_nfe_fiscal_hierarquia_base")
+          total_registros_nivel = (cur.fetchone() or [0])[0] or 0
           cur.execute(
-            f"""
-            {base_cte}
+            """
             SELECT
               produto_codigo,
               produto_descricao,
               COALESCE(SUM(faturamento), 0) AS faturamento,
               COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-            FROM base
+            FROM tmp_nfe_fiscal_hierarquia_base
             GROUP BY 1, 2
             ORDER BY 3 DESC, 1 ASC, 2 ASC
             LIMIT %s
+            OFFSET %s
             """,
-            tuple([*parametros, limite_consulta]),
+            (limite_consulta, offset_consulta),
           )
           por_produto = [
             {
@@ -1450,6 +1482,10 @@ class NFeConsultaService:
       "periodo_ano": periodo_ano,
       "periodo_mes": periodo_mes,
       "nivel_atual": nivel_resolvido,
+      "offset": offset_consulta,
+      "limite": limite_consulta,
+      "total_registros_nivel": total_registros_nivel,
+      "possui_mais_registros": (offset_consulta + len(itens_nivel_atual)) < total_registros_nivel,
       "total_faturamento": total_faturamento or Decimal("0.00"),
       "total_impostos": total_impostos or Decimal("0.00"),
       "percentual_impostos_sobre_faturamento": percentual_total,

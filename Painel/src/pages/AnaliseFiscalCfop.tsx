@@ -13,7 +13,6 @@ import { Header } from '@/pages/components/Header';
 import {
   DetalhamentoFiscalHierarquiaMode,
 } from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
-import { buildSpedFiscalHierarchyState, type FiscalHierarchyState } from '@/pages/components/detalhamentoVendasHelpers';
 import { StatCard } from '@/pages/components/StatCard';
 import {
   fetchNfeAnaliseFiscalCfop,
@@ -40,16 +39,11 @@ const hasValidEmitenteCnpj = (value: string | undefined) => {
 type HierarquiaResponse = AnaliseFiscalHierarquicaNfeResponse | AnaliseFiscalHierarquicaSpedResponse;
 type CfopResponse = AnaliseFiscalCfopNfeResponse | AnaliseFiscalCfopSpedResponse;
 
-type HierarchyRow = HierarquiaResponse['hierarquia'][number];
-
 export default function AnaliseFiscalCfop() {
   const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const [searchTerm, setSearchTerm] = useState('');
-  const [openStateValues, setOpenStateValues] = useState<string[]>([]);
-  const [openCityValues, setOpenCityValues] = useState<string[]>([]);
-  const [openNcmValues, setOpenNcmValues] = useState<string[]>([]);
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
@@ -76,8 +70,8 @@ export default function AnaliseFiscalCfop() {
   const hierarchyQuery = useQuery<HierarquiaResponse>({
     queryKey: ['analise-fiscal-drilldown', emitenteCnpj, isSped, selectedYear, selectedMonth],
     queryFn: () => isSped
-      ? fetchSpedAnaliseFiscalHierarquica({ emitente_cnpj: emitenteCnpj, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, limite: 5000 })
-      : fetchNfeAnaliseFiscalHierarquica({ emitente_cnpj: emitenteCnpj, email: user?.email, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, limite: 5000 }),
+      ? fetchSpedAnaliseFiscalHierarquica({ emitente_cnpj: emitenteCnpj, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, nivel_atual: 'estado', limite: 50 })
+      : fetchNfeAnaliseFiscalHierarquica({ emitente_cnpj: emitenteCnpj, email: user?.email, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, nivel_atual: 'estado', limite: 50 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
@@ -97,31 +91,7 @@ export default function AnaliseFiscalCfop() {
 
   useEffect(() => {
     setSearchTerm('');
-    setOpenStateValues([]);
-    setOpenCityValues([]);
-    setOpenNcmValues([]);
   }, [selectedMonth, selectedYear, emitenteCnpj, isSped]);
-
-  const hierarchyRows = useMemo(() => {
-    const baseItems = hierarchyQuery.data?.hierarquia ?? [];
-    const query = searchTerm.trim().toLowerCase();
-    if (!query) return baseItems;
-    return baseItems.filter((item) => Object.values(item).some((value) => String(value ?? '').toLowerCase().includes(query)));
-  }, [hierarchyQuery.data?.hierarquia, searchTerm]);
-
-  const hierarchy = useMemo<FiscalHierarchyState[]>(() => buildSpedFiscalHierarchyState(hierarchyRows as HierarchyRow[]), [hierarchyRows]);
-
-  const stateAccordionValues = useMemo(() => hierarchy.map((item) => item.key), [hierarchy]);
-  const cityAccordionValues = useMemo(() => hierarchy.flatMap((stateEntry) => stateEntry.cities.map((item) => item.key)), [hierarchy]);
-  const ncmAccordionValues = useMemo(() => hierarchy.flatMap((stateEntry) => stateEntry.cities.flatMap((cityEntry) => cityEntry.ncms.map((item) => item.key))), [hierarchy]);
-
-  useEffect(() => { setOpenStateValues((current) => current.filter((value) => stateAccordionValues.includes(value))); }, [stateAccordionValues]);
-  useEffect(() => { setOpenCityValues((current) => current.filter((value) => cityAccordionValues.includes(value))); }, [cityAccordionValues]);
-  useEffect(() => { setOpenNcmValues((current) => current.filter((value) => ncmAccordionValues.includes(value))); }, [ncmAccordionValues]);
-
-  const allStatesOpen = stateAccordionValues.length > 0 && stateAccordionValues.every((value) => openStateValues.includes(value));
-  const allCitiesOpen = cityAccordionValues.length > 0 && cityAccordionValues.every((value) => openCityValues.includes(value));
-  const allNcmsOpen = ncmAccordionValues.length > 0 && ncmAccordionValues.every((value) => openNcmValues.includes(value));
 
   const stats = [
     { title: 'Total movimentado', value: formatCurrency(parseDecimal(cfopQuery.data?.total_movimentado ?? 0)), description: 'Base total analisada por CFOP', icon: Wallet, trend: 'neutral', accentClass: 'border-l-sky-500', appendPreviousMonthLabel: false },
@@ -140,7 +110,7 @@ export default function AnaliseFiscalCfop() {
 
       {(cfopQuery.isError || hierarchyQuery.isError) && <Alert variant="destructive"><AlertTitle>Erro ao carregar analise fiscal</AlertTitle><AlertDescription>{(cfopQuery.error instanceof Error && cfopQuery.error.message) || (hierarchyQuery.error instanceof Error && hierarchyQuery.error.message) || 'Nao foi possivel consultar os dados fiscais.'}</AlertDescription></Alert>}
 
-      <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]"><CardContent className="p-0"><div className="border-b border-slate-800/80 px-6 py-4"><div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="relative w-full max-w-xl"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Pesquisar no drill-down" className="border-slate-700 bg-slate-900/80 pl-10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-500" /></div><div className="flex flex-wrap gap-3"><Button type="button" variant="outline" onClick={() => setOpenStateValues(allStatesOpen ? [] : stateAccordionValues)} className="h-auto justify-start border-slate-700 bg-slate-900/80 px-4 py-3 text-left text-slate-100 hover:border-sky-500/60 hover:bg-slate-800">Estado</Button><Button type="button" variant="outline" onClick={() => { if (allCitiesOpen) { setOpenCityValues([]); return; } setOpenStateValues(stateAccordionValues); setOpenCityValues(cityAccordionValues); }} className="h-auto justify-start border-slate-700 bg-slate-900/80 px-4 py-3 text-left text-slate-100 hover:border-sky-500/60 hover:bg-slate-800">Cidade</Button><Button type="button" variant="outline" onClick={() => { if (allNcmsOpen) { setOpenNcmValues([]); return; } setOpenStateValues(stateAccordionValues); setOpenCityValues(cityAccordionValues); setOpenNcmValues(ncmAccordionValues); }} className="h-auto justify-start border-slate-700 bg-slate-900/80 px-4 py-3 text-left text-slate-100 hover:border-sky-500/60 hover:bg-slate-800">NCM</Button><Button type="button" variant="outline" onClick={() => { setOpenStateValues(stateAccordionValues); setOpenCityValues(cityAccordionValues); setOpenNcmValues(ncmAccordionValues); }} className="h-auto justify-start border-slate-700 bg-slate-900/80 px-4 py-3 text-left text-slate-100 hover:border-sky-500/60 hover:bg-slate-800">Produto</Button></div></div><div className="text-xs text-slate-400">Exibindo {hierarchyRows.length} produtos agregados na hierarquia.</div></div>{hierarchy.length > 0 ? <DetalhamentoFiscalHierarquiaMode hierarchy={hierarchy} openStateValues={openStateValues} onOpenStateValuesChange={setOpenStateValues} openCityValues={openCityValues} onOpenCityValuesChange={setOpenCityValues} openNcmValues={openNcmValues} onOpenNcmValuesChange={setOpenNcmValues} /> : <div className="p-6 text-sm text-slate-300">{hierarchyQuery.isLoading ? 'Carregando drill-down fiscal...' : searchTerm.trim() ? 'Nenhum resultado encontrado para a pesquisa informada.' : 'Nenhum dado fiscal encontrado para o periodo selecionado.'}</div>}</CardContent></Card>
+      <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]"><CardContent className="p-0"><div className="border-b border-slate-800/80 px-6 py-4"><div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="relative w-full max-w-xl"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Pesquisar nos blocos carregados do drill-down" className="border-slate-700 bg-slate-900/80 pl-10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-sky-500" /></div><div className="text-xs text-slate-400">Carregamento inicial em blocos por estado. Cidades, NCMs e produtos sob demanda.</div></div><div className="text-xs text-slate-400">Exibindo {hierarchyQuery.data?.por_estado.length ?? 0} estados no primeiro nivel.</div></div>{(hierarchyQuery.data?.por_estado?.length ?? 0) > 0 ? <DetalhamentoFiscalHierarquiaMode fetchHierarchy={isSped ? fetchSpedAnaliseFiscalHierarquica : fetchNfeAnaliseFiscalHierarquica} baseParams={{ emitente_cnpj: emitenteCnpj, email: isSped ? undefined : user?.email, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber }} states={hierarchyQuery.data?.por_estado ?? []} searchTerm={searchTerm} /> : <div className="p-6 text-sm text-slate-300">{hierarchyQuery.isLoading ? 'Carregando drill-down fiscal por estado...' : searchTerm.trim() ? 'Nenhum resultado encontrado para a pesquisa informada.' : 'Nenhum dado fiscal encontrado para o periodo selecionado.'}</div>}</CardContent></Card>
     </div>
   );
 }

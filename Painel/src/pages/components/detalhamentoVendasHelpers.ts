@@ -141,6 +141,9 @@ const normalizeSpedCityName = (city?: string | null, uf?: string | null) => {
 
 export const buildSpedFiscalHierarchyState = <TRow extends SpedHierarchyRow>(rows: TRow[]): FiscalHierarchyState[] => {
   const stateMap = new Map<string, FiscalHierarchyState>();
+  const cityMap = new Map<string, FiscalHierarchyCity>();
+  const ncmMap = new Map<string, FiscalHierarchyNcm>();
+  const productMap = new Map<string, FiscalHierarchyProduct>();
 
   rows.forEach((row) => {
     const uf = String(row.uf ?? row.estado ?? 'Sem UF').trim() || 'Sem UF';
@@ -160,10 +163,12 @@ export const buildSpedFiscalHierarchyState = <TRow extends SpedHierarchyRow>(row
     stateEntry.total += total;
     stateEntry.taxValue += taxValue;
 
-    let cityEntry = stateEntry.cities.find((item) => item.key === `city-${uf}-${city}`);
+    const cityKey = `city-${uf}-${city}`;
+    let cityEntry = cityMap.get(cityKey);
     if (!cityEntry) {
-      cityEntry = { key: `city-${uf}-${city}`, city, uf, total: 0, taxValue: 0, taxPercent: 0, ncms: [] };
+      cityEntry = { key: cityKey, city, uf, total: 0, taxValue: 0, taxPercent: 0, ncms: [] };
       stateEntry.cities.push(cityEntry);
+      cityMap.set(cityKey, cityEntry);
     }
     cityEntry.total += total;
     cityEntry.taxValue += taxValue;
@@ -172,18 +177,22 @@ export const buildSpedFiscalHierarchyState = <TRow extends SpedHierarchyRow>(row
       return;
     }
 
-    let ncmEntry = cityEntry.ncms.find((item) => item.key === `ncm-${uf}-${city}-${ncm}`);
+    const ncmKey = `ncm-${uf}-${city}-${ncm}`;
+    let ncmEntry = ncmMap.get(ncmKey);
     if (!ncmEntry) {
-      ncmEntry = { key: `ncm-${uf}-${city}-${ncm}`, ncm, description, total: 0, taxValue: 0, taxPercent: 0, products: [] };
+      ncmEntry = { key: ncmKey, ncm, description, total: 0, taxValue: 0, taxPercent: 0, products: [] };
       cityEntry.ncms.push(ncmEntry);
+      ncmMap.set(ncmKey, ncmEntry);
     }
     ncmEntry.total += total;
     ncmEntry.taxValue += taxValue;
 
-    let productEntry = ncmEntry.products.find((item) => item.code === productCode);
+    const productKey = `product-${uf}-${city}-${ncm}-${productCode}`;
+    let productEntry = productMap.get(productKey);
     if (!productEntry) {
-      productEntry = { key: `product-${uf}-${city}-${ncm}-${productCode}`, code: productCode, description: productDescription, totalValue: 0, taxValue: 0, taxPercent: 0 };
+      productEntry = { key: productKey, code: productCode, description: productDescription, totalValue: 0, taxValue: 0, taxPercent: 0 };
       ncmEntry.products.push(productEntry);
+      productMap.set(productKey, productEntry);
     }
 
     productEntry.totalValue += total;

@@ -381,6 +381,10 @@ export interface AnaliseFiscalHierarquicaResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   nivel_atual: string;
+  offset: number;
+  limite: number;
+  total_registros_nivel: number;
+  possui_mais_registros: boolean;
   total_faturamento: number | string;
   total_impostos: number | string;
   percentual_impostos_sobre_faturamento: number | string;
@@ -418,6 +422,7 @@ export interface AnaliseFiscalHierarquicaResponse {
   por_ncm: Array<{
     ncm: string;
     descricao: string;
+    quantidade_produtos: number;
     faturamento: number | string;
     imposto_valor: number | string;
     imposto_percentual: number | string;
@@ -615,6 +620,7 @@ export const fetchNfeAnaliseFiscalHierarquica = async (
     ncm?: string;
     produto_codigo?: string;
     limite?: number;
+    offset?: number;
   } = {},
   options: RequestOptions = {},
 ): Promise<AnaliseFiscalHierarquicaResponse> => {

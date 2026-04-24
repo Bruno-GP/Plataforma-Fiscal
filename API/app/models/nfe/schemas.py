@@ -402,6 +402,7 @@ class FiscalHierarquiaCidadeItem(BaseModel):
 class FiscalHierarquiaNcmItem(BaseModel):
   ncm: str
   descricao: str
+  quantidade_produtos: int = 0
   faturamento: Decimal = Decimal("0.00")
   imposto_valor: Decimal = Decimal("0.00")
   imposto_percentual: Decimal = Decimal("0.00")
@@ -421,6 +422,10 @@ class AnaliseFiscalHierarquicaResponse(BaseModel):
   periodo_ano: int | None = None
   periodo_mes: int | None = None
   nivel_atual: str = "estado"
+  offset: int = 0
+  limite: int = 0
+  total_registros_nivel: int = 0
+  possui_mais_registros: bool = False
   total_faturamento: Decimal = Decimal("0.00")
   total_impostos: Decimal = Decimal("0.00")
   percentual_impostos_sobre_faturamento: Decimal = Decimal("0.00")

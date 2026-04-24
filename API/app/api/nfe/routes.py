@@ -354,6 +354,7 @@ def consultar_analise_fiscal_hierarquia_nfe(
   ncm: str | None = Query(default=None),
   produto_codigo: str | None = Query(default=None),
   limite: int | None = Query(default=100000, ge=1),
+  offset: int = Query(default=0, ge=0),
 ):
   service = NFeConsultaService()
 
@@ -368,6 +369,7 @@ def consultar_analise_fiscal_hierarquia_nfe(
       ncm=ncm,
       produto_codigo=produto_codigo,
       limite=limite,
+      offset=offset,
     )
   except ValueError as exc:
     raise HTTPException(

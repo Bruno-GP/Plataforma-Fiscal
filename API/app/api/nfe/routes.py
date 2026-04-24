@@ -2,6 +2,7 @@ import psycopg
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File
 
+from app.api.shared.analytics import obter_periodo_anterior
 from app.core.upload_security import validate_xml_uploads
 from app.core.security import require_company_scope
 from app.services.nfe.process_nfe import ProcessarNFeService

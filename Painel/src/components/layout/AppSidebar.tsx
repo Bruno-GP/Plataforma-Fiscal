@@ -29,7 +29,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const menuItemsBase = [
   { title: 'Vendas', url: '/analise-vendas', icon: LayoutDashboard },
-  { title: 'Detalhe Vendas', url: '/detalhamento-vendas', icon: ListTree },
+  { title: 'Detalhamento Vendas', url: '/detalhamento-vendas', icon: ListTree },
   { title: 'Análise Fiscal', url: '/analise-fiscal-cfop', icon: BarChart3 },
   { title: 'Clientes', url: '/analise-clientes', icon: Users },
 ];

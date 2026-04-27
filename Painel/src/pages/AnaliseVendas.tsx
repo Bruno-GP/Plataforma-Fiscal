@@ -1,33 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
 import { TrendingDown, TrendingUp, Users, Percent } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Header } from './components/Header';
-import { CfopAnalysisTable } from './components/CfopAnalysisTable';
-import { RankingCard } from './components/RankingCard';
+import { RankingPanelGroup, RankingConfig } from './components/RankingPanelGroup';
 import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
 import { EvolucaoChart } from './components/EvolucaoChart';
-import { fetchNfeAnaliseVendas, fetchNfeDashboardVendas, parseDecimal } from '@/services/nfe';
+
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchSpedAnaliseVendas, fetchSpedDashboardVendas } from '@/services/sped';
 import { monthLabels } from '../services/utils';
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
-
-const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
-
-const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? '').replace(/\D/g, '');
-  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
-};
+import { usePeriodFilter } from '@/hooks/usePeriodFilter';
+import { useDashboardVendasQueries } from '@/hooks/useDashboardQueries';
+import {
+  formatCurrency,
+  formatPercent,
+  hasValidEmitenteCnpj,
+  parseDecimal,
+  safePercentage,
+  calculateChange,
+} from '@/utils/formatters';
+import { buildRankingItems } from '@/utils/rankingUtils';
 
 interface DashboardProps {
   title?: string;
@@ -39,55 +34,27 @@ export default function Dashboard({
   subtitle = 'Visão geral do seu negócio',
 }: DashboardProps) {
   const { user } = useAuth();
-
-  const [selectedMonth, setSelectedMonth] = useState('all');
-  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
-
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const monthNumber = Number.parseInt(selectedMonth, 10);
-  const year = Number.parseInt(selectedYear, 10);
 
-  const dashboardQuery = useQuery({
-    queryKey: ['dashboard-vendas', emitenteCnpj, user?.tem_sped, year, selectedMonth],
-    queryFn: () =>
-      user?.tem_sped
-        ? fetchSpedDashboardVendas({
-            emitente_cnpj: emitenteCnpj,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          })
-        : fetchNfeDashboardVendas({
-            emitente_cnpj: emitenteCnpj,
-            email: user?.email,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          }),
-    enabled: hasEmitenteCnpj,
-    staleTime: 5 * 60 * 1000,
-  });
+  const {
+    selectedMonth,
+    setSelectedMonth,
+    selectedYear,
+    setSelectedYear,
+    monthNumber,
+    year,
+    faturamentoPeriodo,
+  } = usePeriodFilter();
 
-  const mapQuery = useQuery({
-    queryKey: ['dashboard-vendas-mapa', emitenteCnpj, user?.tem_sped, year, selectedMonth],
-    queryFn: () =>
-      user?.tem_sped
-        ? fetchSpedAnaliseVendas({
-            emitente_cnpj: emitenteCnpj,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 500,
-          })
-        : fetchNfeAnaliseVendas({
-            emitente_cnpj: emitenteCnpj,
-            email: user?.email,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 500,
-          }),
-    enabled: hasEmitenteCnpj,
-    staleTime: 5 * 60 * 1000,
+  const { dashboardQuery, mapQuery } = useDashboardVendasQueries({
+    emitenteCnpj,
+    email: user?.email,
+    temSped: user?.tem_sped,
+    year,
+    selectedMonth,
+    monthNumber,
+    hasEmitenteCnpj,
   });
 
   const availableYears = dashboardQuery.data?.anos_disponiveis?.length
@@ -95,35 +62,19 @@ export default function Dashboard({
     : [year];
 
   useEffect(() => {
-    if (!dashboardQuery.data?.anos_disponiveis?.length) {
-      return;
-    }
-
+    if (!dashboardQuery.data?.anos_disponiveis?.length) return;
     if (!dashboardQuery.data.anos_disponiveis.includes(year)) {
       setSelectedYear(String(dashboardQuery.data.anos_disponiveis[0]));
     }
-  }, [dashboardQuery.data?.anos_disponiveis, year]);
+  }, [dashboardQuery.data?.anos_disponiveis, year, setSelectedYear]);
 
   const currentData = dashboardQuery.data?.resumo_atual;
   const previousData = dashboardQuery.data?.resumo_anterior;
   const totalFaturamento = parseDecimal(mapQuery.data?.total_vendido ?? currentData?.total_vendido ?? 0);
 
-  const totalSalesChange = parseDecimal(previousData?.total_vendido ?? 0)
-    ? ((totalFaturamento - parseDecimal(previousData?.total_vendido ?? 0)) / parseDecimal(previousData?.total_vendido ?? 0)) * 100
-    : 0;
-  const ticketChange = parseDecimal(previousData?.ticket_medio ?? 0)
-    ? ((parseDecimal(currentData?.ticket_medio ?? 0) - parseDecimal(previousData?.ticket_medio ?? 0)) / parseDecimal(previousData?.ticket_medio ?? 0)) * 100
-    : 0;
-  const totalTaxesChange = parseDecimal(previousData?.total_impostos ?? 0)
-    ? ((parseDecimal(currentData?.total_impostos ?? 0) - parseDecimal(previousData?.total_impostos ?? 0)) / parseDecimal(previousData?.total_impostos ?? 0)) * 100
-    : 0;
-
-  const faturamentoPeriodo = useMemo(() => {
-    if (selectedMonth === 'all') {
-      return selectedYear;
-    }
-    return `${String(monthNumber).padStart(2, '0')}/${selectedYear}`;
-  }, [monthNumber, selectedMonth, selectedYear]);
+  const totalSalesChange = calculateChange(totalFaturamento, previousData?.total_vendido ?? 0);
+  const ticketChange = calculateChange(currentData?.ticket_medio ?? 0, previousData?.ticket_medio ?? 0);
+  const totalTaxesChange = calculateChange(currentData?.total_impostos ?? 0, previousData?.total_impostos ?? 0);
 
   const stats = [
     {
@@ -136,7 +87,7 @@ export default function Dashboard({
     },
     {
       title: 'Comparativo anual',
-      value: `${totalSalesChange >= 0 ? '+' : ''}${totalSalesChange.toFixed(1)}%`,
+      value: formatPercent(totalSalesChange),
       description: selectedMonth === 'all'
         ? `vs. mesmo período de ${year - 1}`
         : 'vs. período anterior',
@@ -167,9 +118,9 @@ export default function Dashboard({
     const serie = dashboardQuery.data?.serie_mensal ?? [];
     const itens = selectedMonth === 'all'
       ? serie
-      : serie.filter((item) => item.periodo_mes === monthNumber);
+      : serie.filter((item: any) => item.periodo_mes === monthNumber);
 
-    return itens.map((item) => ({
+    return itens.map((item: any) => ({
       month: monthLabels[item.periodo_mes - 1] ?? `Mês ${item.periodo_mes}`,
       faturamento: parseDecimal(item.total_vendido ?? 0),
     }));
@@ -185,108 +136,51 @@ export default function Dashboard({
         : `Nenhum dado disponível para ${selectedYear}.`;
   const hasChartData = salesEvolutionData.length > 0;
 
-  const resolvePercentual = (valorTotal?: number | string) => {
-    const valor = parseDecimal(valorTotal ?? 0);
-    if (!totalFaturamento || !valor) {
-      return null;
-    }
-    return (valor / totalFaturamento) * 100;
-  };
+  const resolvePercentual = (valorTotal?: number | string) => safePercentage(valorTotal || 0, totalFaturamento);
 
   const topClientesBase = mapQuery.data?.top_clientes_valor?.length
     ? mapQuery.data.top_clientes_valor
     : currentData?.top_clientes ?? [];
 
-  const topClientesItems = topClientesBase.slice(0, 5).map((cliente, index) => {
-    const percentual = resolvePercentual(cliente.valor_total);
-    const valorTotal = parseDecimal(cliente.valor_total ?? 0);
-
-    return {
-      key: `${cliente.cliente}-${index}`,
-      title: cliente.cliente ?? 'Cliente não identificado',
-      subtitle:
-        percentual !== null
-          ? `${percentual.toFixed(1)}% do faturamento`
-        : 'Participação não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
+  const topClientesItems = buildRankingItems(
+    topClientesBase,
+    'cliente',
+    'Cliente não identificado',
+    resolvePercentual
+  );
 
   const topProdutosBase = mapQuery.data?.top_produtos_valor?.length
     ? mapQuery.data.top_produtos_valor
     : currentData?.top_produtos ?? [];
 
-  const topProdutosItems = topProdutosBase.slice(0, 5).map((produto, index) => {
-    const percentual = resolvePercentual(produto.valor_total);
-    const valorTotal = parseDecimal(produto.valor_total ?? 0);
-
-    return {
-      key: `${produto.produto}-${index}`,
-      title: produto.produto ?? 'Produto não identificado',
-      subtitle:
-        percentual !== null
-          ? `${percentual.toFixed(1)}% do faturamento`
-        : 'Participação não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
+  const topProdutosItems = buildRankingItems(
+    topProdutosBase,
+    'produto',
+    'Produto não identificado',
+    resolvePercentual
+  );
 
   const topCidadesBase = mapQuery.data?.top_cidades_valor?.length
     ? mapQuery.data.top_cidades_valor
     : currentData?.top_cidades ?? [];
 
-  const topCidadesItems = topCidadesBase.slice(0, 5).map((cidade, index) => {
-    const percentual = resolvePercentual(cidade.valor_total);
-    const valorTotal = parseDecimal(cidade.valor_total ?? 0);
+  const topCidadesItems = buildRankingItems(
+    topCidadesBase,
+    'cidade_uf',
+    'Cidade não identificada',
+    resolvePercentual
+  );
 
-    return {
-      key: `${cidade.cidade}-${'uf' in cidade ? cidade.uf ?? 'sem-uf' : 'sem-uf'}-${index}`,
-      title: cidade.cidade ?? 'Cidade não identificada',
-      subtitle:
-        percentual !== null
-          ? `${percentual.toFixed(1)}% do faturamento`
-        : 'Participação não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
+  const mapTopCidadesItems = buildRankingItems(
+    mapQuery.data?.top_cidades_valor ?? [],
+    'cidade_uf',
+    'Cidade não identificada',
+    resolvePercentual
+  );
 
-  const mapTopCidadesItems = (mapQuery.data?.top_cidades_valor ?? []).map((cidade, index) => {
-    const valorTotal = parseDecimal(cidade.valor_total ?? 0);
-    const percentual = resolvePercentual(valorTotal);
-    const cidadeComUf = cidade.uf?.trim()
-      ? `${cidade.cidade ?? 'Cidade não identificada'} - ${cidade.uf.trim().toUpperCase()}`
-      : cidade.cidade ?? 'Cidade não identificada';
-
-    return {
-      key: `${cidade.cidade}-${cidade.uf ?? 'sem-uf'}-${index}`,
-      title: cidadeComUf,
-      subtitle:
-        percentual !== null
-          ? `${percentual.toFixed(1)}% do faturamento`
-          : 'Participção não informada',
-      value: formatCurrency(valorTotal),
-      rawValue: valorTotal,
-      percent: percentual,
-    };
-  });
-
-  const mapTopRegioesItems = (mapQuery.data?.top_regioes_valor ?? []).map((regiao) => ({
+  const mapTopRegioesItems = (mapQuery.data?.top_regioes_valor ?? []).map((regiao: any) => ({
     regiao: regiao.regiao,
     rawValue: parseDecimal(regiao.valor_total ?? 0),
-  }));
-
-  const cfopItems = (mapQuery.data?.top_cfops_valor ?? []).map((cfop, index) => ({
-    key: `${cfop.cfop}-${index}`,
-    cfop: cfop.cfop || '0000',
-    descricao: cfop.descricao || 'CFOP sem descrição',
-    valorTotal: parseDecimal(cfop.valor_total ?? 0),
-    participacao: parseDecimal(cfop.participacao_percentual ?? 0),
   }));
 
   return (
@@ -312,9 +206,7 @@ export default function Dashboard({
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar indicadores</AlertTitle>
           <AlertDescription>
-            {dashboardQuery.error instanceof Error
-              ? dashboardQuery.error.message
-            : 'Não foi possível buscar os KPIs mais recentes na API.'}
+            {dashboardQuery.error instanceof Error ? dashboardQuery.error.message : 'Não foi possível buscar KPIs.'}
           </AlertDescription>
         </Alert>
       )}
@@ -325,41 +217,15 @@ export default function Dashboard({
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <RankingCard
-          title="Top Clientes"
-          description="Clientes com maior faturamento no último período"
-          items={topClientesItems}
-          isLoading={dashboardQuery.isLoading}
-          loadingMessage="Carregando ranking..."
-          emptyMessage="Nenhum cliente registrado."
-          totalValue={formatCurrency(totalFaturamento)}
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
-        <RankingCard
-          title="Top Produtos"
-          description="Itens com maior faturamento no último período"
-          items={topProdutosItems}
-          isLoading={dashboardQuery.isLoading}
-          loadingMessage="Carregando ranking..."
-          emptyMessage="Nenhum produto registrado."
-          totalValue={formatCurrency(totalFaturamento)}
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
-        <RankingCard
-          title="Top Cidades"
-          description="Cidades com maior faturamento no último período"
-          items={topCidadesItems}
-          isLoading={dashboardQuery.isLoading}
-          loadingMessage="Carregando ranking..."
-          emptyMessage="Nenhuma cidade registrada."
-          totalValue={formatCurrency(totalFaturamento)}
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
-      </div>
+      <RankingPanelGroup
+        rankings={[
+          { title: "Top Clientes", description: "Clientes com maior faturamento", items: topClientesItems, emptyMessage: "Nenhum cliente registrado." },
+          { title: "Top Produtos", description: "Itens com maior faturamento", items: topProdutosItems, emptyMessage: "Nenhum produto registrado." },
+          { title: "Top Cidades", description: "Cidades com maior faturamento", items: topCidadesItems, emptyMessage: "Nenhuma cidade registrada." },
+        ]}
+        isLoading={dashboardQuery.isLoading}
+        totalValue={formatCurrency(totalFaturamento)}
+      />
 
       <EvolucaoChart
         billingData={salesEvolutionData}

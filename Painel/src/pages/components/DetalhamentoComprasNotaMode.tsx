@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getNcmDescription, hierarchyLabelClass } from '@/pages/components/detalhamentoVendasHelpers';
 import type { NfeNotaDetalhada } from '@/services/nfe';
@@ -24,6 +25,15 @@ type CompraProduto = {
   quantidade: number;
   valorTotal: number;
   notasCount: number;
+  tributos: CompraProdutoTributo[];
+};
+
+type CompraProdutoTributo = {
+  key: string;
+  codigo: string;
+  nome: string;
+  valor: number;
+  natureza: string;
 };
 
 type CompraNcm = {
@@ -78,6 +88,7 @@ export function DetalhamentoComprasNotaMode({
 
       fornecedor.valorTotal += valorNota;
       fornecedor.notasCount += 1;
+      const itemBaseTotal = nota.itens.reduce((total, item) => total + parseDecimal(item.valor_total), 0);
 
       for (const item of nota.itens) {
         const ncm = (item.ncm || 'sem-ncm').trim() || 'sem-ncm';
@@ -112,6 +123,7 @@ export function DetalhamentoComprasNotaMode({
             quantidade: 0,
             valorTotal: 0,
             notasCount: 0,
+            tributos: [],
           };
           ncmGroup.produtos.push(produto);
         }
@@ -119,6 +131,36 @@ export function DetalhamentoComprasNotaMode({
         produto.quantidade += quantidade;
         produto.valorTotal += valorItem;
         produto.notasCount += 1;
+
+        const tributosItem = item.tributos?.length
+          ? item.tributos.map((tributo) => ({
+              codigo: tributo.tributo_codigo,
+              nome: tributo.tributo_nome,
+              natureza: tributo.natureza === 'debito' ? 'Debito' : 'Credito',
+              valor: parseDecimal(tributo.valor_tributo),
+            }))
+          : [
+              { codigo: 'ICMS', nome: 'ICMS', natureza: 'Credito', valor: parseDecimal(nota.valor_icms) * (itemBaseTotal > 0 ? valorItem / itemBaseTotal : 0) },
+              { codigo: 'IPI', nome: 'IPI', natureza: 'Credito', valor: parseDecimal(nota.valor_ipi) * (itemBaseTotal > 0 ? valorItem / itemBaseTotal : 0) },
+              { codigo: 'PIS', nome: 'PIS', natureza: 'Credito', valor: parseDecimal(nota.valor_pis) * (itemBaseTotal > 0 ? valorItem / itemBaseTotal : 0) },
+              { codigo: 'COFINS', nome: 'COFINS', natureza: 'Credito', valor: parseDecimal(nota.valor_cofins) * (itemBaseTotal > 0 ? valorItem / itemBaseTotal : 0) },
+            ].filter((tributo) => tributo.valor !== 0);
+
+        for (const tributo of tributosItem) {
+          const tributoKey = `${tributo.codigo}-${tributo.natureza}`;
+          const atual = produto.tributos.find((entry) => entry.key === tributoKey);
+          if (atual) {
+            atual.valor += tributo.valor;
+          } else {
+            produto.tributos.push({
+              key: tributoKey,
+              codigo: tributo.codigo,
+              nome: tributo.nome,
+              natureza: tributo.natureza,
+              valor: tributo.valor,
+            });
+          }
+        }
       }
     }
 
@@ -216,6 +258,7 @@ export function DetalhamentoComprasNotaMode({
                                   <TableHead className="text-slate-300">Nome do produto</TableHead>
                                   <TableHead className="text-slate-300">QTD comprada</TableHead>
                                   <TableHead className="text-right text-slate-300">Valor total</TableHead>
+                                  <TableHead className="text-right text-slate-300">Tributos</TableHead>
                                   <TableHead className="text-right text-slate-300">Documentos</TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -226,6 +269,23 @@ export function DetalhamentoComprasNotaMode({
                                     <TableCell className="text-slate-200">{item.descricao}</TableCell>
                                     <TableCell className="text-slate-300">{item.quantidade.toFixed(2)}</TableCell>
                                     <TableCell className="text-right font-medium text-slate-100">{formatCurrency(item.valorTotal)}</TableCell>
+                                    <TableCell className="min-w-[280px] text-right">
+                                      {item.tributos.length > 0 ? (
+                                        <div className="flex flex-wrap justify-end gap-2">
+                                          {item.tributos.map((tributo) => (
+                                            <Badge
+                                              key={`${item.key}-${tributo.key}`}
+                                              variant="outline"
+                                              className="border-slate-700 bg-slate-950/70 text-slate-200"
+                                            >
+                                              {tributo.codigo} {formatCurrency(tributo.valor)} - {tributo.natureza}
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span className="text-slate-500">Sem tributos</span>
+                                      )}
+                                    </TableCell>
                                     <TableCell className="text-right text-slate-300">{item.notasCount}</TableCell>
                                   </TableRow>
                                 ))}

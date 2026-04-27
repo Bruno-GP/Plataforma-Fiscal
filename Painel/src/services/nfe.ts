@@ -343,6 +343,7 @@ export interface AnaliseFiscalCfopResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_movimentado: number | string;
+  total_impostos_complementares?: number | string;
   quantidade_documentos: number;
   quantidade_cfops: number;
   top_categorias: Array<{
@@ -365,6 +366,7 @@ export interface AnaliseFiscalNcmResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_movimentado: number | string;
+  total_impostos_complementares?: number | string;
   quantidade_documentos: number;
   quantidade_ncms: number;
   top_ncms: Array<{
@@ -381,6 +383,10 @@ export interface AnaliseFiscalHierarquicaResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   nivel_atual: string;
+  offset: number;
+  limite: number;
+  total_registros_nivel: number;
+  possui_mais_registros: boolean;
   total_faturamento: number | string;
   total_impostos: number | string;
   percentual_impostos_sobre_faturamento: number | string;
@@ -418,6 +424,7 @@ export interface AnaliseFiscalHierarquicaResponse {
   por_ncm: Array<{
     ncm: string;
     descricao: string;
+    quantidade_produtos: number;
     faturamento: number | string;
     imposto_valor: number | string;
     imposto_percentual: number | string;
@@ -456,6 +463,7 @@ export interface AnaliseClientesResponse {
 }
 
 export interface NfeItemDetalhado {
+  id?: number | null;
   item_numero: number;
   produto_codigo: string;
   descricao: string;
@@ -465,9 +473,11 @@ export interface NfeItemDetalhado {
   quantidade: number | string;
   valor_unitario: number | string;
   valor_total: number | string;
+  tributos?: NfeItemTributoDetalhado[];
 }
 
 export interface NfeNotaDetalhada {
+  id?: number | null;
   numero_nf: string;
   emitente_cnpj: string;
   modelo: string;
@@ -486,6 +496,19 @@ export interface NfeNotaDetalhada {
   valor_cofins: number | string;
   valor_total_nf: number | string;
   itens: NfeItemDetalhado[];
+}
+
+export interface NfeItemTributoDetalhado {
+  tributo_codigo: string;
+  tributo_nome: string;
+  base_calculo: number | string;
+  aliquota?: number | string | null;
+  valor_debito: number | string;
+  valor_credito: number | string;
+  valor_tributo: number | string;
+  natureza?: string | null;
+  origem?: string | null;
+  status?: string | null;
 }
 
 export interface ConsultaNotasDetalhadasResponse {
@@ -615,6 +638,7 @@ export const fetchNfeAnaliseFiscalHierarquica = async (
     ncm?: string;
     produto_codigo?: string;
     limite?: number;
+    offset?: number;
   } = {},
   options: RequestOptions = {},
 ): Promise<AnaliseFiscalHierarquicaResponse> => {

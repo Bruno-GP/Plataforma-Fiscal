@@ -278,6 +278,7 @@ def consultar_analise_fiscal_hierarquia_sped(
   ncm: str | None = Query(default=None),
   produto_codigo: str | None = Query(default=None),
   limite: int | None = Query(default=100000, ge=1),
+  offset: int = Query(default=0, ge=0),
 ):
   _validar_empresa_sped(emitente_cnpj)
 
@@ -292,6 +293,7 @@ def consultar_analise_fiscal_hierarquia_sped(
       ncm=ncm,
       produto_codigo=produto_codigo,
       limite=limite,
+      offset=offset,
     )
   except ValueError as exc:
     raise HTTPException(

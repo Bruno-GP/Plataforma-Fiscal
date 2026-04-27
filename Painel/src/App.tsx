@@ -22,6 +22,7 @@ import AnaliseCompras from "./pages/AnaliseCompras";
 import AnaliseFiscalCfop from "./pages/AnaliseFiscalCfop";
 import Inconsistencias from "./pages/Inconsistencias";
 import RelatoriosIA from "./pages/RelatoriosIA";
+import ReformaTributaria from "./pages/ReformaTributaria";
 
 // QueryClient centraliza cache e invalidação de chamadas HTTP da aplicação.
 const queryClient = new QueryClient();
@@ -105,6 +106,14 @@ const App = () => (
                 element={
                   <MainLayout>
                     <AnaliseFiscalCfop />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/reforma-tributaria"
+                element={
+                  <MainLayout>
+                    <ReformaTributaria />
                   </MainLayout>
                 }
               />

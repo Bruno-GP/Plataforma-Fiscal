@@ -3,7 +3,7 @@ import { parseDecimal } from '@/services/nfe';
 
 export const hierarchyLabelClass = 'text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400';
 
-export type DetailMode = 'nota' | 'regiao';
+export type DetailMode = 'nota' | 'regiao' | 'fiscal';
 
 export type RegionProduct = {
   key: string;
@@ -38,6 +38,44 @@ export type RegionState = {
   total: number;
   noteCount: number;
   cities: RegionCity[];
+};
+
+export type FiscalHierarchyProduct = {
+  key: string;
+  code: string;
+  description: string;
+  totalValue: number;
+  taxValue: number;
+  taxPercent: number;
+};
+
+export type FiscalHierarchyNcm = {
+  key: string;
+  ncm: string;
+  description: string;
+  total: number;
+  taxValue: number;
+  taxPercent: number;
+  products: FiscalHierarchyProduct[];
+};
+
+export type FiscalHierarchyCity = {
+  key: string;
+  city: string;
+  uf: string;
+  total: number;
+  taxValue: number;
+  taxPercent: number;
+  ncms: FiscalHierarchyNcm[];
+};
+
+export type FiscalHierarchyState = {
+  key: string;
+  uf: string;
+  total: number;
+  taxValue: number;
+  taxPercent: number;
+  cities: FiscalHierarchyCity[];
 };
 
 export const getRegionByUf = (uf: string) => {
@@ -76,6 +114,108 @@ export const getRegionByUf = (uf: string) => {
 
 export const getNcmDescription = (descricaoNcm?: string | null) =>
   (descricaoNcm ?? '').trim() || 'Descricao NCM nao informada';
+
+type SpedHierarchyRow = {
+  estado?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  ncm?: string | null;
+  descricao_ncm?: string | null;
+  produto_codigo?: string | null;
+  produto?: string | null;
+  faturamento?: string | number | null;
+  imposto_valor?: string | number | null;
+  sem_item_detalhado?: boolean | null;
+};
+
+const normalizeSpedCityName = (city?: string | null, uf?: string | null) => {
+  const cityLabel = String(city ?? '').trim();
+  const ufLabel = String(uf ?? '').trim().toUpperCase();
+
+  if (!cityLabel) return 'Cidade nao identificada';
+  if (!ufLabel) return cityLabel;
+
+  const suffixPattern = new RegExp(`\\s[-/]\\s${ufLabel}$`, 'i');
+  return cityLabel.replace(suffixPattern, '').trim() || cityLabel;
+};
+
+export const buildSpedFiscalHierarchyState = <TRow extends SpedHierarchyRow>(rows: TRow[]): FiscalHierarchyState[] => {
+  const stateMap = new Map<string, FiscalHierarchyState>();
+  const cityMap = new Map<string, FiscalHierarchyCity>();
+  const ncmMap = new Map<string, FiscalHierarchyNcm>();
+  const productMap = new Map<string, FiscalHierarchyProduct>();
+
+  rows.forEach((row) => {
+    const uf = String(row.uf ?? row.estado ?? 'Sem UF').trim() || 'Sem UF';
+    const city = normalizeSpedCityName(row.cidade, uf);
+    const ncm = String(row.ncm ?? '00000000').trim() || '00000000';
+    const description = String(row.descricao_ncm ?? 'NCM sem descricao').trim() || 'NCM sem descricao';
+    const productCode = String(row.produto_codigo ?? 'SEM-CODIGO').trim() || 'SEM-CODIGO';
+    const productDescription = String(row.produto ?? 'Produto sem descricao').trim() || 'Produto sem descricao';
+    const total = parseDecimal(row.faturamento ?? 0);
+    const taxValue = parseDecimal(row.imposto_valor ?? 0);
+
+    let stateEntry = stateMap.get(uf);
+    if (!stateEntry) {
+      stateEntry = { key: `uf-${uf}`, uf, total: 0, taxValue: 0, taxPercent: 0, cities: [] };
+      stateMap.set(uf, stateEntry);
+    }
+    stateEntry.total += total;
+    stateEntry.taxValue += taxValue;
+
+    const cityKey = `city-${uf}-${city}`;
+    let cityEntry = cityMap.get(cityKey);
+    if (!cityEntry) {
+      cityEntry = { key: cityKey, city, uf, total: 0, taxValue: 0, taxPercent: 0, ncms: [] };
+      stateEntry.cities.push(cityEntry);
+      cityMap.set(cityKey, cityEntry);
+    }
+    cityEntry.total += total;
+    cityEntry.taxValue += taxValue;
+
+    if (row.sem_item_detalhado) {
+      return;
+    }
+
+    const ncmKey = `ncm-${uf}-${city}-${ncm}`;
+    let ncmEntry = ncmMap.get(ncmKey);
+    if (!ncmEntry) {
+      ncmEntry = { key: ncmKey, ncm, description, total: 0, taxValue: 0, taxPercent: 0, products: [] };
+      cityEntry.ncms.push(ncmEntry);
+      ncmMap.set(ncmKey, ncmEntry);
+    }
+    ncmEntry.total += total;
+    ncmEntry.taxValue += taxValue;
+
+    const productKey = `product-${uf}-${city}-${ncm}-${productCode}`;
+    let productEntry = productMap.get(productKey);
+    if (!productEntry) {
+      productEntry = { key: productKey, code: productCode, description: productDescription, totalValue: 0, taxValue: 0, taxPercent: 0 };
+      ncmEntry.products.push(productEntry);
+      productMap.set(productKey, productEntry);
+    }
+
+    productEntry.totalValue += total;
+    productEntry.taxValue += taxValue;
+  });
+
+  return [...stateMap.values()].map((stateEntry) => ({
+    ...stateEntry,
+    taxPercent: stateEntry.total ? (stateEntry.taxValue / stateEntry.total) * 100 : 0,
+    cities: stateEntry.cities.map((cityEntry) => ({
+      ...cityEntry,
+      taxPercent: cityEntry.total ? (cityEntry.taxValue / cityEntry.total) * 100 : 0,
+      ncms: cityEntry.ncms.map((ncmEntry) => ({
+        ...ncmEntry,
+        taxPercent: ncmEntry.total ? (ncmEntry.taxValue / ncmEntry.total) * 100 : 0,
+        products: [...ncmEntry.products].map((productEntry) => ({
+          ...productEntry,
+          taxPercent: productEntry.totalValue ? (productEntry.taxValue / productEntry.totalValue) * 100 : 0,
+        })).sort((a, b) => b.totalValue - a.totalValue),
+      })).sort((a, b) => b.total - a.total),
+    })).sort((a, b) => b.total - a.total),
+  })).sort((a, b) => b.total - a.total);
+};
 
 const normalizeSearchValue = (value: string | number | null | undefined) =>
   String(value ?? '')
@@ -212,25 +352,25 @@ export const buildRegionHierarchy = (notas: NfeNotaDetalhada[]): RegionState[] =
       const productKey = `${clientKey}-produto-${productCode}-${productDescription.toLowerCase()}`;
 
       let productEntry = clientEntry.products.find((entry) => entry.key === productKey);
-        if (!productEntry) {
-          productEntry = {
-            key: productKey,
-            code: productCode,
-            description: productDescription,
-            totalQuantity: 0,
-            totalValue: 0,
-            notesCount: 0,
-            noteNumbers: [],
-          };
-          clientEntry.products.push(productEntry);
-        }
+      if (!productEntry) {
+        productEntry = {
+          key: productKey,
+          code: productCode,
+          description: productDescription,
+          totalQuantity: 0,
+          totalValue: 0,
+          notesCount: 0,
+          noteNumbers: [],
+        };
+        clientEntry.products.push(productEntry);
+      }
 
-        productEntry.totalQuantity += parseDecimal(item.quantidade);
-        productEntry.totalValue += parseDecimal(item.valor_total);
-        productEntry.notesCount += 1;
-        if (!productEntry.noteNumbers.includes(nota.numero_nf)) {
-          productEntry.noteNumbers.push(nota.numero_nf);
-        }
+      productEntry.totalQuantity += parseDecimal(item.quantidade);
+      productEntry.totalValue += parseDecimal(item.valor_total);
+      productEntry.notesCount += 1;
+      if (!productEntry.noteNumbers.includes(nota.numero_nf)) {
+        productEntry.noteNumbers.push(nota.numero_nf);
+      }
     }
   }
 

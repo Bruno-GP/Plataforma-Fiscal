@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS SPED_empresas (
     regime_tributario  VARCHAR(30)
 );
 
-CREATE TABLE IF NOT EXISTS SPED_sped_importacoes (
+CREATE TABLE IF NOT EXISTS SPED_importacoes (
     id              SERIAL PRIMARY KEY,
     empresa_cnpj    CHAR(14) NOT NULL REFERENCES SPED_empresas(cnpj),
     periodo_ano     INT NOT NULL,
@@ -292,7 +292,7 @@ CREATE TABLE IF NOT EXISTS SPED_ajustes_fiscais (
     valor         NUMERIC(15,2)
 );
 
-CREATE TABLE IF NOT EXISTS SPED_kpis_sped_fiscal (
+CREATE TABLE IF NOT EXISTS SPED_kpis_fiscal (
     id                            SERIAL PRIMARY KEY,
     processamento_id              INTEGER NOT NULL,
     cnpj_emitente                 VARCHAR(14) NOT NULL,

@@ -258,6 +258,7 @@ class NFeNotasService:
 
         sql_itens = """
             SELECT
+                id,
                 nota_id,
                 item_numero,
                 produto_codigo,
@@ -365,6 +366,7 @@ class NFeNotasService:
 
         sql_itens = """
             SELECT
+                id,
                 nota_id,
                 item_numero,
                 produto_codigo,
@@ -404,18 +406,20 @@ class NFeNotasService:
     ) -> list[NotaExtraida]:
         itens_por_nota: dict[int, list[ItemNota]] = {}
         for row in itens_rows:
-            nota_id = row[0]
+            item_id = row[0]
+            nota_id = row[1]
             itens_por_nota.setdefault(nota_id, []).append(
                 ItemNota(
-                    numero_item=int(row[1] or 0),
-                    codigo_produto=row[2] or "",
-                    descricao=row[3] or "",
-                    ncm=row[4] or "",
-                    cfop=row[5] or "",
+                    id=item_id,
+                    numero_item=int(row[2] or 0),
+                    codigo_produto=row[3] or "",
+                    descricao=row[4] or "",
+                    ncm=row[5] or "",
+                    cfop=row[6] or "",
                     unidade="",
-                    quantidade=Decimal(row[6] or 0),
-                    valor_unitario=Decimal(row[7] or 0),
-                    valor_total=Decimal(row[8] or 0),
+                    quantidade=Decimal(row[7] or 0),
+                    valor_unitario=Decimal(row[8] or 0),
+                    valor_total=Decimal(row[9] or 0),
                 )
             )
 
@@ -443,10 +447,62 @@ class NFeNotasService:
                     valor_desconto=Decimal(row[16] or 0),
                     valor_frete=Decimal(row[17] or 0),
                     itens=itens_por_nota.get(nota_id, []),
+                    id=nota_id,
                 )
             )
 
         return notas
+
+    def listar_tributos_itens(
+        self,
+        conn,
+        item_ids: list[int],
+    ) -> dict[int, list[dict]]:
+        if not item_ids:
+            return {}
+
+        sql = """
+            SELECT
+                it.nota_item_id,
+                t.codigo,
+                t.nome,
+                it.base_calculo,
+                it.aliquota,
+                it.valor_debito,
+                it.valor_credito,
+                it.valor_tributo,
+                it.natureza,
+                it.origem,
+                it.status
+            FROM public.itens_documentos_fiscais_tributos AS it
+            JOIN public.tributos AS t
+              ON t.id = it.tributo_id
+            WHERE it.nota_item_id = ANY(%s)
+            ORDER BY it.nota_item_id, t.codigo;
+        """
+
+        with conn.cursor() as cur:
+            cur.execute(sql, (item_ids,))
+            rows = cur.fetchall()
+
+        tributos_por_item: dict[int, list[dict]] = {}
+        for row in rows:
+            tributos_por_item.setdefault(row[0], []).append(
+                {
+                    "tributo_codigo": row[1],
+                    "tributo_nome": row[2],
+                    "base_calculo": Decimal(row[3] or 0),
+                    "aliquota": Decimal(row[4]) if row[4] is not None else None,
+                    "valor_debito": Decimal(row[5] or 0),
+                    "valor_credito": Decimal(row[6] or 0),
+                    "valor_tributo": Decimal(row[7] or 0),
+                    "natureza": row[8],
+                    "origem": row[9],
+                    "status": row[10],
+                }
+            )
+
+        return tributos_por_item
     
     def remover_notas_sem_cfop_venda(self, conn, processamento_id: int) -> int:
         logger.warning(

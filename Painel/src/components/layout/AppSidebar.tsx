@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ListTree,
   LogOut,
+  Scale,
   Sparkles,
   Users,
 } from 'lucide-react';
@@ -37,6 +38,7 @@ const menuItemsBase = [
 const menuItemImportacaoXml = { title: 'Importacao XML', url: '/importacao-xml', icon: FileUp };
 const menuItemImportacaoSped = { title: 'Importacoes SPED', url: '/importacao-sped', icon: FileDigit };
 const menuItemAnaliseCompras = { title: 'Compras', url: '/analise-compras', icon: FileSearch };
+const menuItemReformaTributaria = { title: 'Reforma Tributaria', url: '/reforma-tributaria', icon: Scale };
 // const menuItemDetalhamentoCompras = { title: 'Detalhe compras', url: '/detalhamento-compras', icon: ListTree };
 const menuItemRelatoriosIA = { title: 'Relatorios com IA', url: '/relatorios-ia', icon: Sparkles };
 const menuItemInconsistencias = { title: 'Inconsistencias', url: '/inconsistencias', icon: AlertTriangle };
@@ -50,6 +52,7 @@ export function AppSidebar() {
     ? [
         ...menuItemsBase,
         menuItemAnaliseCompras,
+        menuItemReformaTributaria,
         // menuItemDetalhamentoCompras,
         menuItemRelatoriosIA,
         menuItemInconsistencias,
@@ -58,6 +61,7 @@ export function AppSidebar() {
     : [
         ...menuItemsBase,
         menuItemAnaliseCompras,
+        menuItemReformaTributaria,
         // menuItemDetalhamentoCompras,
         menuItemRelatoriosIA,
         menuItemInconsistencias,

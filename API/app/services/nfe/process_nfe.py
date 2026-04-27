@@ -22,6 +22,7 @@ from app.services.nfe.empresa_service import EmpresaService, normalizar_cnpj
 from app.services.nfe.nfe_notas_service import NFeNotasService
 from app.services.nfe.nfe_itens_service import NFeItensService
 from app.services.nfe.nfe_process_service import NFeProcessamentosService
+from app.services.reforma_tributaria.reforma_tributaria_sync_service import ReformaTributariaSyncService
 
 logger = logging.getLogger("ProcessarNFeService")
 
@@ -259,6 +260,12 @@ class ProcessarNFeService:
                             conn=conn,
                             notas=notas_periodo,
                             processamento_id=processamento_id,
+                        )
+                        ReformaTributariaSyncService().sincronizar_nfe_periodo(
+                            conn=conn,
+                            emitente_cnpj=cnpj_emitente,
+                            periodo_ano=ano,
+                            periodo_mes=mes,
                         )
                         self._registrar_progresso(80)
                         

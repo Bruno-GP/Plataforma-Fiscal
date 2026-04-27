@@ -12,6 +12,7 @@ from typing import Iterable
 import psycopg
 
 from app.domain.sped.reader import resumir_registros_sped_bytes
+from app.services.reforma_tributaria.reforma_tributaria_sync_service import ReformaTributariaSyncService
 from app.services.sped.postgres_config import carregar_config_postgres_sped
 
 @dataclass
@@ -172,6 +173,7 @@ class SpedImportacaoService:
 
       if ids_processados:
         self._atualizar_kpis(conn, cnpj_normalizado, ids_processados)
+        ReformaTributariaSyncService().sincronizar_sped_apuracao_icms(conn, cnpj_normalizado)
         
       self._atualizar_nomes_municipios_participantes(conn, cnpj_normalizado)
 

@@ -23,7 +23,21 @@ class ProcessarNFeRequest(BaseModel):
 # DOMÍNIO NFE
 # =========================
 
+class NFeItemTributo(BaseModel):
+  tributo_codigo: str
+  tributo_nome: str
+  base_calculo: Decimal = Decimal("0.00")
+  aliquota: Optional[Decimal] = None
+  valor_debito: Decimal = Decimal("0.00")
+  valor_credito: Decimal = Decimal("0.00")
+  valor_tributo: Decimal = Decimal("0.00")
+  natureza: Optional[str] = None
+  origem: Optional[str] = None
+  status: Optional[str] = None
+
+
 class NFeItem(BaseModel):
+  id: Optional[int] = None
   item_numero: int
   produto_codigo: str
   descricao: str
@@ -39,9 +53,11 @@ class NFeItem(BaseModel):
   icms_base: Optional[Decimal] = None
   icms_aliquota: Optional[Decimal] = None
   icms_valor: Optional[Decimal] = None
+  tributos: List[NFeItemTributo] = Field(default_factory=list)
 
 
 class NFeNota(BaseModel):
+  id: Optional[int] = None
   numero_nf: str
   emitente_cnpj: str
   modelo: str

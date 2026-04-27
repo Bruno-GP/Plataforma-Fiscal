@@ -463,6 +463,7 @@ export interface AnaliseClientesResponse {
 }
 
 export interface NfeItemDetalhado {
+  id?: number | null;
   item_numero: number;
   produto_codigo: string;
   descricao: string;
@@ -472,9 +473,11 @@ export interface NfeItemDetalhado {
   quantidade: number | string;
   valor_unitario: number | string;
   valor_total: number | string;
+  tributos?: NfeItemTributoDetalhado[];
 }
 
 export interface NfeNotaDetalhada {
+  id?: number | null;
   numero_nf: string;
   emitente_cnpj: string;
   modelo: string;
@@ -493,6 +496,19 @@ export interface NfeNotaDetalhada {
   valor_cofins: number | string;
   valor_total_nf: number | string;
   itens: NfeItemDetalhado[];
+}
+
+export interface NfeItemTributoDetalhado {
+  tributo_codigo: string;
+  tributo_nome: string;
+  base_calculo: number | string;
+  aliquota?: number | string | null;
+  valor_debito: number | string;
+  valor_credito: number | string;
+  valor_tributo: number | string;
+  natureza?: string | null;
+  origem?: string | null;
+  status?: string | null;
 }
 
 export interface ConsultaNotasDetalhadasResponse {

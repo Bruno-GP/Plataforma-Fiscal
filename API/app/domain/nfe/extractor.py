@@ -82,8 +82,10 @@ class ItemNota:
         unidade: str,
         quantidade: Decimal,
         valor_unitario: Decimal,
-        valor_total: Decimal
+        valor_total: Decimal,
+        id: int | None = None,
     ):
+        self.id = id
         self.numero_item = numero_item
         self.codigo_produto = codigo_produto
         self.descricao = descricao
@@ -124,8 +126,10 @@ class NotaExtraida:
         valor_desconto: Decimal,
         valor_frete: Decimal,
 
-        itens: List[ItemNota]
+        itens: List[ItemNota],
+        id: int | None = None,
     ):
+        self.id = id
         self.chave = chave
         self.numero_nf = numero_nf
         self.emitente_cnpj = emitente_cnpj

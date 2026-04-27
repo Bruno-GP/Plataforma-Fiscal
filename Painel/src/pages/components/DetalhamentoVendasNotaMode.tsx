@@ -1,4 +1,5 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   getNcmDescription,
@@ -133,11 +134,8 @@ export function DetalhamentoVendasNotaMode({
                                       {isNfse ? 'Valor liquido' : 'Valor total'}
                                     </TableHead>
                                     <TableHead className="text-right text-slate-300">
-                                      {isNfse ? 'Retencoes' : 'ICMS'}
+                                      Tributos
                                     </TableHead>
-                                    {!isNfse && <TableHead className="text-right text-slate-300">IPI</TableHead>}
-                                    {!isNfse && <TableHead className="text-right text-slate-300">PIS</TableHead>}
-                                    {!isNfse && <TableHead className="text-right text-slate-300">Cofins</TableHead>}
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -146,6 +144,13 @@ export function DetalhamentoVendasNotaMode({
                                     .map((item) => {
                                       const itemTotal = parseDecimal(item.valor_total);
                                       const proportion = itemBaseTotal > 0 ? itemTotal / itemBaseTotal : 0;
+                                      const tributos = item.tributos ?? [];
+                                      const tributosLegados = [
+                                        { codigo: isNfse ? 'Retencoes' : 'ICMS', valor: parseDecimal(nota.valor_icms) * proportion },
+                                        { codigo: 'IPI', valor: parseDecimal(nota.valor_ipi) * proportion },
+                                        { codigo: 'PIS', valor: parseDecimal(nota.valor_pis) * proportion },
+                                        { codigo: 'COFINS', valor: parseDecimal(nota.valor_cofins) * proportion },
+                                      ].filter((tributo) => isNfse ? tributo.codigo === 'Retencoes' : tributo.valor !== 0);
 
                                       return (
                                         <TableRow
@@ -156,22 +161,41 @@ export function DetalhamentoVendasNotaMode({
                                           <TableCell className="text-slate-200">{item.descricao || 'Produto nao identificado'}</TableCell>
                                           <TableCell className="text-slate-300">{parseDecimal(item.quantidade).toFixed(2)}</TableCell>
                                           <TableCell className="text-right font-medium text-slate-100">{formatCurrency(itemTotal)}</TableCell>
-                                          <TableCell className="text-right text-slate-300">{formatCurrency(parseDecimal(nota.valor_icms) * proportion)}</TableCell>
-                                          {!isNfse && (
-                                            <TableCell className="text-right text-slate-300">
-                                              {formatCurrency(parseDecimal(nota.valor_ipi) * proportion)}
-                                            </TableCell>
-                                          )}
-                                          {!isNfse && (
-                                            <TableCell className="text-right text-slate-300">
-                                              {formatCurrency(parseDecimal(nota.valor_pis) * proportion)}
-                                            </TableCell>
-                                          )}
-                                          {!isNfse && (
-                                            <TableCell className="text-right text-slate-300">
-                                              {formatCurrency(parseDecimal(nota.valor_cofins) * proportion)}
-                                            </TableCell>
-                                          )}
+                                          <TableCell className="min-w-[280px] text-right">
+                                            {tributos.length > 0 ? (
+                                              <div className="flex flex-wrap justify-end gap-2">
+                                                {tributos.map((tributo) => {
+                                                  const valor = parseDecimal(tributo.valor_tributo);
+                                                  const natureza = tributo.natureza === 'credito' ? 'Credito' : 'Debito';
+                                                  return (
+                                                    <Badge
+                                                      key={`${item.id}-${tributo.tributo_codigo}-${natureza}`}
+                                                      variant="outline"
+                                                      className="border-slate-700 bg-slate-950/70 text-slate-200"
+                                                    >
+                                                      {tributo.tributo_codigo} {formatCurrency(valor)} - {natureza}
+                                                    </Badge>
+                                                  );
+                                                })}
+                                              </div>
+                                            ) : (
+                                              <div className="flex flex-wrap justify-end gap-2">
+                                                {tributosLegados.length > 0 ? (
+                                                  tributosLegados.map((tributo) => (
+                                                    <Badge
+                                                      key={`${item.item_numero}-${tributo.codigo}`}
+                                                      variant="outline"
+                                                      className="border-slate-800 bg-slate-950/60 text-slate-400"
+                                                    >
+                                                      {tributo.codigo} {formatCurrency(tributo.valor)}
+                                                    </Badge>
+                                                  ))
+                                                ) : (
+                                                  <span className="text-slate-500">Sem tributos</span>
+                                                )}
+                                              </div>
+                                            )}
+                                          </TableCell>
                                         </TableRow>
                                       );
                                     })}

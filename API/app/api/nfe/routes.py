@@ -15,6 +15,7 @@ from app.services.AI.openai_report_service import OpenAIReportService
 from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
   NFeItem,
+  NFeItemTributo,
   NFeNota,
   ConsultaNFeResponse,
   ConsultaKPIResponse,
@@ -679,6 +680,14 @@ def consultar_notas_detalhadas(
         periodo_mes=periodo_mes,
         tipo_operacao=tipo_operacao,
       )
+      notas_slice = notas[offset:offset + limite]
+      item_ids = [
+        item.id
+        for nota in notas_slice
+        for item in nota.itens
+        if getattr(item, "id", None) is not None
+      ]
+      tributos_por_item = notas_service.listar_tributos_itens(conn, item_ids)
   except psycopg.Error as exc:
     raise HTTPException(
       status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -688,6 +697,7 @@ def consultar_notas_detalhadas(
   total = len(notas)
   notas_paginadas = [
     NFeNota(
+      id=getattr(nota, "id", None),
       numero_nf=str(nota.numero_nf),
       emitente_cnpj=nota.emitente_cnpj,
       modelo=nota.modelo,
@@ -707,6 +717,7 @@ def consultar_notas_detalhadas(
       valor_total_nf=nota.valor_total_nf,
       itens=[
         NFeItem(
+          id=getattr(item, "id", None),
           item_numero=item.numero_item,
           produto_codigo=item.codigo_produto,
           descricao=item.descricao,
@@ -716,11 +727,15 @@ def consultar_notas_detalhadas(
           quantidade=item.quantidade,
           valor_unitario=item.valor_unitario,
           valor_total=item.valor_total,
+          tributos=[
+            NFeItemTributo(**tributo)
+            for tributo in tributos_por_item.get(getattr(item, "id", None), [])
+          ],
         )
         for item in nota.itens
       ],
     )
-    for nota in notas[offset:offset + limite]
+    for nota in notas_slice
   ]
 
   return ConsultaNFeResponse(status="ok", total=total, notas=notas_paginadas)

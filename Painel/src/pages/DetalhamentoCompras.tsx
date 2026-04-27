@@ -8,10 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Header } from '@/pages/components/Header';
+import { DetalhamentoComprasNotaMode } from '@/pages/components/DetalhamentoComprasNotaMode';
 import { RankingPanelGroup } from '@/pages/components/RankingPanelGroup';
 import { StatCard } from '@/pages/components/StatCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { monthLabels } from '@/services/utils';
+import { fetchNfeNotasDetalhadas } from '@/services/nfe';
 
 import { usePeriodFilter } from '@/hooks/usePeriodFilter';
 import { useDashboardComprasQueries } from '@/hooks/useDashboardQueries';
@@ -29,6 +31,9 @@ export default function DetalhamentoCompras() {
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
   const isSped = Boolean(user?.tem_sped);
+  const [openPurchaseSupplierValues, setOpenPurchaseSupplierValues] = useState<string[]>([]);
+  const [openPurchaseNcmValues, setOpenPurchaseNcmValues] = useState<string[]>([]);
+  const [openPurchaseProductValues, setOpenPurchaseProductValues] = useState<string[]>([]);
 
   const {
     selectedMonth,
@@ -48,6 +53,21 @@ export default function DetalhamentoCompras() {
     selectedMonth,
     monthNumber,
     hasEmitenteCnpj,
+  });
+
+  const notasComprasQuery = useQuery({
+    queryKey: ['detalhamento-compras-notas', emitenteCnpj, user?.email, selectedYear, selectedMonth],
+    queryFn: () => fetchNfeNotasDetalhadas({
+      emitente_cnpj: emitenteCnpj,
+      email: user?.email,
+      periodo_ano: Number.isNaN(year) ? undefined : year,
+      periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
+      tipo_operacao: 'compras',
+      limite: 500,
+      offset: 0,
+    }),
+    enabled: hasEmitenteCnpj && !isSped,
+    staleTime: 5 * 60 * 1000,
   });
 
   const availableYears = dashboardQuery.data?.anos_disponiveis?.length
@@ -181,6 +201,7 @@ export default function DetalhamentoCompras() {
   );
 
   const hasDetalhamentoCompras = purchasePanels.some((panel) => panel.items.length > 0);
+  const notasCompras = notasComprasQuery.data?.notas ?? [];
 
   return (
     <div className="space-y-6 py-6">
@@ -234,6 +255,17 @@ export default function DetalhamentoCompras() {
         </Alert>
       )}
 
+      {!isSped && notasComprasQuery.isError && (
+        <Alert variant="destructive">
+          <AlertTitle>Erro ao carregar notas de compra</AlertTitle>
+          <AlertDescription>
+            {notasComprasQuery.error instanceof Error
+              ? notasComprasQuery.error.message
+              : 'Nao foi possivel consultar as notas detalhadas de compra deste periodo.'}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {dashboardQuery.isError && (
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar detalhamento de compras</AlertTitle>
@@ -263,6 +295,43 @@ export default function DetalhamentoCompras() {
           isLoading={dashboardQuery.isLoading}
           totalValue={formatCurrency(currentTotalComprado)}
         />
+      )}
+
+      {!isSped && (
+        <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
+          <CardContent className="p-0">
+            <div className="border-b border-slate-800/80 px-6 py-4">
+              <div className="flex flex-col gap-2">
+                <Badge className="w-fit border border-sky-400/20 bg-sky-400/10 text-sky-100 hover:bg-sky-400/10">
+                  Tributos por item
+                </Badge>
+                <h2 className="text-xl font-semibold tracking-tight">Compras por fornecedor, NCM e produto</h2>
+                <p className="max-w-3xl text-sm text-slate-300">
+                  A grade usa os tributos complementares sincronizados por item quando existem; caso contrario, mantem
+                  a leitura proporcional dos tributos legados da nota.
+                </p>
+              </div>
+            </div>
+
+            {notasComprasQuery.isLoading ? (
+              <div className="p-6 text-sm text-slate-300">Carregando notas detalhadas de compra...</div>
+            ) : notasCompras.length > 0 ? (
+              <DetalhamentoComprasNotaMode
+                notas={notasCompras}
+                openNoteValues={openPurchaseSupplierValues}
+                onOpenNoteValuesChange={setOpenPurchaseSupplierValues}
+                openSupplierValues={openPurchaseNcmValues}
+                onOpenSupplierValuesChange={setOpenPurchaseNcmValues}
+                openNcmValues={openPurchaseProductValues}
+                onOpenNcmValuesChange={setOpenPurchaseProductValues}
+              />
+            ) : (
+              <div className="p-6 text-sm text-slate-300">
+                Nenhuma nota detalhada de compra encontrada para o periodo selecionado.
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

@@ -10,6 +10,11 @@ logger = logging.getLogger("OpenAIReportService")
 
 ReportCategory = Literal["compras", "vendas", "clientes"]
 ReportFormat = Literal["executivo", "analitico"]
+CONTINUATION_INSTRUCTION = (
+  "Continue exatamente de onde a resposta anterior parou, "
+  "sem reiniciar, sem resumir e sem repetir blocos ja enviados. "
+  "Finalize todo o conteudo restante e feche corretamente todas as tags HTML."
+)
 
 
 class OpenAIReportService:
@@ -72,39 +77,149 @@ class OpenAIReportService:
     prompt: str,
     formato: ReportFormat,
   ) -> str:
-    max_tokens = 4000 if formato == "analitico" else 1400
+    max_tokens = 7000 if formato == "analitico" else 2600
 
     if hasattr(cliente, "responses"):
-      resposta = cliente.responses.create(
-        model=self.model,
-        input=[
-          {
-            "role": "system",
-            "content": system_prompt,
-          },
-          {"role": "user", "content": prompt},
-        ],
-        temperature=0.3,
-        max_output_tokens=max_tokens,
+      return self._gerar_texto_resposta_responses(
+        cliente,
+        system_prompt,
+        prompt,
+        max_tokens,
       )
-      return (getattr(resposta, "output_text", "") or "").strip()
 
-    resposta = cliente.chat.completions.create(
-      model=self.model,
-      messages=[
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt},
-      ],
-      temperature=0.3,
-      max_tokens=max_tokens,
+    return self._gerar_texto_resposta_chat(
+      cliente,
+      system_prompt,
+      prompt,
+      max_tokens,
     )
-    mensagem = resposta.choices[0].message.content if resposta.choices else ""
+
+  def _gerar_texto_resposta_responses(
+    self,
+    cliente: OpenAI,
+    system_prompt: str,
+    prompt: str,
+    max_tokens: int,
+  ) -> str:
+    partes: list[str] = []
+    previous_response_id: str | None = None
+
+    for tentativa in range(3):
+      if previous_response_id:
+        resposta = cliente.responses.create(
+          model=self.model,
+          previous_response_id=previous_response_id,
+          input=CONTINUATION_INSTRUCTION,
+          temperature=0.3,
+          max_output_tokens=max_tokens,
+        )
+      else:
+        resposta = cliente.responses.create(
+          model=self.model,
+          input=[
+            {
+              "role": "system",
+              "content": system_prompt,
+            },
+            {"role": "user", "content": prompt},
+          ],
+          temperature=0.3,
+          max_output_tokens=max_tokens,
+        )
+
+      texto = (getattr(resposta, "output_text", "") or "").strip()
+      if texto:
+        partes.append(texto)
+
+      previous_response_id = getattr(resposta, "id", None)
+      if not self._resposta_foi_truncada(resposta):
+        break
+
+      logger.warning(
+        "Resposta da OpenAI interrompida por limite; solicitando continuacao.",
+        extra={
+          "model": self.model,
+          "tentativa": tentativa + 1,
+          "api": "responses",
+        },
+      )
+
+    return self._combinar_partes_relatorio(partes)
+
+  def _gerar_texto_resposta_chat(
+    self,
+    cliente: OpenAI,
+    system_prompt: str,
+    prompt: str,
+    max_tokens: int,
+  ) -> str:
+    mensagens: list[dict[str, str]] = [
+      {"role": "system", "content": system_prompt},
+      {"role": "user", "content": prompt},
+    ]
+    partes: list[str] = []
+
+    for tentativa in range(3):
+      resposta = cliente.chat.completions.create(
+        model=self.model,
+        messages=mensagens,
+        temperature=0.3,
+        max_tokens=max_tokens,
+      )
+      escolha = resposta.choices[0] if resposta.choices else None
+      mensagem = escolha.message.content if escolha else ""
+      texto = self._extrair_texto_mensagem_chat(mensagem)
+      if texto:
+        partes.append(texto)
+        mensagens.append({"role": "assistant", "content": texto})
+
+      finish_reason = getattr(escolha, "finish_reason", None)
+      if finish_reason != "length":
+        break
+
+      logger.warning(
+        "Resposta da OpenAI interrompida por limite; solicitando continuacao.",
+        extra={
+          "model": self.model,
+          "tentativa": tentativa + 1,
+          "api": "chat.completions",
+        },
+      )
+      mensagens.append({"role": "user", "content": CONTINUATION_INSTRUCTION})
+
+    return self._combinar_partes_relatorio(partes)
+
+  def _resposta_foi_truncada(self, resposta) -> bool:
+    status = getattr(resposta, "status", None)
+    if status == "incomplete":
+      return True
+
+    incomplete_details = getattr(resposta, "incomplete_details", None)
+    if not incomplete_details:
+      return False
+
+    reason = getattr(incomplete_details, "reason", None)
+    if reason is None and isinstance(incomplete_details, dict):
+      reason = incomplete_details.get("reason")
+
+    return reason in {"max_output_tokens", "length"}
+
+  def _extrair_texto_mensagem_chat(self, mensagem) -> str:
     if isinstance(mensagem, list):
       return "".join(
         parte.get("text", "") if isinstance(parte, dict) else str(parte)
         for parte in mensagem
       ).strip()
     return (mensagem or "").strip()
+
+  def _combinar_partes_relatorio(self, partes: list[str]) -> str:
+    if not partes:
+      return ""
+
+    relatorio = partes[0]
+    for parte in partes[1:]:
+      relatorio = f"{relatorio.rstrip()}\n{parte.lstrip()}"
+    return relatorio.strip()
 
   def _montar_prompt_compras(
     self,

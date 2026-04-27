@@ -16,7 +16,13 @@ from app.core.config import (
     is_production,
 )
 from app.core.logger import configure_logging, log_request_cycle
-from app.services.db_schema_service import ensure_empresas_tem_sped_column, ensure_fiscal_analysis_indexes, ensure_ncm_ibpt_tables
+from app.services.db_schema_service import (
+    ensure_empresas_tem_sped_column,
+    ensure_fiscal_analysis_indexes,
+    ensure_municipios_catalogo_table,
+    ensure_ncm_ibpt_tables,
+    ensure_reforma_tributaria_base_schema,
+)
 
 configure_logging()
 
@@ -79,7 +85,9 @@ app.include_router(api_router, prefix="/api")
 def ensure_database_schema() -> None:
     ensure_empresas_tem_sped_column()
     ensure_ncm_ibpt_tables()
+    ensure_municipios_catalogo_table()
     ensure_fiscal_analysis_indexes()
+    ensure_reforma_tributaria_base_schema()
 
 
 @app.get("/health")

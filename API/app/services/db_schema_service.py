@@ -1,10 +1,15 @@
 import logging
+from pathlib import Path
 
 import psycopg
 
 from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("DbSchemaService")
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+APP_SQL_DIR = BASE_DIR / "app" / "file" / "sql"
+MIGRATIONS_DIR = BASE_DIR / "migrations"
 
 
 DDL_NCM_CATALOGO = """
@@ -147,9 +152,30 @@ def ensure_ncm_ibpt_tables() -> None:
     logger.info("Schema verificado: tabelas public.ncm_catalogo e public.ncm_tributacao prontas para uso.")
 
 
+def ensure_municipios_catalogo_table() -> None:
+    ddl_municipios = (APP_SQL_DIR / "municipios_catalogo.sql").read_text(encoding="utf-8")
+
+    with psycopg.connect(**_conn_params()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(ddl_municipios)
+
+    logger.info("Schema verificado: tabela public.municipios_catalogo pronta para uso.")
+
+
 def ensure_fiscal_analysis_indexes() -> None:
     with psycopg.connect(**_conn_params()) as conn:
         with conn.cursor() as cur:
             cur.execute(DDL_FISCAL_ANALISE_INDEXES)
 
     logger.info("Schema verificado: indices funcionais da analise fiscal prontos para uso.")
+
+
+def ensure_reforma_tributaria_base_schema() -> None:
+    migration_path = MIGRATIONS_DIR / "004_add_reforma_tributaria_base.sql"
+    ddl_reforma_tributaria = migration_path.read_text(encoding="utf-8")
+
+    with psycopg.connect(**_conn_params()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(ddl_reforma_tributaria)
+
+    logger.info("Schema verificado: base da Reforma Tributaria pronta para uso.")

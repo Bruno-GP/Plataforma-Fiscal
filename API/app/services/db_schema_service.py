@@ -190,3 +190,14 @@ def ensure_reforma_tributaria_documentos_itens_schema() -> None:
             cur.execute(ddl_reforma_documentos_itens)
 
     logger.info("Schema verificado: tributos por documento e item prontos para uso.")
+
+
+def ensure_reforma_tributaria_creditos_debitos_memoria_schema() -> None:
+    migration_path = MIGRATIONS_DIR / "006_add_reforma_tributaria_creditos_debitos_memoria.sql"
+    ddl_reforma_creditos_debitos_memoria = migration_path.read_text(encoding="utf-8")
+
+    with psycopg.connect(**_conn_params()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(ddl_reforma_creditos_debitos_memoria)
+
+    logger.info("Schema verificado: creditos, debitos e memoria de calculo tributaria prontos para uso.")

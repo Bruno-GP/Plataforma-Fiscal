@@ -20,6 +20,7 @@ from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
+  obter_total_impostos_complementares_documentos,
   obter_regiao_por_uf,
 )
 from app.services.nfe.postres_config import carregar_config_postgres
@@ -1105,12 +1106,20 @@ class NFeConsultaService:
       periodo_mes=periodo_mes,
       limite=limite,
     )
+    total_impostos_complementares = obter_total_impostos_complementares_documentos(
+      conn_params=self.conn_params,
+      origem_documento="nfe",
+      emitente_cnpj=cnpj_filtrado,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
 
     return {
       "emitente_cnpj": cnpj_filtrado,
       "periodo_ano": periodo_ano,
       "periodo_mes": periodo_mes,
       "total_movimentado": resultado["total_movimentado"],
+      "total_impostos_complementares": total_impostos_complementares,
       "quantidade_documentos": resultado["quantidade_documentos"],
       "quantidade_cfops": resultado["quantidade_dimensoes"],
       "top_categorias": resultado["top_categorias"],
@@ -1147,12 +1156,20 @@ class NFeConsultaService:
       periodo_mes=periodo_mes,
       limite=limite,
     )
+    total_impostos_complementares = obter_total_impostos_complementares_documentos(
+      conn_params=self.conn_params,
+      origem_documento="nfe",
+      emitente_cnpj=cnpj_filtrado,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
 
     return {
       "emitente_cnpj": cnpj_filtrado,
       "periodo_ano": periodo_ano,
       "periodo_mes": periodo_mes,
       "total_movimentado": resultado["total_movimentado"],
+      "total_impostos_complementares": total_impostos_complementares,
       "quantidade_documentos": resultado["quantidade_documentos"],
       "quantidade_ncms": resultado["quantidade_dimensoes"],
       "top_ncms": [
@@ -1229,9 +1246,22 @@ class NFeConsultaService:
     )
 
     base_cte = f"""
-      WITH itens_filtrados AS (
+      WITH tributos_item AS (
+        SELECT
+          nota_item_id,
+          COALESCE(
+            NULLIF(SUM(valor_tributo), 0),
+            SUM(valor_debito) - SUM(valor_credito),
+            0
+          ) AS imposto_valor
+        FROM public.itens_documentos_fiscais_tributos
+        WHERE nota_item_id IS NOT NULL
+        GROUP BY nota_item_id
+      ),
+      itens_filtrados AS (
         SELECT
           n.id AS documento_id,
+          i.id AS item_id,
           COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), 'Sem UF') AS estado,
           COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nao identificada') AS cidade,
           COALESCE(NULLIF(TRIM(i.produto_codigo), ''), 'SEM-CODIGO') AS produto_codigo,
@@ -1267,14 +1297,19 @@ class NFeConsultaService:
           itens.produto_codigo,
           itens.produto_descricao,
           itens.faturamento,
-          CASE
-            WHEN COALESCE(rateio.faturamento_total_nota, 0) > 0 THEN
-              (itens.faturamento / rateio.faturamento_total_nota) * rateio.imposto_total_nota
-            ELSE 0::numeric
-          END AS imposto_valor
+          COALESCE(
+            tributos.imposto_valor,
+            CASE
+              WHEN COALESCE(rateio.faturamento_total_nota, 0) > 0 THEN
+                (itens.faturamento / rateio.faturamento_total_nota) * rateio.imposto_total_nota
+              ELSE 0::numeric
+            END
+          ) AS imposto_valor
         FROM itens_filtrados AS itens
         JOIN notas_rateio AS rateio
           ON rateio.documento_id = itens.documento_id
+        LEFT JOIN tributos_item AS tributos
+          ON tributos.nota_item_id = itens.item_id
         LEFT JOIN public.ncm_catalogo AS nc
           ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
              = COALESCE(NULLIF(itens.ncm_codigo, ''), '00000000')

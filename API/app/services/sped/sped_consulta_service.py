@@ -7,6 +7,7 @@ from app.models.nfe.schemas import NFeKPI, NFeKPIConsulta
 from app.services.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
+  obter_total_impostos_complementares_documentos,
   obter_regiao_por_uf,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
@@ -746,12 +747,20 @@ class SpedConsultaService:
       periodo_mes=periodo_mes,
       limite=limite,
     )
+    total_impostos_complementares = obter_total_impostos_complementares_documentos(
+      conn_params=self.conn_params,
+      origem_documento="sped",
+      emitente_cnpj=cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
 
     return {
       "emitente_cnpj": cnpj,
       "periodo_ano": periodo_ano,
       "periodo_mes": periodo_mes,
       "total_movimentado": resultado["total_movimentado"],
+      "total_impostos_complementares": total_impostos_complementares,
       "quantidade_documentos": resultado["quantidade_documentos"],
       "quantidade_cfops": resultado["quantidade_dimensoes"],
       "top_categorias": resultado["top_categorias"],
@@ -782,12 +791,20 @@ class SpedConsultaService:
       periodo_mes=periodo_mes,
       limite=limite,
     )
+    total_impostos_complementares = obter_total_impostos_complementares_documentos(
+      conn_params=self.conn_params,
+      origem_documento="sped",
+      emitente_cnpj=cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
 
     return {
       "emitente_cnpj": cnpj,
       "periodo_ano": periodo_ano,
       "periodo_mes": periodo_mes,
       "total_movimentado": resultado["total_movimentado"],
+      "total_impostos_complementares": total_impostos_complementares,
       "quantidade_documentos": resultado["quantidade_documentos"],
       "quantidade_ncms": resultado["quantidade_dimensoes"],
       "top_ncms": [
@@ -870,9 +887,22 @@ class SpedConsultaService:
     )
 
     base_cte = f"""
-      WITH base AS (
+      WITH tributos_item AS (
+        SELECT
+          sped_item_id,
+          COALESCE(
+            NULLIF(SUM(valor_tributo), 0),
+            SUM(valor_debito) - SUM(valor_credito),
+            0
+          ) AS imposto_valor
+        FROM public.itens_documentos_fiscais_tributos
+        WHERE sped_item_id IS NOT NULL
+        GROUP BY sped_item_id
+      ),
+      base AS (
         SELECT
           d.id AS documento_id,
+          i.id AS item_id,
           COALESCE(NULLIF(TRIM(p.uf), ''), 'Sem UF') AS estado,
           COALESCE(
             NULLIF(TRIM(p.municipio_nome), ''),
@@ -884,10 +914,13 @@ class SpedConsultaService:
           {_sped_produto_codigo_expr()} AS produto_codigo,
           COALESCE(NULLIF(TRIM(pr.descricao), ''), 'Produto sem descricao') AS produto_descricao,
           COALESCE(i.valor_total, 0) AS faturamento,
+          COALESCE(tributos.imposto_valor, 0) AS imposto_valor,
           FALSE AS sem_item_detalhado
         FROM public.sped_documentos_fiscais d
         JOIN public.sped_documento_itens i
           ON i.documento_id = d.id
+        LEFT JOIN tributos_item AS tributos
+          ON tributos.sped_item_id = i.id
         LEFT JOIN public.sped_participantes p
           ON p.id = d.participante_id
         LEFT JOIN public.sped_produtos pr
@@ -901,6 +934,7 @@ class SpedConsultaService:
 
         SELECT
           d.id AS documento_id,
+          NULL::integer AS item_id,
           COALESCE(NULLIF(TRIM(p.uf), ''), 'Sem UF') AS estado,
           COALESCE(
             NULLIF(TRIM(p.municipio_nome), ''),
@@ -912,6 +946,7 @@ class SpedConsultaService:
           'SEM-CODIGO' AS produto_codigo,
           'Produto sem descricao' AS produto_descricao,
           COALESCE(d.valor_total, 0) AS faturamento,
+          0::numeric AS imposto_valor,
           TRUE AS sem_item_detalhado
         FROM public.sped_documentos_fiscais d
         LEFT JOIN public.sped_participantes p
@@ -967,6 +1002,7 @@ class SpedConsultaService:
           """
           SELECT
             COALESCE(SUM(faturamento), 0) AS total_faturamento,
+            COALESCE(SUM(imposto_valor), 0) AS total_impostos_complementares,
             COUNT(DISTINCT documento_id) AS quantidade_documentos,
             COUNT(DISTINCT estado) AS total_estados,
             COUNT(DISTINCT CONCAT(cidade, '::', estado)) AS total_cidades,
@@ -978,6 +1014,7 @@ class SpedConsultaService:
         resumo_row = cur.fetchone()
 
         total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
+        total_impostos_complementares = resumo_row[1] if resumo_row else Decimal("0.00")
         cur.execute(
           """
           SELECT COALESCE(SUM(faturamento), 0)
@@ -987,7 +1024,12 @@ class SpedConsultaService:
         row_faturamento_periodo = cur.fetchone()
         total_faturamento_periodo = row_faturamento_periodo[0] if row_faturamento_periodo else Decimal("0.00")
         percentual_total = _calcular_percentual_imposto(total_impostos_periodo, total_faturamento_periodo)
-        total_impostos = (total_faturamento * percentual_total) / Decimal("100") if total_faturamento else Decimal("0.00")
+        usar_impostos_complementares = total_impostos_complementares > 0
+        total_impostos = (
+          total_impostos_complementares
+          if usar_impostos_complementares
+          else (total_faturamento * percentual_total) / Decimal("100") if total_faturamento else Decimal("0.00")
+        )
         hierarquia = []
         if modo_legado_hierarquia_completa:
           cur.execute(
@@ -1000,7 +1042,8 @@ class SpedConsultaService:
               produto_codigo,
               produto_descricao,
               sem_item_detalhado,
-              COALESCE(SUM(faturamento), 0) AS faturamento
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
             FROM tmp_sped_fiscal_hierarquia_base_filtrada
             GROUP BY 1, 2, 3, 4, 5, 6, 7
             ORDER BY 1 ASC, 2 ASC, 8 DESC, 5 ASC
@@ -1008,9 +1051,11 @@ class SpedConsultaService:
             """,
             (limite_consulta,),
           )
-          for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, sem_item_detalhado, faturamento in cur.fetchall():
+          for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, sem_item_detalhado, faturamento, imposto_complementar in cur.fetchall():
             faturamento_item = faturamento or Decimal("0.00")
-            imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
+            imposto_valor = imposto_complementar or Decimal("0.00")
+            if not usar_impostos_complementares:
+              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
             hierarquia.append({
               "estado": uf_item,
               "cidade": _normalizar_nome_cidade(cidade_item),
@@ -1037,7 +1082,10 @@ class SpedConsultaService:
           total_registros_nivel = (cur.fetchone() or [0])[0] or 0
           cur.execute(
             """
-            SELECT estado, COALESCE(SUM(faturamento), 0) AS faturamento
+            SELECT
+              estado,
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
             FROM tmp_sped_fiscal_hierarquia_base_filtrada
             GROUP BY 1
             ORDER BY 2 DESC, 1 ASC
@@ -1046,9 +1094,11 @@ class SpedConsultaService:
             """,
             (limite_consulta, offset_consulta),
           )
-          for uf_item, faturamento in cur.fetchall():
+          for uf_item, faturamento, imposto_complementar in cur.fetchall():
             faturamento_item = faturamento or Decimal("0.00")
-            imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
+            imposto_valor = imposto_complementar or Decimal("0.00")
+            if not usar_impostos_complementares:
+              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
             por_estado.append({
               "estado": uf_item,
               "faturamento": faturamento_item,
@@ -1061,7 +1111,11 @@ class SpedConsultaService:
           total_registros_nivel = (cur.fetchone() or [0])[0] or 0
           cur.execute(
             """
-            SELECT cidade, estado, COALESCE(SUM(faturamento), 0) AS faturamento
+            SELECT
+              cidade,
+              estado,
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
             FROM tmp_sped_fiscal_hierarquia_base_filtrada
             GROUP BY 1, 2
             ORDER BY 3 DESC, 1 ASC, 2 ASC
@@ -1070,9 +1124,11 @@ class SpedConsultaService:
             """,
             (limite_consulta, offset_consulta),
           )
-          for cidade_item, uf_item, faturamento in cur.fetchall():
+          for cidade_item, uf_item, faturamento, imposto_complementar in cur.fetchall():
             faturamento_item = faturamento or Decimal("0.00")
-            imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
+            imposto_valor = imposto_complementar or Decimal("0.00")
+            if not usar_impostos_complementares:
+              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
             por_cidade.append({
               "cidade": _normalizar_nome_cidade(cidade_item),
               "uf": uf_item,
@@ -1090,7 +1146,8 @@ class SpedConsultaService:
               ncm,
               descricao_ncm,
               COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) AS quantidade_produtos,
-              COALESCE(SUM(faturamento), 0) AS faturamento
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
             FROM tmp_sped_fiscal_hierarquia_base_filtrada
             WHERE NOT sem_item_detalhado
             GROUP BY 1, 2
@@ -1100,9 +1157,11 @@ class SpedConsultaService:
             """,
             (limite_consulta, offset_consulta),
           )
-          for ncm_item, descricao_item, quantidade_produtos, faturamento in cur.fetchall():
+          for ncm_item, descricao_item, quantidade_produtos, faturamento, imposto_complementar in cur.fetchall():
             faturamento_item = faturamento or Decimal("0.00")
-            imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
+            imposto_valor = imposto_complementar or Decimal("0.00")
+            if not usar_impostos_complementares:
+              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
             por_ncm.append({
               "ncm": ncm_item,
               "descricao": descricao_item,
@@ -1117,7 +1176,11 @@ class SpedConsultaService:
           total_registros_nivel = (cur.fetchone() or [0])[0] or 0
           cur.execute(
             """
-            SELECT produto_codigo, produto_descricao, COALESCE(SUM(faturamento), 0) AS faturamento
+            SELECT
+              produto_codigo,
+              produto_descricao,
+              COALESCE(SUM(faturamento), 0) AS faturamento,
+              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
             FROM tmp_sped_fiscal_hierarquia_base_filtrada
             WHERE NOT sem_item_detalhado
             GROUP BY 1, 2
@@ -1127,9 +1190,11 @@ class SpedConsultaService:
             """,
             (limite_consulta, offset_consulta),
           )
-          for codigo_item, produto_item, faturamento in cur.fetchall():
+          for codigo_item, produto_item, faturamento, imposto_complementar in cur.fetchall():
             faturamento_item = faturamento or Decimal("0.00")
-            imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
+            imposto_valor = imposto_complementar or Decimal("0.00")
+            if not usar_impostos_complementares:
+              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
             por_produto.append({
               "produto_codigo": codigo_item,
               "produto": produto_item,
@@ -1151,11 +1216,11 @@ class SpedConsultaService:
       "total_faturamento": total_faturamento or Decimal("0.00"),
       "total_impostos": total_impostos or Decimal("0.00"),
       "percentual_impostos_sobre_faturamento": percentual_total,
-      "quantidade_documentos": resumo_row[1] if resumo_row else 0,
-      "total_estados": resumo_row[2] if resumo_row else 0,
-      "total_cidades": resumo_row[3] if resumo_row else 0,
-      "total_ncms": resumo_row[4] if resumo_row else 0,
-      "total_produtos": resumo_row[5] if resumo_row else 0,
+      "quantidade_documentos": resumo_row[2] if resumo_row else 0,
+      "total_estados": resumo_row[3] if resumo_row else 0,
+      "total_cidades": resumo_row[4] if resumo_row else 0,
+      "total_ncms": resumo_row[5] if resumo_row else 0,
+      "total_produtos": resumo_row[6] if resumo_row else 0,
       "hierarquia": hierarquia,
       "itens_nivel_atual": itens_nivel_atual,
       "por_estado": por_estado,

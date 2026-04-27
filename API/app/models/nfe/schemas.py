@@ -367,6 +367,7 @@ class AnaliseFiscalCfopResponse(BaseModel):
   periodo_ano: int | None = None
   periodo_mes: int | None = None
   total_movimentado: Decimal = Decimal("0.00")
+  total_impostos_complementares: Decimal = Decimal("0.00")
   quantidade_documentos: int = 0
   quantidade_cfops: int = 0
   top_categorias: list[RankingCategoriaFiscal] = Field(default_factory=list)
@@ -379,6 +380,7 @@ class AnaliseFiscalNcmResponse(BaseModel):
   periodo_ano: int | None = None
   periodo_mes: int | None = None
   total_movimentado: Decimal = Decimal("0.00")
+  total_impostos_complementares: Decimal = Decimal("0.00")
   quantidade_documentos: int = 0
   quantidade_ncms: int = 0
   top_ncms: list[RankingNcmFiscal] = Field(default_factory=list)

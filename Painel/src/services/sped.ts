@@ -220,6 +220,7 @@ export interface AnaliseFiscalCfopResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_movimentado: number | string;
+  total_impostos_complementares?: number | string;
   quantidade_documentos: number;
   quantidade_cfops: number;
   top_categorias: Array<{
@@ -242,6 +243,7 @@ export interface AnaliseFiscalNcmResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_movimentado: number | string;
+  total_impostos_complementares?: number | string;
   quantidade_documentos: number;
   quantidade_ncms: number;
   top_ncms: Array<{

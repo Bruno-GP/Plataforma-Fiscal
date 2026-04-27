@@ -98,6 +98,56 @@ def _adicionar_limite(sql: str, params: list[object], limite: Optional[int]) -> 
     return f"{sql}\nLIMIT %s", [*params, limite]
 
 
+def obter_total_impostos_complementares_documentos(
+    conn_params: dict[str, object],
+    origem_documento: str,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+) -> Decimal:
+    coluna_documento = "nota_id" if origem_documento == "nfe" else "sped_documento_id"
+    filtros = [
+        f"dt.{coluna_documento} IS NOT NULL",
+        "regexp_replace(dt.empresa_cnpj, '\\D', '', 'g') = %s",
+    ]
+    parametros: list[object] = [emitente_cnpj]
+
+    if periodo_ano is not None:
+        filtros.append(
+            "(dt.periodo_ano = %s OR (dt.periodo_ano IS NULL AND EXTRACT(YEAR FROM dt.data_emissao) = %s))"
+        )
+        parametros.extend([periodo_ano, periodo_ano])
+
+    if periodo_mes is not None:
+        filtros.append(
+            "(dt.periodo_mes = %s OR (dt.periodo_mes IS NULL AND EXTRACT(MONTH FROM dt.data_emissao) = %s))"
+        )
+        parametros.extend([periodo_mes, periodo_mes])
+
+    with psycopg.connect(**conn_params) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT COALESCE(
+                  SUM(
+                    COALESCE(
+                      NULLIF(dt.valor_tributo, 0),
+                      dt.valor_debito - dt.valor_credito,
+                      0
+                    )
+                  ),
+                  0
+                ) AS total_impostos
+                FROM public.documentos_fiscais_tributos dt
+                WHERE {' AND '.join(filtros)}
+                """,
+                parametros,
+            )
+            row = cur.fetchone()
+
+    return row[0] if row else Decimal("0.00")
+
+
 def analisar_fiscal_por_dimensao(
     conn_params: dict[str, object],
     config: FiscalDimensionConfig,

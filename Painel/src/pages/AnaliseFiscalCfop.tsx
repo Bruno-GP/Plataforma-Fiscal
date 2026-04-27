@@ -97,7 +97,7 @@ export default function AnaliseFiscalCfop() {
     { title: 'Total movimentado', value: formatCurrency(parseDecimal(cfopQuery.data?.total_movimentado ?? 0)), description: 'Base total analisada por CFOP', icon: Wallet, trend: 'neutral', accentClass: 'border-l-sky-500', appendPreviousMonthLabel: false },
     { title: 'Documentos', value: String(cfopQuery.data?.quantidade_documentos ?? 0), description: 'Documentos considerados', icon: Files, trend: 'neutral', accentClass: 'border-l-emerald-500', appendPreviousMonthLabel: false },
     { title: 'CFOPs', value: String(cfopQuery.data?.quantidade_cfops ?? 0), description: 'CFOPs identificados no periodo', icon: Percent, trend: 'neutral', accentClass: 'border-l-amber-400', appendPreviousMonthLabel: false },
-    { title: 'Categorias', value: String(cfopQuery.data?.top_categorias?.length ?? 0), description: 'Categorias fiscais retornadas', icon: BarChart3, trend: 'neutral', accentClass: 'border-l-violet-500', appendPreviousMonthLabel: false },
+    { title: 'Impostos', value: formatCurrency(parseDecimal(cfopQuery.data?.total_impostos_complementares ?? 0)), description: 'Total na camada fiscal complementar', icon: BarChart3, trend: 'neutral', accentClass: 'border-l-violet-500', appendPreviousMonthLabel: false },
   ] as const;
 
   return (

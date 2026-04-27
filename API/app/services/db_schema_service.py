@@ -179,3 +179,14 @@ def ensure_reforma_tributaria_base_schema() -> None:
             cur.execute(ddl_reforma_tributaria)
 
     logger.info("Schema verificado: base da Reforma Tributaria pronta para uso.")
+
+
+def ensure_reforma_tributaria_documentos_itens_schema() -> None:
+    migration_path = MIGRATIONS_DIR / "005_add_reforma_tributaria_documentos_itens.sql"
+    ddl_reforma_documentos_itens = migration_path.read_text(encoding="utf-8")
+
+    with psycopg.connect(**_conn_params()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(ddl_reforma_documentos_itens)
+
+    logger.info("Schema verificado: tributos por documento e item prontos para uso.")

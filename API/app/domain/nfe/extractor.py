@@ -83,6 +83,7 @@ class ItemNota:
         quantidade: Decimal,
         valor_unitario: Decimal,
         valor_total: Decimal,
+        reforma_tributos: list[dict] | None = None,
         id: int | None = None,
     ):
         self.id = id
@@ -95,6 +96,7 @@ class ItemNota:
         self.quantidade = quantidade
         self.valor_unitario = valor_unitario
         self.valor_total = valor_total
+        self.reforma_tributos = reforma_tributos or []
 
 
 # =========================
@@ -174,6 +176,64 @@ def _encontrar_elemento(root, nome_tag: str):
         (element for element in root.iter() if element.tag.split("}")[-1] == nome_tag),
         None,
     )
+
+def _nome_local(elemento) -> str:
+    return elemento.tag.split("}")[-1] if elemento is not None else ""
+
+def _encontrar_elemento_local(root, nome_tag: str):
+    if root is None:
+        return None
+    return next((element for element in root.iter() if _nome_local(element) == nome_tag), None)
+
+def _texto_elemento_local(root, nome_tag: str) -> str:
+    elemento = _encontrar_elemento_local(root, nome_tag)
+    if elemento is None or elemento.text is None:
+        return ""
+    return elemento.text.strip()
+
+def _decimal_texto(valor: str) -> Decimal:
+    if not valor:
+        return Decimal("0")
+    try:
+        return Decimal(valor.replace(",", "."))
+    except Exception:
+        return Decimal("0")
+
+def _extrair_tributos_reforma_item(det) -> list[dict]:
+    imposto = det.find("nfe:imposto", NS)
+    if imposto is None:
+        imposto = det
+
+    cst = _texto_elemento_local(imposto, "CST")
+    classificacao = _texto_elemento_local(imposto, "cClassTrib")
+
+    specs = [
+        ("CBS", "gCBS", "vCBS", "pCBS"),
+        ("IBS", "gIBSCBS", "vIBS", "pIBS"),
+        ("IBS_UF", "gIBSUF", "vIBSUF", "pIBSUF"),
+        ("IBS_MUN", "gIBSMun", "vIBSMun", "pIBSMun"),
+        ("IS", "gIS", "vIS", "pIS"),
+    ]
+
+    tributos: list[dict] = []
+    for codigo, grupo_tag, valor_tag, aliquota_tag in specs:
+        grupo = _encontrar_elemento_local(imposto, grupo_tag) or imposto
+        valor = _decimal_texto(_texto_elemento_local(grupo, valor_tag))
+        if valor == 0:
+            continue
+
+        tributos.append(
+            {
+                "tributo_codigo": codigo,
+                "base_calculo": _decimal_texto(_texto_elemento_local(grupo, "vBC")),
+                "aliquota": _decimal_texto(_texto_elemento_local(grupo, aliquota_tag)),
+                "valor_tributo": valor,
+                "cst_codigo": cst or None,
+                "classificacao_tributaria": classificacao or None,
+            }
+        )
+
+    return tributos
 
 def _extrair_descricao_servico(discriminacao: str) -> str:
     if not discriminacao:
@@ -482,7 +542,8 @@ class NFeExtractor:
                         unidade=prod.findtext("nfe:uCom", "", NS),
                         quantidade=Decimal(prod.findtext("nfe:qCom", "0", NS)),
                         valor_unitario=Decimal(prod.findtext("nfe:vUnCom", "0", NS)),
-                        valor_total=Decimal(prod.findtext("nfe:vProd", "0", NS))
+                        valor_total=Decimal(prod.findtext("nfe:vProd", "0", NS)),
+                        reforma_tributos=_extrair_tributos_reforma_item(det),
                     )
                 )
 

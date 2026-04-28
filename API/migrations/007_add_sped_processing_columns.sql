@@ -1,0 +1,21 @@
+ALTER TABLE IF EXISTS public.sped_documentos_fiscais
+  ADD COLUMN IF NOT EXISTS origem_importacao_id BIGINT;
+
+CREATE INDEX IF NOT EXISTS ix_sped_documentos_origem_importacao
+  ON public.sped_documentos_fiscais (origem_importacao_id);
+
+ALTER TABLE IF EXISTS public.sped_documento_itens
+  ADD COLUMN IF NOT EXISTS cst_icms VARCHAR(3),
+  ADD COLUMN IF NOT EXISTS valor_bc_icms NUMERIC(15,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS aliquota_icms NUMERIC(9,4) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS valor_icms NUMERIC(15,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS valor_bc_ipi NUMERIC(15,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS aliquota_ipi NUMERIC(9,4) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS valor_ipi NUMERIC(15,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS valor_pis NUMERIC(15,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS valor_cofins NUMERIC(15,2) DEFAULT 0;
+
+ALTER TABLE IF EXISTS public.sped_kpis_fiscal
+  ADD COLUMN IF NOT EXISTS ipi_valor NUMERIC(15,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS pis_valor NUMERIC(15,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS cofins_valor NUMERIC(15,2) DEFAULT 0;

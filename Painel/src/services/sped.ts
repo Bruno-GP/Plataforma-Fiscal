@@ -203,6 +203,8 @@ export interface AnaliseVendasResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_vendido: number | string;
+  total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
   top_cfops_valor: Array<{
     cfop: string;
     descricao: string;
@@ -225,6 +227,7 @@ export interface AnaliseFiscalCfopResponse {
   periodo_mes?: number | null;
   total_movimentado: number | string;
   total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
   quantidade_documentos: number;
   quantidade_cfops: number;
   top_categorias: Array<{
@@ -248,6 +251,7 @@ export interface AnaliseFiscalNcmResponse {
   periodo_mes?: number | null;
   total_movimentado: number | string;
   total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
   quantidade_documentos: number;
   quantidade_ncms: number;
   top_ncms: Array<{
@@ -270,6 +274,7 @@ export interface AnaliseFiscalHierarquicaResponse {
   possui_mais_registros: boolean;
   total_faturamento: number | string;
   total_impostos: number | string;
+  total_tributos_reforma?: number | string;
   percentual_impostos_sobre_faturamento: number | string;
   quantidade_documentos: number;
   total_estados: number;

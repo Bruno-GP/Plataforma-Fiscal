@@ -388,6 +388,7 @@ class AnaliseFiscalCfopResponse(BaseModel):
   periodo_mes: int | None = None
   total_movimentado: Decimal = Decimal("0.00")
   total_impostos_complementares: Decimal = Decimal("0.00")
+  total_tributos_reforma: Decimal = Decimal("0.00")
   quantidade_documentos: int = 0
   quantidade_cfops: int = 0
   top_categorias: list[RankingCategoriaFiscal] = Field(default_factory=list)
@@ -401,6 +402,7 @@ class AnaliseFiscalNcmResponse(BaseModel):
   periodo_mes: int | None = None
   total_movimentado: Decimal = Decimal("0.00")
   total_impostos_complementares: Decimal = Decimal("0.00")
+  total_tributos_reforma: Decimal = Decimal("0.00")
   quantidade_documentos: int = 0
   quantidade_ncms: int = 0
   top_ncms: list[RankingNcmFiscal] = Field(default_factory=list)
@@ -450,6 +452,7 @@ class AnaliseFiscalHierarquicaResponse(BaseModel):
   possui_mais_registros: bool = False
   total_faturamento: Decimal = Decimal("0.00")
   total_impostos: Decimal = Decimal("0.00")
+  total_tributos_reforma: Decimal = Decimal("0.00")
   percentual_impostos_sobre_faturamento: Decimal = Decimal("0.00")
   quantidade_documentos: int = 0
   total_estados: int = 0
@@ -470,6 +473,8 @@ class AnaliseVendasResponse(BaseModel):
   periodo_ano: int | None = None
   periodo_mes: int | None = None
   total_vendido: Decimal = Decimal("0.00")
+  total_impostos_complementares: Decimal = Decimal("0.00")
+  total_tributos_reforma: Decimal = Decimal("0.00")
   top_regioes_valor: list[RankingRegiaoVenda] = Field(default_factory=list)
   top_cidades_valor: list[RankingCidadeVenda] = Field(default_factory=list)
   top_clientes_valor: list[RankingClienteVenda] = Field(default_factory=list)

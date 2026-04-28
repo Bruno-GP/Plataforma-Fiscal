@@ -173,7 +173,9 @@ class SpedImportacaoService:
 
       if ids_processados:
         self._atualizar_kpis(conn, cnpj_normalizado, ids_processados)
-        ReformaTributariaSyncService().sincronizar_sped_apuracao_icms(conn, cnpj_normalizado)
+        reforma_sync_service = ReformaTributariaSyncService()
+        reforma_sync_service.sincronizar_sped_apuracao_icms(conn, cnpj_normalizado)
+        reforma_sync_service.sincronizar_sped_documentos_itens_icms(conn, cnpj_normalizado)
         
       self._atualizar_nomes_municipios_participantes(conn, cnpj_normalizado)
 

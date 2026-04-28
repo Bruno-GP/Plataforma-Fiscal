@@ -310,6 +310,8 @@ class AnaliseComprasResponse(BaseModel):
   periodo_ano: int | None = None
   periodo_mes: int | None = None
   total_comprado: Decimal = Decimal("0.00")
+  total_impostos_complementares: Decimal = Decimal("0.00")
+  total_tributos_reforma: Decimal = Decimal("0.00")
   top_fornecedores_valor: list[RankingFornecedorCompra] = Field(default_factory=list)
   top_fornecedores_quantidade: list[RankingFornecedorCompra] = Field(default_factory=list)
   top_produtos_valor: list[RankingProdutoCompra] = Field(default_factory=list)
@@ -320,6 +322,8 @@ class SerieMensalComprasItem(BaseModel):
   periodo_ano: int
   periodo_mes: int
   total_comprado: Decimal = Decimal("0.00")
+  total_impostos_complementares: Decimal = Decimal("0.00")
+  total_tributos_reforma: Decimal = Decimal("0.00")
 
 class DashboardComprasResponse(BaseModel):
   status: str
@@ -481,11 +485,15 @@ class SerieMensalVendasItem(BaseModel):
   total_vendido: Decimal = Decimal("0.00")
   quantidade_notas: int = 0
   total_impostos: Decimal = Decimal("0.00")
+  total_impostos_complementares: Decimal = Decimal("0.00")
+  total_tributos_reforma: Decimal = Decimal("0.00")
 
 class DashboardVendasResumo(BaseModel):
   total_vendido: Decimal = Decimal("0.00")
   quantidade_notas: int = 0
   total_impostos: Decimal = Decimal("0.00")
+  total_impostos_complementares: Decimal = Decimal("0.00")
+  total_tributos_reforma: Decimal = Decimal("0.00")
   ticket_medio: Decimal = Decimal("0.00")
   top_clientes: list[dict] = Field(default_factory=list)
   top_produtos: list[dict] = Field(default_factory=list)

@@ -4,6 +4,7 @@ from app.services.nfe.empresa_service import normalizar_cnpj
 
 class ReformaTributariaSyncService:
   TRIBUTOS_LEGADOS_NFE = ("ICMS", "IPI", "PIS", "COFINS")
+  TRIBUTOS_LEGADOS_SPED = ("ICMS",)
 
   def sincronizar_nfe_periodo(
     self,
@@ -77,6 +78,21 @@ class ReformaTributariaSyncService:
         (cnpj,),
       )
 
+  def sincronizar_sped_documentos_itens_icms(
+    self,
+    conn: psycopg.Connection,
+    emitente_cnpj: str,
+  ) -> None:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    if not cnpj:
+      return
+
+    with conn.cursor() as cur:
+      self._remover_tributos_sped(cur, cnpj)
+      self._inserir_documentos_tributos_sped_icms(cur, cnpj)
+      self._inserir_itens_tributos_sped_icms(cur, cnpj)
+      self._inserir_creditos_debitos_sped_icms(cur, cnpj)
+
   def _remover_tributos_nfe_periodo(
     self,
     cur,
@@ -96,6 +112,308 @@ class ReformaTributariaSyncService:
         AND EXTRACT(MONTH FROM n.data_emissao) = %s;
       """,
       (list(self.TRIBUTOS_LEGADOS_NFE), cnpj, periodo_ano, periodo_mes),
+    )
+
+  def _remover_tributos_sped(self, cur, cnpj: str) -> None:
+    cur.execute(
+      """
+      DELETE FROM public.creditos_tributarios c
+      USING public.documentos_fiscais_tributos dt, public.tributos t
+      WHERE c.documento_tributo_id = dt.id
+        AND c.tributo_id = t.id
+        AND dt.sped_documento_id IS NOT NULL
+        AND dt.origem = 'sped'
+        AND regexp_replace(c.empresa_cnpj, '\\D', '', 'g') = %s
+        AND t.codigo = ANY(%s);
+      """,
+      (cnpj, list(self.TRIBUTOS_LEGADOS_SPED)),
+    )
+    cur.execute(
+      """
+      DELETE FROM public.debitos_tributarios d
+      USING public.documentos_fiscais_tributos dt, public.tributos t
+      WHERE d.documento_tributo_id = dt.id
+        AND d.tributo_id = t.id
+        AND dt.sped_documento_id IS NOT NULL
+        AND dt.origem = 'sped'
+        AND regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+        AND t.codigo = ANY(%s);
+      """,
+      (cnpj, list(self.TRIBUTOS_LEGADOS_SPED)),
+    )
+    cur.execute(
+      """
+      DELETE FROM public.documentos_fiscais_tributos dt
+      USING public.tributos t
+      WHERE dt.tributo_id = t.id
+        AND dt.sped_documento_id IS NOT NULL
+        AND dt.origem = 'sped'
+        AND regexp_replace(dt.empresa_cnpj, '\\D', '', 'g') = %s
+        AND t.codigo = ANY(%s);
+      """,
+      (cnpj, list(self.TRIBUTOS_LEGADOS_SPED)),
+    )
+
+  def _inserir_documentos_tributos_sped_icms(self, cur, cnpj: str) -> None:
+    cur.execute(
+      """
+      WITH documentos AS (
+        SELECT
+          d.*,
+          EXTRACT(YEAR FROM d.data_emissao)::int AS periodo_ano,
+          EXTRACT(MONTH FROM d.data_emissao)::int AS periodo_mes,
+          SUM(COALESCE(d.valor_total, 0)) OVER (
+            PARTITION BY EXTRACT(YEAR FROM d.data_emissao), EXTRACT(MONTH FROM d.data_emissao), d.tipo_operacao
+          ) AS total_operacao_periodo
+        FROM public.sped_documentos_fiscais d
+        WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+          AND d.data_emissao IS NOT NULL
+          AND d.tipo_operacao IN ('entrada', 'saida')
+      ),
+      valores AS (
+        SELECT
+          d.id AS sped_documento_id,
+          d.empresa_cnpj,
+          d.periodo_ano,
+          d.periodo_mes,
+          d.modelo::varchar AS modelo_documento,
+          COALESCE(NULLIF(d.chave_acesso, ''), d.numero::varchar) AS chave_acesso,
+          d.tipo_operacao,
+          d.data_emissao,
+          COALESCE(NULLIF(d.valor_produtos, 0), d.valor_total, 0) AS base_calculo,
+          CASE
+            WHEN d.tipo_operacao = 'saida' AND COALESCE(d.total_operacao_periodo, 0) > 0
+              THEN ROUND((COALESCE(d.valor_total, 0) / d.total_operacao_periodo) * COALESCE(a.total_debitos, 0), 2)
+            WHEN d.tipo_operacao = 'entrada' AND COALESCE(d.total_operacao_periodo, 0) > 0
+              THEN ROUND((COALESCE(d.valor_total, 0) / d.total_operacao_periodo) * COALESCE(a.total_creditos, 0), 2)
+            ELSE 0
+          END AS valor_tributo
+        FROM documentos d
+        JOIN public.sped_apuracao_icms a
+          ON regexp_replace(a.empresa_cnpj, '\\D', '', 'g') = regexp_replace(d.empresa_cnpj, '\\D', '', 'g')
+         AND a.periodo_ano = d.periodo_ano
+         AND a.periodo_mes = d.periodo_mes
+      )
+      INSERT INTO public.documentos_fiscais_tributos (
+        sped_documento_id,
+        tributo_id,
+        empresa_cnpj,
+        periodo_ano,
+        periodo_mes,
+        modelo_documento,
+        chave_acesso,
+        tipo_operacao,
+        data_emissao,
+        base_calculo,
+        valor_debito,
+        valor_credito,
+        valor_tributo,
+        natureza,
+        origem,
+        status,
+        observacoes
+      )
+      SELECT
+        v.sped_documento_id,
+        t.id,
+        v.empresa_cnpj,
+        v.periodo_ano,
+        v.periodo_mes,
+        v.modelo_documento,
+        v.chave_acesso,
+        v.tipo_operacao,
+        v.data_emissao,
+        v.base_calculo,
+        CASE WHEN v.tipo_operacao = 'saida' THEN v.valor_tributo ELSE 0 END,
+        CASE WHEN v.tipo_operacao = 'entrada' THEN v.valor_tributo ELSE 0 END,
+        v.valor_tributo,
+        CASE WHEN v.tipo_operacao = 'entrada' THEN 'credito' ELSE 'debito' END,
+        'sped',
+        'ativo',
+        'Valor distribuido proporcionalmente a partir da apuracao ICMS do SPED.'
+      FROM valores v
+      JOIN public.tributos t ON t.codigo = 'ICMS'
+      WHERE COALESCE(v.valor_tributo, 0) <> 0;
+      """,
+      (cnpj,),
+    )
+
+  def _inserir_itens_tributos_sped_icms(self, cur, cnpj: str) -> None:
+    cur.execute(
+      """
+      WITH itens AS (
+        SELECT
+          i.*,
+          d.empresa_cnpj,
+          EXTRACT(YEAR FROM d.data_emissao)::int AS periodo_ano,
+          EXTRACT(MONTH FROM d.data_emissao)::int AS periodo_mes,
+          p.codigo AS produto_codigo,
+          p.ncm,
+          SUM(COALESCE(i.valor_total, 0)) OVER (PARTITION BY i.documento_id) AS total_itens_documento
+        FROM public.sped_documento_itens i
+        JOIN public.sped_documentos_fiscais d ON d.id = i.documento_id
+        LEFT JOIN public.sped_produtos p ON p.id = i.produto_id
+        WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+      )
+      INSERT INTO public.itens_documentos_fiscais_tributos (
+        documento_tributo_id,
+        sped_item_id,
+        tributo_id,
+        empresa_cnpj,
+        periodo_ano,
+        periodo_mes,
+        numero_item,
+        produto_codigo,
+        ncm_codigo,
+        cfop,
+        base_calculo,
+        valor_debito,
+        valor_credito,
+        valor_tributo,
+        natureza,
+        origem,
+        status,
+        observacoes
+      )
+      SELECT
+        dt.id,
+        i.id,
+        dt.tributo_id,
+        i.empresa_cnpj,
+        i.periodo_ano,
+        i.periodo_mes,
+        i.numero_item,
+        i.produto_codigo,
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM public.ncm_catalogo nc
+            WHERE nc.codigo = LEFT(regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g'), 8)::char(8)
+          )
+            THEN LEFT(regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g'), 8)::char(8)
+          ELSE NULL
+        END,
+        i.cfop,
+        COALESCE(i.valor_total, 0),
+        CASE WHEN dt.natureza = 'debito' THEN
+          CASE
+            WHEN COALESCE(i.total_itens_documento, 0) > 0
+              THEN ROUND((COALESCE(i.valor_total, 0) / i.total_itens_documento) * dt.valor_tributo, 2)
+            ELSE 0
+          END
+        ELSE 0 END,
+        CASE WHEN dt.natureza = 'credito' THEN
+          CASE
+            WHEN COALESCE(i.total_itens_documento, 0) > 0
+              THEN ROUND((COALESCE(i.valor_total, 0) / i.total_itens_documento) * dt.valor_tributo, 2)
+            ELSE 0
+          END
+        ELSE 0 END,
+        CASE
+          WHEN COALESCE(i.total_itens_documento, 0) > 0
+            THEN ROUND((COALESCE(i.valor_total, 0) / i.total_itens_documento) * dt.valor_tributo, 2)
+          ELSE 0
+        END,
+        dt.natureza,
+        'sped',
+        'ativo',
+        'Valor distribuido proporcionalmente a partir do documento fiscal SPED.'
+      FROM itens i
+      JOIN public.documentos_fiscais_tributos dt
+        ON dt.sped_documento_id = i.documento_id
+       AND dt.origem = 'sped'
+      JOIN public.tributos t ON t.id = dt.tributo_id
+      WHERE t.codigo = 'ICMS';
+      """,
+      (cnpj,),
+    )
+
+  def _inserir_creditos_debitos_sped_icms(self, cur, cnpj: str) -> None:
+    cur.execute(
+      """
+      INSERT INTO public.creditos_tributarios (
+        documento_tributo_id,
+        item_tributo_id,
+        empresa_cnpj,
+        periodo_ano,
+        periodo_mes,
+        tributo_id,
+        origem_credito,
+        tipo_credito,
+        valor_original,
+        valor_saldo,
+        data_origem,
+        status,
+        observacoes
+      )
+      SELECT
+        it.documento_tributo_id,
+        it.id,
+        it.empresa_cnpj,
+        it.periodo_ano,
+        it.periodo_mes,
+        it.tributo_id,
+        'entrada',
+        'basico',
+        COALESCE(NULLIF(it.valor_credito, 0), it.valor_tributo, 0),
+        COALESCE(NULLIF(it.valor_credito, 0), it.valor_tributo, 0),
+        dt.data_emissao,
+        'disponivel',
+        'Credito ICMS distribuido a partir do SPED.'
+      FROM public.itens_documentos_fiscais_tributos it
+      JOIN public.documentos_fiscais_tributos dt ON dt.id = it.documento_tributo_id
+      JOIN public.tributos t ON t.id = it.tributo_id
+      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+        AND dt.sped_documento_id IS NOT NULL
+        AND dt.origem = 'sped'
+        AND it.natureza = 'credito'
+        AND t.codigo = 'ICMS'
+        AND COALESCE(NULLIF(it.valor_credito, 0), it.valor_tributo, 0) > 0;
+      """,
+      (cnpj,),
+    )
+    cur.execute(
+      """
+      INSERT INTO public.debitos_tributarios (
+        documento_tributo_id,
+        item_tributo_id,
+        empresa_cnpj,
+        periodo_ano,
+        periodo_mes,
+        tributo_id,
+        origem_debito,
+        tipo_debito,
+        valor_original,
+        valor_devido,
+        data_fato_gerador,
+        status,
+        observacoes
+      )
+      SELECT
+        it.documento_tributo_id,
+        it.id,
+        it.empresa_cnpj,
+        it.periodo_ano,
+        it.periodo_mes,
+        it.tributo_id,
+        'saida',
+        'operacao',
+        COALESCE(NULLIF(it.valor_debito, 0), it.valor_tributo, 0),
+        COALESCE(NULLIF(it.valor_debito, 0), it.valor_tributo, 0),
+        dt.data_emissao,
+        'aberto',
+        'Debito ICMS distribuido a partir do SPED.'
+      FROM public.itens_documentos_fiscais_tributos it
+      JOIN public.documentos_fiscais_tributos dt ON dt.id = it.documento_tributo_id
+      JOIN public.tributos t ON t.id = it.tributo_id
+      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+        AND dt.sped_documento_id IS NOT NULL
+        AND dt.origem = 'sped'
+        AND it.natureza = 'debito'
+        AND t.codigo = 'ICMS'
+        AND COALESCE(NULLIF(it.valor_debito, 0), it.valor_tributo, 0) > 0;
+      """,
+      (cnpj,),
     )
 
   def _remover_creditos_debitos_nfe_periodo(

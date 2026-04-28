@@ -104,6 +104,8 @@ def obter_total_impostos_complementares_documentos(
     emitente_cnpj: str,
     periodo_ano: Optional[int] = None,
     periodo_mes: Optional[int] = None,
+    tipo_operacao: Optional[str] = None,
+    codigos_tributos: Optional[list[str]] = None,
 ) -> Decimal:
     coluna_documento = "nota_id" if origem_documento == "nfe" else "sped_documento_id"
     filtros = [
@@ -124,6 +126,16 @@ def obter_total_impostos_complementares_documentos(
         )
         parametros.extend([periodo_mes, periodo_mes])
 
+    if tipo_operacao is not None:
+        filtros.append("dt.tipo_operacao = %s")
+        parametros.append(tipo_operacao)
+
+    join_tributos = ""
+    if codigos_tributos:
+        join_tributos = "JOIN public.tributos t ON t.id = dt.tributo_id"
+        filtros.append("t.codigo = ANY(%s)")
+        parametros.append(codigos_tributos)
+
     with psycopg.connect(**conn_params) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -139,6 +151,7 @@ def obter_total_impostos_complementares_documentos(
                   0
                 ) AS total_impostos
                 FROM public.documentos_fiscais_tributos dt
+                {join_tributos}
                 WHERE {' AND '.join(filtros)}
                 """,
                 parametros,
@@ -146,6 +159,25 @@ def obter_total_impostos_complementares_documentos(
             row = cur.fetchone()
 
     return row[0] if row else Decimal("0.00")
+
+
+def obter_total_tributos_reforma_documentos(
+    conn_params: dict[str, object],
+    origem_documento: str,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    tipo_operacao: Optional[str] = None,
+) -> Decimal:
+    return obter_total_impostos_complementares_documentos(
+        conn_params=conn_params,
+        origem_documento=origem_documento,
+        emitente_cnpj=emitente_cnpj,
+        periodo_ano=periodo_ano,
+        periodo_mes=periodo_mes,
+        tipo_operacao=tipo_operacao,
+        codigos_tributos=["CBS", "IBS", "IBS_UF", "IBS_MUN", "IS"],
+    )
 
 
 def analisar_fiscal_por_dimensao(

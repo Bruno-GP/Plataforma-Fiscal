@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingDown, TrendingUp, Users, Percent } from 'lucide-react';
+import { Scale, TrendingDown, TrendingUp, Users, Percent } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -75,6 +75,8 @@ export default function Dashboard({
   const totalSalesChange = calculateChange(totalFaturamento, previousData?.total_vendido ?? 0);
   const ticketChange = calculateChange(currentData?.ticket_medio ?? 0, previousData?.ticket_medio ?? 0);
   const totalTaxesChange = calculateChange(currentData?.total_impostos ?? 0, previousData?.total_impostos ?? 0);
+  const reformaTaxes = parseDecimal(currentData?.total_tributos_reforma ?? 0);
+  const previousReformaTaxes = parseDecimal(previousData?.total_tributos_reforma ?? 0);
 
   const stats = [
     {
@@ -111,6 +113,14 @@ export default function Dashboard({
       icon: Percent,
       trend: totalTaxesChange >= 0 ? 'up' : 'down',
       accentClass: 'border-l-violet-500',
+    },
+    {
+      title: 'Reforma Tributaria',
+      value: formatCurrency(reformaTaxes),
+      description: reformaTaxes > 0 ? 'IBS, CBS e IS no periodo' : 'Sem IBS/CBS/IS apurados',
+      icon: Scale,
+      trend: reformaTaxes >= previousReformaTaxes ? 'up' : 'down',
+      accentClass: 'border-l-cyan-500',
     },
   ];
 
@@ -211,7 +221,7 @@ export default function Dashboard({
         </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />
         ))}

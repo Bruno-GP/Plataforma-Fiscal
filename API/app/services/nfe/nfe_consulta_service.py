@@ -21,6 +21,7 @@ from app.services.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
   obter_total_impostos_complementares_documentos,
+  obter_total_tributos_reforma_documentos,
   obter_regiao_por_uf,
 )
 from app.services.nfe.postres_config import carregar_config_postgres
@@ -314,12 +315,48 @@ class NFeConsultaService:
       resultados_filtrados,
       DashboardVendasResumo,
       limite,
-    ).model_copy(update={"total_vendido": total_vendido_atual})
+    ).model_copy(update={
+      "total_vendido": total_vendido_atual,
+      "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+        self.conn_params,
+        "nfe",
+        emitente_cnpj,
+        ano_referencia,
+        periodo_mes,
+        "saida",
+      ),
+      "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+        self.conn_params,
+        "nfe",
+        emitente_cnpj,
+        ano_referencia,
+        periodo_mes,
+        "saida",
+      ),
+    })
     resumo_anterior = resumir_vendas_por_kpis(
       resultados_anteriores,
       DashboardVendasResumo,
       limite,
-    ).model_copy(update={"total_vendido": total_vendido_anterior})
+    ).model_copy(update={
+      "total_vendido": total_vendido_anterior,
+      "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+        self.conn_params,
+        "nfe",
+        emitente_cnpj,
+        ano_anterior,
+        mes_anterior,
+        "saida",
+      ),
+      "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+        self.conn_params,
+        "nfe",
+        emitente_cnpj,
+        ano_anterior,
+        mes_anterior,
+        "saida",
+      ),
+    })
 
     serie_mensal = [
       SerieMensalVendasItem(
@@ -335,6 +372,22 @@ class NFeConsultaService:
           + Decimal(str(item.kpis.total_ipi or 0))
           + Decimal(str(item.kpis.total_pis or 0))
           + Decimal(str(item.kpis.total_cofins or 0))
+        ),
+        total_impostos_complementares=obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "nfe",
+          emitente_cnpj,
+          ano_referencia,
+          item.periodo_mes,
+          "saida",
+        ),
+        total_tributos_reforma=obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "nfe",
+          emitente_cnpj,
+          ano_referencia,
+          item.periodo_mes,
+          "saida",
         ),
       )
       for item in sorted(resultados_ano_atual, key=lambda resultado: resultado.periodo_mes or 0)

@@ -7,8 +7,8 @@ Repositorio com duas aplicacoes que operam em conjunto:
 
 Cada modulo possui seu proprio guia:
 
-- [API/README.md](C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\API\README.md)
-- [Painel/README.md](C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\Painel\README.md)
+- [API/README.md](API/README.md)
+- [Painel/README.md](Painel/README.md)
 
 ## Atualizacao da documentacao
 
@@ -23,6 +23,7 @@ Cada modulo possui seu proprio guia:
 - Registro da pagina de analise fiscal por hierarquia `Estado > Cidade > NCM > Produto`.
 - Registro da central de inconsistencias, com pendencias fiscais e historico local das ultimas operacoes.
 - Registro do modulo NCM/IBPT da API, incluindo consulta tributaria e sincronizacao de catalogo.
+- Registro do modulo Reforma Tributaria, com apuracao, memoria de calculo e rastreabilidade por documento/item.
 - Referencia ao guia operacional do cron IBPT em `API/docs/ibpt-cron.md`.
 
 ### O que foi tirado
@@ -119,6 +120,7 @@ O frontend normaliza a URL automaticamente:
 - Comparativo mensal de KPIs para NFe
 - GeoJSON de municipios
 - Consulta tributaria NCM/IBPT e sincronizacao de catalogo
+- Consultas da Reforma Tributaria para tributos, apuracao, documentos, itens e memoria de calculo
 - Relatorios narrativos via OpenAI
 
 ### Painel
@@ -131,6 +133,7 @@ O frontend normaliza a URL automaticamente:
 - Dashboard de vendas
 - Dashboard de compras
 - Analise fiscal por hierarquia
+- Reforma Tributaria com filtros por periodo e tributo
 - Dashboard de clientes
 - Central de inconsistencias com historico local de operacoes
 - Central de relatorios com IA e exportacao para PDF
@@ -153,4 +156,5 @@ O frontend normaliza a URL automaticamente:
 - CORS: revise `CORS_ALLOW_ORIGINS`, `CORS_ALLOW_CREDENTIALS` e `CORS_ALLOW_ORIGIN_REGEX` na API.
 - Tela sem dados: confirme `VITE_API_URL`, API ativa e sessao valida.
 - Importacao rejeitada: valide o perfil da empresa (`tem_sped`) e o tipo de arquivo enviado.
+- Reforma Tributaria sem dados: confirme se o usuario possui `emitente_cnpj` valido e se as migracoes `004` a `006` foram aplicadas.
 - Relatorios IA indisponiveis: configure `OPENAI_API_KEY` no backend.

@@ -14,6 +14,7 @@ Frontend em React + Vite para operacao da plataforma fiscal, com autenticacao, i
 
 - Documentacao da pagina `Analise Fiscal` com drill-down por estado, cidade, NCM e produto.
 - Documentacao da `Central de inconsistencias`, com pendencias fiscais e historico salvo em `localStorage`.
+- Documentacao da tela `Reforma Tributaria`, com apuracao por tributo e memoria de calculo.
 - Registro das rotas de detalhamento de vendas e de compras no panorama do painel.
 - Registro do changelog local consumido pela pagina `Atualizacoes`.
 
@@ -49,6 +50,7 @@ Se preferir, os comandos equivalentes com `yarn` tambem funcionam.
 Observacao:
 
 - O projeto possui `vitest.config.ts` e arquivos de teste base, mas ainda nao ha script `test` definido em `package.json`.
+- Para detalhes de lacunas e recomendacoes de qualidade, veja [../docs/testing.md](../docs/testing.md).
 
 ## Ambiente
 
@@ -92,6 +94,7 @@ Painel/
 - `/analise-vendas`
 - `/analise-compras`
 - `/analise-fiscal-cfop`
+- `/reforma-tributaria`
 - `/analise-clientes`
 - `/detalhamento-vendas`
 - `/detalhamento-compras`
@@ -109,6 +112,23 @@ Painel/
 
 Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 
+## Status das funcionalidades
+
+| Funcionalidade | Status | Observacao |
+| --- | --- | --- |
+| Login | Ativa | Usa `/api/auth/entrar`. |
+| Cadastro de empresa | Ativa | Define `tem_sped`. |
+| Importacao XML | Ativa para empresas XML | Redireciona empresas SPED. |
+| Importacao SPED | Ativa para empresas SPED | Redireciona empresas XML. |
+| Analises de vendas/compras/clientes | Ativas | Service escolhe NFe ou SPED conforme perfil. |
+| Analise fiscal | Ativa | Drill-down por estado, cidade, NCM e produto. |
+| Reforma Tributaria | Ativa como consulta | Depende de dados persistidos na API. |
+| Relatorios IA | Dependente de configuracao | Exige IA habilitada na API. |
+| Inconsistencias | Ativa | Usa pendencias da API e historico local. |
+| Atualizacoes | Implementada, fora do fluxo | Rota comentada no `App.tsx`. |
+| Configuracoes | Implementada, fora do fluxo | Rota comentada no `App.tsx`. |
+| Chat | Desabilitado | Componentes existem, mas o widget nao esta ativo no layout. |
+
 ## Comportamento da aplicacao
 
 - Sessao persistida em `localStorage`
@@ -118,6 +138,9 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
   - empresa XML -> bloqueia fluxo SPED
 - Aviso superior quando existem arquivos pendentes de processamento
 - Historico local das ultimas operacoes fiscais utilizado pela central de inconsistencias
+- Consulta da Reforma Tributaria habilitada para usuarios com `emitente_cnpj` valido
+
+Risco conhecido: `localStorage` pode ser lido em caso de XSS. O token sensivel deve permanecer no cookie HttpOnly emitido pela API; os dados locais devem ser tratados como conveniencia de UI, nao como fronteira de seguranca.
 
 ## Paginas principais
 
@@ -165,6 +188,16 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 - Busca no nivel atual e expansao controlada dos grupos
 - Consumo de rotas especificas de NFe ou SPED conforme o perfil da empresa
 
+### Reforma Tributaria
+
+- Acompanhamento de CBS, IBS, Imposto Seletivo, apuracao e memoria de calculo
+- Filtros por periodo e tributo
+- Cards de debitos, creditos, saldo e total de memorias
+- Tabela de apuracao por tributo com debitos, creditos, ajustes, saldo e status
+- Tabela de memoria de calculo com etapa, base, aliquota, valor, fonte e hash
+- Busca local na memoria por tributo, etapa, fonte, formula ou hash
+- A tela nao calcula regra legal completa; ela exibe dados retornados pela API. Veja [../docs/reforma-tributaria.md](../docs/reforma-tributaria.md).
+
 ### Analise de clientes
 
 - Busca de clientes
@@ -183,13 +216,18 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 - Formato `executivo` ou `analitico`
 - Campo livre de layout para orientar a resposta em compras e vendas
 - Exportacao do relatorio para PDF via impressao do navegador
+- O relatorio e apoio analitico e precisa de validacao humana. Veja [../docs/relatorios-ia.md](../docs/relatorios-ia.md).
 
 ## Integracao com a API
+
+Contratos completos com parametros, exemplos e erros comuns estao em [../docs/api-contracts.md](../docs/api-contracts.md).
 
 ### Auth
 
 - `POST /api/auth/entrar`
 - `POST /api/auth/registrar`
+- `GET /api/auth/sessao`
+- `POST /api/auth/sair`
 
 ### NFe
 
@@ -198,7 +236,12 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 - `GET /api/nfe/analise/compras`
 - `GET /api/nfe/analise/vendas`
 - `GET /api/nfe/analise/clientes`
+- `GET /api/nfe/analise/fiscal/cfop`
+- `GET /api/nfe/analise/fiscal/ncm`
 - `GET /api/nfe/analise/fiscal/hierarquia`
+- `GET /api/nfe/analise/compras/dashboard`
+- `GET /api/nfe/analise/vendas/dashboard`
+- `GET /api/nfe/notas/detalhado`
 - `POST /api/nfe/xml/importar`
 - `GET /api/nfe/xml/pendencias`
 - `POST /api/nfe/xml/processar-importados`
@@ -209,10 +252,20 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 - `GET /api/sped/analise/compras`
 - `GET /api/sped/analise/vendas`
 - `GET /api/sped/analise/clientes`
+- `GET /api/sped/analise/fiscal/cfop`
+- `GET /api/sped/analise/fiscal/ncm`
 - `GET /api/sped/analise/fiscal/hierarquia`
+- `GET /api/sped/analise/compras/dashboard`
+- `GET /api/sped/analise/vendas/dashboard`
 - `POST /api/sped/importar`
 - `GET /api/sped/pendencias`
 - `POST /api/sped/processar-importados`
+
+### Reforma Tributaria
+
+- `GET /api/reforma-tributaria/tributos`
+- `GET /api/reforma-tributaria/apuracao`
+- `GET /api/reforma-tributaria/memoria-calculo`
 
 ## Recursos auxiliares no codigo
 
@@ -245,5 +298,6 @@ npm run preview
 - Sem dados na tela: valide `VITE_API_URL`, login e disponibilidade da API.
 - CORS: ajuste a configuracao no backend.
 - Erro ao importar: confirme se a empresa esta no fluxo correto de XML ou SPED.
+- Reforma Tributaria vazia: confirme `emitente_cnpj` na sessao e dados nas tabelas de apuracao/memoria.
 - Relatorio IA indisponivel: valide `OPENAI_API_KEY` na API.
 - PDF nao gerado: confirme se o navegador permite a janela de impressao.

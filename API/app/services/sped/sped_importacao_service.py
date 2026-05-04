@@ -49,6 +49,29 @@ class SpedImportacaoService:
       self._garantir_tabela(conn)
 
       for nome_arquivo, conteudo in arquivos:
+        cnpj_arquivo = self._extrair_cnpj_sped(conteudo)
+        if not cnpj_arquivo:
+          resultados.append(
+            SpedImportacaoResultado(
+              arquivo=nome_arquivo,
+              cnpj_emitente=None,
+              status="erro",
+              mensagem="Arquivo SPED rejeitado: registro 0000 sem CNPJ valido.",
+            )
+          )
+          continue
+
+        if cnpj_arquivo != cnpj_normalizado:
+          resultados.append(
+            SpedImportacaoResultado(
+              arquivo=nome_arquivo,
+              cnpj_emitente=cnpj_arquivo,
+              status="erro",
+              mensagem="Arquivo SPED rejeitado: o CNPJ do registro 0000 difere do CNPJ da empresa autenticada.",
+            )
+          )
+          continue
+
         hash_arquivo = sha256(conteudo).hexdigest()
 
         with conn.cursor() as cur:
@@ -169,11 +192,13 @@ class SpedImportacaoService:
         contador_registros.update(registros)
         total_linhas += linhas
         ids_processados.append(sped_id)
-        self._carregar_sped_em_tabelas(conn, cnpj_normalizado, conteudo)
+        self._carregar_sped_em_tabelas(conn, cnpj_normalizado, conteudo, sped_id)
 
       if ids_processados:
         self._atualizar_kpis(conn, cnpj_normalizado, ids_processados)
-        ReformaTributariaSyncService().sincronizar_sped_apuracao_icms(conn, cnpj_normalizado)
+        reforma_sync_service = ReformaTributariaSyncService()
+        reforma_sync_service.sincronizar_sped_apuracao_icms(conn, cnpj_normalizado)
+        reforma_sync_service.sincronizar_sped_documentos_itens_icms(conn, cnpj_normalizado)
         
       self._atualizar_nomes_municipios_participantes(conn, cnpj_normalizado)
 
@@ -203,7 +228,13 @@ class SpedImportacaoService:
         )
       conn.commit()
       
-  def _carregar_sped_em_tabelas(self, conn: psycopg.Connection, cnpj_emitente: str, conteudo: bytes) -> None:
+  def _carregar_sped_em_tabelas(
+    self,
+    conn: psycopg.Connection,
+    cnpj_emitente: str,
+    conteudo: bytes,
+    importacao_id: int,
+  ) -> None:
     linhas = conteudo.decode("latin-1", errors="ignore").splitlines()
 
     participantes: dict[str, tuple[str, str | None, str | None, str | None, str | None]] = {}
@@ -215,6 +246,23 @@ class SpedImportacaoService:
     periodo_mes: int | None = None
 
     with conn.cursor() as cur:
+      cur.execute(
+        """
+        DELETE FROM sped_documento_itens i
+        USING sped_documentos_fiscais d
+        WHERE i.documento_id = d.id
+          AND d.origem_importacao_id = %s
+        """,
+        (importacao_id,),
+      )
+      cur.execute(
+        """
+        DELETE FROM sped_documentos_fiscais
+        WHERE origem_importacao_id = %s
+        """,
+        (importacao_id,),
+      )
+
       cur.execute(
         """
         INSERT INTO sped_empresas (cnpj, razao_social)
@@ -278,9 +326,10 @@ class SpedImportacaoService:
               valor_produtos,
               valor_frete,
               valor_desconto,
-              situacao
+              situacao,
+              origem_importacao_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -298,6 +347,7 @@ class SpedImportacaoService:
               self._to_decimal(partes[18] if len(partes) > 18 else None),
               self._to_decimal(partes[14] if len(partes) > 14 else None),
               "normal",
+              importacao_id,
             ),
           )
           documento_id_atual = int(cur.fetchone()[0])
@@ -388,6 +438,8 @@ class SpedImportacaoService:
         if registro == "C170" and documento_id_atual:
           codigo_item = (partes[3] if len(partes) > 3 else "").strip()
           produto_id = self._upsert_produto(cur, produto_ids, produtos, cnpj_emitente, codigo_item)
+          quantidade = self._to_decimal(partes[5] if len(partes) > 5 else None)
+          valor_total_item = self._to_decimal(partes[7] if len(partes) > 7 else None)
 
           cur.execute(
             """
@@ -399,19 +451,37 @@ class SpedImportacaoService:
               quantidade,
               valor_unitario,
               valor_total,
-              desconto
+              desconto,
+              cst_icms,
+              valor_bc_icms,
+              aliquota_icms,
+              valor_icms,
+              valor_bc_ipi,
+              aliquota_ipi,
+              valor_ipi,
+              valor_pis,
+              valor_cofins
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
               documento_id_atual,
               produto_id,
               self._to_int(partes[2] if len(partes) > 2 else None),
               (partes[11] if len(partes) > 11 else None) or None,
-              self._to_decimal(partes[5] if len(partes) > 5 else None),
-              self._to_decimal(partes[6] if len(partes) > 6 else None),
-              self._to_decimal(partes[7] if len(partes) > 7 else None),
+              quantidade,
+              self._calcular_valor_unitario(valor_total_item, quantidade),
+              valor_total_item,
               self._to_decimal(partes[8] if len(partes) > 8 else None),
+              (partes[10] if len(partes) > 10 else None) or None,
+              self._to_decimal(partes[13] if len(partes) > 13 else None),
+              self._to_decimal(partes[14] if len(partes) > 14 else None),
+              self._to_decimal(partes[15] if len(partes) > 15 else None),
+              self._to_decimal(partes[22] if len(partes) > 22 else None),
+              self._to_decimal(partes[23] if len(partes) > 23 else None),
+              self._to_decimal(partes[24] if len(partes) > 24 else None),
+              self._to_decimal(partes[30] if len(partes) > 30 else None),
+              self._to_decimal(partes[36] if len(partes) > 36 else None),
             ),
           )
 
@@ -570,6 +640,25 @@ class SpedImportacaoService:
 
         cur.execute(
           """
+          SELECT
+            COALESCE(SUM(i.valor_ipi), 0),
+            COALESCE(SUM(i.valor_pis), 0),
+            COALESCE(SUM(i.valor_cofins), 0)
+          FROM sped_documento_itens i
+          JOIN sped_documentos_fiscais d ON d.id = i.documento_id
+          WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+            AND EXTRACT(YEAR FROM d.data_emissao) = %s
+            AND EXTRACT(MONTH FROM d.data_emissao) = %s
+          """,
+          (cnpj_emitente, ano, mes),
+        )
+        row_impostos_itens = cur.fetchone()
+        valor_ipi = row_impostos_itens[0] if row_impostos_itens else Decimal("0")
+        valor_pis = row_impostos_itens[1] if row_impostos_itens else Decimal("0")
+        valor_cofins = row_impostos_itens[2] if row_impostos_itens else Decimal("0")
+
+        cur.execute(
+          """
           INSERT INTO sped_kpis_fiscal (
             processamento_id,
             cnpj_emitente,
@@ -582,9 +671,12 @@ class SpedImportacaoService:
             valor_total_frete,
             valor_total_descontos,
             icms_valor_debitado,
-            ticket_medio
+            ticket_medio,
+            ipi_valor,
+            pis_valor,
+            cofins_valor
           )
-          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
           ON CONFLICT (cnpj_emitente, periodo_ano, periodo_mes)
           DO UPDATE SET
             processamento_id = EXCLUDED.processamento_id,
@@ -596,6 +688,9 @@ class SpedImportacaoService:
             valor_total_descontos = EXCLUDED.valor_total_descontos,
             icms_valor_debitado = EXCLUDED.icms_valor_debitado,
             ticket_medio = EXCLUDED.ticket_medio,
+            ipi_valor = EXCLUDED.ipi_valor,
+            pis_valor = EXCLUDED.pis_valor,
+            cofins_valor = EXCLUDED.cofins_valor,
             data_calculo = CURRENT_TIMESTAMP
           """,
           (
@@ -611,6 +706,9 @@ class SpedImportacaoService:
             valor_total_descontos,
             valor_icms_debitado,
             ticket_medio,
+            valor_ipi,
+            valor_pis,
+            valor_cofins,
           ),
         )
 
@@ -705,8 +803,16 @@ class SpedImportacaoService:
           valor_produtos NUMERIC(15,2),
           valor_frete NUMERIC(15,2),
           valor_desconto NUMERIC(15,2),
-          situacao VARCHAR(20)
+          situacao VARCHAR(20),
+          origem_importacao_id BIGINT
         )
+        """
+      )
+      cur.execute("ALTER TABLE sped_documentos_fiscais ADD COLUMN IF NOT EXISTS origem_importacao_id BIGINT")
+      cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_sped_documentos_origem_importacao
+        ON sped_documentos_fiscais (origem_importacao_id)
         """
       )
       cur.execute(
@@ -720,10 +826,28 @@ class SpedImportacaoService:
           quantidade NUMERIC(15,4),
           valor_unitario NUMERIC(15,6),
           valor_total NUMERIC(15,2),
-          desconto NUMERIC(15,2)
+          desconto NUMERIC(15,2),
+          cst_icms VARCHAR(3),
+          valor_bc_icms NUMERIC(15,2) DEFAULT 0,
+          aliquota_icms NUMERIC(9,4) DEFAULT 0,
+          valor_icms NUMERIC(15,2) DEFAULT 0,
+          valor_bc_ipi NUMERIC(15,2) DEFAULT 0,
+          aliquota_ipi NUMERIC(9,4) DEFAULT 0,
+          valor_ipi NUMERIC(15,2) DEFAULT 0,
+          valor_pis NUMERIC(15,2) DEFAULT 0,
+          valor_cofins NUMERIC(15,2) DEFAULT 0
         )
         """
       )
+      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS cst_icms VARCHAR(3)")
+      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_bc_icms NUMERIC(15,2) DEFAULT 0")
+      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS aliquota_icms NUMERIC(9,4) DEFAULT 0")
+      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_icms NUMERIC(15,2) DEFAULT 0")
+      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_bc_ipi NUMERIC(15,2) DEFAULT 0")
+      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS aliquota_ipi NUMERIC(9,4) DEFAULT 0")
+      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_ipi NUMERIC(15,2) DEFAULT 0")
+      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_pis NUMERIC(15,2) DEFAULT 0")
+      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_cofins NUMERIC(15,2) DEFAULT 0")
       cur.execute(
         """
         CREATE TABLE IF NOT EXISTS sped_kpis_fiscal (
@@ -740,12 +864,17 @@ class SpedImportacaoService:
           valor_total_descontos NUMERIC(15,2) DEFAULT 0,
           icms_valor_debitado NUMERIC(15,2) DEFAULT 0,
           ipi_valor NUMERIC(15,2) DEFAULT 0,
+          pis_valor NUMERIC(15,2) DEFAULT 0,
+          cofins_valor NUMERIC(15,2) DEFAULT 0,
           ticket_medio NUMERIC(15,2) DEFAULT 0,
           data_calculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           UNIQUE (cnpj_emitente, periodo_ano, periodo_mes)
         )
         """
       )
+      cur.execute("ALTER TABLE sped_kpis_fiscal ADD COLUMN IF NOT EXISTS ipi_valor NUMERIC(15,2) DEFAULT 0")
+      cur.execute("ALTER TABLE sped_kpis_fiscal ADD COLUMN IF NOT EXISTS pis_valor NUMERIC(15,2) DEFAULT 0")
+      cur.execute("ALTER TABLE sped_kpis_fiscal ADD COLUMN IF NOT EXISTS cofins_valor NUMERIC(15,2) DEFAULT 0")
       
       cur.execute(
         """
@@ -785,6 +914,16 @@ class SpedImportacaoService:
     digits = "".join(ch for ch in cnpj if ch.isdigit())
     if len(digits) == 14:
       return digits
+
+    return None
+
+  def _extrair_cnpj_sped(self, conteudo: bytes) -> str | None:
+    for linha in conteudo.decode("latin-1", errors="ignore").splitlines():
+      partes = linha.strip().split("|")
+      if len(partes) < 8 or partes[1] != "0000":
+        continue
+
+      return self._normalizar_cnpj(partes[7])
 
     return None
   
@@ -901,6 +1040,12 @@ class SpedImportacaoService:
       return Decimal(normalizado)
     except InvalidOperation:
       return Decimal("0")
+
+  def _calcular_valor_unitario(self, valor_total: Decimal, quantidade: Decimal) -> Decimal:
+    if quantidade == 0:
+      return Decimal("0")
+
+    return valor_total / quantidade
 
   def _to_date(self, value: str | None):
     if not value:

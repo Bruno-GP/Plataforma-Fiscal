@@ -8,6 +8,7 @@ from app.services.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
   obter_total_impostos_complementares_documentos,
+  obter_total_tributos_reforma_documentos,
   obter_regiao_por_uf,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
@@ -57,7 +58,7 @@ SPED_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
   dimension_code_count_expr=_sped_ncm_expr(),
   dimension_code_display_expr=_sped_ncm_expr(),
   dimension_description_expr="nc.descricao",
-  category_description_expr="d.natureza_operacao",
+  category_description_expr="cf.descricao",
   sale_condition_expr=(
     "d.tipo_operacao = 'saida' "
     "AND LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')"
@@ -66,6 +67,9 @@ SPED_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
     LEFT JOIN public.ncm_catalogo nc
       ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
          = COALESCE(NULLIF(regexp_replace(COALESCE(pr.ncm, ''), '\\D', '', 'g'), ''), '00000000')
+    LEFT JOIN public.notas_cfops cf
+      ON regexp_replace(COALESCE(cf.codigo, ''), '\\D', '', 'g')
+         = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
   """,
   unknown_code="00000000",
   unknown_description="NCM sem descrição",
@@ -169,7 +173,9 @@ class SpedConsultaService:
             0::numeric AS maior_nota,
             0::numeric AS menor_nota,
             icms_valor_debitado,
-            ipi_valor
+            ipi_valor,
+            pis_valor,
+            cofins_valor
       FROM public.sped_kpis_fiscal
       WHERE {where_clause}
       ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
@@ -180,12 +186,13 @@ class SpedConsultaService:
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+          self._garantir_tabela_kpis(cur)
           cur.execute(sql_kpis, params)
           rows = cur.fetchall()
 
           resultados: list[NFeKPIConsulta] = []
           for row in rows:
-            kpi_id, processamento_id, cnpj_emitente, ano, mes, total_vendas, total_docs, ticket_medio, maior_nota, menor_nota, total_icms, total_ipi = row
+            kpi_id, processamento_id, cnpj_emitente, ano, mes, total_vendas, total_docs, ticket_medio, maior_nota, menor_nota, total_icms, total_ipi, total_pis, total_cofins = row
             top_clientes = self._top_clientes(cur, cnpj, ano, mes)
             top_cidades = self._top_cidades(cur, cnpj, ano, mes)
             top_produtos = self._top_produtos(cur, cnpj, ano, mes)
@@ -206,8 +213,8 @@ class SpedConsultaService:
                     menor_nota=menor_nota or Decimal("0.00"),
                     total_icms=total_icms or Decimal("0.00"),
                     total_ipi=total_ipi or Decimal("0.00"),
-                    total_pis=Decimal("0.00"),
-                    total_cofins=Decimal("0.00"),
+                    total_pis=total_pis or Decimal("0.00"),
+                    total_cofins=total_cofins or Decimal("0.00"),
                     top_clientes=top_clientes,
                     top_produtos=top_produtos,
                     top_cidades=top_cidades,
@@ -216,6 +223,34 @@ class SpedConsultaService:
               )
 
           return resultados
+
+  def _garantir_tabela_kpis(self, cur) -> None:
+    cur.execute(
+      """
+      CREATE TABLE IF NOT EXISTS public.sped_kpis_fiscal (
+        id SERIAL PRIMARY KEY,
+        processamento_id INTEGER NOT NULL,
+        cnpj_emitente VARCHAR(14) NOT NULL,
+        periodo_ano INTEGER NOT NULL,
+        periodo_mes INTEGER NOT NULL,
+        total_documentos INTEGER DEFAULT 0,
+        total_itens INTEGER DEFAULT 0,
+        valor_total_saidas NUMERIC(15,2) DEFAULT 0,
+        valor_total_produtos NUMERIC(15,2) DEFAULT 0,
+        valor_total_frete NUMERIC(15,2) DEFAULT 0,
+        valor_total_descontos NUMERIC(15,2) DEFAULT 0,
+        icms_valor_debitado NUMERIC(15,2) DEFAULT 0,
+        ipi_valor NUMERIC(15,2) DEFAULT 0,
+        pis_valor NUMERIC(15,2) DEFAULT 0,
+        cofins_valor NUMERIC(15,2) DEFAULT 0,
+        ticket_medio NUMERIC(15,2) DEFAULT 0,
+        data_calculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (cnpj_emitente, periodo_ano, periodo_mes)
+      )
+      """
+    )
+    cur.execute("ALTER TABLE public.sped_kpis_fiscal ADD COLUMN IF NOT EXISTS pis_valor NUMERIC(15,2) DEFAULT 0")
+    cur.execute("ALTER TABLE public.sped_kpis_fiscal ADD COLUMN IF NOT EXISTS cofins_valor NUMERIC(15,2) DEFAULT 0")
 
   def _top_clientes(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:
     return self._safe_top_query(
@@ -511,6 +546,22 @@ class SpedConsultaService:
           "periodo_ano": periodo_ano,
           "periodo_mes": periodo_mes,
           "total_comprado": total_comprado,
+          "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+            self.conn_params,
+            "sped",
+            cnpj,
+            periodo_ano,
+            periodo_mes,
+            "entrada",
+          ),
+          "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+            self.conn_params,
+            "sped",
+            cnpj,
+            periodo_ano,
+            periodo_mes,
+            "entrada",
+          ),
           "top_fornecedores_valor": top_fornecedores_valor,
           "top_fornecedores_quantidade": top_fornecedores_quantidade,
           "top_produtos_valor": top_produtos_valor,
@@ -722,6 +773,22 @@ class SpedConsultaService:
           "periodo_ano": periodo_ano,
           "periodo_mes": periodo_mes,
           "total_vendido": total_vendido,
+          "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+            self.conn_params,
+            "sped",
+            cnpj,
+            periodo_ano,
+            periodo_mes,
+            "saida",
+          ),
+          "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+            self.conn_params,
+            "sped",
+            cnpj,
+            periodo_ano,
+            periodo_mes,
+            "saida",
+          ),
           "top_clientes_valor": top_clientes_valor,
           "top_clientes_quantidade": top_clientes_quantidade,
           "top_produtos_valor": top_produtos_valor,
@@ -754,6 +821,13 @@ class SpedConsultaService:
       periodo_ano=periodo_ano,
       periodo_mes=periodo_mes,
     )
+    total_tributos_reforma = obter_total_tributos_reforma_documentos(
+      conn_params=self.conn_params,
+      origem_documento="sped",
+      emitente_cnpj=cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
 
     return {
       "emitente_cnpj": cnpj,
@@ -761,6 +835,7 @@ class SpedConsultaService:
       "periodo_mes": periodo_mes,
       "total_movimentado": resultado["total_movimentado"],
       "total_impostos_complementares": total_impostos_complementares,
+      "total_tributos_reforma": total_tributos_reforma,
       "quantidade_documentos": resultado["quantidade_documentos"],
       "quantidade_cfops": resultado["quantidade_dimensoes"],
       "top_categorias": resultado["top_categorias"],
@@ -798,6 +873,13 @@ class SpedConsultaService:
       periodo_ano=periodo_ano,
       periodo_mes=periodo_mes,
     )
+    total_tributos_reforma = obter_total_tributos_reforma_documentos(
+      conn_params=self.conn_params,
+      origem_documento="sped",
+      emitente_cnpj=cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
 
     return {
       "emitente_cnpj": cnpj,
@@ -805,6 +887,7 @@ class SpedConsultaService:
       "periodo_mes": periodo_mes,
       "total_movimentado": resultado["total_movimentado"],
       "total_impostos_complementares": total_impostos_complementares,
+      "total_tributos_reforma": total_tributos_reforma,
       "quantidade_documentos": resultado["quantidade_documentos"],
       "quantidade_ncms": resultado["quantidade_dimensoes"],
       "top_ncms": [
@@ -1215,6 +1298,14 @@ class SpedConsultaService:
       "possui_mais_registros": (offset_consulta + len(itens_nivel_atual)) < total_registros_nivel,
       "total_faturamento": total_faturamento or Decimal("0.00"),
       "total_impostos": total_impostos or Decimal("0.00"),
+      "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+        self.conn_params,
+        "sped",
+        cnpj,
+        periodo_ano,
+        periodo_mes,
+        "saida",
+      ),
       "percentual_impostos_sobre_faturamento": percentual_total,
       "quantidade_documentos": resumo_row[2] if resumo_row else 0,
       "total_estados": resumo_row[3] if resumo_row else 0,

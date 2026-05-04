@@ -122,6 +122,8 @@ export interface AnaliseComprasResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_comprado: number | string;
+  total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
   top_fornecedores_valor: RankingFornecedorCompra[];
   top_fornecedores_quantidade: RankingFornecedorCompra[];
   top_produtos_valor: RankingProdutoCompra[];
@@ -133,6 +135,8 @@ export interface SerieMensalComprasItem {
   periodo_ano: number;
   periodo_mes: number;
   total_comprado: number | string;
+  total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
 }
 
 export interface DashboardComprasResponse {
@@ -199,6 +203,8 @@ export interface AnaliseVendasResponse {
   periodo_ano?: number | null;
   periodo_mes?: number | null;
   total_vendido: number | string;
+  total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
   top_cfops_valor: Array<{
     cfop: string;
     descricao: string;
@@ -221,6 +227,7 @@ export interface AnaliseFiscalCfopResponse {
   periodo_mes?: number | null;
   total_movimentado: number | string;
   total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
   quantidade_documentos: number;
   quantidade_cfops: number;
   top_categorias: Array<{
@@ -244,6 +251,7 @@ export interface AnaliseFiscalNcmResponse {
   periodo_mes?: number | null;
   total_movimentado: number | string;
   total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
   quantidade_documentos: number;
   quantidade_ncms: number;
   top_ncms: Array<{
@@ -266,6 +274,7 @@ export interface AnaliseFiscalHierarquicaResponse {
   possui_mais_registros: boolean;
   total_faturamento: number | string;
   total_impostos: number | string;
+  total_tributos_reforma?: number | string;
   percentual_impostos_sobre_faturamento: number | string;
   quantidade_documentos: number;
   total_estados: number;
@@ -322,12 +331,16 @@ export interface SerieMensalVendasItem {
   total_vendido: number | string;
   quantidade_notas: number;
   total_impostos: number | string;
+  total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
 }
 
 export interface DashboardVendasResumo {
   total_vendido: number | string;
   quantidade_notas: number;
   total_impostos: number | string;
+  total_impostos_complementares?: number | string;
+  total_tributos_reforma?: number | string;
   ticket_medio: number | string;
   top_clientes: Array<{ cliente?: string; valor_total?: number | string }>;
   top_produtos: Array<{ produto?: string; valor_total?: number | string }>;

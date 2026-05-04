@@ -13,6 +13,7 @@ Backend em FastAPI responsavel por autenticacao, importacao fiscal, processament
 ### O que foi adicionado
 
 - Modulo `/api/ncm` com sincronizacao IBPT e consulta tributaria por NCM/UF.
+- Modulo `/api/reforma-tributaria` com tributos, apuracao, documentos, itens e memoria de calculo.
 - Referencia ao material operacional em `API/docs/ibpt-cron.md`.
 - Registro das migracoes SQL em `API/migrations/`.
 - Registro do startup que garante colunas e tabelas auxiliares no banco.
@@ -28,6 +29,18 @@ Backend em FastAPI responsavel por autenticacao, importacao fiscal, processament
 - Prefixo da API: `/api`
 - Swagger: `/docs`
 - Health check: `/health`
+
+## Documentacao operacional
+
+- [Contratos de API](../docs/api-contracts.md)
+- [Banco de dados](../docs/database.md)
+- [Migrations](../docs/migrations.md)
+- [Seguranca](../docs/security.md)
+- [Importacao e processamento fiscal](../docs/importacao-processamento.md)
+- [Reforma Tributaria](../docs/reforma-tributaria.md)
+- [Relatorios com IA](../docs/relatorios-ia.md)
+- [Deploy](../docs/deploy.md)
+- [Auditoria operacional](../docs/auditoria-operacional.md)
 
 ## Stack
 
@@ -48,6 +61,7 @@ API/
 |   |   |-- geo/
 |   |   |-- ncm/
 |   |   |-- nfe/
+|   |   |-- reforma_tributaria/
 |   |   `-- sped/
 |   |-- core/
 |   |-- domain/
@@ -133,6 +147,7 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `/api/sped`
 - `/api/geo`
 - `/api/ncm`
+- `/api/reforma-tributaria`
 
 ## Endpoints principais
 
@@ -144,6 +159,8 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 
 - `POST /api/auth/registrar`
 - `POST /api/auth/entrar`
+- `GET /api/auth/sessao`
+- `POST /api/auth/sair`
 
 ### NFe
 
@@ -157,7 +174,13 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `GET /api/nfe/analise/compras`
 - `GET /api/nfe/analise/vendas`
 - `GET /api/nfe/analise/clientes`
+- `GET /api/nfe/analise/fiscal/cfop`
+- `GET /api/nfe/analise/fiscal/ncm`
 - `GET /api/nfe/analise/fiscal/hierarquia`
+- `GET /api/nfe/analise/compras/dashboard`
+- `GET /api/nfe/analise/vendas/dashboard`
+- `GET /api/nfe/notas`
+- `GET /api/nfe/notas/detalhado`
 
 ### SPED
 
@@ -170,7 +193,11 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `GET /api/sped/analise/compras`
 - `GET /api/sped/analise/vendas`
 - `GET /api/sped/analise/clientes`
+- `GET /api/sped/analise/fiscal/cfop`
+- `GET /api/sped/analise/fiscal/ncm`
 - `GET /api/sped/analise/fiscal/hierarquia`
+- `GET /api/sped/analise/compras/dashboard`
+- `GET /api/sped/analise/vendas/dashboard`
 
 ### Geo
 
@@ -182,13 +209,28 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `POST /api/ncm/ibpt/sincronizar`
 - `GET /api/ncm/tributacao`
 
+### Reforma Tributaria
+
+- `GET /api/reforma-tributaria/tributos`
+- `GET /api/reforma-tributaria/apuracao`
+- `GET /api/reforma-tributaria/documentos/{origem_documento}/{documento_id}/tributos`
+- `GET /api/reforma-tributaria/itens/{origem_item}/{item_id}/tributos`
+- `GET /api/reforma-tributaria/memoria-calculo`
+
+Contratos detalhados, parametros, exemplos e erros comuns estao em [../docs/api-contracts.md](../docs/api-contracts.md).
+
 ## Regras de negocio
 
 - Empresa com `tem_sped=true` nao pode usar rotas XML.
 - Empresa com `tem_sped=false` nao pode usar rotas SPED.
 - NFe aceita ate `10.000` arquivos por importacao e apenas `.xml`.
 - SPED aceita ate `500` arquivos por importacao e apenas `.txt`.
+- Uploads tambem respeitam `UPLOAD_MAX_XML_BYTES`, `UPLOAD_MAX_TXT_BYTES` e `UPLOAD_MAX_TOTAL_BYTES`.
 - A validacao de CNPJ ocorre em varios endpoints com janela minima e maxima de tamanho.
+- As rotas de Reforma Tributaria exigem escopo de empresa autenticada.
+- `apuracao` e `memoria-calculo` exigem `emitente_cnpj` e aceitam filtros opcionais por `periodo_ano`, `periodo_mes` e `tributo_codigo`.
+- A consulta de memoria de calculo limita a paginacao entre `1` e `1000` registros por chamada.
+- A Reforma Tributaria exposta pela API consulta dados persistidos e estruturas de rastreabilidade; nao ha garantia de motor legal completo para CBS, IBS e IS.
 
 ## Relatorios com IA
 
@@ -210,6 +252,7 @@ Implementacao atual:
 - Prompt templates: `API/app/services/AI/Agents/`
 - GeoJSON local: `API/app/services/Municipios/`
 - Catalogo NCM e arquivos IBPT: `API/app/services/NCM/`
+- Services da Reforma Tributaria: `API/app/services/reforma_tributaria/`
 - Guia operacional: `API/docs/ibpt-cron.md`
 - Script manual de sincronizacao: `API/scripts/sync_ibpt.py`
 
@@ -218,7 +261,19 @@ Implementacao atual:
 - Nao ha mecanismo de migracao automatizado no repositorio.
 - A estrutura SQL esta distribuida entre `app/file/sql/`, `app/models/` e `migrations/`.
 - Ha suporte para separacao entre base NFe e base SPED.
-- No startup, a aplicacao tenta garantir a coluna `tem_sped` e as tabelas auxiliares de NCM/IBPT.
+- No startup, a aplicacao tenta garantir a coluna `tem_sped`, tabelas auxiliares de NCM/IBPT, indices de analise fiscal e as estruturas da Reforma Tributaria.
+- As migracoes da Reforma Tributaria estao em `004_add_reforma_tributaria_base.sql`, `005_add_reforma_tributaria_documentos_itens.sql` e `006_add_reforma_tributaria_creditos_debitos_memoria.sql`.
+- O detalhamento de ordem, riscos e checklist esta em [../docs/database.md](../docs/database.md) e [../docs/migrations.md](../docs/migrations.md).
+
+## Seguranca operacional
+
+- A API aceita cookie HttpOnly e Bearer token.
+- Rotas fiscais usam escopo por CNPJ para reduzir risco multiempresa.
+- CORS deve ser restrito em producao.
+- `AUTH_SECRET_KEY` nao pode ficar com o padrao de desenvolvimento.
+- Dados enviados para relatorios IA podem conter informacoes fiscais sensiveis.
+
+Veja [../docs/security.md](../docs/security.md) antes de publicar a API.
 
 ## Respostas e erros comuns
 
@@ -232,3 +287,4 @@ Implementacao atual:
 
 - O nome exibido no `FastAPI(...)` ainda esta como `API - Agente Extrator NFe`, embora a API hoje cubra NFe, SPED e NCM.
 - Consulte sempre `/docs` para confirmar schemas e contratos atualizados.
+- Nao documente um endpoint como funcional sem conferir a rota correspondente em `API/app/api/`.

@@ -12,6 +12,10 @@ from app.services.NCM.ncm_catalog_service import NCMCatalogService
 from app.services.company_profile_service import CompanyProfileService
 from app.services.nfe.xml_importacao_service import XMLImportacaoService
 from app.services.AI.openai_report_service import OpenAIReportService
+from app.services.fiscal_analysis import (
+  obter_total_impostos_complementares_documentos,
+  obter_total_tributos_reforma_documentos,
+)
 from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
   NFeItem,
@@ -431,6 +435,22 @@ def consultar_dashboard_compras_nfe(
           periodo_mes=mes,
           limite=limite,
         )["total_comprado"],
+        total_impostos_complementares=obter_total_impostos_complementares_documentos(
+          service.conn_params,
+          "nfe",
+          emitente_resolvido,
+          ano_referencia,
+          mes,
+          "entrada",
+        ),
+        total_tributos_reforma=obter_total_tributos_reforma_documentos(
+          service.conn_params,
+          "nfe",
+          emitente_resolvido,
+          ano_referencia,
+          mes,
+          "entrada",
+        ),
       )
       for mes in range(1, 13)
     ]
@@ -446,8 +466,50 @@ def consultar_dashboard_compras_nfe(
     periodo_ano=ano_referencia,
     periodo_mes=periodo_mes,
     anos_disponiveis=anos_disponiveis,
-    resumo_atual=AnaliseComprasResponse(status="ok", **resumo_atual),
-    resumo_anterior=AnaliseComprasResponse(status="ok", **resumo_anterior),
+    resumo_atual=AnaliseComprasResponse(
+      status="ok",
+      **{
+        **resumo_atual,
+        "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+          service.conn_params,
+          "nfe",
+          emitente_resolvido,
+          ano_referencia,
+          periodo_mes,
+          "entrada",
+        ),
+        "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+          service.conn_params,
+          "nfe",
+          emitente_resolvido,
+          ano_referencia,
+          periodo_mes,
+          "entrada",
+        ),
+      },
+    ),
+    resumo_anterior=AnaliseComprasResponse(
+      status="ok",
+      **{
+        **resumo_anterior,
+        "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+          service.conn_params,
+          "nfe",
+          emitente_resolvido,
+          ano_anterior,
+          mes_anterior,
+          "entrada",
+        ),
+        "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+          service.conn_params,
+          "nfe",
+          emitente_resolvido,
+          ano_anterior,
+          mes_anterior,
+          "entrada",
+        ),
+      },
+    ),
     serie_mensal=serie_mensal,
   )
 

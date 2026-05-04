@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Package, ShoppingCart, Truck } from 'lucide-react';
+import { Box, Package, Scale, ShoppingCart, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -90,6 +90,8 @@ export default function AnaliseFiscal() {
   
   const currentTicketMedio = currentDocCount ? currentTotalComprado / currentDocCount : 0;
   const previousTicketMedio = previousDocCount ? previousTotalComprado / previousDocCount : 0;
+  const reformaTaxes = parseDecimal(currentData?.total_tributos_reforma ?? 0);
+  const previousReformaTaxes = parseDecimal(previousData?.total_tributos_reforma ?? 0);
 
   const stats = [
     {
@@ -123,6 +125,14 @@ export default function AnaliseFiscal() {
       icon: Box,
       trend: currentTicketMedio >= previousTicketMedio ? 'up' : 'down',
       accentClass: 'border-l-violet-500',
+    },
+    {
+      title: 'Reforma Tributaria',
+      value: formatCurrency(reformaTaxes),
+      description: reformaTaxes > 0 ? 'IBS, CBS e IS no periodo' : 'Sem IBS/CBS/IS apurados',
+      icon: Scale,
+      trend: reformaTaxes >= previousReformaTaxes ? 'up' : 'down',
+      accentClass: 'border-l-cyan-500',
     },
   ] as const;
 
@@ -178,7 +188,7 @@ export default function AnaliseFiscal() {
         </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />
         ))}

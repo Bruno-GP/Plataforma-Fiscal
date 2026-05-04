@@ -50,6 +50,7 @@ Se preferir, os comandos equivalentes com `yarn` tambem funcionam.
 Observacao:
 
 - O projeto possui `vitest.config.ts` e arquivos de teste base, mas ainda nao ha script `test` definido em `package.json`.
+- Para detalhes de lacunas e recomendacoes de qualidade, veja [../docs/testing.md](../docs/testing.md).
 
 ## Ambiente
 
@@ -111,6 +112,23 @@ Painel/
 
 Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 
+## Status das funcionalidades
+
+| Funcionalidade | Status | Observacao |
+| --- | --- | --- |
+| Login | Ativa | Usa `/api/auth/entrar`. |
+| Cadastro de empresa | Ativa | Define `tem_sped`. |
+| Importacao XML | Ativa para empresas XML | Redireciona empresas SPED. |
+| Importacao SPED | Ativa para empresas SPED | Redireciona empresas XML. |
+| Analises de vendas/compras/clientes | Ativas | Service escolhe NFe ou SPED conforme perfil. |
+| Analise fiscal | Ativa | Drill-down por estado, cidade, NCM e produto. |
+| Reforma Tributaria | Ativa como consulta | Depende de dados persistidos na API. |
+| Relatorios IA | Dependente de configuracao | Exige IA habilitada na API. |
+| Inconsistencias | Ativa | Usa pendencias da API e historico local. |
+| Atualizacoes | Implementada, fora do fluxo | Rota comentada no `App.tsx`. |
+| Configuracoes | Implementada, fora do fluxo | Rota comentada no `App.tsx`. |
+| Chat | Desabilitado | Componentes existem, mas o widget nao esta ativo no layout. |
+
 ## Comportamento da aplicacao
 
 - Sessao persistida em `localStorage`
@@ -121,6 +139,8 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 - Aviso superior quando existem arquivos pendentes de processamento
 - Historico local das ultimas operacoes fiscais utilizado pela central de inconsistencias
 - Consulta da Reforma Tributaria habilitada para usuarios com `emitente_cnpj` valido
+
+Risco conhecido: `localStorage` pode ser lido em caso de XSS. O token sensivel deve permanecer no cookie HttpOnly emitido pela API; os dados locais devem ser tratados como conveniencia de UI, nao como fronteira de seguranca.
 
 ## Paginas principais
 
@@ -176,6 +196,7 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 - Tabela de apuracao por tributo com debitos, creditos, ajustes, saldo e status
 - Tabela de memoria de calculo com etapa, base, aliquota, valor, fonte e hash
 - Busca local na memoria por tributo, etapa, fonte, formula ou hash
+- A tela nao calcula regra legal completa; ela exibe dados retornados pela API. Veja [../docs/reforma-tributaria.md](../docs/reforma-tributaria.md).
 
 ### Analise de clientes
 
@@ -195,8 +216,11 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 - Formato `executivo` ou `analitico`
 - Campo livre de layout para orientar a resposta em compras e vendas
 - Exportacao do relatorio para PDF via impressao do navegador
+- O relatorio e apoio analitico e precisa de validacao humana. Veja [../docs/relatorios-ia.md](../docs/relatorios-ia.md).
 
 ## Integracao com a API
+
+Contratos completos com parametros, exemplos e erros comuns estao em [../docs/api-contracts.md](../docs/api-contracts.md).
 
 ### Auth
 

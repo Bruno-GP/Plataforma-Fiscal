@@ -5,32 +5,34 @@ Repositorio com duas aplicacoes que operam em conjunto:
 - `API/`: backend em FastAPI para autenticacao, importacao fiscal, processamento e consultas analiticas.
 - `Painel/`: frontend em React + Vite para operacao diaria, importacoes, dashboards e relatorios.
 
-Cada modulo possui seu proprio guia:
+Cada modulo possui seu proprio guia e a documentacao operacional fica em `docs/`:
 
 - [API/README.md](API/README.md)
 - [Painel/README.md](Painel/README.md)
+- [Contratos de API](docs/api-contracts.md)
+- [Banco de dados](docs/database.md)
+- [Migrations](docs/migrations.md)
+- [Reforma Tributaria](docs/reforma-tributaria.md)
+- [Seguranca](docs/security.md)
+- [Importacao e processamento](docs/importacao-processamento.md)
+- [Relatorios com IA](docs/relatorios-ia.md)
+- [Matriz XML versus SPED](docs/matriz-xml-sped.md)
+- [Testes](docs/testing.md)
+- [Deploy](docs/deploy.md)
+- [Checklist de producao](docs/production-checklist.md)
+- [Auditoria operacional](docs/auditoria-operacional.md)
 
-## Atualizacao da documentacao
+## Leitura recomendada
 
-### O que foi atualizado
+Para manutencao ou deploy, leia primeiro:
 
-- A documentacao foi alinhada com as rotas ativas do painel e com os modulos reais publicados pela API.
-- As secoes de funcionalidades agora refletem o fluxo atual de XML, SPED, analise fiscal, inconsistencias e integracao com NCM/IBPT.
-- As observacoes operacionais foram revisadas para deixar claro o que segue ativo, o que esta desabilitado e o que ficou fora do roteador principal.
+1. [Banco de dados](docs/database.md)
+2. [Migrations](docs/migrations.md)
+3. [Seguranca](docs/security.md)
+4. [Contratos de API](docs/api-contracts.md)
+5. [Importacao e processamento](docs/importacao-processamento.md)
 
-### O que foi adicionado
-
-- Registro da pagina de analise fiscal por hierarquia `Estado > Cidade > NCM > Produto`.
-- Registro da central de inconsistencias, com pendencias fiscais e historico local das ultimas operacoes.
-- Registro do modulo NCM/IBPT da API, incluindo consulta tributaria e sincronizacao de catalogo.
-- Registro do modulo Reforma Tributaria, com apuracao, memoria de calculo e rastreabilidade por documento/item.
-- Referencia ao guia operacional do cron IBPT em `API/docs/ibpt-cron.md`.
-
-### O que foi tirado
-
-- A documentacao antiga deixava implicito que apenas vendas, compras e clientes estavam disponiveis como analise principal; isso foi substituido pela lista real de telas ativas.
-- As paginas `Atualizacoes` e `Configuracoes` continuam no codigo, mas foram retiradas do fluxo ativo do roteador principal e agora isso esta documentado explicitamente.
-- O chat permanece fora do layout principal e foi removido da descricao de funcionalidades ativas.
+Para auditoria fiscal e evolucao de produto, leia tambem [Reforma Tributaria](docs/reforma-tributaria.md), [Relatorios com IA](docs/relatorios-ia.md) e [Matriz XML versus SPED](docs/matriz-xml-sped.md).
 
 ## Visao geral
 
@@ -138,10 +140,28 @@ O frontend normaliza a URL automaticamente:
 - Central de inconsistencias com historico local de operacoes
 - Central de relatorios com IA e exportacao para PDF
 
+## Status das funcionalidades
+
+| Funcionalidade | Status | Observacao |
+| --- | --- | --- |
+| Login e cadastro de empresa | Ativa | Sessao persistida no frontend e cookie HttpOnly na API. |
+| Importacao XML/NFe | Ativa para `tem_sped=false` | Bloqueada para empresas SPED. |
+| Importacao SPED | Ativa para `tem_sped=true` | Bloqueada para empresas XML. |
+| Dashboards e analises | Ativas | Usam endpoints NFe ou SPED conforme perfil. |
+| Analise fiscal hierarquica | Ativa | Estado, cidade, NCM e produto. |
+| Reforma Tributaria | Ativa como consulta de dados persistidos | Nao e motor legal completo de CBS/IBS/IS. |
+| NCM/IBPT | Ativa | Sincronizacao depende de fonte externa e catalogos. |
+| Relatorios IA | Dependente de configuracao | Exige `OPENAI_API_KEY`; apoio analitico, nao parecer fiscal. |
+| Inconsistencias | Ativa | Combina pendencias da API e historico local. |
+| Atualizacoes e Configuracoes | Implementadas, fora do fluxo | Paginas existem, mas rotas estao comentadas no roteador principal. |
+| Chat | Desabilitado | Componentes existem, sem integracao ativa com API. |
+
 ## Observacoes importantes
 
 - Empresas configuradas para SPED nao devem usar o fluxo XML.
 - Empresas configuradas para XML nao devem usar o fluxo SPED.
+- O projeto nao possui migrations automatizadas; veja [Migrations](docs/migrations.md).
+- Dados fiscais e relatorios IA exigem validacao humana antes de uso oficial.
 - O painel possui paginas de `Atualizacoes` e `Configuracoes` implementadas no codigo, mas elas nao estao ativas no roteador principal.
 - O chat do frontend existe como componente/contexto local, porem esta desabilitado no layout e hoje nao conversa com a API.
 

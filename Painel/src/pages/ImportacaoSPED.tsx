@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, FileUp, Upload, Database } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { waitForJob, type ProcessingJobResponse } from '@/services/jobs';
 import { saveFiscalOperation } from '@/services/operations';
 import {
   consultarPendenciasSped,
@@ -15,7 +16,6 @@ import {
   processarSpedsImportados,
   type ImportacaoSpedArquivoResultado,
   type ImportacaoSpedPendenciasResponse,
-  type ProcessamentoSpedResponse,
 } from '@/services/sped';
 
 interface SpedFileItem {
@@ -36,7 +36,9 @@ export default function ImportacaoSPED() {
   const [results, setResults] = useState<ImportacaoSpedArquivoResultado[]>([]);
   const [pendencias, setPendencias] = useState<ImportacaoSpedPendenciasResponse | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processamento, setProcessamento] = useState<ProcessamentoSpedResponse | null>(null);
+  const [currentJob, setCurrentJob] = useState<ProcessingJobResponse | null>(null);
+  const [jobMessage, setJobMessage] = useState<string | null>(null);
+  const processingAbortRef = useRef<AbortController | null>(null);
 
   const totalSize = useMemo(() => selectedFiles.reduce((acc, item) => acc + item.file.size, 0), [selectedFiles]);
 
@@ -63,6 +65,12 @@ export default function ImportacaoSPED() {
     void carregarPendencias();
   }, [carregarPendencias]);
 
+  useEffect(() => {
+    return () => {
+      processingAbortRef.current?.abort();
+    };
+  }, []);
+
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return;
 
@@ -86,6 +94,8 @@ export default function ImportacaoSPED() {
     setIsImporting(true);
     setImportedCount(0);
     setResults([]);
+    setCurrentJob(null);
+    setJobMessage(null);
 
     const importResults: ImportacaoSpedArquivoResultado[] = [];
 
@@ -132,10 +142,36 @@ export default function ImportacaoSPED() {
   const processarImportados = async () => {
     if (!user?.emitente_cnpj || isProcessing) return;
 
+    processingAbortRef.current?.abort();
+    const abortController = new AbortController();
+    processingAbortRef.current = abortController;
+
     setIsProcessing(true);
+    setCurrentJob(null);
+    setJobMessage(null);
+
     try {
-      const response = await processarSpedsImportados(user.emitente_cnpj);
-      setProcessamento(response);
+      const createdJob = await processarSpedsImportados(user.emitente_cnpj, { signal: abortController.signal });
+      setJobMessage(createdJob.message);
+      saveFiscalOperation({
+        type: 'sped-process',
+        status: 'queued',
+        title: 'Processamento SPED enviado para fila',
+        description: createdJob.message,
+        cnpj: user.emitente_cnpj,
+        jobId: createdJob.job_id,
+        jobStatus: createdJob.status,
+        backendMessage: createdJob.message,
+      });
+
+      const finishedJob = await waitForJob(createdJob.job_id, {
+        signal: abortController.signal,
+        onUpdate: (job) => {
+          setCurrentJob(job);
+          setJobMessage(job.mensagem ?? `Status do processamento: ${job.status}`);
+        },
+      });
+      setCurrentJob(finishedJob);
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['kpis'] }),
@@ -146,22 +182,46 @@ export default function ImportacaoSPED() {
 
       toast({
         title: 'Processamento concluído',
-        description: `Foram processados ${response.total_arquivos_processados} arquivo(s) SPED.`,
+        description: finishedJob.mensagem ?? 'Processamento SPED finalizado com sucesso.',
       });
       saveFiscalOperation({
         type: 'sped-process',
         status: 'success',
         title: 'Processamento SPED concluido',
-        description: `Arquivos processados: ${response.total_arquivos_processados}.`,
+        description: finishedJob.mensagem ?? 'Processamento SPED finalizado com sucesso.',
         cnpj: user.emitente_cnpj,
+        jobId: finishedJob.job_id,
+        jobStatus: finishedJob.status,
+        backendMessage: finishedJob.mensagem ?? undefined,
       });
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        saveFiscalOperation({
+          type: 'sped-process',
+          status: 'cancelled',
+          title: 'Acompanhamento SPED interrompido',
+          description: 'O acompanhamento foi interrompido nesta tela. Um job ja criado pode continuar no backend.',
+          cnpj: user?.emitente_cnpj ?? '',
+          jobId: currentJob?.job_id,
+          jobStatus: currentJob?.status,
+          backendMessage: currentJob?.mensagem ?? undefined,
+        });
+        toast({
+          title: 'Acompanhamento interrompido',
+          description: 'O processamento pode continuar no backend. Acompanhe pela Central de inconsistencias.',
+        });
+        return;
+      }
+
       saveFiscalOperation({
         type: 'sped-process',
         status: 'error',
         title: 'Falha no processamento SPED',
         description: error instanceof Error ? error.message : 'Nao foi possivel processar os SPEDs.',
         cnpj: user?.emitente_cnpj ?? '',
+        jobId: currentJob?.job_id,
+        jobStatus: currentJob?.status,
+        backendMessage: currentJob?.mensagem ?? undefined,
       });
       toast({
         title: 'Falha no processamento',
@@ -169,8 +229,15 @@ export default function ImportacaoSPED() {
         variant: 'destructive',
       });
     } finally {
+      if (processingAbortRef.current === abortController) {
+        processingAbortRef.current = null;
+      }
       setIsProcessing(false);
     }
+  };
+
+  const pararAcompanhamento = () => {
+    processingAbortRef.current?.abort();
   };
 
   return (
@@ -208,11 +275,31 @@ export default function ImportacaoSPED() {
             <Button onClick={processarImportados} disabled={!pendencias?.possui_pendentes || isProcessing || isImporting}>
               <Database className="mr-2 h-4 w-4" />{isProcessing ? 'Processando...' : 'Processar SPED importado'}
             </Button>
+            {isProcessing && (
+              <Button variant="outline" onClick={pararAcompanhamento}>
+                Parar acompanhamento
+              </Button>
+            )}
           </div>
 
           <p className="text-sm text-muted-foreground">{selectedFiles.length}/{MAX_SPED_FILES} arquivo(s) • {formatFileSize(totalSize)}</p>
 
           {(isImporting || importedCount > 0) && <Progress value={progressValue} />}
+
+          {isProcessing && (
+            <div className="space-y-2 rounded-lg border p-4 text-sm">
+              <p className="font-medium">Processamento em fila ou execucao</p>
+              <p className="text-muted-foreground">{jobMessage ?? 'Aguardando retorno do backend.'}</p>
+              {currentJob && (
+                <div className="text-xs text-muted-foreground">
+                  Job {currentJob.job_id} - {currentJob.status}
+                  {currentJob.total_itens > 0
+                    ? ` - ${currentJob.itens_processados}/${currentJob.total_itens} item(ns)`
+                    : ''}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="rounded-lg border">
             {selectedFiles.length ? (
@@ -242,11 +329,14 @@ export default function ImportacaoSPED() {
             </div>
           )}
 
-          {processamento && (
+          {currentJob?.status === 'SUCCESS' && (
             <div className="space-y-2 rounded-lg border p-4 text-sm">
-              <p><strong>Arquivos processados:</strong> {processamento.total_arquivos_processados}</p>
-              <p><strong>Total de linhas:</strong> {processamento.total_linhas}</p>
-              <p><strong>Registros identificados:</strong> {processamento.total_registros_identificados}</p>
+              <p><strong>Job:</strong> {currentJob.job_id}</p>
+              <p><strong>Status:</strong> {currentJob.status}</p>
+              {currentJob.total_itens > 0 && (
+                <p><strong>Itens processados:</strong> {currentJob.itens_processados}/{currentJob.total_itens}</p>
+              )}
+              {currentJob.mensagem && <p><strong>Mensagem:</strong> {currentJob.mensagem}</p>}
             </div>
           )}
         </CardContent>

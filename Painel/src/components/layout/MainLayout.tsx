@@ -56,7 +56,8 @@ export function MainLayout({ children }: MainLayoutProps) {
               <div className="border-b border-amber-200 bg-amber-50">
                 <div className="mx-auto flex min-h-11 max-w-[1700px] items-center gap-2 py-2 pr-4 pl-8 text-sm text-amber-900 md:pr-8 md:pl-14">
                   <span>
-                    Ainda faltam XMLs a serem processados ({totalPendentes}). O botão <strong>Processar NFe</strong> continua habilitado.
+                    Ainda faltam XMLs a serem processados ({totalPendentes}). O processamento pode entrar em fila e
+                    continuar em andamento; acompanhe pela tela de importação ou pela central.
                   </span>
                   <Link to="/inconsistencias" className="ml-auto whitespace-nowrap font-medium underline">
                     Abrir central

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc>
+  <NFe>
+    <infNFe>
+      <ide>
+        <mod>55</mod>
+        <nNF>1</nNF>
+      </ide>
+      <emit>
+        <CNPJ>12345678000190</CNPJ>
+        <xNome>Empresa Teste</xNome>
+      </emit>
+    </infNFe>
+  </NFe>
+</nfeProc>

@@ -1,11 +1,18 @@
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - ambiente minimo sem python-dotenv instalado
+    def load_dotenv(*args, **kwargs):
+        return False
 from pathlib import Path
 
 # Carrega variáveis de ambiente locais para desenvolvimento e execução via scripts.
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
-from fastapi import FastAPI
+import os
+
+import psycopg
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
@@ -85,6 +92,8 @@ app.include_router(api_router, prefix="/api")
 
 @app.on_event("startup")
 def ensure_database_schema() -> None:
+    if os.getenv("ENABLE_STARTUP_SCHEMA_ENSURE", "false").strip().lower() not in {"1", "true", "yes"}:
+        return
     ensure_empresas_tem_sped_column()
     ensure_ncm_ibpt_tables()
     ensure_municipios_catalogo_table()
@@ -96,4 +105,45 @@ def ensure_database_schema() -> None:
 
 @app.get("/health")
 def health_check():
+    return {"status": "ok"}
+
+
+@app.get("/health/db")
+def health_check_db():
+    from app.services.nfe.postres_config import carregar_config_postgres, opcoes_conexao_postgres
+
+    config = carregar_config_postgres()
+    last_error: Exception | None = None
+    for options in opcoes_conexao_postgres(config):
+        try:
+            with psycopg.connect(**options) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+            return {"status": "ok"}
+        except psycopg.Error as exc:
+            last_error = exc
+
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="PostgreSQL indisponivel.",
+    ) from last_error
+
+
+@app.get("/health/redis")
+def health_check_redis():
+    import redis
+
+    try:
+        client = redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            socket_connect_timeout=2,
+        )
+        client.ping()
+    except redis.RedisError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Redis indisponivel.",
+        ) from exc
+
     return {"status": "ok"}

@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAuth } from '@/contexts/AuthContext';
 import { consultarPendenciasXmlImportados } from '@/services/nfe';
 import { consultarPendenciasSped } from '@/services/sped';
+import { fetchJobs, type JobStatus, type ProcessingJobResponse } from '@/services/jobs';
 import { readFiscalOperations, type FiscalOperationEntry } from '@/services/operations';
 
 const operationTypeLabel: Record<FiscalOperationEntry['type'], string> = {
@@ -24,6 +25,8 @@ const statusVariantMap: Record<FiscalOperationEntry['status'], 'default' | 'seco
   warning: 'secondary',
   error: 'destructive',
   cancelled: 'outline',
+  queued: 'secondary',
+  running: 'secondary',
 };
 
 const statusLabelMap: Record<FiscalOperationEntry['status'], string> = {
@@ -31,7 +34,32 @@ const statusLabelMap: Record<FiscalOperationEntry['status'], string> = {
   warning: 'Atencao',
   error: 'Erro',
   cancelled: 'Cancelada',
+  queued: 'Em fila',
+  running: 'Em execucao',
 };
+
+const jobStatusVariantMap: Record<JobStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  PENDING: 'secondary',
+  QUEUED: 'secondary',
+  RUNNING: 'secondary',
+  SUCCESS: 'default',
+  FAILED: 'destructive',
+  CANCELED: 'outline',
+};
+
+const jobStatusLabelMap: Record<JobStatus, string> = {
+  PENDING: 'Pendente',
+  QUEUED: 'Em fila',
+  RUNNING: 'Em execucao',
+  SUCCESS: 'Concluido',
+  FAILED: 'Falhou',
+  CANCELED: 'Cancelado',
+};
+
+const isActiveJob = (job: ProcessingJobResponse) =>
+  job.status === 'PENDING' || job.status === 'QUEUED' || job.status === 'RUNNING';
+
+const isFailedJob = (job: ProcessingJobResponse) => job.status === 'FAILED';
 
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -59,6 +87,16 @@ export default function Inconsistencias() {
     staleTime: 60_000,
   });
 
+  const jobsQuery = useQuery({
+    queryKey: ['inconsistencias-jobs', usaSped],
+    queryFn: () =>
+      fetchJobs({
+        tipo: usaSped ? 'SPED_PROCESSAMENTO_IMPORTADOS' : 'NFE_PROCESSAMENTO_IMPORTADOS',
+        limit: 10,
+      }),
+    staleTime: 30_000,
+  });
+
   const operationHistory = useMemo(
     () => readFiscalOperations().filter((entry) => entry.cnpj === emitenteCnpj),
     [emitenteCnpj],
@@ -66,7 +104,12 @@ export default function Inconsistencias() {
 
   const latestError = operationHistory.find((entry) => entry.status === 'error');
   const latestWarning = operationHistory.find((entry) => entry.status === 'warning');
+  const recentJobs = jobsQuery.data?.resultados ?? [];
+  const activeJobs = recentJobs.filter(isActiveJob);
+  const failedJobs = recentJobs.filter(isFailedJob);
   const hasPendencias = (pendenciasQuery.data?.total_pendentes ?? 0) > 0;
+  const hasActiveJobs = activeJobs.length > 0;
+  const hasFailedJobs = failedJobs.length > 0;
 
   const actionLink = usaSped ? '/importacao-sped' : '/importacao-xml';
   const actionLabel = usaSped ? 'Abrir fluxo SPED' : 'Abrir fluxo XML';
@@ -87,7 +130,7 @@ export default function Inconsistencias() {
         </Button>
       </div>
 
-      {!hasPendencias && !latestError && !latestWarning && (
+      {!hasPendencias && !hasActiveJobs && !hasFailedJobs && !latestError && !latestWarning && (
         <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900 [&>svg]:text-emerald-700">
           <CheckCircle2 className="h-4 w-4" />
           <AlertTitle>Operacao sem inconsistencias abertas</AlertTitle>
@@ -97,14 +140,16 @@ export default function Inconsistencias() {
         </Alert>
       )}
 
-      {(hasPendencias || latestError || latestWarning) && (
-        <Alert variant="destructive">
+      {(hasPendencias || hasActiveJobs || hasFailedJobs || latestError || latestWarning) && (
+        <Alert variant={hasFailedJobs || latestError ? 'destructive' : 'default'}>
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Existem pontos que pedem atencao</AlertTitle>
           <AlertDescription>
-            {hasPendencias
+            {hasActiveJobs
+              ? `Ha ${activeJobs.length} processamento(s) em fila ou execucao. Pendencias podem permanecer ate a conclusao.`
+              : hasPendencias
               ? `Ha ${pendenciasQuery.data?.total_pendentes ?? 0} arquivo(s) aguardando processamento.`
-              : latestError
+              : hasFailedJobs || latestError
                 ? 'Encontramos uma falha recente na operacao fiscal.'
                 : 'Ha um evento recente que merece revisao.'}
           </AlertDescription>
@@ -151,6 +196,62 @@ export default function Inconsistencias() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock3 className="h-5 w-5" />
+              Jobs de processamento
+            </CardTitle>
+            <CardDescription>
+              Ultimos processamentos retornados pela API de jobs para o fluxo atual.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {jobsQuery.isLoading && (
+              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                Carregando jobs recentes...
+              </div>
+            )}
+
+            {jobsQuery.isError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                Nao foi possivel carregar os jobs recentes.
+              </div>
+            )}
+
+            {!jobsQuery.isLoading && !jobsQuery.isError && recentJobs.length === 0 && (
+              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                Nenhum job recente encontrado para este fluxo.
+              </div>
+            )}
+
+            {recentJobs.map((job) => (
+              <div key={job.job_id} className="rounded-lg border p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{job.tipo}</p>
+                      <Badge variant={jobStatusVariantMap[job.status]}>{jobStatusLabelMap[job.status]}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {job.erro ?? job.mensagem ?? 'Sem mensagem do backend.'}
+                    </p>
+                    {job.total_itens > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Progresso: {job.itens_processados}/{job.total_itens}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right text-xs text-muted-foreground">
+                    <div>{job.job_id}</div>
+                    <div>{formatDateTime(job.criado_em)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock3 className="h-5 w-5" />
               Ultimas execucoes
             </CardTitle>
             <CardDescription>Resumo das operacoes fiscais mais recentes salvas pelo painel.</CardDescription>
@@ -171,6 +272,12 @@ export default function Inconsistencias() {
                       <Badge variant={statusVariantMap[entry.status]}>{statusLabelMap[entry.status]}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{entry.description}</p>
+                    {entry.jobId && (
+                      <p className="text-xs text-muted-foreground">
+                        Job {entry.jobId}
+                        {entry.jobStatus ? ` - ${entry.jobStatus}` : ''}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right text-xs text-muted-foreground">
                     <div>{operationTypeLabel[entry.type]}</div>

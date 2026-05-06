@@ -37,6 +37,13 @@ class JsonFormatter(logging.Formatter):
             "filename",
             "content_type",
             "size_bytes",
+            "job_id",
+            "tipo_job",
+            "etapa",
+            "duracao_ms",
+            "total_itens",
+            "itens_processados",
+            "erro",
         ):
             value = getattr(record, field, None)
             if value is not None:

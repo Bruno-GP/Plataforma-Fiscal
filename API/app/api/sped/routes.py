@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 
 from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
 from app.core.upload_security import validate_txt_uploads
+from app.models.jobs.schemas import JobCreateResponse
 from app.models.nfe.schemas import ConsultaKPIResponse
 from app.models.sped.schemas import (
   ImportacaoSpedArquivoResultado,
@@ -32,6 +33,7 @@ from app.services.sped.sped_process_service import ProcessarSpedFiscalService
 from app.services.company_profile_service import CompanyProfileService
 from app.services.sped.sped_consulta_service import SpedConsultaService
 from app.services.AI.openai_report_service import OpenAIReportService
+from app.services.jobs.job_service import JobService
 from app.services.fiscal_analysis import (
   obter_total_impostos_complementares_documentos,
   obter_total_tributos_reforma_documentos,
@@ -228,7 +230,7 @@ def consultar_analise_fiscal_cfop_sped(
   emitente_cnpj: str = Query(..., min_length=14, max_length=20),
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
-  limite: int | None = Query(default=100000, ge=1),
+  limite: int | None = Query(default=1000, ge=1, le=5000),
 ):
   _validar_empresa_sped(emitente_cnpj)
 
@@ -252,7 +254,7 @@ def consultar_analise_fiscal_ncm_sped(
   emitente_cnpj: str = Query(..., min_length=14, max_length=20),
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
-  limite: int | None = Query(default=100000, ge=1),
+  limite: int | None = Query(default=1000, ge=1, le=5000),
 ):
   _validar_empresa_sped(emitente_cnpj)
 
@@ -281,7 +283,7 @@ def consultar_analise_fiscal_hierarquia_sped(
   cidade: str | None = Query(default=None),
   ncm: str | None = Query(default=None),
   produto_codigo: str | None = Query(default=None),
-  limite: int | None = Query(default=100000, ge=1),
+  limite: int | None = Query(default=1000, ge=1, le=5000),
   offset: int = Query(default=0, ge=0),
 ):
   _validar_empresa_sped(emitente_cnpj)
@@ -615,42 +617,22 @@ def consultar_pendencias_sped(cnpj_emitente: str = Query(..., min_length=14, max
   )
 
 
-@sped_router.post("/processar-importados", response_model=ProcessarSpedImportadosResponse)
+@sped_router.post(
+  "/processar-importados",
+  response_model=JobCreateResponse,
+  status_code=status.HTTP_202_ACCEPTED,
+)
 def processar_sped_importados(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
   _validar_empresa_sped(cnpj_emitente)
   service = SpedImportacaoService()
 
-  try:
-    registros, total_linhas, ids_processados = service.processar_importados(cnpj_emitente)
-  except ValueError as exc:
-    raise HTTPException(
-      status_code=status.HTTP_400_BAD_REQUEST,
-      detail=str(exc),
-    ) from exc
-
-  if not ids_processados:
+  if service.contar_pendentes(cnpj_emitente) == 0:
     raise HTTPException(
       status_code=status.HTTP_404_NOT_FOUND,
       detail="Nenhum arquivo SPED pendente encontrado para o CNPJ informado.",
     )
 
-  service.marcar_como_processados(ids_processados)
-  config = ProcessarSpedFiscalService().config
-
-  resumo_ordenado = sorted(registros.items(), key=lambda item: (-item[1], item[0]))
-
-  return ProcessarSpedImportadosResponse(
-    status="processado",
-    cnpj_emitente=cnpj_emitente,
-    total_linhas=total_linhas,
-    total_registros_identificados=sum(registros.values()),
-    total_arquivos_processados=len(ids_processados),
-    resumo_registros=[
-      RegistroSpedResumo(registro=registro, quantidade=quantidade)
-      for registro, quantidade in resumo_ordenado
-    ],
-    banco_sped=config["database"],
-  )
+  return JobService().criar_processamento_sped_importados(cnpj_emitente=cnpj_emitente)
 
 @sped_router.get("/kpis", response_model=ConsultaKPIResponse)
 def consultar_kpis_sped(

@@ -1,6 +1,7 @@
 import type { ConsultaKpiResponse } from './nfe';
 import { API_BASE_URL, apiFetch } from './api';
 import { buildFiscalSearchParams } from './fiscal';
+import type { JobCreateResponse } from './jobs';
 
 interface RequestOptions {
   signal?: AbortSignal;
@@ -73,12 +74,16 @@ export const consultarPendenciasSped = async (cnpjEmitente: string): Promise<Imp
   return response.json() as Promise<ImportacaoSpedPendenciasResponse>;
 };
 
-export const processarSpedsImportados = async (cnpjEmitente: string): Promise<ProcessamentoSpedResponse> => {
+export const processarSpedsImportados = async (
+  cnpjEmitente: string,
+  options: RequestOptions = {},
+): Promise<JobCreateResponse> => {
   const digits = cnpjEmitente.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
   const response = await apiFetch(`${API_BASE_URL}/sped/processar-importados?${searchParams.toString()}`, {
     method: 'POST',
+    signal: options.signal,
   });
 
   if (!response.ok) {
@@ -86,7 +91,7 @@ export const processarSpedsImportados = async (cnpjEmitente: string): Promise<Pr
     throw new Error(error.detail ?? 'Falha ao processar arquivos SPED.');
   }
 
-  return response.json() as Promise<ProcessamentoSpedResponse>;
+  return response.json() as Promise<JobCreateResponse>;
 };
 
 export type ConsultaSpedKpiResponse = ConsultaKpiResponse;

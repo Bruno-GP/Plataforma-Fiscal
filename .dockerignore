@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+!.env.example
+API/app/.env
+API/app/.env.*
+!API/app/.env.example
+API/app/.venv
+Painel/node_modules
+Painel/dist
+__pycache__
+.pytest_cache
+.mypy_cache

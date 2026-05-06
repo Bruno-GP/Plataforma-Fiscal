@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { waitForJob, type ProcessingJobResponse } from '@/services/jobs';
 import { saveFiscalOperation } from '@/services/operations';
 import {
   consultarPendenciasXmlImportados,
@@ -72,6 +73,8 @@ export default function ImportacaoXML() {
   const [operationStage, setOperationStage] = useState<OperationStage>('idle');
   const [operationProgress, setOperationProgress] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [currentJob, setCurrentJob] = useState<ProcessingJobResponse | null>(null);
+  const [currentJobMessage, setCurrentJobMessage] = useState<string | null>(null);
 
   const operationAbortRef = useRef<AbortController | null>(null);
   const elapsedIntervalRef = useRef<number | null>(null);
@@ -89,7 +92,7 @@ export default function ImportacaoXML() {
       case 'importing':
         return `Importando XMLs - ${progressText}`;
       case 'processing':
-        return `Processando - ${progressText}`;
+        return `${currentJobMessage ?? 'Processamento em fila'} - ${progressText}`;
       case 'completed':
         return `Processamento terminado - 100% - ${formatElapsedTime(elapsedSeconds)}`;
       case 'cancelled':
@@ -99,7 +102,7 @@ export default function ImportacaoXML() {
       default:
         return `0% - ${formatElapsedTime(elapsedSeconds)}`;
     }
-  }, [elapsedSeconds, operationProgress, operationStage]);
+  }, [currentJobMessage, elapsedSeconds, operationProgress, operationStage]);
 
   const cnpjsImportados = useMemo(() => {
     const cnpjs = new Set(
@@ -214,6 +217,8 @@ export default function ImportacaoXML() {
     setOperationStage('idle');
     setOperationProgress(0);
     setElapsedSeconds(0);
+    setCurrentJob(null);
+    setCurrentJobMessage(null);
   };
 
   const stopProcessingAnimation = () => {
@@ -252,6 +257,8 @@ export default function ImportacaoXML() {
     setOperationProgress((current) => Math.max(current, PROCESS_PROGRESS_START));
 
     try {
+      let lastFinishedJob: ProcessingJobResponse | null = null;
+
       for (const [index, cnpj] of cnpjs.entries()) {
         const rangeStart =
           PROCESS_PROGRESS_START + (index / cnpjs.length) * (PROCESS_PROGRESS_END - PROCESS_PROGRESS_START);
@@ -261,14 +268,31 @@ export default function ImportacaoXML() {
         setOperationProgress((current) => Math.max(current, Math.round(rangeStart)));
         startProcessingAnimation(Math.round(rangeStart), Math.max(Math.round(rangeEnd) - 3, Math.round(rangeStart)));
 
-        const response = await processarXmlsImportados(cnpj, { signal: abortController.signal });
+        const createdJob = await processarXmlsImportados(cnpj, { signal: abortController.signal });
+        setCurrentJobMessage(createdJob.message);
+        saveFiscalOperation({
+          type: 'xml-process',
+          status: 'queued',
+          title: 'Processamento XML enviado para fila',
+          description: createdJob.message,
+          cnpj: user?.emitente_cnpj ?? cnpj,
+          jobId: createdJob.job_id,
+          jobStatus: createdJob.status,
+          backendMessage: createdJob.message,
+        });
 
-        if (response.status !== 'processado') {
-          throw new Error(response.erros?.[0]?.mensagem ?? 'Falha ao processar XMLs importados.');
-        }
+        const finishedJob = await waitForJob(createdJob.job_id, {
+          signal: abortController.signal,
+          onUpdate: (job) => {
+            setCurrentJob(job);
+            setCurrentJobMessage(job.mensagem ?? `Status do processamento: ${job.status}`);
+          },
+        });
 
         stopProcessingAnimation();
         setOperationProgress(Math.round(rangeEnd));
+        setCurrentJob(finishedJob);
+        lastFinishedJob = finishedJob;
       }
 
       setOperationStage('completed');
@@ -282,8 +306,11 @@ export default function ImportacaoXML() {
         type: 'xml-process',
         status: 'success',
         title: 'Processamento XML concluido',
-        description: `Foram processados ${cnpjs.length} CNPJ(s) com sucesso.`,
+        description: `Processamento finalizado para ${cnpjs.length} CNPJ(s).`,
         cnpj: user?.emitente_cnpj ?? '',
+        jobId: lastFinishedJob?.job_id,
+        jobStatus: lastFinishedJob?.status,
+        backendMessage: lastFinishedJob?.mensagem ?? undefined,
       });
 
       await Promise.all([
@@ -324,6 +351,8 @@ export default function ImportacaoXML() {
     setElapsedSeconds(0);
     setOperationProgress(0);
     setOperationStage('importing');
+    setCurrentJob(null);
+    setCurrentJobMessage(null);
 
     const importResults: ImportacaoXmlArquivoResultado[] = [];
     const batches = chunkFiles(selectedFiles, XML_IMPORT_BATCH_SIZE);
@@ -383,14 +412,17 @@ export default function ImportacaoXML() {
         setOperationStage('cancelled');
         toast({
           title: 'Operação cancelada',
-          description: 'A importação/processamento dos XMLs foi cancelada na tela.',
+          description: 'O acompanhamento foi interrompido nesta tela. Um job ja criado pode continuar no backend.',
         });
         saveFiscalOperation({
           type: isProcessing ? 'xml-process' : 'xml-import',
           status: 'cancelled',
           title: 'Operacao XML cancelada',
-          description: 'A operacao foi interrompida antes da conclusao.',
+          description: 'O acompanhamento foi interrompido nesta tela. Um job ja criado pode continuar no backend.',
           cnpj: user?.emitente_cnpj ?? '',
+          jobId: currentJob?.job_id,
+          jobStatus: currentJob?.status,
+          backendMessage: currentJob?.mensagem ?? undefined,
         });
         return;
       }
@@ -500,7 +532,7 @@ export default function ImportacaoXML() {
             {(isImporting || isProcessing) && (
               <Button variant="destructive" onClick={cancelOperation}>
                 <X className="mr-2 h-4 w-4" />
-                Cancelar operação
+                Parar acompanhamento
               </Button>
             )}
           </div>
@@ -522,6 +554,14 @@ export default function ImportacaoXML() {
                 <span className="text-muted-foreground">{progressLabel}</span>
               </div>
               <Progress value={operationProgress} />
+              {currentJob && (
+                <p className="text-xs text-muted-foreground">
+                  Job {currentJob.job_id} - {currentJob.status}
+                  {currentJob.total_itens > 0
+                    ? ` - ${currentJob.itens_processados}/${currentJob.total_itens} item(ns)`
+                    : ''}
+                </p>
+              )}
             </div>
           )}
 

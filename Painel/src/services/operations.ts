@@ -1,5 +1,5 @@
 export type FiscalOperationType = 'xml-import' | 'xml-process' | 'sped-import' | 'sped-process';
-export type FiscalOperationStatus = 'success' | 'warning' | 'error' | 'cancelled';
+export type FiscalOperationStatus = 'success' | 'warning' | 'error' | 'cancelled' | 'queued' | 'running';
 
 export interface FiscalOperationEntry {
   id: string;
@@ -9,6 +9,9 @@ export interface FiscalOperationEntry {
   description: string;
   cnpj: string;
   createdAt: string;
+  jobId?: string;
+  jobStatus?: string;
+  backendMessage?: string;
 }
 
 const OPERATIONS_STORAGE_KEY = 'fiscal_operations';

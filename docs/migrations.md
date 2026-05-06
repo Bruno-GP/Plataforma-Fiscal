@@ -1,6 +1,18 @@
 # Migrations
 
-Nao existe runner automatizado de migrations no repositorio. Os arquivos em `API/migrations/` devem ser tratados como migrations manuais e revisados antes de execucao.
+O projeto agora possui Alembic em `API/app/alembic`.
+
+Os SQLs legados em `API/SQL/migrations/` continuam como referencia historica, mas o caminho operacional recomendado e Alembic.
+
+## Comandos
+
+```bash
+alembic -c API/app/alembic.ini upgrade head
+alembic -c API/app/alembic.ini downgrade -1
+alembic -c API/app/alembic.ini revision -m "descricao"
+```
+
+Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos workers.
 
 ## Arquivos de referencia no codigo
 
@@ -39,10 +51,10 @@ Nao existe runner automatizado de migrations no repositorio. Os arquivos em `API
 
 ## Pontos de atencao
 
-- As migrations `004`, `005` e `006` tambem sao executadas no startup por `db_schema_service.py`.
-- As tabelas `notas_xml_importados` e `sped_importados` nao estao em migrations formais; sao criadas pelos services de importacao.
-- As tabelas analiticas SPED tambem sao garantidas no processamento SPED.
-- Nao ha rollback documentado. Em producao, rollback deve ser feito por backup/restore ou script especifico revisado.
+- O startup nao executa DDL por padrao. `ENABLE_STARTUP_SCHEMA_ENSURE=true` e fallback transitorio para banco legado.
+- `notas_xml_importados`, `sped_importados` e `processing_jobs` estao na migration inicial.
+- Parte dos services ainda possui `_garantir_tabela` defensivo. A meta e remover esses fallbacks apos validar ambientes existentes.
+- Downgrade destrutivo amplo nao foi automatizado por seguranca; rollback de producao deve usar backup/restore planejado.
 
 ## Inventario por tipo de criacao
 
@@ -56,9 +68,7 @@ Nao existe runner automatizado de migrations no repositorio. Os arquivos em `API
 
 ## Fragilidades
 
-- Nao existe tabela como `alembic_version`.
-- Nao ha comando unico de upgrade.
-- Nao ha rollback versionado.
+- Ainda ha DDL defensivo em services, mantido temporariamente por compatibilidade.
 - O mesmo objeto pode ser criado por mais de um caminho (`ncm_tributacao`, estruturas da Reforma, `sped_kpis_fiscal`).
 - Um ambiente pode parecer saudavel no `/health` e ainda assim nao ter todas as tabelas necessarias para um fluxo fiscal especifico.
 

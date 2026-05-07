@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { FileText, FileUp, Loader2, Upload, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +14,7 @@ import { saveFiscalOperation } from '@/services/operations';
 import {
   consultarPendenciasXmlImportados,
   importarXmlArquivos,
+  listarCnpjsXmlImportados,
   processarXmlsImportados,
   type ImportacaoXmlArquivoResultado,
   type ImportacaoXmlPendenciasResponse,
@@ -61,6 +63,7 @@ const chunkFiles = (files: XmlFileItem[], size: number): XmlFileItem[][] => {
 
 export default function ImportacaoXML() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -103,16 +106,6 @@ export default function ImportacaoXML() {
         return `0% - ${formatElapsedTime(elapsedSeconds)}`;
     }
   }, [currentJobMessage, elapsedSeconds, operationProgress, operationStage]);
-
-  const cnpjsImportados = useMemo(() => {
-    const cnpjs = new Set(
-      results
-        .filter((item) => item.status === 'importado' && item.cnpj_emitente)
-        .map((item) => item.cnpj_emitente as string),
-    );
-
-    return Array.from(cnpjs);
-  }, [results]);
 
   const possuiPendenciasNaoProcessadas = (pendenciasXml?.total_pendentes ?? 0) > 0;
 
@@ -314,12 +307,15 @@ export default function ImportacaoXML() {
       });
 
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas-mapa'] }),
         queryClient.invalidateQueries({ queryKey: ['nfe-kpis'] }),
         queryClient.invalidateQueries({ queryKey: ['nfe-kpis-years'] }),
         queryClient.invalidateQueries({ queryKey: ['nfe-kpis-clientes'] }),
       ]);
 
       await carregarPendenciasXml();
+      navigate('/analise-vendas');
     } finally {
       stopProcessingAnimation();
       setIsProcessing(false);
@@ -392,20 +388,19 @@ export default function ImportacaoXML() {
       setSelectedFiles([]);
       await carregarPendenciasXml();
 
-      const cnpjsProcessaveis =
-        cnpjsImportados.length > 0
-          ? cnpjsImportados
-          : importResults
-              .filter((item) => item.status === 'importado' && item.cnpj_emitente)
-              .map((item) => item.cnpj_emitente as string);
+      const cnpjsParaProcessar = listarCnpjsXmlImportados(importResults);
 
-      const cnpjsParaProcessar = Array.from(new Set(cnpjsProcessaveis));
-      const fallbackCnpj =
-        !cnpjsParaProcessar.length && user.emitente_cnpj && (pendenciasXml?.possui_pendentes ?? true)
-          ? [user.emitente_cnpj]
-          : cnpjsParaProcessar;
+      if (!cnpjsParaProcessar.length) {
+        setOperationStage('completed');
+        setOperationProgress(100);
+        toast({
+          title: 'ImportaÃ§Ã£o concluÃ­da',
+          description: 'Nenhum XML novo importado para processamento.',
+        });
+        return;
+      }
 
-      await processImportedXml(fallbackCnpj, abortController);
+      await processImportedXml(cnpjsParaProcessar, abortController);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         stopProcessingAnimation();

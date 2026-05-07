@@ -175,6 +175,14 @@ export interface ImportacaoXmlResponse {
   resultados: ImportacaoXmlArquivoResultado[];
 }
 
+export const listarCnpjsXmlImportados = (resultados: ImportacaoXmlArquivoResultado[]): string[] => {
+  const cnpjs = resultados
+    .filter((item) => item.status === 'importado' && item.cnpj_emitente)
+    .map((item) => item.cnpj_emitente as string);
+
+  return Array.from(new Set(cnpjs));
+};
+
 export const importarXmlArquivo = async (
   file: File,
   cnpjEmpresaOrigem: string,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, FileUp, Upload, Database } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +30,7 @@ export default function ImportacaoSPED() {
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [selectedFiles, setSelectedFiles] = useState<SpedFileItem[]>([]);
   const [isImporting, setIsImporting] = useState(false);
@@ -174,6 +176,8 @@ export default function ImportacaoSPED() {
       setCurrentJob(finishedJob);
 
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas-mapa'] }),
         queryClient.invalidateQueries({ queryKey: ['kpis'] }),
         queryClient.invalidateQueries({ queryKey: ['kpis-years'] }),
       ]);
@@ -194,6 +198,7 @@ export default function ImportacaoSPED() {
         jobStatus: finishedJob.status,
         backendMessage: finishedJob.mensagem ?? undefined,
       });
+      navigate('/analise-vendas');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         saveFiscalOperation({

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { processarXmlsImportados } from '@/services/nfe';
+import { listarCnpjsXmlImportados, processarXmlsImportados } from '@/services/nfe';
 import { processarSpedsImportados } from '@/services/sped';
 
 const { apiFetchMock } = vi.hoisted(() => ({
@@ -39,6 +39,37 @@ describe('processing services', () => {
       'http://localhost:8000/api/nfe/xml/processar-importados?cnpj_emitente=12345678000199',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('lista somente CNPJs de XMLs realmente importados', () => {
+    const cnpjs = listarCnpjsXmlImportados([
+      {
+        arquivo: 'novo.xml',
+        cnpj_emitente: '12345678000199',
+        status: 'importado',
+        mensagem: 'Importado com sucesso.',
+      },
+      {
+        arquivo: 'duplicado.xml',
+        cnpj_emitente: '11111111000191',
+        status: 'duplicado',
+        mensagem: 'XML ja importado.',
+      },
+      {
+        arquivo: 'erro.xml',
+        cnpj_emitente: '22222222000192',
+        status: 'erro',
+        mensagem: 'XML invalido.',
+      },
+      {
+        arquivo: 'mesmo-cnpj.xml',
+        cnpj_emitente: '12345678000199',
+        status: 'importado',
+        mensagem: 'Importado com sucesso.',
+      },
+    ]);
+
+    expect(cnpjs).toEqual(['12345678000199']);
   });
 
   it('processarSpedsImportados retorna JobCreateResponse', async () => {

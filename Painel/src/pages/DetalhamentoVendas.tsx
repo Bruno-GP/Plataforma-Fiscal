@@ -32,7 +32,7 @@ import { monthLabels } from '@/services/utils';
 
 import { usePeriodFilter } from '@/hooks/usePeriodFilter';
 import { useDashboardVendasQueries } from '@/hooks/useDashboardQueries';
-import { fetchNfeNotasDetalhadas } from '@/services/nfe';
+import { fetchNfeKpis, fetchNfeNotasDetalhadas } from '@/services/nfe';
 import {
   fetchSpedAnaliseFiscalHierarquica,
   fetchSpedKpis,
@@ -114,7 +114,10 @@ export default function DetalhamentoVendas() {
 
   const yearsQuery = useQuery({
     queryKey: ['detalhamento-vendas-anos', emitenteCnpj, isSped],
-    queryFn: () => fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+    queryFn: () =>
+      isSped
+        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
+        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });

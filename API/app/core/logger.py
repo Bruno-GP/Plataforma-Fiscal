@@ -1,13 +1,34 @@
 import json
 import logging
+import re
 import time
 import uuid
 from contextvars import ContextVar
 
 from fastapi import Request
 
+from app.core.config import get_api_request_logs_enabled, get_log_level
+
 
 request_id_context: ContextVar[str] = ContextVar("request_id", default="-")
+
+_EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+_CNPJ_PATTERN = re.compile(r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b")
+_OPENAI_KEY_PATTERN = re.compile(r"sk-[A-Za-z0-9_-]+")
+_TOKEN_PATTERN = re.compile(
+    r"(?i)\b(token|authorization|password|senha|secret|api[_-]?key)\b\s*[:=]\s*['\"]?[^'\"\s,}]+"
+)
+
+
+def _sanitize(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+
+    sanitized = _EMAIL_PATTERN.sub("[redacted-email]", value)
+    sanitized = _CNPJ_PATTERN.sub("[redacted-cnpj]", sanitized)
+    sanitized = _OPENAI_KEY_PATTERN.sub("[redacted-api-key]", sanitized)
+    sanitized = _TOKEN_PATTERN.sub(lambda match: f"{match.group(1)}=[redacted]", sanitized)
+    return sanitized
 
 
 class JsonFormatter(logging.Formatter):
@@ -16,7 +37,7 @@ class JsonFormatter(logging.Formatter):
             "timestamp": self.formatTime(record, self.datefmt),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": _sanitize(record.getMessage()),
             "request_id": getattr(record, "request_id", request_id_context.get()),
         }
 
@@ -25,24 +46,27 @@ class JsonFormatter(logging.Formatter):
             "path",
             "status_code",
             "duration_ms",
-            "client",
             "event",
-            "email",
-            "cnpj",
             "empresa_id",
             "login_id",
             "reason",
             "outcome",
             "auth_source",
-            "filename",
             "content_type",
             "size_bytes",
+            "job_id",
+            "tipo_job",
+            "etapa",
+            "duracao_ms",
+            "total_itens",
+            "itens_processados",
+            "erro",
         ):
             value = getattr(record, field, None)
             if value is not None:
-                payload[field] = value
+                payload[field] = _sanitize(value)
 
-        if record.exc_info:
+        if record.exc_info and logging.getLogger().isEnabledFor(logging.DEBUG):
             payload["exception"] = self.formatException(record.exc_info)
 
         return json.dumps(payload, ensure_ascii=True)
@@ -58,7 +82,7 @@ def configure_logging() -> None:
 
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(getattr(logging, get_log_level(), logging.WARNING))
     root_logger._plataforma_fiscal_configured = True  # type: ignore[attr-defined]
 
 
@@ -68,6 +92,11 @@ def get_logger(name: str) -> logging.Logger:
 
 
 async def log_request_cycle(request: Request, call_next):
+    if not get_api_request_logs_enabled():
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        return response
+
     logger = get_logger("api.request")
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     token = request_id_context.set(request_id)

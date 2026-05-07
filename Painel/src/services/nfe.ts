@@ -1,5 +1,6 @@
 import { API_BASE_URL, apiFetch } from './api';
 import { buildFiscalSearchParams } from './fiscal';
+import type { JobCreateResponse } from './jobs';
 
 export { parseDecimal } from './fiscal';
 
@@ -174,6 +175,14 @@ export interface ImportacaoXmlResponse {
   resultados: ImportacaoXmlArquivoResultado[];
 }
 
+export const listarCnpjsXmlImportados = (resultados: ImportacaoXmlArquivoResultado[]): string[] => {
+  const cnpjs = resultados
+    .filter((item) => item.status === 'importado' && item.cnpj_emitente)
+    .map((item) => item.cnpj_emitente as string);
+
+  return Array.from(new Set(cnpjs));
+};
+
 export const importarXmlArquivo = async (
   file: File,
   cnpjEmpresaOrigem: string,
@@ -252,7 +261,7 @@ export interface ProcessamentoNfeResponse {
 export const processarXmlsImportados = async (
   cnpjEmitente: string,
   options: RequestOptions = {},
-): Promise<ProcessamentoNfeResponse> => {
+): Promise<JobCreateResponse> => {
   const digits = cnpjEmitente.replace(/\D/g, '');
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
@@ -266,7 +275,7 @@ export const processarXmlsImportados = async (
     throw new Error(error.detail ?? 'Falha ao processar XMLs importados.');
   }
 
-  return response.json() as Promise<ProcessamentoNfeResponse>;
+  return response.json() as Promise<JobCreateResponse>;
 };
 
 export const fetchNfeAnaliseCompras = async (

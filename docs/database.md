@@ -1,6 +1,6 @@
 # Banco de Dados
 
-Este projeto usa PostgreSQL e hoje nao possui controle automatizado de versao de schema como Alembic. A estrutura e criada por uma combinacao de scripts SQL, migrations manuais e DDL executado no startup da API.
+Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estrutura ainda combina migrations versionadas, scripts SQL legados, DDL defensivo em services e um fallback opcional de schema no startup da API.
 
 ## Arquivos de referencia no codigo
 
@@ -8,7 +8,7 @@ Este projeto usa PostgreSQL e hoje nao possui controle automatizado de versao de
 - `API/app/file/sql/ncm_catalogo.sql`
 - `API/app/file/sql/ncm_tributacao.sql`
 - `API/app/file/sql/municipios_catalogo.sql`
-- `API/migrations/001_add_tem_sped.sql` ate `API/migrations/007_add_sped_processing_columns.sql`
+- `API/SQL/migrations/001_add_tem_sped.sql` ate `API/SQL/migrations/007_add_sped_processing_columns.sql`
 - `API/app/services/db_schema_service.py`
 - `API/app/services/nfe/xml_importacao_service.py`
 - `API/app/services/sped/sped_importacao_service.py`
@@ -29,14 +29,15 @@ Este projeto usa PostgreSQL e hoje nao possui controle automatizado de versao de
 | `API/app/file/sql/ncm_tributacao.sql` | Estrutura auxiliar de aliquotas IBPT por NCM/UF. |
 | `API/app/file/sql/municipios_catalogo.sql` | Catalogo de municipios usado por consultas geograficas e fiscais. |
 | `API/app/models/nfe/Tables/FISCAL Schema Tables.sql` | Schema historico do modulo fiscal/NFe. Validar antes de reaplicar. |
-| `API/migrations/*.sql` | Evolucoes manuais numeradas. |
-| `API/app/services/db_schema_service.py` | DDL executado no startup da API para colunas, tabelas auxiliares, indices e Reforma Tributaria. |
+| `API/SQL/migrations/*.sql` | Evolucoes manuais numeradas legadas. |
+| `API/app/alembic/` | Caminho operacional recomendado para novas migrations versionadas. |
+| `API/app/services/db_schema_service.py` | DDL opcional no startup da API para colunas, tabelas auxiliares, indices e Reforma Tributaria. |
 | `API/app/services/nfe/xml_importacao_service.py` | Cria/ajusta `notas_xml_importados` sob demanda. |
 | `API/app/services/sped/sped_importacao_service.py` | Cria/ajusta tabelas de staging e tabelas analiticas SPED sob demanda. |
 
 ## Estruturas criadas no startup
 
-Ao iniciar, `API/app/main.py` chama:
+Quando `ENABLE_STARTUP_SCHEMA_ENSURE=true`, `API/app/main.py` chama:
 
 - `ensure_empresas_tem_sped_column`: adiciona `public.empresas.tem_sped`.
 - `ensure_ncm_ibpt_tables`: cria `public.ncm_catalogo` e `public.ncm_tributacao`.
@@ -46,7 +47,7 @@ Ao iniciar, `API/app/main.py` chama:
 - `ensure_reforma_tributaria_documentos_itens_schema`: aplica `005_add_reforma_tributaria_documentos_itens.sql`.
 - `ensure_reforma_tributaria_creditos_debitos_memoria_schema`: aplica `006_add_reforma_tributaria_creditos_debitos_memoria.sql`.
 
-Essas chamadas ajudam em desenvolvimento, mas nao substituem migrations versionadas em producao.
+Essas chamadas ajudam em desenvolvimento e em bancos legados, mas nao substituem migrations versionadas em producao.
 
 ## Tabelas por origem de criacao
 
@@ -86,7 +87,7 @@ Scripts auxiliares:
 
 ### Criadas no startup
 
-O startup executa DDL idempotente em `db_schema_service.py`:
+Com `ENABLE_STARTUP_SCHEMA_ENSURE=true`, o startup executa DDL idempotente em `db_schema_service.py`:
 
 - altera `public.empresas` para garantir `tem_sped`;
 - cria `public.ncm_catalogo`;
@@ -95,7 +96,7 @@ O startup executa DDL idempotente em `db_schema_service.py`:
 - cria indices funcionais de analise fiscal;
 - reaplica as estruturas das migrations `004`, `005` e `006`.
 
-Fragilidade: o startup pode alterar schema sem um registro formal de migration aplicada.
+Fragilidade: se habilitado em ambiente persistente, o startup pode alterar schema sem um registro formal de migration aplicada.
 
 ### Criadas sob demanda por service
 
@@ -120,15 +121,15 @@ Fragilidade: tabelas sob demanda podem nao existir em um banco recem-provisionad
 
 ## Riscos atuais
 
-- Nao ha tabela de controle de migrations aplicadas.
-- Parte do schema pode ser criada automaticamente no startup, dificultando auditoria de quando uma mudanca entrou.
+- Scripts SQL legados nao possuem tabela propria de controle de aplicacao; Alembic deve ser o caminho principal para novas mudancas.
+- Parte do schema pode ser criada automaticamente no startup quando o fallback estiver habilitado, dificultando auditoria de quando uma mudanca entrou.
 - Scripts SQL estao distribuídos em varios diretorios.
 - Reaplicar scripts historicos sem revisao pode conflitar com estruturas ja ajustadas pelo codigo.
 - Ambientes podem divergir silenciosamente se uma migration manual for esquecida.
 
 ## Recomendacao
 
-Adotar Alembic ou mecanismo equivalente com:
+Consolidar o uso do Alembic com:
 
 - revisoes numeradas e rastreadas no banco;
 - comando unico de upgrade/downgrade;

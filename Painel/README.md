@@ -120,6 +120,7 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
 | Cadastro de empresa | Ativa | Define `tem_sped`. |
 | Importacao XML | Ativa para empresas XML | Redireciona empresas SPED. |
 | Importacao SPED | Ativa para empresas SPED | Redireciona empresas XML. |
+| Processamento assincrono | Ativo | Processamentos retornam `job_id` e sao acompanhados pela API de jobs. |
 | Analises de vendas/compras/clientes | Ativas | Service escolhe NFe ou SPED conforme perfil. |
 | Analise fiscal | Ativa | Drill-down por estado, cidade, NCM e produto. |
 | Reforma Tributaria | Ativa como consulta | Depende de dados persistidos na API. |
@@ -137,6 +138,7 @@ Essas paginas existem no codigo, mas hoje estao comentadas em `src/App.tsx`.
   - empresa SPED -> bloqueia fluxo XML
   - empresa XML -> bloqueia fluxo SPED
 - Aviso superior quando existem arquivos pendentes de processamento
+- Processamento de importados via jobs assincronos, com acompanhamento por status/progresso na API
 - Historico local das ultimas operacoes fiscais utilizado pela central de inconsistencias
 - Consulta da Reforma Tributaria habilitada para usuarios com `emitente_cnpj` valido
 
@@ -158,13 +160,13 @@ Risco conhecido: `localStorage` pode ser lido em caso de XSS. O token sensivel d
 
 - Upload de XML
 - Consulta de pendencias
-- Processamento de XMLs importados
+- Processamento de XMLs importados via `POST /api/nfe/xml/processar-importados`, que retorna `job_id`
 
 ### Importacao SPED
 
 - Upload de arquivos TXT
 - Consulta de pendencias
-- Processamento de arquivos importados
+- Processamento de arquivos importados via `POST /api/sped/processar-importados`, que retorna `job_id`
 
 ### Analise de vendas
 
@@ -261,6 +263,12 @@ Contratos completos com parametros, exemplos e erros comuns estao em [../docs/ap
 - `GET /api/sped/pendencias`
 - `POST /api/sped/processar-importados`
 
+### Jobs
+
+- `GET /api/jobs`
+- `GET /api/jobs/{job_id}`
+- `GET /api/jobs/metrics`
+
 ### Reforma Tributaria
 
 - `GET /api/reforma-tributaria/tributos`
@@ -298,6 +306,7 @@ npm run preview
 - Sem dados na tela: valide `VITE_API_URL`, login e disponibilidade da API.
 - CORS: ajuste a configuracao no backend.
 - Erro ao importar: confirme se a empresa esta no fluxo correto de XML ou SPED.
+- Processamento nao avanca: valide Redis, workers Celery e status em `/api/jobs/{job_id}`.
 - Reforma Tributaria vazia: confirme `emitente_cnpj` na sessao e dados nas tabelas de apuracao/memoria.
 - Relatorio IA indisponivel: valide `OPENAI_API_KEY` na API.
 - PDF nao gerado: confirme se o navegador permite a janela de impressao.

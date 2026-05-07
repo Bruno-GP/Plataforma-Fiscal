@@ -8,20 +8,21 @@ Backend em FastAPI responsavel por autenticacao, importacao fiscal, processament
 
 - A lista de endpoints e modulos foi revisada para refletir a API atualmente exposta em `/api`.
 - A secao de regras de negocio agora considera o fluxo separado entre XML/NFe e SPED.
-- A documentacao de ambiente foi ajustada para incluir CORS, banco dedicado para SPED e configuracao opcional de OpenAI.
+- A documentacao de ambiente foi ajustada para incluir CORS, Redis/Celery, banco dedicado para SPED e configuracao opcional de OpenAI.
 
 ### O que foi adicionado
 
 - Modulo `/api/ncm` com sincronizacao IBPT e consulta tributaria por NCM/UF.
+- Modulo `/api/jobs` para acompanhamento de processamentos assincronos.
 - Modulo `/api/reforma-tributaria` com tributos, apuracao, documentos, itens e memoria de calculo.
 - Referencia ao material operacional em `API/docs/ibpt-cron.md`.
-- Registro das migracoes SQL em `API/migrations/`.
-- Registro do startup que garante colunas e tabelas auxiliares no banco.
+- Registro das migracoes e scripts SQL em `API/app/alembic/`, `API/app/alembic.ini` e `API/SQL/`.
+- Registro do startup opcional que garante colunas e tabelas auxiliares no banco quando `ENABLE_STARTUP_SCHEMA_ENSURE=true`.
 
 ### O que foi tirado
 
 - A descricao antiga focada apenas em XML/NFe foi substituida por uma visao mais fiel ao backend atual, que cobre tambem SPED e NCM.
-- O README deixou de sugerir que a estrutura SQL esta concentrada em um unico ponto; agora o texto informa a distribuicao real entre scripts, models e migrations.
+- O README deixou de sugerir que a estrutura SQL esta concentrada em um unico ponto; agora o texto informa a distribuicao real entre Alembic, scripts SQL, models e servicos.
 
 ## Resumo
 
@@ -29,6 +30,8 @@ Backend em FastAPI responsavel por autenticacao, importacao fiscal, processament
 - Prefixo da API: `/api`
 - Swagger: `/docs`
 - Health check: `/health`
+- Health check do banco: `/health/db`
+- Health check do Redis: `/health/redis`
 
 ## Documentacao operacional
 
@@ -37,6 +40,8 @@ Backend em FastAPI responsavel por autenticacao, importacao fiscal, processament
 - [Migrations](../docs/migrations.md)
 - [Seguranca](../docs/security.md)
 - [Importacao e processamento fiscal](../docs/importacao-processamento.md)
+- [Jobs assincronos](../docs/jobs.md)
+- [Troubleshooting de jobs](../docs/troubleshooting-jobs.md)
 - [Reforma Tributaria](../docs/reforma-tributaria.md)
 - [Relatorios com IA](../docs/relatorios-ia.md)
 - [Deploy](../docs/deploy.md)
@@ -50,6 +55,8 @@ Backend em FastAPI responsavel por autenticacao, importacao fiscal, processament
 - Psycopg `3.2.1`
 - OpenAI SDK `1.51.2`
 - PostgreSQL
+- Redis
+- Celery
 
 ## Estrutura principal
 
@@ -59,6 +66,7 @@ API/
 |   |-- api/
 |   |   |-- auth/
 |   |   |-- geo/
+|   |   |-- jobs/
 |   |   |-- ncm/
 |   |   |-- nfe/
 |   |   |-- reforma_tributaria/
@@ -66,13 +74,14 @@ API/
 |   |-- core/
 |   |-- domain/
 |   |-- models/
+|   |-- repositories/
 |   |-- services/
+|   |-- workers/
 |   |-- file/
 |   |-- requirements.txt
 |   `-- main.py
 |-- docs/
-|-- migrations/
-|-- scripts/
+|-- SQL/
 `-- README.md
 ```
 
@@ -117,6 +126,15 @@ POSTGRES_SPED_USER=postgres
 POSTGRES_SPED_PASSWORD=postgres
 ```
 
+### Redis e Celery
+
+```env
+REDIS_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+```
+
+Os endpoints `POST /api/nfe/xml/processar-importados` e `POST /api/sped/processar-importados` retornam `202 Accepted` com `job_id`; o processamento final ocorre nos workers Celery.
+
 ### CORS
 
 ```env
@@ -145,6 +163,7 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `/api/auth`
 - `/api/nfe`
 - `/api/sped`
+- `/api/jobs`
 - `/api/geo`
 - `/api/ncm`
 - `/api/reforma-tributaria`
@@ -154,6 +173,8 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 ### Sistema
 
 - `GET /health`
+- `GET /health/db`
+- `GET /health/redis`
 
 ### Auth
 
@@ -199,6 +220,12 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `GET /api/sped/analise/compras/dashboard`
 - `GET /api/sped/analise/vendas/dashboard`
 
+### Jobs
+
+- `GET /api/jobs`
+- `GET /api/jobs/{job_id}`
+- `GET /api/jobs/metrics`
+
 ### Geo
 
 - `GET /api/geo/municipios`
@@ -226,6 +253,7 @@ Contratos detalhados, parametros, exemplos e erros comuns estao em [../docs/api-
 - NFe aceita ate `10.000` arquivos por importacao e apenas `.xml`.
 - SPED aceita ate `500` arquivos por importacao e apenas `.txt`.
 - Uploads tambem respeitam `UPLOAD_MAX_XML_BYTES`, `UPLOAD_MAX_TXT_BYTES` e `UPLOAD_MAX_TOTAL_BYTES`.
+- Processamentos de importados sao assincronos e exigem Redis e workers Celery ativos.
 - A validacao de CNPJ ocorre em varios endpoints com janela minima e maxima de tamanho.
 - As rotas de Reforma Tributaria exigem escopo de empresa autenticada.
 - `apuracao` e `memoria-calculo` exigem `emitente_cnpj` e aceitam filtros opcionais por `periodo_ano`, `periodo_mes` e `tributo_codigo`.
@@ -258,10 +286,10 @@ Implementacao atual:
 
 ## Banco de dados
 
-- Nao ha mecanismo de migracao automatizado no repositorio.
-- A estrutura SQL esta distribuida entre `app/file/sql/`, `app/models/` e `migrations/`.
+- O ambiente Docker executa Alembic antes de subir API e workers.
+- A estrutura SQL esta distribuida entre `app/file/sql/`, `app/models/`, `alembic/` e `SQL/`.
 - Ha suporte para separacao entre base NFe e base SPED.
-- No startup, a aplicacao tenta garantir a coluna `tem_sped`, tabelas auxiliares de NCM/IBPT, indices de analise fiscal e as estruturas da Reforma Tributaria.
+- No startup, a aplicacao so tenta garantir a coluna `tem_sped`, tabelas auxiliares de NCM/IBPT, indices de analise fiscal e estruturas da Reforma Tributaria quando `ENABLE_STARTUP_SCHEMA_ENSURE=true`.
 - As migracoes da Reforma Tributaria estao em `004_add_reforma_tributaria_base.sql`, `005_add_reforma_tributaria_documentos_itens.sql` e `006_add_reforma_tributaria_creditos_debitos_memoria.sql`.
 - O detalhamento de ordem, riscos e checklist esta em [../docs/database.md](../docs/database.md) e [../docs/migrations.md](../docs/migrations.md).
 

@@ -4,9 +4,9 @@ Esta documentacao descreve o que existe no codigo. Ela nao representa validacao 
 
 ## Arquivos de referencia no codigo
 
-- `API/migrations/004_add_reforma_tributaria_base.sql`
-- `API/migrations/005_add_reforma_tributaria_documentos_itens.sql`
-- `API/migrations/006_add_reforma_tributaria_creditos_debitos_memoria.sql`
+- `API/SQL/migrations/004_add_reforma_tributaria_base.sql`
+- `API/SQL/migrations/005_add_reforma_tributaria_documentos_itens.sql`
+- `API/SQL/migrations/006_add_reforma_tributaria_creditos_debitos_memoria.sql`
 - `API/app/api/reforma_tributaria/routes.py`
 - `API/app/models/reforma_tributaria/schemas.py`
 - `API/app/services/reforma_tributaria/reforma_tributaria_consulta_service.py`

@@ -33,5 +33,6 @@ TRUNCATE TABLE
     sped_produtos,
     sped_resumo_cfop_cst,
     sped_tributos_itens,
-    tributos
+    tributos,
+    processing_jobs
 RESTART IDENTITY CASCADE;

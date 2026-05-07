@@ -22,8 +22,9 @@ Frontend:
 
 Backend:
 
-- Nao ha suite de testes automatizados identificada no modulo `API/`.
-- A validacao atual depende de execucao manual, Swagger, health check e verificacao das telas.
+- Existe suite minima em `API/app/tests/`.
+- Os testes usam fixtures anonimizadas em `API/app/tests/fixtures/`.
+- Testes HTTP isolam banco/fila com monkeypatch quando o objetivo e validar contrato.
 
 ## Comandos disponiveis hoje
 
@@ -40,11 +41,24 @@ cd Painel
 npx vitest run
 ```
 
+Backend:
+
+```bash
+cd API/app
+pytest
+```
+
+Ou, da raiz:
+
+```bash
+python -m pytest API/app/tests
+```
+
 ## Lacunas
 
 - Falta script `test` no frontend.
-- Falta suite de testes backend para rotas, services e banco.
-- Falta base de fixtures fiscais versionada para XML, NFC-e, NFSe e SPED.
+- Falta ampliar a suite backend com banco PostgreSQL descartavel.
+- Falta cobertura completa de regra fiscal NFe/SPED com massas maiores.
 - Falta teste de regressao para Reforma Tributaria e memoria de calculo.
 - Falta teste de autorizacao multiempresa.
 

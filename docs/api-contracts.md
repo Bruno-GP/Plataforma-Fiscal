@@ -8,6 +8,7 @@ Base local: `http://localhost:8000`. Prefixo: `/api`. Endpoints fiscais exigem a
 - `API/app/api/nfe/routes.py`
 - `API/app/api/sped/routes.py`
 - `API/app/api/ncm/routes.py`
+- `API/app/api/jobs/routes.py`
 - `API/app/api/reforma_tributaria/routes.py`
 - `API/app/models/nfe/auth/schemas.py`
 - `API/app/models/nfe/schemas.py`
@@ -117,8 +118,19 @@ curl -X POST "http://localhost:8000/api/nfe/xml/importar?cnpj_empresa_origem=123
 ### `POST /api/nfe/xml/processar-importados`
 
 - Query obrigatoria: `cnpj_emitente`.
-- Processa staging nao processado e marca `processado_em`.
-- Response: mesmo schema de `ProcessarNFeResponse`.
+- Enfileira o processamento do staging nao processado.
+- Status HTTP: `202 Accepted`.
+- Response (`JobCreateResponse`):
+
+```json
+{
+  "job_id": "00000000-0000-0000-0000-000000000000",
+  "status": "QUEUED",
+  "message": "Processamento enviado para fila"
+}
+```
+
+- O resultado operacional deve ser acompanhado em `/api/jobs/{job_id}`. Em sucesso, o worker marca os XMLs importados como processados e atualiza `processing_jobs`.
 - Erros comuns: `404` sem XML pendente, `400` fluxo errado.
 
 ## Importacao SPED
@@ -155,8 +167,54 @@ curl -X POST "http://localhost:8000/api/nfe/xml/importar?cnpj_empresa_origem=123
 ### `POST /api/sped/processar-importados`
 
 - Query obrigatoria: `cnpj_emitente`.
-- Carrega participantes, produtos, documentos, itens, KPIs e apuracao ICMS quando disponiveis.
-- Response (`ProcessarSpedImportadosResponse`): `status`, `cnpj_emitente`, `total_linhas`, `total_registros_identificados`, `total_arquivos_processados`, `resumo_registros`, `banco_sped`.
+- Enfileira o processamento do staging SPED nao processado.
+- Status HTTP: `202 Accepted`.
+- Response (`JobCreateResponse`):
+
+```json
+{
+  "job_id": "00000000-0000-0000-0000-000000000000",
+  "status": "QUEUED",
+  "message": "Processamento enviado para fila"
+}
+```
+
+- O worker carrega participantes, produtos, documentos, itens, KPIs e apuracao ICMS quando disponiveis. O resultado operacional deve ser acompanhado em `/api/jobs/{job_id}`.
+
+## Jobs de processamento
+
+Os endpoints de processamento de importados nao executam trabalho pesado no request. Eles criam registro em `processing_jobs`, enviam a tarefa ao Celery e retornam `job_id`.
+
+Tipos atuais:
+
+- `NFE_PROCESSAMENTO_IMPORTADOS`
+- `SPED_PROCESSAMENTO_IMPORTADOS`
+
+Status possiveis:
+
+- `PENDING`
+- `QUEUED`
+- `RUNNING`
+- `SUCCESS`
+- `FAILED`
+- `CANCELED`
+
+### `GET /api/jobs/{job_id}`
+
+- Retorna `id`, `tipo`, `status`, `mensagem`, `total_itens`, `itens_processados`, `erro`, `criado_em`, `iniciado_em`, `finalizado_em`.
+- Erros comuns: `404` job inexistente.
+
+### `GET /api/jobs`
+
+- Query opcional: `status`, `tipo`, `data_inicio`, `data_fim`, `limit` (1-500), `offset`.
+- Response: `total`, `limit`, `offset`, `resultados`.
+
+### `GET /api/jobs/metrics`
+
+- Query opcional: `status`, `tipo`, `data_inicio`, `data_fim`.
+- Response: `total_jobs`, `por_status`, `por_tipo`, `duracao_media_ms`.
+
+Observacao operacional: Redis e workers Celery devem estar ativos para que jobs avancem de `QUEUED` para `RUNNING`/`SUCCESS`/`FAILED`.
 
 ## Analises fiscais, dashboards e clientes
 

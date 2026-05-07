@@ -15,6 +15,8 @@ export interface FiscalQueryParams {
   layout?: string;
 }
 
+export const MAX_FISCAL_LIMIT = 5000;
+
 export const parseDecimal = (value: unknown): number => {
   if (typeof value === 'number') {
     return value;
@@ -84,7 +86,7 @@ export const buildFiscalSearchParams = (params: FiscalQueryParams = {}) => {
   if (params.cidade?.trim()) searchParams.set('cidade', params.cidade.trim());
   if (params.ncm?.trim()) searchParams.set('ncm', params.ncm.trim());
   if (params.produto_codigo?.trim()) searchParams.set('produto_codigo', params.produto_codigo.trim());
-  if (params.limite) searchParams.set('limite', String(params.limite));
+  if (params.limite) searchParams.set('limite', String(Math.min(params.limite, MAX_FISCAL_LIMIT)));
   if (params.offset) searchParams.set('offset', String(params.offset));
   if (params.gerar_relatorio_ia) searchParams.set('gerar_relatorio_ia', 'true');
   if (params.formato_relatorio) searchParams.set('formato_relatorio', params.formato_relatorio);

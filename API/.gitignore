@@ -1,5 +1,10 @@
+.env
+.env.*
+!.env.example
 app/.env
-
+app/.env.*
+!app/.env.example
 app/.venv
-
+.venv-local
+.pytest_cache
 **/__pycache__

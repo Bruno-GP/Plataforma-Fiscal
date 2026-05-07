@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile
 from app.api.shared.analytics import obter_periodo_anterior
 from app.core.upload_security import validate_xml_uploads
 from app.core.security import require_company_scope
+from app.models.jobs.schemas import JobCreateResponse
+from app.services.jobs.job_service import JobService
 from app.services.nfe.process_nfe import ProcessarNFeService
 from app.services.nfe.nfe_consulta_service import NFeConsultaService
 from app.services.nfe.nfe_notas_service import NFeNotasService
@@ -169,28 +171,22 @@ def consultar_pendencias_xml(cnpj_emitente: str = Query(..., min_length=14, max_
   )
   
 """Executa processamento do staging e marca XMLs como processados em caso de sucesso."""  
-@nfe_router.post("/xml/processar-importados", response_model=ProcessarNFeResponse)
+@nfe_router.post(
+  "/xml/processar-importados",
+  response_model=JobCreateResponse,
+  status_code=status.HTTP_202_ACCEPTED,
+)
 def processar_xmls_importados(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
   _validar_empresa_xml(cnpj_emitente)
   service_importacao = XMLImportacaoService()
-  xmls_importados = service_importacao.listar_xmls_importados_nao_processados(cnpj_emitente)
 
-  if not xmls_importados:
+  if service_importacao.contar_xmls_pendentes(cnpj_emitente) == 0:
     raise HTTPException(
       status_code=status.HTTP_404_NOT_FOUND,
       detail="Nenhum XML pendente encontrado para o CNPJ informado.",
     )
 
-  resposta, ids_processados = ProcessarNFeService().executar_xmls_importados(
-    cnpj_emitente=cnpj_emitente,
-    xmls_importados=xmls_importados,
-  )
-
-  # A marcação evita reprocessamento dos mesmos arquivos em chamadas futuras.
-  if resposta.status == "processado":
-    service_importacao.marcar_como_processados(ids_processados)
-
-  return resposta
+  return JobService().criar_processamento_nfe_importados(cnpj_emitente=cnpj_emitente)
 
 # -------------------------
 # Consulta de KPIs (consolidado)
@@ -306,7 +302,7 @@ def consultar_analise_fiscal_cfop_nfe(
   emitente_resolvido: str = Depends(get_emitente_resolvido_nfe),
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
-  limite: int | None = Query(default=100000, ge=1),
+  limite: int | None = Query(default=1000, ge=1, le=5000),
 ):
   service = NFeConsultaService()
 
@@ -330,7 +326,7 @@ def consultar_analise_fiscal_ncm_nfe(
   emitente_resolvido: str = Depends(get_emitente_resolvido_nfe),
   periodo_ano: int | None = Query(default=None),
   periodo_mes: int | None = Query(default=None),
-  limite: int | None = Query(default=100000, ge=1),
+  limite: int | None = Query(default=1000, ge=1, le=5000),
 ):
   service = NFeConsultaService()
 
@@ -359,7 +355,7 @@ def consultar_analise_fiscal_hierarquia_nfe(
   cidade: str | None = Query(default=None),
   ncm: str | None = Query(default=None),
   produto_codigo: str | None = Query(default=None),
-  limite: int | None = Query(default=100000, ge=1),
+  limite: int | None = Query(default=1000, ge=1, le=5000),
   offset: int = Query(default=0, ge=0),
 ):
   service = NFeConsultaService()

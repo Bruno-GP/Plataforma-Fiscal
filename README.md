@@ -18,6 +18,10 @@ Cada modulo possui seu proprio guia e a documentacao operacional fica em `docs/`
 - [Relatorios com IA](docs/relatorios-ia.md)
 - [Matriz XML versus SPED](docs/matriz-xml-sped.md)
 - [Testes](docs/testing.md)
+- [Setup local](docs/setup.md)
+- [Processamento de dados](docs/data-processing.md)
+- [Jobs assincronos](docs/jobs.md)
+- [Troubleshooting de jobs](docs/troubleshooting-jobs.md)
 - [Deploy](docs/deploy.md)
 - [Checklist de producao](docs/production-checklist.md)
 - [Auditoria operacional](docs/auditoria-operacional.md)
@@ -43,9 +47,10 @@ Fluxo principal da plataforma:
    - `tem_sped=false`: operacao com XML/NFe
    - `tem_sped=true`: operacao com SPED Fiscal
 3. Os arquivos sao importados para staging.
-4. A API processa os arquivos pendentes e consolida KPIs.
-5. O Painel exibe dashboards, analises fiscais e acompanhamentos operacionais.
-6. Relatorios narrativos podem ser gerados via OpenAI nas analises suportadas.
+4. A API enfileira o processamento dos arquivos pendentes em jobs assincronos.
+5. Workers Celery processam XML/NFe ou SPED, atualizam o status do job e consolidam KPIs.
+6. O Painel exibe dashboards, analises fiscais e acompanhamentos operacionais.
+7. Relatorios narrativos podem ser gerados via OpenAI nas analises suportadas.
 
 ## Estrutura
 
@@ -54,8 +59,8 @@ Fluxo principal da plataforma:
 |-- API/
 |   |-- app/
 |   |-- docs/
-|   |-- migrations/
 |   |-- scripts/
+|   |-- SQL/
 |   `-- README.md
 |-- Painel/
 |   |-- src/
@@ -66,12 +71,14 @@ Fluxo principal da plataforma:
 
 ## Stack
 
-- Backend: FastAPI, Pydantic v2, Psycopg v3, PostgreSQL, OpenAI SDK
+- Backend: FastAPI, Pydantic v2, Psycopg v3, PostgreSQL, Redis, Celery, OpenAI SDK
 - Frontend: React 18, TypeScript, Vite, React Router, TanStack Query, Tailwind
 
 ## Quick start
 
 ### API
+
+Execucao apenas da API:
 
 ```bash
 pip install -r API/app/requirements.txt
@@ -81,7 +88,47 @@ python -m uvicorn app.main:app --reload
 
 - API local: `http://localhost:8000`
 - Health check: `http://localhost:8000/health`
+- Health DB: `http://localhost:8000/health/db`
+- Health Redis: `http://localhost:8000/health/redis`
 - Swagger: `http://localhost:8000/docs`
+
+Esse comando sobe somente a API. Para usar os processamentos assincronos de importados, mantenha Redis e workers Celery ativos em paralelo.
+
+Redis via Docker Compose:
+
+```bash
+docker compose up -d redis
+```
+
+Redis compativel no Windows sem Docker/WSL, usando Garnet:
+
+```powershell
+cd "C:\Users\supor\OneDrive\Área de Trabalho\Garnet\garnet-main"
+dotnet run -c Release --project .\main\GarnetServer\GarnetServer.csproj -- --port 6379 --lua
+```
+
+Workers Celery em terminais separados:
+
+```bash
+cd API
+celery -A app.workers.celery_app worker --loglevel=info -Q nfe
+celery -A app.workers.celery_app worker --loglevel=info -Q sped
+```
+
+No Windows, use a venv local e `--pool=solo`:
+
+```powershell
+cd "C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\API"
+.\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q nfe --pool=solo
+```
+
+Se preferir subir o ambiente completo de uma vez:
+
+```bash
+docker compose up --build
+```
+
+O Compose sobe PostgreSQL, Redis, API, workers e Painel.
 
 ### Painel
 
@@ -116,6 +163,7 @@ O frontend normaliza a URL automaticamente:
 - Processamento de XML/NFe
 - Processamento de SPED Fiscal
 - Importacao para staging com consulta de pendencias
+- Jobs assincronos para processar importados XML/NFe e SPED
 - KPIs consolidados por periodo
 - Analises de compras, vendas e clientes
 - Analise fiscal hierarquica por estado, cidade, NCM e produto
@@ -147,6 +195,7 @@ O frontend normaliza a URL automaticamente:
 | Login e cadastro de empresa | Ativa | Sessao persistida no frontend e cookie HttpOnly na API. |
 | Importacao XML/NFe | Ativa para `tem_sped=false` | Bloqueada para empresas SPED. |
 | Importacao SPED | Ativa para `tem_sped=true` | Bloqueada para empresas XML. |
+| Jobs de processamento | Ativos | `processar-importados` retorna `202` com `job_id`; status em `/api/jobs`. |
 | Dashboards e analises | Ativas | Usam endpoints NFe ou SPED conforme perfil. |
 | Analise fiscal hierarquica | Ativa | Estado, cidade, NCM e produto. |
 | Reforma Tributaria | Ativa como consulta de dados persistidos | Nao e motor legal completo de CBS/IBS/IS. |
@@ -160,7 +209,7 @@ O frontend normaliza a URL automaticamente:
 
 - Empresas configuradas para SPED nao devem usar o fluxo XML.
 - Empresas configuradas para XML nao devem usar o fluxo SPED.
-- O projeto nao possui migrations automatizadas; veja [Migrations](docs/migrations.md).
+- O projeto usa Alembic no ambiente Docker e mantem guias operacionais em [Migrations](docs/migrations.md).
 - Dados fiscais e relatorios IA exigem validacao humana antes de uso oficial.
 - O painel possui paginas de `Atualizacoes` e `Configuracoes` implementadas no codigo, mas elas nao estao ativas no roteador principal.
 - O chat do frontend existe como componente/contexto local, porem esta desabilitado no layout e hoje nao conversa com a API.
@@ -170,11 +219,13 @@ O frontend normaliza a URL automaticamente:
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL
+- Redis para filas Celery
 
 ## Troubleshooting rapido
 
 - CORS: revise `CORS_ALLOW_ORIGINS`, `CORS_ALLOW_CREDENTIALS` e `CORS_ALLOW_ORIGIN_REGEX` na API.
 - Tela sem dados: confirme `VITE_API_URL`, API ativa e sessao valida.
 - Importacao rejeitada: valide o perfil da empresa (`tem_sped`) e o tipo de arquivo enviado.
+- Job parado ou falhando: verifique Redis, workers Celery e consulte [Troubleshooting de jobs](docs/troubleshooting-jobs.md).
 - Reforma Tributaria sem dados: confirme se o usuario possui `emitente_cnpj` valido e se as migracoes `004` a `006` foram aplicadas.
 - Relatorios IA indisponiveis: configure `OPENAI_API_KEY` no backend.

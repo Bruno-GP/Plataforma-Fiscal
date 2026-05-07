@@ -78,6 +78,8 @@ Fluxo principal da plataforma:
 
 ### API
 
+Execucao apenas da API:
+
 ```bash
 pip install -r API/app/requirements.txt
 cd API
@@ -90,7 +92,29 @@ python -m uvicorn app.main:app --reload
 - Health Redis: `http://localhost:8000/health/redis`
 - Swagger: `http://localhost:8000/docs`
 
-Para processamentos de importados em desenvolvimento local, mantenha Redis e os workers Celery ativos. O `docker compose up --build` sobe PostgreSQL, Redis, API, workers e Painel.
+Esse comando sobe somente a API. Para usar os processamentos assincronos de importados, mantenha Redis e workers Celery ativos em paralelo.
+
+Redis via Docker Compose:
+
+```bash
+docker compose up -d redis
+```
+
+Workers Celery em terminais separados:
+
+```bash
+cd API
+celery -A app.workers.celery_app worker --loglevel=info -Q nfe
+celery -A app.workers.celery_app worker --loglevel=info -Q sped
+```
+
+Se preferir subir o ambiente completo de uma vez:
+
+```bash
+docker compose up --build
+```
+
+O Compose sobe PostgreSQL, Redis, API, workers e Painel.
 
 ### Painel
 

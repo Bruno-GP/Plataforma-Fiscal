@@ -16,13 +16,13 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 
 ## Arquivos de referencia no codigo
 
-- `API/migrations/001_add_tem_sped.sql`
-- `API/migrations/002_add_ncm_tributacao.sql`
-- `API/migrations/003_add_fiscal_analysis_indexes.sql`
-- `API/migrations/004_add_reforma_tributaria_base.sql`
-- `API/migrations/005_add_reforma_tributaria_documentos_itens.sql`
-- `API/migrations/006_add_reforma_tributaria_creditos_debitos_memoria.sql`
-- `API/migrations/007_add_sped_processing_columns.sql`
+- `API/SQL/migrations/001_add_tem_sped.sql`
+- `API/SQL/migrations/002_add_ncm_tributacao.sql`
+- `API/SQL/migrations/003_add_fiscal_analysis_indexes.sql`
+- `API/SQL/migrations/004_add_reforma_tributaria_base.sql`
+- `API/SQL/migrations/005_add_reforma_tributaria_documentos_itens.sql`
+- `API/SQL/migrations/006_add_reforma_tributaria_creditos_debitos_memoria.sql`
+- `API/SQL/migrations/007_add_sped_processing_columns.sql`
 - `API/app/services/db_schema_service.py`
 - `API/app/services/nfe/xml_importacao_service.py`
 - `API/app/services/sped/sped_importacao_service.py`

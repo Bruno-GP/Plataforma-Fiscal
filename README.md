@@ -100,12 +100,26 @@ Redis via Docker Compose:
 docker compose up -d redis
 ```
 
+Redis compativel no Windows sem Docker/WSL, usando Garnet:
+
+```powershell
+cd "C:\Users\supor\OneDrive\Área de Trabalho\Garnet\garnet-main"
+dotnet run -c Release --project .\main\GarnetServer\GarnetServer.csproj -- --port 6379 --lua
+```
+
 Workers Celery em terminais separados:
 
 ```bash
 cd API
 celery -A app.workers.celery_app worker --loglevel=info -Q nfe
 celery -A app.workers.celery_app worker --loglevel=info -Q sped
+```
+
+No Windows, use a venv local e `--pool=solo`:
+
+```powershell
+cd "C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\API"
+.\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q nfe --pool=solo
 ```
 
 Se preferir subir o ambiente completo de uma vez:

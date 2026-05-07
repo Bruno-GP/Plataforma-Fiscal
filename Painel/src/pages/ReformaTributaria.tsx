@@ -181,25 +181,30 @@ export default function ReformaTributaria() {
         onYearChange={setSelectedYear}
       />
 
-      <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-          <ListFilter className="h-4 w-4 text-slate-500" />
-          <span>Tributo</span>
-        </div>
-        <Select value={selectedTributo} onValueChange={setSelectedTributo}>
-          <SelectTrigger className="w-full md:w-72">
-            <SelectValue placeholder="Todos os tributos" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os tributos</SelectItem>
-            {tributosReforma.map((tributo) => (
-              <SelectItem key={tributo.codigo} value={tributo.codigo}>
-                {tributo.codigo} - {tributo.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <Card className="border border-slate-800/80 bg-slate-950/70 text-white shadow-[0_18px_55px_-38px_rgba(15,23,42,1)]">
+        <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+              <ListFilter className="h-4 w-4 text-sky-300" />
+              <span>Filtro de tributo</span>
+            </div>
+            <p className="text-xs text-slate-400">Apure CBS, IBS e Imposto Seletivo por periodo.</p>
+          </div>
+          <Select value={selectedTributo} onValueChange={setSelectedTributo}>
+            <SelectTrigger className="w-full border-slate-700 bg-slate-900/80 text-slate-100 md:w-80">
+              <SelectValue placeholder="Todos os tributos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os tributos</SelectItem>
+              {tributosReforma.map((tributo) => (
+                <SelectItem key={tributo.codigo} value={tributo.codigo}>
+                  {tributo.codigo} - {tributo.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
 
       {(apuracaoQuery.isError || memoriaQuery.isError || tributosQuery.isError) && (
         <Alert variant="destructive">
@@ -219,48 +224,50 @@ export default function ReformaTributaria() {
         ))}
       </div>
 
-      <Card className="border border-slate-200 bg-white shadow-sm">
+      <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
         <CardContent className="p-0">
-          <div className="flex flex-col gap-2 border-b border-slate-200 px-6 py-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 border-b border-slate-800/80 px-6 py-5 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Apuracao por tributo</h2>
-              <p className="text-sm text-slate-500">Debitos, creditos, ajustes e saldo por periodo.</p>
+              <h2 className="text-lg font-semibold tracking-tight text-white">Apuracao por tributo</h2>
+              <p className="text-sm text-slate-400">Debitos, creditos, ajustes e saldo por periodo.</p>
             </div>
-            <Badge variant="outline">{apuracoes.length} registros</Badge>
+            <Badge variant="outline" className="w-fit border-slate-600 text-slate-300">
+              {apuracoes.length} registros
+            </Badge>
           </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Tributo</TableHead>
-                  <TableHead>Periodo</TableHead>
-                  <TableHead className="text-right">Debitos</TableHead>
-                  <TableHead className="text-right">Creditos</TableHead>
-                  <TableHead className="text-right">Ajustes</TableHead>
-                  <TableHead className="text-right">Saldo</TableHead>
-                  <TableHead>Status</TableHead>
+                <TableRow className="border-slate-800 hover:bg-transparent">
+                  <TableHead className="text-slate-400">Tributo</TableHead>
+                  <TableHead className="text-slate-400">Periodo</TableHead>
+                  <TableHead className="text-right text-slate-400">Debitos</TableHead>
+                  <TableHead className="text-right text-slate-400">Creditos</TableHead>
+                  <TableHead className="text-right text-slate-400">Ajustes</TableHead>
+                  <TableHead className="text-right text-slate-400">Saldo</TableHead>
+                  <TableHead className="text-slate-400">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {apuracoes.map((item: ApuracaoTributariaItem) => (
-                  <TableRow key={item.id}>
+                  <TableRow key={item.id} className="border-slate-800/80 hover:bg-slate-900/70">
                     <TableCell>
-                      <div className="font-medium text-slate-900">{item.tributo_codigo}</div>
-                      <div className="text-xs text-slate-500">{item.tributo_nome}</div>
+                      <div className="font-medium text-white">{item.tributo_codigo}</div>
+                      <div className="text-xs text-slate-400">{item.tributo_nome}</div>
                     </TableCell>
-                    <TableCell>{String(item.periodo_mes).padStart(2, '0')}/{item.periodo_ano}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(parseDecimal(item.total_debitos))}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(parseDecimal(item.total_creditos))}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(parseDecimal(item.ajustes_debito) - parseDecimal(item.ajustes_credito))}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(parseDecimal(item.saldo_apurado))}</TableCell>
+                    <TableCell className="text-slate-300">{String(item.periodo_mes).padStart(2, '0')}/{item.periodo_ano}</TableCell>
+                    <TableCell className="text-right text-slate-200">{formatCurrency(parseDecimal(item.total_debitos))}</TableCell>
+                    <TableCell className="text-right text-slate-200">{formatCurrency(parseDecimal(item.total_creditos))}</TableCell>
+                    <TableCell className="text-right text-slate-200">{formatCurrency(parseDecimal(item.ajustes_debito) - parseDecimal(item.ajustes_credito))}</TableCell>
+                    <TableCell className="text-right font-medium text-white">{formatCurrency(parseDecimal(item.saldo_apurado))}</TableCell>
                     <TableCell>
                       <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
                     </TableCell>
                   </TableRow>
                 ))}
                 {!apuracoes.length && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-sm text-slate-500">
+                  <TableRow className="border-slate-800/80 hover:bg-transparent">
+                    <TableCell colSpan={7} className="h-28 text-center text-sm text-slate-400">
                       {apuracaoQuery.isLoading ? 'Carregando apuracao...' : 'Nenhuma apuracao encontrada para os filtros selecionados.'}
                     </TableCell>
                   </TableRow>
@@ -271,12 +278,12 @@ export default function ReformaTributaria() {
         </CardContent>
       </Card>
 
-      <Card className="border border-slate-200 bg-white shadow-sm">
+      <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
         <CardContent className="p-0">
-          <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 border-b border-slate-800/80 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Memoria de calculo</h2>
-              <p className="text-sm text-slate-500">Rastreabilidade de regra, base, aliquota e resultado calculado.</p>
+              <h2 className="text-lg font-semibold tracking-tight text-white">Memoria de calculo</h2>
+              <p className="text-sm text-slate-400">Rastreabilidade de regra, base, aliquota e resultado calculado.</p>
             </div>
             <div className="relative w-full max-w-md">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -284,45 +291,47 @@ export default function ReformaTributaria() {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Pesquisar tributo, etapa, fonte ou hash"
-                className="pl-10"
+                className="border-slate-700 bg-slate-900/80 pl-10 text-slate-100 placeholder:text-slate-500 focus-visible:ring-sky-500"
               />
             </div>
           </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Tributo</TableHead>
-                  <TableHead>Etapa</TableHead>
-                  <TableHead className="text-right">Base</TableHead>
-                  <TableHead className="text-right">Aliquota</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead>Fonte</TableHead>
-                  <TableHead>Hash</TableHead>
+                <TableRow className="border-slate-800 hover:bg-transparent">
+                  <TableHead className="text-slate-400">Tributo</TableHead>
+                  <TableHead className="text-slate-400">Etapa</TableHead>
+                  <TableHead className="text-right text-slate-400">Base</TableHead>
+                  <TableHead className="text-right text-slate-400">Aliquota</TableHead>
+                  <TableHead className="text-right text-slate-400">Valor</TableHead>
+                  <TableHead className="text-slate-400">Fonte</TableHead>
+                  <TableHead className="text-slate-400">Hash</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {memoriaFiltrada.map((item: MemoriaCalculoTributariaItem) => (
-                  <TableRow key={item.id}>
+                  <TableRow key={item.id} className="border-slate-800/80 hover:bg-slate-900/70">
                     <TableCell>
-                      <div className="font-medium text-slate-900">{item.tributo_codigo}</div>
-                      <div className="text-xs text-slate-500">{item.tributo_nome}</div>
+                      <div className="font-medium text-white">{item.tributo_codigo}</div>
+                      <div className="text-xs text-slate-400">{item.tributo_nome}</div>
                     </TableCell>
-                    <TableCell>{item.etapa_calculo}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(parseDecimal(item.base_calculo))}</TableCell>
-                    <TableCell className="text-right">{formatPercent(item.aliquota_aplicada)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(parseDecimal(item.valor_calculado))}</TableCell>
+                    <TableCell className="text-slate-300">{item.etapa_calculo}</TableCell>
+                    <TableCell className="text-right text-slate-200">{formatCurrency(parseDecimal(item.base_calculo))}</TableCell>
+                    <TableCell className="text-right text-slate-200">{formatPercent(item.aliquota_aplicada)}</TableCell>
+                    <TableCell className="text-right font-medium text-white">{formatCurrency(parseDecimal(item.valor_calculado))}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{item.fonte_dados}</Badge>
+                      <Badge variant="outline" className="border-slate-600 text-slate-300">
+                        {item.fonte_dados}
+                      </Badge>
                     </TableCell>
-                    <TableCell className="max-w-[180px] truncate font-mono text-xs text-slate-500">
+                    <TableCell className="max-w-[180px] truncate font-mono text-xs text-slate-400">
                       {item.hash_calculo ?? '-'}
                     </TableCell>
                   </TableRow>
                 ))}
                 {!memoriaFiltrada.length && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-sm text-slate-500">
+                  <TableRow className="border-slate-800/80 hover:bg-transparent">
+                    <TableCell colSpan={7} className="h-28 text-center text-sm text-slate-400">
                       {memoriaQuery.isLoading ? 'Carregando memoria de calculo...' : 'Nenhuma memoria de calculo encontrada.'}
                     </TableCell>
                   </TableRow>

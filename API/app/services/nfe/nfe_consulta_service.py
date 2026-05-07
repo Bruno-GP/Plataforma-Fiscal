@@ -27,14 +27,6 @@ from app.services.fiscal_analysis import (
 from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("NFeConsultaService")
-logger.setLevel(logging.DEBUG)
-
-handler = logging.StreamHandler()
-formatter = logging.Formatter(
-  "[%(asctime)s] [%(levelname)s] %(message)s"
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 NFE_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
   from_clause="""

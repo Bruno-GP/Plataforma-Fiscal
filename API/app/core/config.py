@@ -1,6 +1,22 @@
 import os
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_log_level() -> str:
+    raw_value = os.getenv("LOG_LEVEL", "CRITICAL").strip().upper()
+    return raw_value if raw_value in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"} else "WARNING"
+
+
+def get_api_request_logs_enabled() -> bool:
+    return _env_bool("API_REQUEST_LOGS", False)
+
+
 def get_auth_secret_key() -> str:
     return os.getenv("AUTH_SECRET_KEY", "dev-secret-change-me")
 

@@ -1,13 +1,16 @@
 import os
 import xml.etree.ElementTree as ET
 from typing import List
+
 from app.domain.nfe.xml_models import XmlNFe
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 AUTORIZADOS_NFE = {"100", "150"}
 
+
 def _local_name(tag: str) -> str:
     return (tag or "").split("}")[-1]
+
 
 def _eh_xml_evento(root: ET.Element) -> bool:
     nomes_evento = {
@@ -22,6 +25,7 @@ def _eh_xml_evento(root: ET.Element) -> bool:
 
     return root.find(".//nfe:infEvento", NS) is not None
 
+
 def _eh_xml_nfse(root: ET.Element) -> bool:
     nomes_nfse = {"CompNfse", "Nfse", "NFS-e", "GerarNfseResposta", "ConsultarNfseResposta"}
     if _local_name(root.tag) in nomes_nfse:
@@ -29,9 +33,10 @@ def _eh_xml_nfse(root: ET.Element) -> bool:
 
     return root.find(".//InfNfse") is not None or root.find(".//CompNfse") is not None
 
+
 def classificar_xml_processavel(root: ET.Element) -> tuple[bool, str]:
     if _eh_xml_evento(root):
-        return False, "XML de evento (ex.: CCe/cancelamento) não é processável como documento fiscal."
+        return False, "XML de evento nao e processavel como documento fiscal."
 
     inf_nfe = root.find(".//nfe:infNFe", NS)
     if inf_nfe is not None:
@@ -43,7 +48,8 @@ def classificar_xml_processavel(root: ET.Element) -> tuple[bool, str]:
     if _eh_xml_nfse(root):
         return True, "NFSe identificada."
 
-    return False, "XML não corresponde a um documento fiscal autorizado suportado."
+    return False, "XML nao corresponde a um documento fiscal autorizado suportado."
+
 
 def extrair_emitente_xml(root: ET.Element) -> tuple[str | None, str | None]:
     emit = root.find(".//nfe:emit", NS)
@@ -77,6 +83,7 @@ def _buscar_texto_por_tags(root: ET.Element, caminhos: list[str]) -> str | None:
                 return valor
     return None
 
+
 class XmlReader:
     def ler_pasta(self, pasta: str) -> List[XmlNFe]:
         xmls: List[XmlNFe] = []
@@ -91,19 +98,12 @@ class XmlReader:
                 tree = ET.parse(caminho)
                 root = tree.getroot()
 
-                processavel, motivo = classificar_xml_processavel(root)
+                processavel, _ = classificar_xml_processavel(root)
                 if not processavel:
-                    print(f"[XML IGNORADO] {arquivo}: {motivo}")
                     continue
 
                 cnpj, nome = extrair_emitente_xml(root)
-                
-                if not cnpj:
-                    print(f"[XML IGNORADO] Sem CNPJ: {arquivo}")
-                    continue
-                
-                if not nome:
-                    print(f"[XML IGNORADO] Sem xNome: {arquivo}")
+                if not cnpj or not nome:
                     continue
 
                 xmls.append(
@@ -111,27 +111,24 @@ class XmlReader:
                         caminho=caminho,
                         xml=root,
                         emitente_cnpj=cnpj,
-                        emitente_nome=nome
+                        emitente_nome=nome,
                     )
                 )
 
-            except Exception as e:
-                print(f"[ERRO XML] {arquivo}: {e}")
+            except Exception:
+                continue
 
-        print(f"[INFO] XMLs válidos encontrados: {len(xmls)}")
         return xmls
 
     def _eh_nfe_modelo_55(self, root: ET.Element) -> bool:
-      """
-      Valida se o XML é uma NFe modelo 55.
-      Compatível com nfeProc e NFe.
-      """
-      ns = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
+        """
+        Valida se o XML e uma NFe modelo 55.
+        Compativel com nfeProc e NFe.
+        """
+        ns = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
-      # Caso comum: nfeProc -> NFe -> infNFe -> ide -> mod
-      mod = root.find(".//nfe:infNFe/nfe:ide/nfe:mod", ns)
+        mod = root.find(".//nfe:infNFe/nfe:ide/nfe:mod", ns)
+        if mod is None:
+            return False
 
-      if mod is None:
-          return False
-
-      return mod.text == "55"
+        return mod.text == "55"

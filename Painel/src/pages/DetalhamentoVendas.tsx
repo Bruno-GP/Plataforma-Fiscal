@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   DetalhamentoFiscalHierarquiaMode,
 } from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
+import { DetalhamentoVendasDashboardMode } from '@/pages/components/DetalhamentoVendasDashboardMode';
 import {
   DetalhamentoVendasFiscalMode,
   type FiscalNcmSummary,
@@ -111,6 +112,8 @@ export default function DetalhamentoVendas() {
   const isSped = Boolean(user?.tem_sped);
 
   const { selectedMonth, setSelectedMonth, selectedYear, setSelectedYear, monthNumber, year: yearNumber } = usePeriodFilter();
+  const [viewMode, setViewMode] = useState<'grafica' | 'detalhada'>('grafica');
+  const [detailMode, setDetailMode] = useState<DetailMode>(isSped ? 'regiao' : 'nota');
 
   const yearsQuery = useQuery({
     queryKey: ['detalhamento-vendas-anos', emitenteCnpj, isSped],
@@ -122,9 +125,9 @@ export default function DetalhamentoVendas() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { dashboardQuery, mapQuery } = useDashboardVendasQueries({ emitenteCnpj, email: user?.email, temSped: user?.tem_sped, year: yearNumber, selectedMonth, monthNumber, hasEmitenteCnpj });
+  const dashboardSelectedMonth = viewMode === 'grafica' ? 'all' : selectedMonth;
+  const { dashboardQuery, mapQuery } = useDashboardVendasQueries({ emitenteCnpj, email: user?.email, temSped: user?.tem_sped, year: yearNumber, selectedMonth: dashboardSelectedMonth, monthNumber, hasEmitenteCnpj });
 
-  const [detailMode, setDetailMode] = useState<DetailMode>(isSped ? 'regiao' : 'nota');
   const [openNoteValues, setOpenNoteValues] = useState<string[]>([]);
   const [openNoteClientValues, setOpenNoteClientValues] = useState<string[]>([]);
   const [openNcmValues, setOpenNcmValues] = useState<string[]>([]);
@@ -150,7 +153,7 @@ export default function DetalhamentoVendas() {
       const loadedCount = allPages.reduce((total, page) => total + page.notas.length, 0);
       return loadedCount < lastPage.total ? loadedCount : undefined;
     },
-    enabled: hasEmitenteCnpj && !isSped && detailMode === 'nota',
+    enabled: hasEmitenteCnpj && !isSped && viewMode === 'detalhada' && detailMode === 'nota',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -168,14 +171,14 @@ export default function DetalhamentoVendas() {
       }
       return { status: firstPage.status, total: firstPage.total, notas };
     }),
-    enabled: hasEmitenteCnpj && !isSped && detailMode === 'regiao',
+    enabled: hasEmitenteCnpj && !isSped && viewMode === 'detalhada' && detailMode === 'regiao',
     staleTime: 5 * 60 * 1000,
   });
 
   const spedHierarchyQuery = useQuery<SpedFiscalHierarchyResponse>({
     queryKey: ['detalhamento-vendas-sped-hierarquia', emitenteCnpj, selectedYear, selectedMonth],
     queryFn: () => fetchSpedAnaliseFiscalHierarquica({ emitente_cnpj: emitenteCnpj, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, limite: 5000 }),
-    enabled: hasEmitenteCnpj && isSped,
+    enabled: hasEmitenteCnpj && isSped && viewMode === 'detalhada',
     staleTime: 5 * 60 * 1000,
   });
 
@@ -319,12 +322,34 @@ export default function DetalhamentoVendas() {
 
   return (
     <div className="space-y-6 py-6">
-      <Header title="Detalhamento de vendas" subtitle="Expansao hierarquica por nota, regiao ou leitura fiscal com visual alinhado a paleta azul-marinho." selectedMonth={selectedMonth} selectedYear={selectedYear} availableYears={availableYears} monthLabels={monthLabels} onMonthChange={setSelectedMonth} onYearChange={setSelectedYear} />
+      <Header title="Detalhamento de vendas" subtitle="Visao de dashboard e expansao hierarquica por nota, regiao ou leitura fiscal." selectedMonth={selectedMonth} selectedYear={selectedYear} availableYears={availableYears} monthLabels={monthLabels} onMonthChange={setSelectedMonth} onYearChange={setSelectedYear} />
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />)}
       </div>
 
+      <div className="flex flex-wrap gap-3 border-y border-slate-800/80 py-4">
+        {[
+          { key: 'grafica' as const, title: 'Visao grafica' },
+          { key: 'detalhada' as const, title: 'Visao detalhada' },
+        ].map((button) => {
+          const isActive = viewMode === button.key;
+
+          return (
+            <Button
+              key={button.key}
+              type="button"
+              variant={isActive ? 'secondary' : 'outline'}
+              onClick={() => setViewMode(button.key)}
+              className={isActive ? 'bg-white text-slate-900 hover:bg-slate-100' : 'border-slate-700 bg-slate-900/80 text-slate-100 hover:border-sky-500/60 hover:bg-slate-800'}
+            >
+              {button.title}
+            </Button>
+          );
+        })}
+      </div>
+
+      {viewMode === 'detalhada' && (
       <Card className="border border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_28px_90px_-52px_rgba(15,23,42,1)]">
         <CardContent className="space-y-5 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -333,14 +358,29 @@ export default function DetalhamentoVendas() {
               <h2 className="text-2xl font-semibold tracking-tight">{isSped ? (detailMode === 'fiscal' ? 'Expansao fiscal em 2 niveis' : 'Expansao em 4 niveis para SPED') : 'Expansao em 4 niveis'}</h2>
               <p className="max-w-3xl text-sm text-slate-300">{isSped ? 'No SPED, o detalhamento usa a hierarquia fiscal existente para leitura por regiao ou por NCM.' : 'Alterne entre leitura por nota ou por regiao e abra a hierarquia em camadas ate chegar aos produtos.'}</p>
             </div>
-            <Button asChild variant="secondary" className="gap-2 bg-white text-slate-900 hover:bg-slate-100"><Link to="/analise-vendas">Voltar ao dashboard<ArrowRight className="h-4 w-4" /></Link></Button>
+            <Button asChild variant="secondary" className="gap-2 bg-white text-slate-900 hover:bg-slate-100"><Link to="/analise-vendas">Voltar a Analise de Vendas<ArrowRight className="h-4 w-4" /></Link></Button>
           </div>
           <DetalhamentoVendasModeSelector detailMode={detailMode} onChange={setDetailMode} options={modeOptions} />
         </CardContent>
       </Card>
+      )}
 
       {detalhamentoError && <Alert variant="destructive"><AlertTitle>Erro ao carregar o detalhamento</AlertTitle><AlertDescription>{detalhamentoError instanceof Error ? detalhamentoError.message : 'Nao foi possivel consultar o detalhamento deste periodo.'}</AlertDescription></Alert>}
 
+      {viewMode === 'grafica' ? (
+        <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
+          <CardContent className="p-6">
+            <DetalhamentoVendasDashboardMode
+              dashboardData={dashboardQuery.data}
+              mapData={mapQuery.data}
+              isLoading={dashboardQuery.isLoading || mapQuery.isLoading}
+              availableYears={availableYears}
+              selectedYear={selectedYear}
+              onYearChange={setSelectedYear}
+            />
+          </CardContent>
+        </Card>
+      ) : (
       <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
         <CardContent className="p-0">
           <div className="border-b border-slate-800/80 px-6 py-4">
@@ -371,6 +411,7 @@ export default function DetalhamentoVendas() {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

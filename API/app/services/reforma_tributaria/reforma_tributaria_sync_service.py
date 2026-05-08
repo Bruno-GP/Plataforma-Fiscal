@@ -1,10 +1,138 @@
 import psycopg
+import logging
+from xml.etree import ElementTree as ET
 
+from app.domain.nfe.extractor import NS, _extrair_tributos_reforma_item, _parse_data_emissao
 from app.services.nfe.empresa_service import normalizar_cnpj
+from app.services.nfe.nfe_itens_service import NFeItensService
+
+
+logger = logging.getLogger("ReformaTributariaSyncService")
+# logger.setLevel(logging.INFO)
+
 
 class ReformaTributariaSyncService:
   TRIBUTOS_LEGADOS_NFE = ("ICMS", "IPI", "PIS", "COFINS")
   TRIBUTOS_LEGADOS_SPED = ("ICMS",)
+  TRIBUTOS_REFORMA = ("CBS", "IBS", "IBS_UF", "IBS_MUN", "IS")
+
+  def sincronizar_nfe_todos_periodos(
+    self,
+    conn: psycopg.Connection,
+    emitente_cnpj: str,
+  ) -> list[dict]:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    if not cnpj:
+      # logger.warning("Backfill NFe ignorado: CNPJ invalido recebido=%s", emitente_cnpj)
+      return []
+
+    # logger.info("Backfill NFe iniciado: cnpj=%s", cnpj)
+    with conn.cursor() as cur:
+      cur.execute(
+        """
+        SELECT
+          EXTRACT(YEAR FROM n.data_emissao)::int AS periodo_ano,
+          EXTRACT(MONTH FROM n.data_emissao)::int AS periodo_mes,
+          COUNT(DISTINCT n.id) AS documentos
+        FROM public.notas n
+        WHERE regexp_replace(n.emitente_cnpj, '\\D', '', 'g') = %s
+          AND n.data_emissao IS NOT NULL
+        GROUP BY 1, 2
+        ORDER BY 1, 2;
+        """,
+        (cnpj,),
+      )
+      periodos = cur.fetchall()
+
+    # logger.info("Backfill NFe periodos encontrados: cnpj=%s total_periodos=%s", cnpj, len(periodos))
+    resultados = []
+    for periodo_ano, periodo_mes, documentos in periodos:
+      # logger.info(
+      #   "Backfill NFe periodo iniciado: cnpj=%s periodo=%04d-%02d documentos=%s",
+      #   cnpj,
+      #   periodo_ano,
+      #   periodo_mes,
+      #   documentos,
+      # )
+      resumo = self.sincronizar_nfe_periodo(
+        conn=conn,
+        emitente_cnpj=cnpj,
+        periodo_ano=periodo_ano,
+        periodo_mes=periodo_mes,
+      )
+      resultados.append(
+        {
+          "origem": "nfe",
+          "periodo_ano": periodo_ano,
+          "periodo_mes": periodo_mes,
+          "documentos": documentos,
+          **resumo,
+        }
+      )
+      # logger.info(
+      #   "Backfill NFe periodo finalizado: cnpj=%s periodo=%04d-%02d resumo=%s",
+      #   cnpj,
+      #   periodo_ano,
+      #   periodo_mes,
+      #   resumo,
+      # )
+
+    # logger.info("Backfill NFe finalizado: cnpj=%s periodos_processados=%s", cnpj, len(resultados))
+    return resultados
+
+  def sincronizar_sped_todos_periodos(
+    self,
+    conn: psycopg.Connection,
+    emitente_cnpj: str,
+  ) -> list[dict]:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    if not cnpj:
+      # logger.warning("Backfill SPED ignorado: CNPJ invalido recebido=%s", emitente_cnpj)
+      return []
+
+    # logger.info("Backfill SPED iniciado: cnpj=%s", cnpj)
+    with conn.cursor() as cur:
+      cur.execute(
+        """
+        SELECT
+          EXTRACT(YEAR FROM d.data_emissao)::int AS periodo_ano,
+          EXTRACT(MONTH FROM d.data_emissao)::int AS periodo_mes,
+          COUNT(DISTINCT d.id) AS documentos
+        FROM public.sped_documentos_fiscais d
+        WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+          AND d.data_emissao IS NOT NULL
+        GROUP BY 1, 2
+        ORDER BY 1, 2;
+        """,
+        (cnpj,),
+      )
+      periodos = cur.fetchall()
+
+    self.sincronizar_sped_apuracao_icms(conn=conn, emitente_cnpj=cnpj)
+    self.sincronizar_sped_documentos_itens_icms(conn=conn, emitente_cnpj=cnpj)
+
+    resultados = []
+    with conn.cursor() as cur:
+      for periodo_ano, periodo_mes, documentos in periodos:
+        resumo = self._coletar_resumo_periodo(cur, cnpj, periodo_ano, periodo_mes, "sped")
+        resultado = {
+          "origem": "sped",
+          "periodo_ano": periodo_ano,
+          "periodo_mes": periodo_mes,
+          "documentos": documentos,
+          **resumo,
+        }
+        resultados.append(resultado)
+        # logger.info(
+        #   "Backfill SPED periodo finalizado: cnpj=%s periodo=%04d-%02d resumo=%s",
+        #   cnpj,
+        #   periodo_ano,
+        #   periodo_mes,
+        #   resumo,
+        # )
+
+    # logger.info("Backfill SPED finalizado: cnpj=%s periodos_processados=%s", cnpj, len(resultados))
+    return resultados
 
   def sincronizar_nfe_periodo(
     self,
@@ -12,18 +140,53 @@ class ReformaTributariaSyncService:
     emitente_cnpj: str,
     periodo_ano: int,
     periodo_mes: int,
-  ) -> None:
+  ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
     if not cnpj:
-      return
+      # logger.warning("Sincronizacao NFe ignorada: CNPJ invalido recebido=%s", emitente_cnpj)
+      return {}
 
     with conn.cursor() as cur:
+      self._garantir_tributos_base(cur)
+      # logger.info("Sincronizacao NFe limpando tributos legados: cnpj=%s periodo=%04d-%02d", cnpj, periodo_ano, periodo_mes)
       self._remover_tributos_nfe_periodo(cur, cnpj, periodo_ano, periodo_mes)
-      self._remover_creditos_debitos_nfe_periodo(cur, cnpj, periodo_ano, periodo_mes)
+      self._remover_creditos_debitos_nfe_periodo(
+        cur,
+        cnpj,
+        periodo_ano,
+        periodo_mes,
+        self.TRIBUTOS_LEGADOS_NFE + self.TRIBUTOS_REFORMA,
+      )
+      self._remover_memoria_nfe_periodo(
+        cur,
+        cnpj,
+        periodo_ano,
+        periodo_mes,
+        self.TRIBUTOS_LEGADOS_NFE + self.TRIBUTOS_REFORMA,
+      )
+      # logger.info("Sincronizacao NFe inserindo documentos/itens legados: cnpj=%s periodo=%04d-%02d", cnpj, periodo_ano, periodo_mes)
       self._inserir_documentos_tributos_nfe(cur, cnpj, periodo_ano, periodo_mes)
       self._inserir_itens_tributos_nfe(cur, cnpj, periodo_ano, periodo_mes)
-      self._inserir_creditos_debitos_nfe(cur, cnpj, periodo_ano, periodo_mes)
+      xml_resumo = self._inserir_tributos_reforma_xml_importados(cur, cnpj, periodo_ano, periodo_mes)
+      # logger.info(
+      #   "Sincronizacao NFe XMLs importados processados: cnpj=%s periodo=%04d-%02d resumo=%s",
+      #   cnpj,
+      #   periodo_ano,
+      #   periodo_mes,
+      #   xml_resumo,
+      # )
+      # logger.info("Sincronizacao NFe gerando creditos/debitos/memoria/apuracao: cnpj=%s periodo=%04d-%02d", cnpj, periodo_ano, periodo_mes)
+      self._inserir_creditos_debitos_nfe(
+        cur,
+        cnpj,
+        periodo_ano,
+        periodo_mes,
+        self.TRIBUTOS_LEGADOS_NFE + self.TRIBUTOS_REFORMA,
+      )
+      self._inserir_memoria_nfe(cur, cnpj, periodo_ano, periodo_mes)
       self._atualizar_apuracao_nfe(cur, cnpj, periodo_ano, periodo_mes)
+      resumo = self._coletar_resumo_periodo(cur, cnpj, periodo_ano, periodo_mes, "xml")
+      return {**xml_resumo, **resumo}
 
   def sincronizar_sped_apuracao_icms(
     self,
@@ -88,10 +251,49 @@ class ReformaTributariaSyncService:
       return
 
     with conn.cursor() as cur:
+      self._garantir_tributos_base(cur)
       self._remover_tributos_sped(cur, cnpj)
       self._inserir_documentos_tributos_sped_icms(cur, cnpj)
       self._inserir_itens_tributos_sped_icms(cur, cnpj)
       self._inserir_creditos_debitos_sped_icms(cur, cnpj)
+      self._inserir_memoria_sped_icms(cur, cnpj)
+
+  def _garantir_tributos_base(self, cur) -> None:
+    cur.execute(
+      """
+      INSERT INTO public.tributos (codigo, nome, esfera, tipo, descricao, ativo)
+      VALUES
+        ('ICMS', 'Imposto sobre Circulacao de Mercadorias e Servicos', 'estadual', 'atual', 'Tributo estadual vigente antes da Reforma Tributaria do Consumo.', TRUE),
+        ('ICMS_ST', 'ICMS Substituicao Tributaria', 'estadual', 'atual', 'Modalidade de recolhimento por substituicao tributaria do ICMS.', TRUE),
+        ('IPI', 'Imposto sobre Produtos Industrializados', 'federal', 'atual', 'Tributo federal vigente antes da Reforma Tributaria do Consumo.', TRUE),
+        ('PIS', 'Programa de Integracao Social', 'federal', 'atual', 'Contribuicao federal a ser substituida/absorvida no contexto da CBS.', TRUE),
+        ('COFINS', 'Contribuicao para o Financiamento da Seguridade Social', 'federal', 'atual', 'Contribuicao federal a ser substituida/absorvida no contexto da CBS.', TRUE),
+        ('ISS', 'Imposto sobre Servicos', 'municipal', 'atual', 'Tributo municipal vigente antes da Reforma Tributaria do Consumo.', TRUE),
+        ('CBS', 'Contribuicao sobre Bens e Servicos', 'federal', 'reforma', 'Novo tributo federal da Reforma Tributaria do Consumo.', TRUE),
+        ('IBS', 'Imposto sobre Bens e Servicos', 'compartilhada', 'reforma', 'Novo tributo compartilhado entre estados, Distrito Federal e municipios.', TRUE),
+        ('IBS_UF', 'IBS Parcela Estadual', 'estadual', 'reforma', 'Componente estadual do IBS.', TRUE),
+        ('IBS_MUN', 'IBS Parcela Municipal', 'municipal', 'reforma', 'Componente municipal do IBS.', TRUE),
+        ('IS', 'Imposto Seletivo', 'federal', 'reforma', 'Imposto Seletivo incidente sobre bens e servicos especificos.', TRUE)
+      ON CONFLICT (codigo) DO UPDATE SET
+        nome = EXCLUDED.nome,
+        esfera = EXCLUDED.esfera,
+        tipo = EXCLUDED.tipo,
+        descricao = EXCLUDED.descricao,
+        ativo = TRUE,
+        atualizado_em = CURRENT_TIMESTAMP;
+      """
+    )
+    cur.execute(
+      """
+      SELECT codigo
+      FROM public.tributos
+      WHERE codigo = ANY(%s)
+      ORDER BY codigo;
+      """,
+      (list(self.TRIBUTOS_LEGADOS_NFE + self.TRIBUTOS_REFORMA),),
+    )
+    codigos = [row[0] for row in cur.fetchall()]
+    # logger.info("Catalogo de tributos garantido para Reforma: codigos=%s", codigos)
 
   def _remover_tributos_nfe_periodo(
     self,
@@ -115,6 +317,17 @@ class ReformaTributariaSyncService:
     )
 
   def _remover_tributos_sped(self, cur, cnpj: str) -> None:
+    cur.execute(
+      """
+      DELETE FROM public.memoria_calculo_tributaria m
+      USING public.tributos t
+      WHERE m.tributo_id = t.id
+        AND regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s
+        AND m.fonte_dados = 'sped'
+        AND t.codigo = ANY(%s);
+      """,
+      (cnpj, list(self.TRIBUTOS_LEGADOS_SPED)),
+    )
     cur.execute(
       """
       DELETE FROM public.creditos_tributarios c
@@ -416,14 +629,83 @@ class ReformaTributariaSyncService:
       (cnpj,),
     )
 
+  def _inserir_memoria_sped_icms(self, cur, cnpj: str) -> None:
+    cur.execute(
+      """
+      INSERT INTO public.memoria_calculo_tributaria (
+        documento_tributo_id,
+        item_tributo_id,
+        tributo_id,
+        empresa_cnpj,
+        periodo_ano,
+        periodo_mes,
+        etapa_calculo,
+        base_origem,
+        base_calculo,
+        valor_calculado,
+        formula_calculo,
+        parametros_calculo,
+        resultado_calculo,
+        fonte_dados,
+        hash_calculo,
+        observacoes
+      )
+      SELECT
+        it.documento_tributo_id,
+        it.id,
+        it.tributo_id,
+        it.empresa_cnpj,
+        it.periodo_ano,
+        it.periodo_mes,
+        'rateio_sped_icms',
+        it.base_calculo,
+        it.base_calculo,
+        COALESCE(NULLIF(it.valor_tributo, 0), NULLIF(it.valor_debito, 0), NULLIF(it.valor_credito, 0), 0),
+        'Valor de ICMS distribuido proporcionalmente por documento e item do SPED.',
+        jsonb_build_object(
+          'origem', 'sped',
+          'sped_item_id', it.sped_item_id,
+          'documento_tributo_id', it.documento_tributo_id,
+          'natureza', it.natureza
+        ),
+        jsonb_build_object(
+          'valor_debito', it.valor_debito,
+          'valor_credito', it.valor_credito,
+          'valor_tributo', it.valor_tributo
+        ),
+        'sped',
+        md5(concat_ws(
+          '|',
+          'sped',
+          it.id,
+          it.documento_tributo_id,
+          it.tributo_id,
+          it.valor_tributo,
+          it.valor_debito,
+          it.valor_credito
+        )),
+        'Memoria gerada a partir do rateio do ICMS informado na apuracao SPED.'
+      FROM public.itens_documentos_fiscais_tributos it
+      JOIN public.documentos_fiscais_tributos dt ON dt.id = it.documento_tributo_id
+      JOIN public.tributos t ON t.id = it.tributo_id
+      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+        AND it.sped_item_id IS NOT NULL
+        AND dt.origem = 'sped'
+        AND t.codigo = 'ICMS'
+        AND COALESCE(NULLIF(it.valor_tributo, 0), NULLIF(it.valor_debito, 0), NULLIF(it.valor_credito, 0), 0) <> 0;
+      """,
+      (cnpj,),
+    )
+
   def _remover_creditos_debitos_nfe_periodo(
     self,
     cur,
     cnpj: str,
     periodo_ano: int,
     periodo_mes: int,
+    codigos_tributos: tuple[str, ...],
   ) -> None:
-    params = (cnpj, periodo_ano, periodo_mes, list(self.TRIBUTOS_LEGADOS_NFE))
+    params = (cnpj, periodo_ano, periodo_mes, list(codigos_tributos))
     cur.execute(
       """
       DELETE FROM public.creditos_tributarios c
@@ -449,6 +731,28 @@ class ReformaTributariaSyncService:
         AND d.origem_debito = 'saida';
       """,
       params,
+    )
+
+  def _remover_memoria_nfe_periodo(
+    self,
+    cur,
+    cnpj: str,
+    periodo_ano: int,
+    periodo_mes: int,
+    codigos_tributos: tuple[str, ...],
+  ) -> None:
+    cur.execute(
+      """
+      DELETE FROM public.memoria_calculo_tributaria m
+      USING public.tributos t
+      WHERE m.tributo_id = t.id
+        AND regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s
+        AND m.periodo_ano = %s
+        AND m.periodo_mes = %s
+        AND m.fonte_dados = 'xml'
+        AND t.codigo = ANY(%s);
+      """,
+      (cnpj, periodo_ano, periodo_mes, list(codigos_tributos)),
     )
 
   def _inserir_documentos_tributos_nfe(
@@ -640,12 +944,444 @@ class ReformaTributariaSyncService:
       (cnpj, periodo_ano, periodo_mes, list(self.TRIBUTOS_LEGADOS_NFE)),
     )
 
+  def _inserir_tributos_reforma_xml_importados(
+    self,
+    cur,
+    cnpj: str,
+    periodo_ano: int,
+    periodo_mes: int,
+  ) -> dict:
+    resumo = {
+      "xmls_importados_lidos": 0,
+      "xmls_periodo": 0,
+      "xmls_com_reforma": 0,
+      "notas_reforma_reconstruidas": 0,
+      "itens_reforma_xml": 0,
+      "tributos_reforma_inseridos": 0,
+    }
+
+    if not self._tabela_xml_importados_existe(cur):
+      # logger.warning("Tabela notas_xml_importados nao encontrada: cnpj=%s periodo=%04d-%02d", cnpj, periodo_ano, periodo_mes)
+      return resumo
+
+    cur.execute(
+      """
+      SELECT id, nome_arquivo, conteudo_xml
+      FROM public.notas_xml_importados
+      WHERE regexp_replace(cnpj_emitente, '\\D', '', 'g') = %s
+        AND conteudo_xml IS NOT NULL
+      ORDER BY id ASC;
+      """,
+      (cnpj,),
+    )
+    xmls_importados = cur.fetchall()
+    resumo["xmls_importados_lidos"] = len(xmls_importados)
+    # logger.info(
+    #   "XMLs importados carregados para backfill da Reforma: cnpj=%s periodo=%04d-%02d total_xmls=%s",
+    #   cnpj,
+    #   periodo_ano,
+    #   periodo_mes,
+    #   len(xmls_importados),
+    # )
+    if not xmls_importados:
+      return resumo
+
+    nota_ids_reforma: set[int] = set()
+    notas_reconstruidas: set[int] = set()
+
+    for xml_id, nome_arquivo, conteudo_xml in xmls_importados:
+      root = self._parse_xml_importado(conteudo_xml)
+      if root is None:
+        # logger.warning("XML importado ignorado por falha de parse: id=%s nome=%s", xml_id, nome_arquivo)
+        continue
+
+      inf = root.find(".//nfe:infNFe", NS) or self._encontrar_elemento_local(root, "infNFe")
+      if inf is None:
+        # logger.info("XML importado sem infNFe ignorado: id=%s nome=%s", xml_id, nome_arquivo)
+        continue
+
+      ide = inf.find("nfe:ide", NS) or self._encontrar_filho_local(inf, "ide")
+      emit = inf.find("nfe:emit", NS) or self._encontrar_filho_local(inf, "emit")
+      if ide is None or emit is None:
+        continue
+
+      emitente_xml = normalizar_cnpj(
+        self._texto_filho_local(emit, "CNPJ") or self._texto_filho_local(emit, "CPF")
+      )
+      if emitente_xml != cnpj:
+        continue
+
+      numero_nf = self._normalizar_numero_nf(self._texto_filho_local(ide, "nNF"))
+      modelo = self._texto_filho_local(ide, "mod")
+      dh_emi = self._texto_filho_local(ide, "dhEmi")
+      d_emi = self._texto_filho_local(ide, "dEmi")
+      if not numero_nf or not (dh_emi or d_emi):
+        continue
+
+      try:
+        data_emissao = _parse_data_emissao(dh_emi, d_emi)
+      except ValueError:
+        continue
+
+      if data_emissao.year != periodo_ano or data_emissao.month != periodo_mes:
+        continue
+
+      resumo["xmls_periodo"] += 1
+      xml_tem_reforma = False
+
+      for det in self._encontrar_filhos_local(inf, "det"):
+        tributos_reforma = _extrair_tributos_reforma_item(det)
+        if not tributos_reforma:
+          continue
+
+        xml_tem_reforma = True
+        prod = det.find("nfe:prod", NS) or self._encontrar_filho_local(det, "prod")
+        numero_item = int(det.attrib.get("nItem") or 0)
+        produto_codigo = self._texto_filho_local(prod, "cProd") if prod is not None else ""
+        ncm = self._texto_filho_local(prod, "NCM") if prod is not None else ""
+        cfop = self._texto_filho_local(prod, "CFOP") if prod is not None else ""
+
+        cur.execute(
+          """
+          SELECT n.id, ni.id, n.emitente_cnpj
+          FROM public.notas n
+          JOIN public.notas_itens ni ON ni.nota_id = n.id
+          WHERE regexp_replace(n.emitente_cnpj, '\\D', '', 'g') = %s
+            AND n.numero_nf = %s
+            AND COALESCE(n.modelo, '') = COALESCE(%s, '')
+            AND n.data_emissao = %s
+            AND ni.item_numero = %s
+          ORDER BY CASE WHEN COALESCE(ni.produto_codigo, '') = COALESCE(%s, '') THEN 0 ELSE 1 END
+          LIMIT 1;
+          """,
+          (cnpj, str(numero_nf), modelo, data_emissao, numero_item, produto_codigo),
+        )
+        item_row = cur.fetchone()
+        if not item_row:
+          # logger.warning(
+          #   "Item do XML com Reforma nao encontrado nas tabelas normalizadas: xml_id=%s nota=%s modelo=%s data=%s item=%s produto=%s",
+          #   xml_id,
+          #   numero_nf,
+          #   modelo,
+          #   data_emissao,
+          #   numero_item,
+          #   produto_codigo,
+          # )
+          continue
+
+        nota_id, nota_item_id, empresa_cnpj = item_row
+        nota_id = int(nota_id)
+        if nota_id not in notas_reconstruidas:
+          self._remover_tributos_reforma_nota(cur, nota_id)
+          notas_reconstruidas.add(nota_id)
+
+        inseriu_item = False
+        for tributo in tributos_reforma:
+          if self._inserir_tributo_reforma_item_importado(
+            cur=cur,
+            nota_item_id=int(nota_item_id),
+            empresa_cnpj=empresa_cnpj,
+            periodo_ano=periodo_ano,
+            periodo_mes=periodo_mes,
+            numero_item=numero_item,
+            produto_codigo=produto_codigo,
+            ncm=ncm,
+            cfop=cfop,
+            tributo=tributo,
+          ):
+            inseriu_item = True
+            resumo["tributos_reforma_inseridos"] += 1
+
+        if inseriu_item:
+          resumo["itens_reforma_xml"] += 1
+          nota_ids_reforma.add(nota_id)
+
+      if xml_tem_reforma:
+        resumo["xmls_com_reforma"] += 1
+
+    if nota_ids_reforma:
+      NFeItensService()._registrar_documentos_reforma_agregados(
+        cur,
+        sorted(nota_ids_reforma),
+      )
+
+    resumo["notas_reforma_reconstruidas"] = len(nota_ids_reforma)
+    return resumo
+
+  def _remover_tributos_reforma_nota(self, cur, nota_id: int) -> None:
+    cur.execute(
+      """
+      DELETE FROM public.documentos_fiscais_tributos dt
+      USING public.tributos t
+      WHERE dt.tributo_id = t.id
+        AND dt.nota_id = %s
+        AND t.codigo = ANY(%s);
+      """,
+      (nota_id, list(self.TRIBUTOS_REFORMA)),
+    )
+    cur.execute(
+      """
+      DELETE FROM public.itens_documentos_fiscais_tributos it
+      USING public.notas_itens ni, public.tributos t
+      WHERE it.nota_item_id = ni.id
+        AND it.tributo_id = t.id
+        AND ni.nota_id = %s
+        AND t.codigo = ANY(%s);
+      """,
+      (nota_id, list(self.TRIBUTOS_REFORMA)),
+    )
+
+  def _inserir_tributo_reforma_item_importado(
+    self,
+    cur,
+    nota_item_id: int,
+    empresa_cnpj: str,
+    periodo_ano: int,
+    periodo_mes: int,
+    numero_item: int,
+    produto_codigo: str,
+    ncm: str,
+    cfop: str,
+    tributo: dict,
+  ) -> bool:
+    valor_tributo = tributo.get("valor_tributo") or 0
+    if valor_tributo == 0:
+      return False
+
+    cur.execute(
+      """
+      INSERT INTO public.itens_documentos_fiscais_tributos (
+        nota_item_id,
+        tributo_id,
+        empresa_cnpj,
+        periodo_ano,
+        periodo_mes,
+        numero_item,
+        produto_codigo,
+        ncm_codigo,
+        cfop,
+        cst_codigo,
+        classificacao_tributaria,
+        base_calculo,
+        aliquota,
+        valor_debito,
+        valor_credito,
+        valor_tributo,
+        natureza,
+        origem,
+        status,
+        observacoes
+      )
+      SELECT
+        %s,
+        t.id,
+        %s,
+        %s,
+        %s,
+        %s,
+        %s,
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM public.ncm_catalogo nc
+            WHERE nc.codigo = LEFT(regexp_replace(COALESCE(%s, ''), '\\D', '', 'g'), 8)::char(8)
+          )
+            THEN LEFT(regexp_replace(COALESCE(%s, ''), '\\D', '', 'g'), 8)::char(8)
+          ELSE NULL
+        END,
+        %s,
+        %s,
+        %s,
+        %s,
+        %s,
+        %s,
+        0,
+        %s,
+        'debito',
+        'xml',
+        'ativo',
+        'Tributo da Reforma Tributaria extraido do XML importado.'
+      FROM public.tributos t
+      WHERE t.codigo = %s
+        AND NOT EXISTS (
+          SELECT 1
+          FROM public.itens_documentos_fiscais_tributos it
+          JOIN public.tributos existente ON existente.id = it.tributo_id
+          WHERE it.nota_item_id = %s
+            AND existente.codigo = %s
+            AND it.origem = 'xml'
+            AND COALESCE(it.valor_tributo, 0) = COALESCE(%s, 0)
+        );
+      """,
+      (
+        nota_item_id,
+        empresa_cnpj,
+        periodo_ano,
+        periodo_mes,
+        numero_item,
+        produto_codigo,
+        ncm,
+        ncm,
+        cfop,
+        tributo.get("cst_codigo"),
+        tributo.get("classificacao_tributaria"),
+        tributo.get("base_calculo") or 0,
+        tributo.get("aliquota") or 0,
+        valor_tributo,
+        valor_tributo,
+        tributo.get("tributo_codigo"),
+        nota_item_id,
+        tributo.get("tributo_codigo"),
+        valor_tributo,
+      ),
+    )
+
+    return cur.rowcount > 0
+
+  def _tabela_xml_importados_existe(self, cur) -> bool:
+    cur.execute("SELECT to_regclass('public.notas_xml_importados')")
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+  def _parse_xml_importado(self, conteudo_xml):
+    try:
+      if isinstance(conteudo_xml, memoryview):
+        conteudo_xml = conteudo_xml.tobytes()
+      return ET.fromstring(conteudo_xml)
+    except ET.ParseError:
+      return None
+
+  def _nome_local(self, elemento) -> str:
+    return elemento.tag.split("}")[-1] if elemento is not None else ""
+
+  def _encontrar_elemento_local(self, root, nome_tag: str):
+    if root is None:
+      return None
+    return next((elemento for elemento in root.iter() if self._nome_local(elemento) == nome_tag), None)
+
+  def _encontrar_filho_local(self, root, nome_tag: str):
+    if root is None:
+      return None
+    return next((elemento for elemento in list(root) if self._nome_local(elemento) == nome_tag), None)
+
+  def _encontrar_filhos_local(self, root, nome_tag: str) -> list:
+    if root is None:
+      return []
+    return [elemento for elemento in list(root) if self._nome_local(elemento) == nome_tag]
+
+  def _texto_filho_local(self, root, nome_tag: str) -> str:
+    elemento = self._encontrar_filho_local(root, nome_tag)
+    if elemento is None or elemento.text is None:
+      return ""
+    return elemento.text.strip()
+
+  def _normalizar_numero_nf(self, numero_nf: str) -> str:
+    valor = (numero_nf or "").strip()
+    if not valor:
+      return ""
+    if valor.isdigit():
+      return str(int(valor))
+    return valor.lstrip("0") or valor
+
+  def _coletar_resumo_periodo(
+    self,
+    cur,
+    cnpj: str,
+    periodo_ano: int,
+    periodo_mes: int,
+    origem: str,
+  ) -> dict:
+    cur.execute(
+      """
+      SELECT COUNT(*)
+      FROM public.documentos_fiscais_tributos dt
+      WHERE regexp_replace(dt.empresa_cnpj, '\\D', '', 'g') = %s
+        AND dt.periodo_ano = %s
+        AND dt.periodo_mes = %s
+        AND dt.origem = %s;
+      """,
+      (cnpj, periodo_ano, periodo_mes, origem),
+    )
+    documentos_tributos = int(cur.fetchone()[0] or 0)
+
+    cur.execute(
+      """
+      SELECT COUNT(*)
+      FROM public.itens_documentos_fiscais_tributos it
+      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+        AND it.periodo_ano = %s
+        AND it.periodo_mes = %s
+        AND it.origem = %s;
+      """,
+      (cnpj, periodo_ano, periodo_mes, origem),
+    )
+    itens_tributos = int(cur.fetchone()[0] or 0)
+
+    cur.execute(
+      """
+      SELECT COUNT(*)
+      FROM public.debitos_tributarios d
+      WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+        AND d.periodo_ano = %s
+        AND d.periodo_mes = %s;
+      """,
+      (cnpj, periodo_ano, periodo_mes),
+    )
+    debitos = int(cur.fetchone()[0] or 0)
+
+    cur.execute(
+      """
+      SELECT COUNT(*)
+      FROM public.creditos_tributarios c
+      WHERE regexp_replace(c.empresa_cnpj, '\\D', '', 'g') = %s
+        AND c.periodo_ano = %s
+        AND c.periodo_mes = %s;
+      """,
+      (cnpj, periodo_ano, periodo_mes),
+    )
+    creditos = int(cur.fetchone()[0] or 0)
+
+    cur.execute(
+      """
+      SELECT COUNT(*)
+      FROM public.memoria_calculo_tributaria m
+      WHERE regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s
+        AND m.periodo_ano = %s
+        AND m.periodo_mes = %s
+        AND m.fonte_dados = %s;
+      """,
+      (cnpj, periodo_ano, periodo_mes, origem),
+    )
+    memorias = int(cur.fetchone()[0] or 0)
+
+    cur.execute(
+      """
+      SELECT COUNT(*)
+      FROM public.apuracao_tributaria a
+      WHERE regexp_replace(a.empresa_cnpj, '\\D', '', 'g') = %s
+        AND a.periodo_ano = %s
+        AND a.periodo_mes = %s;
+      """,
+      (cnpj, periodo_ano, periodo_mes),
+    )
+    apuracoes = int(cur.fetchone()[0] or 0)
+
+    return {
+      "documentos_tributos": documentos_tributos,
+      "itens_tributos": itens_tributos,
+      "debitos": debitos,
+      "creditos": creditos,
+      "memorias": memorias,
+      "apuracoes": apuracoes,
+    }
+
   def _inserir_creditos_debitos_nfe(
     self,
     cur,
     cnpj: str,
     periodo_ano: int,
     periodo_mes: int,
+    codigos_tributos: tuple[str, ...],
   ) -> None:
     cur.execute(
       """
@@ -686,7 +1422,7 @@ class ReformaTributariaSyncService:
         AND t.codigo = ANY(%s)
         AND COALESCE(NULLIF(it.valor_credito, 0), it.valor_tributo, 0) > 0;
       """,
-      (cnpj, periodo_ano, periodo_mes, list(self.TRIBUTOS_LEGADOS_NFE)),
+      (cnpj, periodo_ano, periodo_mes, list(codigos_tributos)),
     )
     cur.execute(
       """
@@ -727,7 +1463,93 @@ class ReformaTributariaSyncService:
         AND t.codigo = ANY(%s)
         AND COALESCE(NULLIF(it.valor_debito, 0), it.valor_tributo, 0) > 0;
       """,
-      (cnpj, periodo_ano, periodo_mes, list(self.TRIBUTOS_LEGADOS_NFE)),
+      (cnpj, periodo_ano, periodo_mes, list(codigos_tributos)),
+    )
+
+  def _inserir_memoria_nfe(
+    self,
+    cur,
+    cnpj: str,
+    periodo_ano: int,
+    periodo_mes: int,
+  ) -> None:
+    cur.execute(
+      """
+      INSERT INTO public.memoria_calculo_tributaria (
+        documento_tributo_id,
+        item_tributo_id,
+        tributo_id,
+        empresa_cnpj,
+        periodo_ano,
+        periodo_mes,
+        etapa_calculo,
+        base_origem,
+        base_calculo,
+        aliquota_aplicada,
+        valor_calculado,
+        formula_calculo,
+        parametros_calculo,
+        resultado_calculo,
+        fonte_dados,
+        hash_calculo,
+        observacoes
+      )
+      SELECT
+        it.documento_tributo_id,
+        it.id,
+        it.tributo_id,
+        it.empresa_cnpj,
+        it.periodo_ano,
+        it.periodo_mes,
+        CASE
+          WHEN t.tipo = 'reforma' THEN 'extracao_xml_reforma'
+          ELSE 'sincronizacao_xml_legado'
+        END,
+        COALESCE(NULLIF(it.base_calculo, 0), it.valor_tributo, 0),
+        COALESCE(NULLIF(it.base_calculo, 0), it.valor_tributo, 0),
+        it.aliquota,
+        COALESCE(NULLIF(it.valor_tributo, 0), NULLIF(it.valor_debito, 0), NULLIF(it.valor_credito, 0), 0),
+        CASE
+          WHEN t.tipo = 'reforma' THEN 'Valor extraido das tags da Reforma Tributaria no XML.'
+          ELSE 'Valor sincronizado a partir dos tributos legados do XML.'
+        END,
+        jsonb_build_object(
+          'origem', 'xml',
+          'nota_item_id', it.nota_item_id,
+          'documento_tributo_id', it.documento_tributo_id,
+          'natureza', it.natureza
+        ),
+        jsonb_build_object(
+          'valor_debito', it.valor_debito,
+          'valor_credito', it.valor_credito,
+          'valor_tributo', it.valor_tributo
+        ),
+        'xml',
+        md5(concat_ws(
+          '|',
+          'xml',
+          it.id,
+          it.documento_tributo_id,
+          it.tributo_id,
+          it.valor_tributo,
+          it.valor_debito,
+          it.valor_credito
+        )),
+        CASE
+          WHEN t.tipo = 'reforma' THEN 'Memoria gerada a partir dos campos CBS/IBS/IS extraidos do XML.'
+          ELSE 'Memoria gerada a partir da distribuicao dos tributos legados por item.'
+        END
+      FROM public.itens_documentos_fiscais_tributos it
+      JOIN public.tributos t ON t.id = it.tributo_id
+      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+        AND it.periodo_ano = %s
+        AND it.periodo_mes = %s
+        AND it.nota_item_id IS NOT NULL
+        AND it.origem = 'xml'
+        AND t.codigo = ANY(%s)
+        AND COALESCE(NULLIF(it.valor_tributo, 0), NULLIF(it.valor_debito, 0), NULLIF(it.valor_credito, 0), 0) <> 0;
+      """,
+      (cnpj, periodo_ano, periodo_mes, list(self.TRIBUTOS_LEGADOS_NFE + self.TRIBUTOS_REFORMA)),
     )
 
   def _atualizar_apuracao_nfe(

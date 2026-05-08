@@ -309,6 +309,8 @@ export default function ImportacaoXML() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['dashboard-vendas'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-vendas-mapa'] }),
+        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-apuracao'] }),
+        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-memoria'] }),
         queryClient.invalidateQueries({ queryKey: ['nfe-kpis'] }),
         queryClient.invalidateQueries({ queryKey: ['nfe-kpis-years'] }),
         queryClient.invalidateQueries({ queryKey: ['nfe-kpis-clientes'] }),

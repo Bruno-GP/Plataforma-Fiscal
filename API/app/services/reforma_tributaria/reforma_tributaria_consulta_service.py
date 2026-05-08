@@ -284,6 +284,52 @@ class ReformaTributariaConsultaService:
         cur.execute(sql, params)
         return [dict(row) for row in cur.fetchall()]
 
+  def contar_memoria_calculo(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: int | None = None,
+    periodo_mes: int | None = None,
+    tributo_codigo: str | None = None,
+    documento_tributo_id: int | None = None,
+    item_tributo_id: int | None = None,
+  ) -> int:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    filtros = ["regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s"]
+    params: list[object] = [cnpj]
+
+    if periodo_ano is not None:
+      filtros.append("m.periodo_ano = %s")
+      params.append(periodo_ano)
+
+    if periodo_mes is not None:
+      filtros.append("m.periodo_mes = %s")
+      params.append(periodo_mes)
+
+    if tributo_codigo:
+      filtros.append("UPPER(t.codigo) = UPPER(%s)")
+      params.append(tributo_codigo)
+
+    if documento_tributo_id is not None:
+      filtros.append("m.documento_tributo_id = %s")
+      params.append(documento_tributo_id)
+
+    if item_tributo_id is not None:
+      filtros.append("m.item_tributo_id = %s")
+      params.append(item_tributo_id)
+
+    sql = f"""
+      SELECT COUNT(*)
+      FROM public.memoria_calculo_tributaria m
+      JOIN public.tributos t ON t.id = m.tributo_id
+      WHERE {' AND '.join(filtros)};
+    """
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        return int(row[0] if row else 0)
+
   @staticmethod
   def _normalizar_origem_documento(origem_documento: str) -> str:
     origem = origem_documento.strip().lower()

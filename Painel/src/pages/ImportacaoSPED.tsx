@@ -178,6 +178,8 @@ export default function ImportacaoSPED() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['dashboard-vendas'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-vendas-mapa'] }),
+        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-apuracao'] }),
+        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-memoria'] }),
         queryClient.invalidateQueries({ queryKey: ['kpis'] }),
         queryClient.invalidateQueries({ queryKey: ['kpis-years'] }),
       ]);

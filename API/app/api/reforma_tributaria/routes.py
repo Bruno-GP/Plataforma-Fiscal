@@ -1,17 +1,28 @@
+import psycopg
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.security import require_company_scope
 from app.models.reforma_tributaria.schemas import (
+  BackfillReformaTributariaResponse,
   ConsultaApuracaoTributariaResponse,
   ConsultaDocumentoFiscalTributosResponse,
   ConsultaItemDocumentoFiscalTributosResponse,
   ConsultaMemoriaCalculoTributariaResponse,
   ConsultaTributosResponse,
 )
+from app.services.nfe.postres_config import carregar_config_postgres
 from app.services.reforma_tributaria.reforma_tributaria_consulta_service import (
   ReformaTributariaConsultaService,
 )
+from app.services.reforma_tributaria.reforma_tributaria_sync_service import (
+  ReformaTributariaSyncService,
+)
 
+
+logger = logging.getLogger("ReformaTributariaRoutes")
+# logger.setLevel(logging.INFO)
 
 router = APIRouter()
 reforma_router = APIRouter(
@@ -35,6 +46,56 @@ def listar_tributos(
     resultados=resultados,
   )
 
+
+@reforma_router.post("/backfill", response_model=BackfillReformaTributariaResponse)
+def backfill_reforma_tributaria(
+  emitente_cnpj: str = Query(..., min_length=14, max_length=20),
+  origem: str = Query(default="nfe", pattern="^(nfe|sped)$"),
+):
+  # logger.info("Requisicao de backfill da Reforma recebida: emitente_cnpj=%s origem=%s", emitente_cnpj, origem)
+  config = carregar_config_postgres()
+  conn_params = {
+    "host": config["host"],
+    "port": config["port"],
+    "dbname": config["database"],
+    "user": config["user"],
+    "password": config["password"],
+  }
+
+  if config.get("conninfo"):
+    conn_params = {"conninfo": config["conninfo"]}
+  if config.get("sslmode"):
+    conn_params["sslmode"] = config["sslmode"]
+
+  try:
+    with psycopg.connect(**conn_params) as conn:
+      sync_service = ReformaTributariaSyncService()
+      if origem == "sped":
+        resultados = sync_service.sincronizar_sped_todos_periodos(conn, emitente_cnpj)
+      else:
+        resultados = sync_service.sincronizar_nfe_todos_periodos(conn, emitente_cnpj)
+      conn.commit()
+  except psycopg.Error as exc:
+    logger.exception("Falha no backfill da Reforma: emitente_cnpj=%s origem=%s", emitente_cnpj, origem)
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail=f"Falha ao executar backfill da Reforma Tributaria: {exc}",
+    ) from exc
+
+  # logger.info(
+  #   "Backfill da Reforma concluido: emitente_cnpj=%s origem=%s periodos=%s resultados=%s",
+  #   emitente_cnpj,
+  #   origem,
+  #   len(resultados),
+  #   resultados,
+  # )
+  return BackfillReformaTributariaResponse(
+    status="ok",
+    emitente_cnpj=emitente_cnpj,
+    origem=origem,
+    periodos_processados=len(resultados),
+    resultados=resultados,
+  )
 
 @reforma_router.get("/apuracao", response_model=ConsultaApuracaoTributariaResponse)
 def listar_apuracoes(
@@ -131,7 +192,8 @@ def listar_memoria_calculo(
   limite: int = Query(default=100, ge=1, le=1000),
   offset: int = Query(default=0, ge=0),
 ):
-  resultados = ReformaTributariaConsultaService().listar_memoria_calculo(
+  service = ReformaTributariaConsultaService()
+  resultados = service.listar_memoria_calculo(
     emitente_cnpj=emitente_cnpj,
     periodo_ano=periodo_ano,
     periodo_mes=periodo_mes,
@@ -141,13 +203,21 @@ def listar_memoria_calculo(
     limite=limite,
     offset=offset,
   )
+  total = service.contar_memoria_calculo(
+    emitente_cnpj=emitente_cnpj,
+    periodo_ano=periodo_ano,
+    periodo_mes=periodo_mes,
+    tributo_codigo=tributo_codigo,
+    documento_tributo_id=documento_tributo_id,
+    item_tributo_id=item_tributo_id,
+  )
 
   return ConsultaMemoriaCalculoTributariaResponse(
     status="ok",
     emitente_cnpj=emitente_cnpj,
     periodo_ano=periodo_ano,
     periodo_mes=periodo_mes,
-    total=len(resultados),
+    total=total,
     limite=limite,
     offset=offset,
     resultados=resultados,

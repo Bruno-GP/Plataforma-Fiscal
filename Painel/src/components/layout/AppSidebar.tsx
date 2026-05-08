@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   BarChart3,
+  ChevronDown,
   FileDigit,
   FileSearch,
   FileUp,
@@ -15,6 +16,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Sidebar,
   SidebarContent,
@@ -25,48 +27,55 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
+import { cn } from '@/lib/utils';
 
-const menuItemsBase = [
-  { title: 'Vendas', url: '/analise-vendas', icon: LayoutDashboard },
-  { title: 'Detalhamento Vendas', url: '/detalhamento-vendas', icon: ListTree },
-  { title: 'Análise Fiscal', url: '/analise-fiscal-cfop', icon: BarChart3 },
-  { title: 'Clientes', url: '/analise-clientes', icon: Users },
+const navGroupsBase = [
+  {
+    title: 'Análises',
+    icon: LayoutDashboard,
+    items: [
+      { title: 'Análise de Vendas', url: '/analise-vendas', icon: LayoutDashboard },
+      { title: 'Detalhamento de Vendas', url: '/detalhamento-vendas', icon: ListTree },
+      { title: 'Análise de Compras', url: '/analise-compras', icon: FileSearch },
+      { title: 'Análise de Clientes', url: '/analise-clientes', icon: Users },
+    ],
+  },
+  {
+    title: 'Fiscal',
+    icon: BarChart3,
+    items: [
+      { title: 'Análise Fiscal', url: '/analise-fiscal-cfop', icon: BarChart3 },
+      { title: 'Inconsistências Fiscais', url: '/inconsistencias', icon: AlertTriangle },
+      { title: 'Reforma Tributária', url: '/reforma-tributaria', icon: Scale },
+    ],
+  },
 ];
-
-const menuItemImportacaoXml = { title: 'Importacao XML', url: '/importacao-xml', icon: FileUp };
-const menuItemImportacaoSped = { title: 'Importacoes SPED', url: '/importacao-sped', icon: FileDigit };
-const menuItemAnaliseCompras = { title: 'Compras', url: '/analise-compras', icon: FileSearch };
-const menuItemReformaTributaria = { title: 'Reforma Tributaria', url: '/reforma-tributaria', icon: Scale };
-// const menuItemDetalhamentoCompras = { title: 'Detalhe compras', url: '/detalhamento-compras', icon: ListTree };
-const menuItemRelatoriosIA = { title: 'Relatorios com IA', url: '/relatorios-ia', icon: Sparkles };
-const menuItemInconsistencias = { title: 'Inconsistencias', url: '/inconsistencias', icon: AlertTriangle };
 
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-
-  const menuItems = user?.tem_sped
-    ? [
-        ...menuItemsBase,
-        menuItemAnaliseCompras,
-        menuItemReformaTributaria,
-        // menuItemDetalhamentoCompras,
-        menuItemRelatoriosIA,
-        menuItemInconsistencias,
-        menuItemImportacaoSped,
-      ]
-    : [
-        ...menuItemsBase,
-        menuItemAnaliseCompras,
-        menuItemReformaTributaria,
-        // menuItemDetalhamentoCompras,
-        menuItemRelatoriosIA,
-        menuItemInconsistencias,
-        menuItemImportacaoXml,
-      ];
+  const importacaoItem = user?.tem_sped
+    ? { title: 'Importar SPED Fiscal', url: '/importacao-sped', icon: FileDigit }
+    : { title: 'Importar XML', url: '/importacao-xml', icon: FileUp };
+  const navGroups = [
+    ...navGroupsBase,
+    {
+      title: 'Importações',
+      icon: FileUp,
+      items: [importacaoItem],
+    },
+    {
+      title: 'Relatórios',
+      icon: Sparkles,
+      items: [{ title: 'Relatórios com IA', url: '/relatorios-ia', icon: Sparkles }],
+    },
+  ];
 
   const handleLogout = () => {
     logout();
@@ -80,7 +89,7 @@ export function AppSidebar() {
       className="
         sticky top-0
         h-svh
-        w-56
+        w-60
         shrink-0
         border-r border-white/10
         bg-[#0E1525]
@@ -106,30 +115,56 @@ export function AppSidebar() {
       <SidebarContent className="bg-[#0E1525]">
         <SidebarGroup className="px-2.5">
           <SidebarGroupContent className="flex justify-center">
-            <SidebarMenu className="w-full">
-              {menuItems.map((item) => {
-                const isActive = location.pathname === item.url;
+            <SidebarMenu className="w-full gap-1.5">
+              {navGroups.map((group) => {
+                const isActiveGroup = group.items.some((item) => location.pathname === item.url);
 
                 return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      size="sm"
-                      className="h-9 text-sm hover:bg-transparent hover:text-inherit data-[active=true]:bg-white data-[active=true]:text-[#0E1525] data-[active=true]:hover:bg-white/90 data-[active=true]:hover:text-[#0E1525]"
-                      isActive={isActive}
-                    >
-                      <NavLink
-                        to={item.url}
-                        className="flex items-center justify-between gap-2 text-sm text-white/80"
-                        activeClassName="bg-white text-[#0E1525] hover:bg-white/90"
-                      >
-                        <span className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <Collapsible key={group.title} defaultOpen={isActiveGroup} className="group/collapsible">
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          size="sm"
+                          className={cn(
+                            'h-9 text-sm text-white/80 hover:bg-white/10 hover:text-white',
+                            isActiveGroup && 'bg-white/10 text-white',
+                          )}
+                        >
+                          <group.icon className="h-4 w-4" />
+                          <span>{group.title}</span>
+                          <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+
+                      <CollapsibleContent>
+                        <SidebarMenuSub className="mx-3 border-white/10 px-2 py-1">
+                          {group.items.map((item) => {
+                            const isActive = location.pathname === item.url;
+
+                            return (
+                              <SidebarMenuSubItem key={item.url}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  size="md"
+                                  isActive={isActive}
+                                  className="h-8 text-white/75 hover:bg-white/10 hover:text-white data-[active=true]:bg-white data-[active=true]:text-[#0E1525]"
+                                >
+                                  <NavLink
+                                    to={item.url}
+                                    className="flex items-center gap-2"
+                                    activeClassName="bg-white text-[#0E1525]"
+                                  >
+                                    <item.icon className="h-4 w-4" />
+                                    <span>{item.title}</span>
+                                  </NavLink>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
                 );
               })}
             </SidebarMenu>

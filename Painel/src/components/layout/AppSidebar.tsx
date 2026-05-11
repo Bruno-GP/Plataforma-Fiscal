@@ -66,14 +66,14 @@ export function AppSidebar() {
   const navGroups = [
     ...navGroupsBase,
     {
-      title: 'Importações',
-      icon: FileUp,
-      items: [importacaoItem],
-    },
-    {
       title: 'Relatórios',
       icon: Sparkles,
       items: [{ title: 'Relatórios com IA', url: '/relatorios-ia', icon: Sparkles }],
+    },
+    {
+      title: 'Importações',
+      icon: FileUp,
+      items: [importacaoItem],
     },
   ];
 

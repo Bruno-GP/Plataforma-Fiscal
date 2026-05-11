@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+
 import { useAuth } from '@/contexts/AuthContext';
 import {
   DetalhamentoFiscalHierarquiaMode,
@@ -372,7 +373,6 @@ export default function DetalhamentoVendas() {
           <CardContent className="p-6">
             <DetalhamentoVendasDashboardMode
               dashboardData={dashboardQuery.data}
-              mapData={mapQuery.data}
               isLoading={dashboardQuery.isLoading || mapQuery.isLoading}
               availableYears={availableYears}
               selectedYear={selectedYear}

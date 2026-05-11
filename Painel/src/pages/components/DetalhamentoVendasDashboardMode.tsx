@@ -3,6 +3,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,15 +16,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { monthLabels } from '@/services/utils';
 import { formatCurrency, parseDecimal } from '@/utils/formatters';
 
-type RankingItem = {
-  cliente?: string;
-  produto?: string;
-  cidade?: string;
-  regiao?: string;
-  valor_total?: number | string;
-  quantidade_documentos?: number;
-};
-
 type DashboardData = {
   resumo_atual?: {
     total_vendido?: number | string;
@@ -31,9 +24,6 @@ type DashboardData = {
     total_impostos_complementares?: number | string;
     total_tributos_reforma?: number | string;
     ticket_medio?: number | string;
-    top_clientes?: RankingItem[];
-    top_produtos?: RankingItem[];
-    top_cidades?: RankingItem[];
   };
   serie_mensal?: Array<{
     periodo_ano: number;
@@ -44,17 +34,8 @@ type DashboardData = {
   }>;
 };
 
-type MapData = {
-  total_vendido?: number | string;
-  top_clientes_valor?: RankingItem[];
-  top_produtos_valor?: RankingItem[];
-  top_cidades_valor?: RankingItem[];
-  top_regioes_valor?: RankingItem[];
-};
-
 type Props = {
   dashboardData?: DashboardData;
-  mapData?: MapData;
   isLoading: boolean;
   availableYears: number[];
   selectedYear: string;
@@ -67,17 +48,6 @@ const compactCurrency = (value: number) =>
     maximumFractionDigits: 1,
   }).format(value);
 
-const buildRankingData = (items: RankingItem[], labelKeys: Array<keyof RankingItem>) =>
-  items.slice(0, 5).map((item) => {
-    const label = labelKeys.map((key) => item[key]).find(Boolean);
-
-    return {
-      name: String(label ?? 'Nao identificado'),
-      value: parseDecimal(item.valor_total ?? 0),
-      documents: item.quantidade_documentos ?? 0,
-    };
-  });
-
 const EmptyChart = ({ message }: { message: string }) => (
   <div className="flex h-full min-h-[260px] items-center justify-center rounded-md border border-dashed border-slate-700 bg-slate-950/45 px-4 text-center text-sm text-slate-400">
     {message}
@@ -88,7 +58,6 @@ const currencyTooltipFormatter = (value: number | string) => [formatCurrency(par
 
 export function DetalhamentoVendasDashboardMode({
   dashboardData,
-  mapData,
   isLoading,
   availableYears,
   selectedYear,
@@ -115,26 +84,18 @@ export function DetalhamentoVendasDashboardMode({
       faturamento: parseDecimal(item.total_vendido ?? 0),
       impostos: parseDecimal(item.total_impostos ?? 0),
       notas: item.quantidade_notas ?? 0,
+      ticketMedio: item.quantidade_notas ? parseDecimal(item.total_vendido ?? 0) / item.quantidade_notas : 0,
     })), [dashboardData?.serie_mensal, endMonthNumber, startMonthNumber]);
 
   const totalVendido = serieMensal.reduce((total, item) => total + item.faturamento, 0);
   const totalImpostos = serieMensal.reduce((total, item) => total + item.impostos, 0);
   const quantidadeNotas = serieMensal.reduce((total, item) => total + item.notas, 0);
-  const ticketMedio = quantidadeNotas ? totalVendido / quantidadeNotas : parseDecimal(resumo?.ticket_medio ?? 0);
-
-  const clientesData = buildRankingData(
-    mapData?.top_clientes_valor?.length ? mapData.top_clientes_valor : resumo?.top_clientes ?? [],
-    ['cliente'],
-  );
-  const produtosData = buildRankingData(
-    mapData?.top_produtos_valor?.length ? mapData.top_produtos_valor : resumo?.top_produtos ?? [],
-    ['produto'],
-  );
-  const cidadesData = buildRankingData(
-    mapData?.top_cidades_valor?.length ? mapData.top_cidades_valor : resumo?.top_cidades ?? [],
-    ['cidade'],
-  );
-  const regioesData = buildRankingData(mapData?.top_regioes_valor ?? [], ['regiao']);
+  const isFullYearRange = startMonthNumber === 1 && endMonthNumber === 12;
+  const ticketMedio = isFullYearRange
+    ? parseDecimal(resumo?.ticket_medio ?? 0)
+    : quantidadeNotas
+      ? totalVendido / quantidadeNotas
+      : 0;
 
   const noDataMessage = isLoading ? 'Carregando dashboard de vendas...' : 'Nenhum dado encontrado para montar o grafico.';
 
@@ -238,33 +199,62 @@ export function DetalhamentoVendasDashboardMode({
         </Card>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-3">
-        {[
-          { title: 'Top clientes', data: clientesData },
-          { title: 'Top produtos', data: produtosData },
-          { title: cidadesData.length ? 'Top cidades' : 'Top regioes', data: cidadesData.length ? cidadesData : regioesData },
-        ].map((chart) => (
-          <Card key={chart.title} className="border-slate-800 bg-slate-900/80 text-white">
-            <CardHeader>
-              <CardTitle className="text-base">{chart.title}</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              {chart.data.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chart.data} layout="vertical" margin={{ left: 8, right: 16 }}>
-                    <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={(value) => compactCurrency(Number(value))} tickLine={false} axisLine={false} />
-                    <YAxis type="category" dataKey="name" width={96} tick={{ fill: '#cbd5e1', fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <Tooltip formatter={currencyTooltipFormatter} contentStyle={{ background: '#020617', border: '1px solid #1e293b', borderRadius: 8, color: '#e2e8f0' }} />
-                    <Bar dataKey="value" name="Faturamento" fill="#38bdf8" radius={[0, 6, 6, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyChart message={noDataMessage} />
-              )}
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card className="border-slate-800 bg-slate-900/80 text-white">
+          <CardHeader>
+            <CardTitle className="text-base">Vendas x impostos por mes</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[340px]">
+            {serieMensal.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={serieMensal} margin={{ top: 12, right: 16, left: 8, bottom: 4 }}>
+                  <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+                  <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={(value) => compactCurrency(Number(value))} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    formatter={(value: number | string, name: string) => [
+                      formatCurrency(parseDecimal(value)),
+                      name === 'faturamento' ? 'Vendas' : 'Impostos',
+                    ]}
+                    labelFormatter={(label, payload) => {
+                      const point = payload?.[0]?.payload;
+                      const faturamento = parseDecimal(point?.faturamento ?? 0);
+                      const impostos = parseDecimal(point?.impostos ?? 0);
+                      const taxPercent = faturamento ? (impostos / faturamento) * 100 : 0;
+                      return `${label} - Imposto sobre venda: ${taxPercent.toFixed(2)}%`;
+                    }}
+                    contentStyle={{ background: '#020617', border: '1px solid #1e293b', borderRadius: 8, color: '#e2e8f0' }}
+                  />
+                  <Bar dataKey="faturamento" name="faturamento" fill="#38bdf8" radius={[6, 6, 0, 0]} maxBarSize={46} />
+                  <Bar dataKey="impostos" name="impostos" fill="#a78bfa" radius={[6, 6, 0, 0]} maxBarSize={46} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyChart message={noDataMessage} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-800 bg-slate-900/80 text-white">
+          <CardHeader>
+            <CardTitle className="text-base">Ticket medio por mes</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[340px]">
+            {serieMensal.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={serieMensal} margin={{ top: 12, right: 16, left: 8, bottom: 4 }}>
+                  <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+                  <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={(value) => compactCurrency(Number(value))} tickLine={false} axisLine={false} />
+                  <Tooltip formatter={(value: number | string) => [formatCurrency(parseDecimal(value)), 'Ticket medio']} contentStyle={{ background: '#020617', border: '1px solid #1e293b', borderRadius: 8, color: '#e2e8f0' }} />
+                  <Line type="monotone" dataKey="ticketMedio" name="Ticket medio" stroke="#22c55e" strokeWidth={3} dot={{ fill: '#22c55e', r: 4 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyChart message={noDataMessage} />
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -12,7 +12,14 @@
     "test:k6:load": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/load.test.js",
     "test:k6:stress": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/stress.test.js",
     "test:k6:spike": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/spike.test.js",
-    "test:k6:soak": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/soak.test.js"
+    "test:k6:soak": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/soak.test.js",
+    "test:k6:heavy:moderate": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/heavy/moderate-load.test.js",
+    "test:k6:heavy:high": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/heavy/high-load.test.js",
+    "test:k6:heavy:stress": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/heavy/progressive-stress.test.js",
+    "test:k6:heavy:spike": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/heavy/sudden-spike.test.js",
+    "test:k6:heavy:endurance": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/heavy/endurance.test.js",
+    "test:k6:heavy:mixed": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/heavy/mixed-users.test.js",
+    "test:k6:heavy:throughput": "k6 run -e ENVIRONMENT=local ../k6-tests/scenarios/heavy/throughput.test.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -36,7 +36,16 @@ k6-tests/
 |   |-- load.test.js
 |   |-- stress.test.js
 |   |-- spike.test.js
-|   `-- soak.test.js
+|   |-- soak.test.js
+|   `-- heavy/
+|       |-- moderate-load.test.js
+|       |-- high-load.test.js
+|       |-- progressive-stress.test.js
+|       |-- sudden-spike.test.js
+|       |-- endurance.test.js
+|       |-- mixed-users.test.js
+|       |-- throughput.test.js
+|       `-- README.md
 `-- README.md
 ```
 
@@ -144,6 +153,21 @@ npm run test:k6:stress
 npm run test:k6:spike
 npm run test:k6:soak
 ```
+
+Testes pesados complementares:
+
+```bash
+cd Painel
+npm run test:k6:heavy:moderate
+npm run test:k6:heavy:high
+npm run test:k6:heavy:mixed
+npm run test:k6:heavy:throughput
+npm run test:k6:heavy:stress
+npm run test:k6:heavy:spike
+npm run test:k6:heavy:endurance
+```
+
+Veja os detalhes em `k6-tests/scenarios/heavy/README.md`.
 
 ## Cenarios
 

@@ -7,3 +7,7 @@ dist
 __pycache__
 .pytest_cache
 .mypy_cache
+k6-tests/data/users.local.json
+k6-tests/data/users.*.json
+!k6-tests/data/users.example.json
+k6-tests/results/

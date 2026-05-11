@@ -46,6 +46,7 @@ Backend em FastAPI responsavel por autenticacao, importacao fiscal, processament
 - [Relatorios com IA](../docs/relatorios-ia.md)
 - [Deploy](../docs/deploy.md)
 - [Auditoria operacional](../docs/auditoria-operacional.md)
+- [Testes e qualidade](../docs/testing.md)
 
 ## Stack
 

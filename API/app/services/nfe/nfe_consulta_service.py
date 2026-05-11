@@ -21,6 +21,7 @@ from app.services.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
   obter_total_impostos_complementares_documentos,
+  obter_totais_tributos_documentos_por_periodo,
   obter_total_tributos_reforma_documentos,
   obter_regiao_por_uf,
 )
@@ -245,6 +246,55 @@ class NFeConsultaService:
       for periodo_mes, valor_total in rows
     }
 
+  def listar_totais_vendas_brutos_por_periodo(
+    self,
+    emitente_cnpj: Optional[str],
+    periodos: set[tuple[int, int | None]],
+  ) -> dict[tuple[int, int | None], Decimal]:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+    if not cnpj_filtrado:
+      raise ValueError("Informe um emitente_cnpj vÃ¡lido.")
+
+    if not periodos:
+      return {}
+
+    anos = sorted({ano for ano, _mes in periodos})
+    totais = {periodo: Decimal("0.00") for periodo in periodos}
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          """
+          SELECT
+            EXTRACT(YEAR FROM n.data_emissao)::int AS periodo_ano,
+            EXTRACT(MONTH FROM n.data_emissao)::int AS periodo_mes,
+            COALESCE(SUM(i.valor_total), 0) AS total_vendido
+          FROM public.notas AS n
+          JOIN public.notas_itens AS i
+            ON i.nota_id = n.id
+          WHERE regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s
+            AND LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')
+            AND EXTRACT(YEAR FROM n.data_emissao)::int = ANY(%s)
+          GROUP BY 1, 2
+          """,
+          (cnpj_filtrado, anos),
+        )
+        rows = cur.fetchall()
+
+    for ano, mes, valor_total in rows:
+      chave_mensal = (int(ano), int(mes))
+      if chave_mensal in totais:
+        totais[chave_mensal] += valor_total or Decimal("0.00")
+
+      chave_anual = (int(ano), None)
+      if chave_anual in totais:
+        totais[chave_anual] += valor_total or Decimal("0.00")
+
+    return totais
+
   def consultar_dashboard_vendas(
     self,
     emitente_cnpj: str,
@@ -288,19 +338,25 @@ class NFeConsultaService:
       resultados_filtrados = resultados_ano_atual
       resultados_anteriores = resultados_ano_anterior
 
-    total_vendido_atual = self.obter_total_vendido_bruto(
-      emitente_cnpj=emitente_cnpj,
-      periodo_ano=ano_referencia,
-      periodo_mes=periodo_mes,
+    periodos_tributos = {
+      (ano_referencia, periodo_mes),
+      (ano_anterior, mes_anterior),
+      *{
+        (ano_referencia, item.periodo_mes)
+        for item in resultados_ano_atual
+        if item.periodo_mes
+      },
+    }
+    totais_tributos = obter_totais_tributos_documentos_por_periodo(
+      self.conn_params,
+      "nfe",
+      emitente_cnpj,
+      sorted(periodos_tributos, key=lambda periodo: (periodo[0], periodo[1] or 0)),
+      "saida",
     )
-    total_vendido_anterior = self.obter_total_vendido_bruto(
+    totais_vendidos = self.listar_totais_vendas_brutos_por_periodo(
       emitente_cnpj=emitente_cnpj,
-      periodo_ano=ano_anterior,
-      periodo_mes=mes_anterior,
-    )
-    totais_mensais_brutos = self.listar_totais_vendas_mensais_bruto(
-      emitente_cnpj=emitente_cnpj,
-      periodo_ano=ano_referencia,
+      periodos=periodos_tributos,
     )
 
     resumo_atual = resumir_vendas_por_kpis(
@@ -308,22 +364,13 @@ class NFeConsultaService:
       DashboardVendasResumo,
       limite,
     ).model_copy(update={
-      "total_vendido": total_vendido_atual,
-      "total_impostos_complementares": obter_total_impostos_complementares_documentos(
-        self.conn_params,
-        "nfe",
-        emitente_cnpj,
-        ano_referencia,
-        periodo_mes,
-        "saida",
-      ),
-      "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-        self.conn_params,
-        "nfe",
-        emitente_cnpj,
-        ano_referencia,
-        periodo_mes,
-        "saida",
+      "total_vendido": totais_vendidos.get((ano_referencia, periodo_mes), Decimal("0.00")),
+      **totais_tributos.get(
+        (ano_referencia, periodo_mes),
+        {
+          "total_impostos_complementares": Decimal("0.00"),
+          "total_tributos_reforma": Decimal("0.00"),
+        },
       ),
     })
     resumo_anterior = resumir_vendas_por_kpis(
@@ -331,22 +378,13 @@ class NFeConsultaService:
       DashboardVendasResumo,
       limite,
     ).model_copy(update={
-      "total_vendido": total_vendido_anterior,
-      "total_impostos_complementares": obter_total_impostos_complementares_documentos(
-        self.conn_params,
-        "nfe",
-        emitente_cnpj,
-        ano_anterior,
-        mes_anterior,
-        "saida",
-      ),
-      "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-        self.conn_params,
-        "nfe",
-        emitente_cnpj,
-        ano_anterior,
-        mes_anterior,
-        "saida",
+      "total_vendido": totais_vendidos.get((ano_anterior, mes_anterior), Decimal("0.00")),
+      **totais_tributos.get(
+        (ano_anterior, mes_anterior),
+        {
+          "total_impostos_complementares": Decimal("0.00"),
+          "total_tributos_reforma": Decimal("0.00"),
+        },
       ),
     })
 
@@ -354,8 +392,8 @@ class NFeConsultaService:
       SerieMensalVendasItem(
         periodo_ano=ano_referencia,
         periodo_mes=item.periodo_mes or 0,
-        total_vendido=totais_mensais_brutos.get(
-          item.periodo_mes or 0,
+        total_vendido=totais_vendidos.get(
+          (ano_referencia, item.periodo_mes),
           Decimal(str(item.kpis.total_vendas or 0)),
         ),
         quantidade_notas=int(item.kpis.quantidade_notas or 0),
@@ -365,22 +403,14 @@ class NFeConsultaService:
           + Decimal(str(item.kpis.total_pis or 0))
           + Decimal(str(item.kpis.total_cofins or 0))
         ),
-        total_impostos_complementares=obter_total_impostos_complementares_documentos(
-          self.conn_params,
-          "nfe",
-          emitente_cnpj,
-          ano_referencia,
-          item.periodo_mes,
-          "saida",
-        ),
-        total_tributos_reforma=obter_total_tributos_reforma_documentos(
-          self.conn_params,
-          "nfe",
-          emitente_cnpj,
-          ano_referencia,
-          item.periodo_mes,
-          "saida",
-        ),
+        total_impostos_complementares=totais_tributos.get(
+          (ano_referencia, item.periodo_mes),
+          {},
+        ).get("total_impostos_complementares", Decimal("0.00")),
+        total_tributos_reforma=totais_tributos.get(
+          (ano_referencia, item.periodo_mes),
+          {},
+        ).get("total_tributos_reforma", Decimal("0.00")),
       )
       for item in sorted(resultados_ano_atual, key=lambda resultado: resultado.periodo_mes or 0)
       if item.periodo_mes

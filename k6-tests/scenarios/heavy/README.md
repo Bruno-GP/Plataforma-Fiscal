@@ -16,7 +16,7 @@ Os testes usam os mesmos helpers e flows existentes:
 Confirme:
 
 - API local ou staging online.
-- Usuario de teste valido em `K6_EMAIL` e `K6_PASSWORD`.
+- Usuario de teste valido em `K6_EMAIL` e `K6_PASSWORD`. O `high-load.test.js` tenta criar o usuario no `setup()` quando ele ainda nao existe.
 - CNPJs e periodo com massa representativa.
 - Banco, Redis e workers observados durante testes mais longos.
 - Nao executar contra producao sem autorizacao explicita.
@@ -25,7 +25,8 @@ Exemplo local:
 
 ```powershell
 $env:K6_EMAIL="usuario-local@teste.com"
-$env:K6_PASSWORD="senha_de_teste"
+$env:K6_PASSWORD="SenhaTeste@123"
+$env:K6_AUTH_CNPJ="28942600000198"
 $env:K6_XML_CNPJ="28942600000198"
 $env:K6_SPED_CNPJ="35317121000146"
 $env:K6_PERIODO_ANO="2026"

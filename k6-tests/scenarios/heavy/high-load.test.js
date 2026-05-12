@@ -1,4 +1,5 @@
 import { jornadaCompleta } from '../../flows/jornadaCompleta.flow.js';
+import { ensureTestUser } from '../../helpers/auth.js';
 
 const targetVus = Number(__ENV.TARGET_VUS || 30);
 const firstStepVus = Math.max(1, Math.ceil(targetVus / 3));
@@ -19,6 +20,10 @@ export const options = {
     login_failure_rate: ['rate<0.03'],
   },
 };
+
+export function setup() {
+  ensureTestUser();
+}
 
 export default function () {
   jornadaCompleta();

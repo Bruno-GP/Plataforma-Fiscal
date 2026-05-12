@@ -56,6 +56,7 @@ export function get(path, name, expectedStatuses = [200], maxDurationMs = 2000, 
     tags: { endpoint: name },
   });
 
+  logUnexpectedResponse(response, name, expectedStatuses);
   checkStatus(response, name, expectedStatuses, maxDurationMs);
   checkJsonStatusOk(response, name);
 
@@ -69,10 +70,27 @@ export function postJson(path, payload, name, expectedStatuses = [200, 201, 202]
     tags: { endpoint: name },
   });
 
+  logUnexpectedResponse(response, name, expectedStatuses);
   checkStatus(response, name, expectedStatuses, maxDurationMs);
   checkJsonStatusOk(response, name);
 
   return response;
+}
+
+export function logUnexpectedResponse(response, name, expectedStatuses = [200]) {
+  if (String(__ENV.K6_DEBUG_HTTP || '').toLowerCase() !== 'true') {
+    return;
+  }
+
+  if (expectedStatuses.includes(response.status)) {
+    return;
+  }
+
+  const body = String(response.body || '').replace(/\s+/g, ' ').slice(0, 500);
+  console.error(
+    `[${name}] status inesperado=${response.status} esperado=${expectedStatuses.join(',')} ` +
+      `duracao=${Math.round(response.timings.duration)}ms body=${body}`
+  );
 }
 
 export function think(minSeconds = 0.3, maxSeconds = 1.5) {

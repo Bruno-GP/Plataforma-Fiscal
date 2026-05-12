@@ -1,10 +1,10 @@
 [
   {
     "email": "usuario1@teste.com",
-    "password": "senha_teste"
+    "password": "SenhaTeste@123"
   },
   {
     "email": "usuario2@teste.com",
-    "password": "senha_teste"
+    "password": "SenhaTeste@123"
   }
 ]

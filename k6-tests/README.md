@@ -79,7 +79,8 @@ Para rodar localmente, informe credenciais por variaveis de ambiente:
 
 ```powershell
 $env:K6_EMAIL="usuario-local@teste.com"
-$env:K6_PASSWORD="senha_de_teste"
+$env:K6_PASSWORD="SenhaTeste@123"
+$env:K6_AUTH_CNPJ="28942600000198"
 ```
 
 Opcionalmente crie `k6-tests/data/users.local.json` para documentar usuarios locais. Esse arquivo esta no `.gitignore` e nao e lido automaticamente pelos scripts para evitar falha quando ele nao existir.
@@ -136,6 +137,7 @@ Sem `K6_RUN_MODE`, o script usa `tem_sped` retornado pela sessao.
 Na raiz do repositorio:
 
 ```bash
+k6 run -e ENVIRONMENT=local -e K6_DEBUG_HTTP=true k6-tests/scenarios/debug-status.test.js
 k6 run -e ENVIRONMENT=local k6-tests/scenarios/smoke.test.js
 k6 run -e ENVIRONMENT=local k6-tests/scenarios/load.test.js
 k6 run -e ENVIRONMENT=local k6-tests/scenarios/stress.test.js
@@ -172,6 +174,7 @@ Veja os detalhes em `k6-tests/scenarios/heavy/README.md`.
 ## Cenarios
 
 - Smoke: 1 VU por 1 minuto. Valida API online, login, sessao, dashboard, consulta/listagem e operacao critica read-only.
+- Debug status: 1 iteracao autenticada. Imprime status e trecho do corpo de `/reforma-tributaria/tributos` e da analise fiscal hierarquica para diagnosticar falhas sem rodar carga.
 - Load: rampa ate 10 VUs, mantem 5 minutos e reduz. Simula carga esperada inicial.
 - Stress: rampa ate 100 VUs. Ajuda a encontrar limite do sistema.
 - Spike: salto rapido de 10 para 100 VUs. Simula pico repentino.
@@ -239,7 +242,7 @@ Uploads/importacoes nao fazem parte da jornada principal de carga para evitar cr
 - `login_failure_rate`: falha especifica do fluxo de autenticacao.
 - `critical_validation_failure_rate`: falha da consulta/operacao critica.
 
-Se o smoke falhar no login, valide `K6_EMAIL`, `K6_PASSWORD`, API ligada e usuario cadastrado no banco local/staging.
+Se o smoke falhar no login, valide `K6_EMAIL`, `K6_PASSWORD`, API ligada e usuario cadastrado no banco local/staging. A senha precisa obedecer a politica da API: minimo de 12 caracteres, maiuscula, minuscula, numero e simbolo.
 
 ## Pontos para preencher/validar
 

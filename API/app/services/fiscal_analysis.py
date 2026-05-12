@@ -136,27 +136,30 @@ def obter_total_impostos_complementares_documentos(
         filtros.append("t.codigo = ANY(%s)")
         parametros.append(codigos_tributos)
 
-    with psycopg.connect(**conn_params) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT COALESCE(
-                  SUM(
-                    COALESCE(
-                      NULLIF(dt.valor_tributo, 0),
-                      dt.valor_debito - dt.valor_credito,
+    try:
+        with psycopg.connect(**conn_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT COALESCE(
+                      SUM(
+                        COALESCE(
+                          NULLIF(dt.valor_tributo, 0),
+                          dt.valor_debito - dt.valor_credito,
+                          0
+                        )
+                      ),
                       0
-                    )
-                  ),
-                  0
-                ) AS total_impostos
-                FROM public.documentos_fiscais_tributos dt
-                {join_tributos}
-                WHERE {' AND '.join(filtros)}
-                """,
-                parametros,
-            )
-            row = cur.fetchone()
+                    ) AS total_impostos
+                    FROM public.documentos_fiscais_tributos dt
+                    {join_tributos}
+                    WHERE {' AND '.join(filtros)}
+                    """,
+                    parametros,
+                )
+                row = cur.fetchone()
+    except psycopg.errors.UndefinedTable:
+        return Decimal("0.00")
 
     return row[0] if row else Decimal("0.00")
 
@@ -213,44 +216,47 @@ def obter_totais_tributos_documentos_por_periodo(
     periodos_set = set(periodos)
     codigos_tributos_reforma = ["CBS", "IBS", "IBS_UF", "IBS_MUN", "IS"]
 
-    with psycopg.connect(**conn_params) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT
-                  COALESCE(dt.periodo_ano, EXTRACT(YEAR FROM dt.data_emissao)::int) AS periodo_ano,
-                  COALESCE(dt.periodo_mes, EXTRACT(MONTH FROM dt.data_emissao)::int) AS periodo_mes,
-                  COALESCE(
-                    SUM(
+    try:
+        with psycopg.connect(**conn_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                      COALESCE(dt.periodo_ano, EXTRACT(YEAR FROM dt.data_emissao)::int) AS periodo_ano,
+                      COALESCE(dt.periodo_mes, EXTRACT(MONTH FROM dt.data_emissao)::int) AS periodo_mes,
                       COALESCE(
-                        NULLIF(dt.valor_tributo, 0),
-                        dt.valor_debito - dt.valor_credito,
+                        SUM(
+                          COALESCE(
+                            NULLIF(dt.valor_tributo, 0),
+                            dt.valor_debito - dt.valor_credito,
+                            0
+                          )
+                        ),
                         0
-                      )
-                    ),
-                    0
-                  ) AS total_impostos_complementares,
-                  COALESCE(
-                    SUM(
-                      CASE
-                        WHEN t.codigo = ANY(%s) THEN COALESCE(
-                          NULLIF(dt.valor_tributo, 0),
-                          dt.valor_debito - dt.valor_credito,
-                          0
-                        )
-                        ELSE 0
-                      END
-                    ),
-                    0
-                  ) AS total_tributos_reforma
-                FROM public.documentos_fiscais_tributos dt
-                LEFT JOIN public.tributos t ON t.id = dt.tributo_id
-                WHERE {' AND '.join(filtros)}
-                GROUP BY 1, 2
-                """,
-                [codigos_tributos_reforma, *parametros],
-            )
-            rows = cur.fetchall()
+                      ) AS total_impostos_complementares,
+                      COALESCE(
+                        SUM(
+                          CASE
+                            WHEN t.codigo = ANY(%s) THEN COALESCE(
+                              NULLIF(dt.valor_tributo, 0),
+                              dt.valor_debito - dt.valor_credito,
+                              0
+                            )
+                            ELSE 0
+                          END
+                        ),
+                        0
+                      ) AS total_tributos_reforma
+                    FROM public.documentos_fiscais_tributos dt
+                    LEFT JOIN public.tributos t ON t.id = dt.tributo_id
+                    WHERE {' AND '.join(filtros)}
+                    GROUP BY 1, 2
+                    """,
+                    [codigos_tributos_reforma, *parametros],
+                )
+                rows = cur.fetchall()
+    except psycopg.errors.UndefinedTable:
+        return totais
 
     for ano, mes, total_impostos, total_reforma in rows:
         if ano is None:

@@ -133,7 +133,7 @@ def get_login_lockout_minutes() -> int:
 
 
 def get_login_success_cache_ttl_seconds() -> int:
-    raw_value = os.getenv("AUTH_SUCCESS_CACHE_TTL_SECONDS", "60").strip()
+    raw_value = os.getenv("AUTH_SUCCESS_CACHE_TTL_SECONDS", "300").strip()
     try:
         parsed = int(raw_value)
     except ValueError as exc:

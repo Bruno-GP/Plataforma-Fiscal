@@ -1,4 +1,5 @@
 import psycopg
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File
 
@@ -48,11 +49,15 @@ router = APIRouter()
 
 nfe_router = APIRouter(prefix="/nfe", tags=["NFe"], dependencies=[Depends(require_company_scope)])
 
+@lru_cache(maxsize=1)
+def get_nfe_consulta_service() -> NFeConsultaService:
+  return NFeConsultaService()
+
 def get_emitente_resolvido_nfe(
   emitente_cnpj: str | None = Query(default=None),
   email: str | None = Query(default=None),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
   emitente_resolvido = service.resolver_emitente_cnpj(emitente_cnpj=emitente_cnpj, email=email)
   if not emitente_resolvido:
     raise HTTPException(
@@ -201,7 +206,7 @@ def consultar_kpis(
   limite: int = Query(default=100),
   offset: int = Query(default=0),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   resultados = service.listar_kpis(
     emitente_cnpj=emitente_resolvido,
@@ -227,7 +232,7 @@ def consultar_analise_compras_nfe(
   formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
   layout: str | None = Query(default=None),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
     resultado = service.analisar_compras(
@@ -267,7 +272,7 @@ def consultar_analise_vendas_nfe(
   formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
   layout: str | None = Query(default=None),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
     resultado = service.analisar_vendas(
@@ -304,7 +309,7 @@ def consultar_analise_fiscal_cfop_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int | None = Query(default=1000, ge=1, le=5000),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
     resultado = service.analisar_fiscal_cfop(
@@ -328,7 +333,7 @@ def consultar_analise_fiscal_ncm_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int | None = Query(default=1000, ge=1, le=5000),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
     resultado = service.analisar_fiscal_ncm(
@@ -358,7 +363,7 @@ def consultar_analise_fiscal_hierarquia_nfe(
   limite: int | None = Query(default=1000, ge=1, le=5000),
   offset: int = Query(default=0, ge=0),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
     resultado = service.analisar_fiscal_hierarquia(
@@ -388,7 +393,7 @@ def consultar_dashboard_compras_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   anos_disponiveis = sorted(
     {
@@ -516,7 +521,7 @@ def consultar_dashboard_vendas_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
   return service.consultar_dashboard_vendas(
     emitente_cnpj=emitente_resolvido,
     periodo_ano=periodo_ano,
@@ -533,7 +538,7 @@ def consultar_analise_clientes_nfe(
   gerar_relatorio_ia: bool = Query(default=False),
   formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
     resultado = service.analisar_clientes(
@@ -586,7 +591,7 @@ def comparar_kpis_mensal(
       periodo_anterior_mes = periodo_mes - 1
       periodo_anterior_ano = periodo_ano
 
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
   
   kpis = service.comparar_kpis_mensal(
     emitente_cnpj=emitente_resolvido,
@@ -626,7 +631,7 @@ def comparar_kpis_mensal(
 def comparar_kpis_mensal_atual(
   emitente_resolvido: str = Depends(get_emitente_resolvido_nfe),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
   
   try:
     periodos_disponiveis = service.obter_periodos_disponiveis(emitente_resolvido)
@@ -706,7 +711,7 @@ def consultar_notas_detalhadas(
   limite: int = Query(default=100, ge=1, le=500),
   offset: int = Query(default=0, ge=0),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   if periodo_ano is None and periodo_mes is None:
     try:

@@ -39,6 +39,7 @@ class LoginService:
     _schema_lock = Lock()
     _schema_ensured = False
     _auth_cache_lock = Lock()
+    _auth_refresh_lock = Lock()
     _auth_cache: dict[str, tuple[float, LoginResult]] = {}
     _auth_cache_maxsize = 128
 
@@ -351,6 +352,14 @@ class LoginService:
         if cached:
             return cached
 
+        with LoginService._auth_refresh_lock:
+            cached = self._get_cached_auth(email_normalizado, senha)
+            if cached:
+                return cached
+
+            return self._autenticar_sem_cache(email_normalizado, senha)
+
+    def _autenticar_sem_cache(self, email_normalizado: str, senha: str) -> LoginResult:
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
                 cur.execute(

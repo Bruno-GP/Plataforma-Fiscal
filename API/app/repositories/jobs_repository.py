@@ -63,6 +63,12 @@ class JobsRepository:
 
         JobsRepository._schema_ensured = True
 
+    def _clear_read_caches(self) -> None:
+        for cached_method in (self.list, self.metrics):
+            cache_clear = getattr(cached_method, "cache_clear", None)
+            if cache_clear:
+                cache_clear()
+
     def create(
         self,
         *,
@@ -85,6 +91,7 @@ class JobsRepository:
                 )
                 row = cur.fetchone()
             conn.commit()
+        self._clear_read_caches()
         return dict(row)
 
     def get(self, job_id: str | UUID) -> dict[str, Any] | None:
@@ -95,7 +102,7 @@ class JobsRepository:
                 row = cur.fetchone()
         return dict(row) if row else None
 
-    @ttl_cache(ttl_seconds=5, maxsize=128)
+    @ttl_cache(ttl_seconds=15, maxsize=128)
     def list(
         self,
         *,
@@ -159,6 +166,7 @@ class JobsRepository:
                     (JobStatus.RUNNING.value, mensagem, UUID(str(job_id))),
                 )
             conn.commit()
+        self._clear_read_caches()
 
     def update_status(
         self,
@@ -183,6 +191,7 @@ class JobsRepository:
                     (status.value, mensagem, erro, status.value, UUID(str(job_id))),
                 )
             conn.commit()
+        self._clear_read_caches()
 
     def update_progress(
         self,
@@ -206,8 +215,9 @@ class JobsRepository:
                     (total_itens, itens_processados, mensagem, UUID(str(job_id))),
                 )
             conn.commit()
+        self._clear_read_caches()
 
-    @ttl_cache(ttl_seconds=5, maxsize=128)
+    @ttl_cache(ttl_seconds=15, maxsize=128)
     def metrics(
         self,
         *,

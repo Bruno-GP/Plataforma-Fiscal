@@ -8,6 +8,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from app.core.cache import ttl_cache
 from app.models.jobs.schemas import JobStatus
 from app.services.nfe.postres_config import carregar_config_postgres, opcoes_conexao_postgres
 
@@ -94,6 +95,7 @@ class JobsRepository:
                 row = cur.fetchone()
         return dict(row) if row else None
 
+    @ttl_cache(ttl_seconds=5, maxsize=128)
     def list(
         self,
         *,
@@ -205,6 +207,7 @@ class JobsRepository:
                 )
             conn.commit()
 
+    @ttl_cache(ttl_seconds=5, maxsize=128)
     def metrics(
         self,
         *,
@@ -213,27 +216,79 @@ class JobsRepository:
         data_inicio: date | None = None,
         data_fim: date | None = None,
     ) -> dict[str, Any]:
-        total, rows = self.list(status=status, tipo=tipo, data_inicio=data_inicio, data_fim=data_fim, limit=10000)
-        por_status: dict[str, int] = {}
-        por_tipo: dict[str, int] = {}
-        duracoes: dict[str, list[float]] = {}
+        self._ensure_table()
+        filters: list[str] = []
+        params: list[Any] = []
 
-        for row in rows:
-            row_status = str(row["status"])
-            row_tipo = str(row["tipo"])
-            por_status[row_status] = por_status.get(row_status, 0) + 1
-            por_tipo[row_tipo] = por_tipo.get(row_tipo, 0) + 1
-            if row.get("iniciado_em") and row.get("finalizado_em"):
-                duracao_ms = (row["finalizado_em"] - row["iniciado_em"]).total_seconds() * 1000
-                duracoes.setdefault(row_tipo, []).append(duracao_ms)
+        if status:
+            filters.append("status = %s")
+            params.append(status)
+        if tipo:
+            filters.append("tipo = %s")
+            params.append(tipo)
+        if data_inicio:
+            filters.append("criado_em >= %s")
+            params.append(data_inicio)
+        if data_fim:
+            filters.append("criado_em < (%s::date + INTERVAL '1 day')")
+            params.append(data_fim)
+
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT COUNT(*) AS total FROM processing_jobs {where_clause}", params)
+                total = int(cur.fetchone()["total"])
+
+                cur.execute(
+                    f"""
+                    SELECT status, COUNT(*) AS total
+                    FROM processing_jobs
+                    {where_clause}
+                    GROUP BY status
+                    """,
+                    params,
+                )
+                por_status = {
+                    str(row["status"]): int(row["total"])
+                    for row in cur.fetchall()
+                }
+
+                cur.execute(
+                    f"""
+                    SELECT tipo, COUNT(*) AS total
+                    FROM processing_jobs
+                    {where_clause}
+                    GROUP BY tipo
+                    """,
+                    params,
+                )
+                por_tipo = {
+                    str(row["tipo"]): int(row["total"])
+                    for row in cur.fetchall()
+                }
+
+                cur.execute(
+                    f"""
+                    SELECT
+                        tipo,
+                        AVG(EXTRACT(EPOCH FROM (finalizado_em - iniciado_em)) * 1000) AS duracao_media_ms
+                    FROM processing_jobs
+                    {where_clause}
+                    {"AND" if where_clause else "WHERE"} iniciado_em IS NOT NULL
+                      AND finalizado_em IS NOT NULL
+                    GROUP BY tipo
+                    """,
+                    params,
+                )
+                duracao_media_ms = {
+                    str(row["tipo"]): round(float(row["duracao_media_ms"] or 0), 2)
+                    for row in cur.fetchall()
+                }
 
         return {
             "total_jobs": total,
             "por_status": por_status,
             "por_tipo": por_tipo,
-            "duracao_media_ms": {
-                key: round(sum(values) / len(values), 2)
-                for key, values in duracoes.items()
-                if values
-            },
+            "duracao_media_ms": duracao_media_ms,
         }

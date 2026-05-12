@@ -1,6 +1,7 @@
 import psycopg
 from psycopg.rows import dict_row
 
+from app.core.cache import ttl_cache
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
 
@@ -26,6 +27,7 @@ class ReformaTributariaConsultaService:
     if config.get("sslmode"):
       self.conn_params["sslmode"] = config["sslmode"]
 
+  @ttl_cache(ttl_seconds=30, maxsize=32)
   def listar_tributos(self, incluir_inativos: bool = False) -> list[dict]:
     filtros = []
     params: list[object] = []

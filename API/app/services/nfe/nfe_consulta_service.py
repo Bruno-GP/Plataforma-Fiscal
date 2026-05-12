@@ -6,6 +6,7 @@ import psycopg
 from fastapi import HTTPException, status
 
 from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
+from app.core.cache import ttl_cache
 from app.models.nfe.schemas import (
   DashboardVendasResponse,
   DashboardVendasResumo,
@@ -295,6 +296,7 @@ class NFeConsultaService:
 
     return totais
 
+  @ttl_cache(ttl_seconds=15, maxsize=128)
   def consultar_dashboard_vendas(
     self,
     emitente_cnpj: str,
@@ -641,6 +643,7 @@ class NFeConsultaService:
 
     return cidades_normalizadas
 
+  @ttl_cache(ttl_seconds=15, maxsize=256)
   def listar_kpis(
     self,
     emitente_cnpj: Optional[str] = None,
@@ -1191,6 +1194,7 @@ class NFeConsultaService:
       "top_cidades_valor": top_cidades_valor,
     }
 
+  @ttl_cache(ttl_seconds=15, maxsize=128)
   def analisar_fiscal_cfop(
     self,
     emitente_cnpj: Optional[str],
@@ -1249,6 +1253,7 @@ class NFeConsultaService:
       ],
     }
 
+  @ttl_cache(ttl_seconds=15, maxsize=128)
   def analisar_fiscal_ncm(
     self,
     emitente_cnpj: Optional[str],
@@ -1306,6 +1311,7 @@ class NFeConsultaService:
       ],
     }
 
+  @ttl_cache(ttl_seconds=15, maxsize=128)
   def analisar_fiscal_hierarquia(
     self,
     emitente_cnpj: Optional[str],

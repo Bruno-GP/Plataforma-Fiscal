@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 import psycopg
 
@@ -21,6 +23,11 @@ from app.services.nfe.auth.login_service import LoginService
 
 router = APIRouter()
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+@lru_cache(maxsize=1)
+def get_login_service() -> LoginService:
+    return LoginService()
 
 
 def _build_auth_payload(resultado) -> tuple[AuthenticatedUser, str, int]:
@@ -56,7 +63,7 @@ def _build_response_payload(user: AuthenticatedUser, expires_in: int, status_val
 )
 def registrar_login(request: LoginCadastroRequest, response: Response):
     try:
-        resultado = LoginService().registrar(
+        resultado = get_login_service().registrar(
             empresa_nome=request.empresa_nome,
             email=request.email,
             senha=request.senha,
@@ -76,13 +83,13 @@ def registrar_login(request: LoginCadastroRequest, response: Response):
 
     user, access_token, expires_in = _build_auth_payload(resultado)
     set_auth_cookie(response, access_token, expires_in)
-    return LoginCadastroResponse(**_build_response_payload(user, expires_in, "cadastrado"))
+    return LoginCadastroResponse(**_build_response_payload(user, expires_in, "ok"))
 
 
 @auth_router.post("/entrar", response_model=LoginResponse)
 def autenticar_login(request: LoginRequest, response: Response):
     try:
-        resultado = LoginService().autenticar(
+        resultado = get_login_service().autenticar(
             email=request.email,
             senha=request.senha,
         )

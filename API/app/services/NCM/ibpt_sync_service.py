@@ -8,6 +8,7 @@ import logging
 import httpx
 import psycopg
 
+from app.core.cache import ttl_cache
 from app.services.db_schema_service import ensure_ncm_ibpt_tables
 from app.services.nfe.postres_config import carregar_config_postgres
 
@@ -285,6 +286,7 @@ class IBPTSyncService:
 
         return resultados
 
+    @ttl_cache(ttl_seconds=30, maxsize=256)
     def obter_tributacao(self, codigo_ncm: str, uf: str) -> dict | None:
         codigo_normalizado = self._normalizar_ncm(codigo_ncm)
         uf_normalizada = str(uf or "").strip().upper()

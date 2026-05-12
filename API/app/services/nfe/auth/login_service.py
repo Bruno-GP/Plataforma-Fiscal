@@ -3,8 +3,9 @@ import hmac
 import logging
 import os
 import re
+from threading import Lock
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import psycopg
 
@@ -33,8 +34,10 @@ class LoginResult:
 
 
 class LoginService:
+    _schema_lock = Lock()
+    _schema_ensured = False
+
     def __init__(self) -> None:
-        ensure_empresas_tem_sped_column()
         config = carregar_config_postgres()
 
         self.conn_params = {
@@ -56,6 +59,20 @@ class LoginService:
 
         if config.get("sslmode"):
             self.conn_params["sslmode"] = config["sslmode"]
+
+        self._ensure_base_schema_once()
+
+    def _ensure_base_schema_once(self) -> None:
+        if LoginService._schema_ensured:
+            return
+
+        with LoginService._schema_lock:
+            if LoginService._schema_ensured:
+                return
+            ensure_empresas_tem_sped_column()
+            with psycopg.connect(**self.conn_params) as conn:
+                self._ensure_login_security_columns(conn)
+            LoginService._schema_ensured = True
 
     def _ensure_login_security_columns(self, conn: psycopg.Connection) -> None:
         with conn.cursor() as cur:
@@ -157,7 +174,23 @@ class LoginService:
 
         raise ValueError("Credenciais inválidas.")
 
-    def _resetar_falhas_login(self, conn: psycopg.Connection, login_id: int) -> None:
+    def _resetar_falhas_login(
+        self,
+        conn: psycopg.Connection,
+        login_id: int,
+        tentativas_falhas: int,
+        ultimo_login_em: datetime | None,
+    ) -> None:
+        if ultimo_login_em is not None and ultimo_login_em.tzinfo is None:
+            ultimo_login_em = ultimo_login_em.replace(tzinfo=timezone.utc)
+
+        atualizacao_recente = (
+            ultimo_login_em is not None
+            and ultimo_login_em > datetime.now(timezone.utc) - timedelta(minutes=1)
+        )
+        if tentativas_falhas == 0 and atualizacao_recente:
+            return
+
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -181,7 +214,6 @@ class LoginService:
         logger.debug("Iniciando registro de login para %s", email_normalizado)
 
         with psycopg.connect(**self.conn_params) as conn:
-            self._ensure_login_security_columns(conn)
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -276,7 +308,6 @@ class LoginService:
         logger.debug("Iniciando autenticação para %s", email_normalizado)
 
         with psycopg.connect(**self.conn_params) as conn:
-            self._ensure_login_security_columns(conn)
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -286,6 +317,8 @@ class LoginService:
                            login.email,
                            login.senha,
                            login.bloqueado_ate,
+                           login.tentativas_falhas,
+                           login.ultimo_login_em,
                            empresas.nome,
                            COALESCE(empresas.tem_sped, false)
                     FROM public.login AS login
@@ -312,6 +345,8 @@ class LoginService:
                     email_db,
                     senha_armazenada,
                     bloqueado_ate,
+                    tentativas_falhas,
+                    ultimo_login_em,
                     empresa_nome,
                     tem_sped,
                 ) = login
@@ -334,7 +369,7 @@ class LoginService:
                 if not self._verificar_senha(senha, senha_armazenada):
                     self._registrar_falha_login(conn, login_id, email_db)
 
-            self._resetar_falhas_login(conn, login_id)
+            self._resetar_falhas_login(conn, login_id, tentativas_falhas or 0, ultimo_login_em)
             log_security_event(
                 "login_succeeded",
                 outcome="success",

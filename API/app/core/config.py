@@ -132,6 +132,15 @@ def get_login_lockout_minutes() -> int:
     return max(parsed, 1)
 
 
+def get_login_success_cache_ttl_seconds() -> int:
+    raw_value = os.getenv("AUTH_SUCCESS_CACHE_TTL_SECONDS", "60").strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("AUTH_SUCCESS_CACHE_TTL_SECONDS deve ser um inteiro.") from exc
+    return max(parsed, 0)
+
+
 def get_password_min_length() -> int:
     raw_value = os.getenv("AUTH_PASSWORD_MIN_LENGTH", "12").strip()
     try:

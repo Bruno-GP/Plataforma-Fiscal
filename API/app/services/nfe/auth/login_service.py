@@ -3,6 +3,7 @@ import hmac
 import logging
 import os
 import re
+import time
 from threading import Lock
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,7 @@ from app.core.audit import log_security_event
 from app.core.config import (
     get_login_lockout_minutes,
     get_login_max_failed_attempts,
+    get_login_success_cache_ttl_seconds,
     get_password_min_length,
 )
 from app.services.db_schema_service import ensure_empresas_tem_sped_column
@@ -36,6 +38,9 @@ class LoginResult:
 class LoginService:
     _schema_lock = Lock()
     _schema_ensured = False
+    _auth_cache_lock = Lock()
+    _auth_cache: dict[str, tuple[float, LoginResult]] = {}
+    _auth_cache_maxsize = 128
 
     def __init__(self) -> None:
         config = carregar_config_postgres()
@@ -132,6 +137,41 @@ class LoginService:
             return False
         digest = self._hash_senha(senha, salt)
         return hmac.compare_digest(digest, digest_armazenado)
+
+    def _auth_cache_key(self, email: str, senha: str) -> str:
+        return hashlib.sha256(f"{email}\0{senha}".encode("utf-8")).hexdigest()
+
+    def _get_cached_auth(self, email: str, senha: str) -> LoginResult | None:
+        ttl_seconds = get_login_success_cache_ttl_seconds()
+        if ttl_seconds <= 0:
+            return None
+
+        key = self._auth_cache_key(email, senha)
+        now = time.monotonic()
+
+        with LoginService._auth_cache_lock:
+            cached = LoginService._auth_cache.get(key)
+            if not cached:
+                return None
+
+            expires_at, result = cached
+            if expires_at <= now:
+                LoginService._auth_cache.pop(key, None)
+                return None
+
+            return result
+
+    def _set_cached_auth(self, email: str, senha: str, result: LoginResult) -> None:
+        ttl_seconds = get_login_success_cache_ttl_seconds()
+        if ttl_seconds <= 0:
+            return
+
+        key = self._auth_cache_key(email, senha)
+        with LoginService._auth_cache_lock:
+            LoginService._auth_cache[key] = (time.monotonic() + ttl_seconds, result)
+            if len(LoginService._auth_cache) > LoginService._auth_cache_maxsize:
+                oldest_key = next(iter(LoginService._auth_cache))
+                LoginService._auth_cache.pop(oldest_key, None)
 
     def _nome_empresa_completo(self, nome: str | None) -> str:
         return nome.strip() if nome else ""
@@ -307,6 +347,10 @@ class LoginService:
         email_normalizado = email.lower().strip()
         logger.debug("Iniciando autenticação para %s", email_normalizado)
 
+        cached = self._get_cached_auth(email_normalizado, senha)
+        if cached:
+            return cached
+
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -379,7 +423,7 @@ class LoginService:
                 cnpj=cnpj,
             )
 
-            return LoginResult(
+            result = LoginResult(
                 login_id=login_id,
                 empresa_id=empresa_id,
                 cnpj=cnpj,
@@ -387,3 +431,5 @@ class LoginService:
                 empresa_nome=self._nome_empresa_completo(empresa_nome),
                 tem_sped=bool(tem_sped),
             )
+            self._set_cached_auth(email_normalizado, senha, result)
+            return result

@@ -6,6 +6,21 @@ from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
 
 
+DEFAULT_TRIBUTOS: list[dict] = [
+  {"id": 7, "codigo": "CBS", "nome": "Contribuicao sobre Bens e Servicos", "esfera": "federal", "tipo": "reforma", "descricao": "Novo tributo federal da Reforma Tributaria do Consumo.", "ativo": True},
+  {"id": 8, "codigo": "IBS", "nome": "Imposto sobre Bens e Servicos", "esfera": "compartilhada", "tipo": "reforma", "descricao": "Novo tributo compartilhado entre estados, Distrito Federal e municipios.", "ativo": True},
+  {"id": 9, "codigo": "IBS_UF", "nome": "IBS Parcela Estadual", "esfera": "estadual", "tipo": "reforma", "descricao": "Componente estadual do IBS.", "ativo": True},
+  {"id": 10, "codigo": "IBS_MUN", "nome": "IBS Parcela Municipal", "esfera": "municipal", "tipo": "reforma", "descricao": "Componente municipal do IBS.", "ativo": True},
+  {"id": 11, "codigo": "IS", "nome": "Imposto Seletivo", "esfera": "federal", "tipo": "reforma", "descricao": "Imposto Seletivo incidente sobre bens e servicos especificos.", "ativo": True},
+  {"id": 1, "codigo": "ICMS", "nome": "Imposto sobre Circulacao de Mercadorias e Servicos", "esfera": "estadual", "tipo": "atual", "descricao": "Tributo estadual vigente antes da Reforma Tributaria do Consumo.", "ativo": True},
+  {"id": 2, "codigo": "ICMS_ST", "nome": "ICMS Substituicao Tributaria", "esfera": "estadual", "tipo": "atual", "descricao": "Modalidade de recolhimento por substituicao tributaria do ICMS.", "ativo": True},
+  {"id": 3, "codigo": "IPI", "nome": "Imposto sobre Produtos Industrializados", "esfera": "federal", "tipo": "atual", "descricao": "Tributo federal vigente antes da Reforma Tributaria do Consumo.", "ativo": True},
+  {"id": 4, "codigo": "PIS", "nome": "Programa de Integracao Social", "esfera": "federal", "tipo": "atual", "descricao": "Contribuicao federal a ser substituida/absorvida no contexto da CBS.", "ativo": True},
+  {"id": 5, "codigo": "COFINS", "nome": "Contribuicao para o Financiamento da Seguridade Social", "esfera": "federal", "tipo": "atual", "descricao": "Contribuicao federal a ser substituida/absorvida no contexto da CBS.", "ativo": True},
+  {"id": 6, "codigo": "ISS", "nome": "Imposto sobre Servicos", "esfera": "municipal", "tipo": "atual", "descricao": "Tributo municipal vigente antes da Reforma Tributaria do Consumo.", "ativo": True},
+]
+
+
 class ReformaTributariaConsultaService:
   def __init__(self) -> None:
     config = carregar_config_postgres()
@@ -27,8 +42,11 @@ class ReformaTributariaConsultaService:
     if config.get("sslmode"):
       self.conn_params["sslmode"] = config["sslmode"]
 
-  @ttl_cache(ttl_seconds=30, maxsize=32)
+  @ttl_cache(ttl_seconds=300, maxsize=32)
   def listar_tributos(self, incluir_inativos: bool = False) -> list[dict]:
+    if not incluir_inativos:
+      return [dict(tributo) for tributo in DEFAULT_TRIBUTOS]
+
     filtros = []
     params: list[object] = []
 

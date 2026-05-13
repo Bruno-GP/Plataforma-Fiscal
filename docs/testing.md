@@ -38,6 +38,7 @@ Carga e performance:
 - As fixtures anonimizadas ficam em `API/app/tests/fixtures/`.
 - Testes HTTP validam contratos de rotas sem exigir PostgreSQL, Redis ou Celery reais.
 - Dependencias externas e servicos de persistencia sao isolados com `monkeypatch`.
+- `test_database_schema.py` cobre contratos de migrations, estrutura, constraints, regras fiscais persistidas e consultas criticas. A parte que abre PostgreSQL so roda quando `PLATAFORMA_FISCAL_TEST_DATABASE_URL` aponta para um banco descartavel com `test` ou `teste` no nome.
 - `test_sped_reader.py` compara o parser atual de SPED com a versao otimizada em `polars`; o teste e pulado automaticamente se `polars` nao estiver instalado.
 - `test_jobs.py` cobre contratos de `/api/jobs`, disparo de jobs de importados e simulacoes de sucesso/falha do worker de NFe.
 
@@ -82,6 +83,36 @@ Para investigar um arquivo especifico:
 ```bash
 python -m pytest API/app/tests/test_jobs.py -q
 ```
+
+### Banco de teste PostgreSQL
+
+Os testes de banco usam PostgreSQL, Alembic e psycopg. Eles nunca devem apontar para producao. Por seguranca, a fixture recusa qualquer `PLATAFORMA_FISCAL_TEST_DATABASE_URL` cujo nome do banco nao contenha `test` ou `teste`.
+
+Exemplo com banco local descartavel ja criado:
+
+```powershell
+$env:PLATAFORMA_FISCAL_TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/plataforma_fiscal_test"
+cd API
+.\.venv-local\Scripts\python.exe -m pytest app/tests -q
+```
+
+O comando acima:
+
+- limpa apenas o schema `public` do banco informado;
+- executa `alembic upgrade head` em banco limpo;
+- valida a versao final em `alembic_version`;
+- testa existencia de tabelas, colunas, chaves primarias, foreign keys e checks;
+- insere dados ficticios e independentes;
+- valida consultas de listagem, filtro por periodo e totalizacao financeira.
+
+Falhas comuns:
+
+- `Defina PLATAFORMA_FISCAL_TEST_DATABASE_URL`: a suite rapida roda, mas os testes de integracao com banco sao pulados.
+- `deve apontar para um banco descartavel`: o nome do banco nao contem `test` ou `teste`; crie outro banco para evitar risco operacional.
+- teste de banco pulado por conexao: PostgreSQL nao esta ativo, porta/usuario/senha estao incorretos ou o banco de teste ainda nao foi criado.
+- erro em Alembic: alguma migration deixou de ser idempotente ou depende de objeto ausente no schema limpo.
+
+Ao adicionar novos testes de banco, prefira `test_database_schema.py` quando estiver validando schema, constraints e queries SQL criticas. Use dados ficticios, CNPJs artificiais e transacoes independentes; nao use dumps reais nem valores de clientes/fornecedores reais.
 
 ### Front-end
 
@@ -162,8 +193,7 @@ Evite depender de Redis/Celery em testes unitarios. Quando for necessario valida
 
 ## Lacunas conhecidas
 
-- Falta ampliar a suite back-end com banco PostgreSQL descartavel.
-- Falta teste de migrations em banco limpo.
+- Os testes de banco PostgreSQL ja existem, mas dependem de `PLATAFORMA_FISCAL_TEST_DATABASE_URL` para rodar em modo integracao.
 - Falta cobertura completa de regras fiscais NFe/SPED com massas maiores.
 - Falta regressao mais ampla para Reforma Tributaria e memoria de calculo.
 - Falta teste dedicado de autorizacao multiempresa para endpoints analiticos.

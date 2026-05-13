@@ -26,6 +26,18 @@ Object.defineProperty(window, "ResizeObserver", {
   },
 });
 
+Object.defineProperty(window, "IntersectionObserver", {
+  writable: true,
+  value: class IntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  },
+});
+
 beforeAll(() => {
   server.listen({ onUnhandledRequest: "error" });
 });

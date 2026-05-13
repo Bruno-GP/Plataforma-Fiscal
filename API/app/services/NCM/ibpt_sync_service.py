@@ -5,10 +5,10 @@ from datetime import date, datetime
 from decimal import Decimal
 import logging
 
-import httpx
 import psycopg
 
 from app.core.cache import ttl_cache
+from app.core.http_client import get_json
 from app.services.db_schema_service import ensure_ncm_ibpt_tables
 from app.services.nfe.postres_config import carregar_config_postgres
 
@@ -75,10 +75,12 @@ class IBPTSyncService:
         return Decimal(str(value))
 
     def _buscar_todos_ncm_uf(self, uf: str) -> list[dict]:
-        with httpx.Client(timeout=60.0) as client:
-            response = client.get(f"{IBPT_BASE_URL}/api_ibpt_json.php", params={"uf": uf})
-            response.raise_for_status()
-            payload = response.json()
+        payload = get_json(
+            f"{IBPT_BASE_URL}/api_ibpt_json.php",
+            params={"uf": uf},
+            timeout_seconds=60.0,
+            service_name="IBPT",
+        )
 
         registros = payload.get("ncm", [])
         if not isinstance(registros, list):
@@ -86,13 +88,12 @@ class IBPTSyncService:
         return registros
 
     def _buscar_ncm_especifico(self, ncm: str, uf: str) -> list[dict]:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(
-                f"{IBPT_BASE_URL}/api_ibpt.php",
-                params={"codigo": ncm, "uf": uf},
-            )
-            response.raise_for_status()
-            payload = response.json()
+        payload = get_json(
+            f"{IBPT_BASE_URL}/api_ibpt.php",
+            params={"codigo": ncm, "uf": uf},
+            timeout_seconds=30.0,
+            service_name="IBPT",
+        )
 
         if isinstance(payload, dict) and payload.get("codigo"):
             return [payload]

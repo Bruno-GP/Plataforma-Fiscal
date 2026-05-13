@@ -56,10 +56,13 @@ class JsonFormatter(logging.Formatter):
             "size_bytes",
             "job_id",
             "tipo_job",
+            "cnpj_emitente",
             "etapa",
+            "status",
             "duracao_ms",
             "total_itens",
             "itens_processados",
+            "erro_tipo",
             "erro",
         ):
             value = getattr(record, field, None)

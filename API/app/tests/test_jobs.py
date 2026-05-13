@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from uuid import uuid4
 
 import pytest
@@ -215,7 +216,7 @@ def test_job_service_dispatch_eager_retorna_status_atual():
     assert ("queued", job_id) not in calls
 
 
-def test_job_success_simulado(monkeypatch):
+def test_job_success_simulado(monkeypatch, caplog):
     updates = []
 
     class Repo:
@@ -245,13 +246,22 @@ def test_job_success_simulado(monkeypatch):
 
     from app.workers.nfe_tasks import processar_nfe_importados_task
 
-    result = processar_nfe_importados_task.run("job-1", {"cnpj_emitente": "12345678000190"})
+    with caplog.at_level(logging.INFO, logger="workers.nfe"):
+        result = processar_nfe_importados_task.run("job-1", {"cnpj_emitente": "12345678000190"})
 
     assert result["status"] == "SUCCESS"
     assert any(item[0] == "status" and item[1] == JobStatus.SUCCESS for item in updates)
+    completed = next(record for record in caplog.records if record.message == "job_completed")
+    assert completed.job_id == "job-1"
+    assert completed.tipo_job == "NFE_PROCESSAMENTO_IMPORTADOS"
+    assert completed.cnpj_emitente == "12345678000190"
+    assert completed.etapa == "complete"
+    assert completed.status == "SUCCESS"
+    assert completed.total_itens == 1
+    assert completed.itens_processados == 1
 
 
-def test_job_failed_simulado(monkeypatch):
+def test_job_failed_simulado(monkeypatch, caplog):
     updates = []
 
     class Repo:
@@ -273,7 +283,61 @@ def test_job_failed_simulado(monkeypatch):
 
     from app.workers.nfe_tasks import processar_nfe_importados_task
 
-    with pytest.raises(ValueError):
-        processar_nfe_importados_task.run("job-1", {"cnpj_emitente": "12345678000190"})
+    with caplog.at_level(logging.ERROR, logger="workers.nfe"):
+        with pytest.raises(ValueError):
+            processar_nfe_importados_task.run("job-1", {"cnpj_emitente": "12345678000190"})
 
     assert updates[0][0] == JobStatus.FAILED
+    failed = next(record for record in caplog.records if record.message == "job_failed")
+    assert failed.job_id == "job-1"
+    assert failed.tipo_job == "NFE_PROCESSAMENTO_IMPORTADOS"
+    assert failed.cnpj_emitente == "12345678000190"
+    assert failed.etapa == "failed"
+    assert failed.status == "FAILED"
+    assert failed.erro_tipo == "ValueError"
+
+
+def test_sped_job_success_loga_contexto_operacional(monkeypatch, caplog):
+    updates = []
+
+    class Repo:
+        def mark_running(self, job_id, mensagem=None):
+            updates.append(("running", mensagem))
+
+        def update_progress(self, job_id, **kwargs):
+            updates.append(("progress", kwargs))
+
+        def update_status(self, job_id, status, **kwargs):
+            updates.append(("status", status, kwargs))
+
+    class Importacao:
+        def contar_pendentes(self, cnpj):
+            return 1
+
+        def processar_importados(self, cnpj):
+            return {"C100": 2}, 10, [7]
+
+        def marcar_como_processados(self, ids):
+            updates.append(("marcar", ids))
+
+    class Processador:
+        config = {"database": "plataforma_fiscal_test"}
+
+    monkeypatch.setattr("app.workers.sped_tasks.JobsRepository", Repo)
+    monkeypatch.setattr("app.workers.sped_tasks.SpedImportacaoService", Importacao)
+    monkeypatch.setattr("app.workers.sped_tasks.ProcessarSpedFiscalService", Processador)
+
+    from app.workers.sped_tasks import processar_sped_importados_task
+
+    with caplog.at_level(logging.INFO, logger="workers.sped"):
+        result = processar_sped_importados_task.run("job-sped-1", {"cnpj_emitente": "12345678000190"})
+
+    assert result["status"] == "SUCCESS"
+    completed = next(record for record in caplog.records if record.message == "job_completed")
+    assert completed.job_id == "job-sped-1"
+    assert completed.tipo_job == "SPED_PROCESSAMENTO_IMPORTADOS"
+    assert completed.cnpj_emitente == "12345678000190"
+    assert completed.etapa == "complete"
+    assert completed.status == "SUCCESS"
+    assert completed.total_itens == 1
+    assert completed.itens_processados == 1

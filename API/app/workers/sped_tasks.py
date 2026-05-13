@@ -23,7 +23,16 @@ def processar_sped_importados_task(job_id: str, payload: dict) -> dict:
     repository = JobsRepository()
     started_at = time.perf_counter()
     cnpj_emitente = str(payload.get("cnpj_emitente") or "")
-    logger.info("job_started", extra={"job_id": job_id, "tipo_job": "SPED_PROCESSAMENTO_IMPORTADOS", "etapa": "start"})
+    logger.info(
+        "job_started",
+        extra={
+            "job_id": job_id,
+            "tipo_job": "SPED_PROCESSAMENTO_IMPORTADOS",
+            "cnpj_emitente": cnpj_emitente,
+            "etapa": "start",
+            "status": "RUNNING",
+        },
+    )
     repository.mark_running(job_id, mensagem="Processando arquivos SPED importados")
 
     try:
@@ -52,6 +61,8 @@ def processar_sped_importados_task(job_id: str, payload: dict) -> dict:
             extra={
                 "job_id": job_id,
                 "tipo_job": "SPED_PROCESSAMENTO_IMPORTADOS",
+                "cnpj_emitente": cnpj_emitente,
+                "etapa": "complete",
                 "status": "SUCCESS",
                 "duracao_ms": duracao_ms,
                 "total_itens": pendentes,
@@ -68,9 +79,19 @@ def processar_sped_importados_task(job_id: str, payload: dict) -> dict:
             "banco_sped": config["database"],
         }
     except Exception as exc:
+        duracao_ms = round((time.perf_counter() - started_at) * 1000, 2)
         repository.update_status(job_id, JobStatus.FAILED, mensagem="Falha no processamento SPED", erro=str(exc))
         logger.exception(
             "job_failed",
-            extra={"job_id": job_id, "tipo_job": "SPED_PROCESSAMENTO_IMPORTADOS", "status": "FAILED", "erro": str(exc)},
+            extra={
+                "job_id": job_id,
+                "tipo_job": "SPED_PROCESSAMENTO_IMPORTADOS",
+                "cnpj_emitente": cnpj_emitente,
+                "etapa": "failed",
+                "status": "FAILED",
+                "duracao_ms": duracao_ms,
+                "erro_tipo": type(exc).__name__,
+                "erro": str(exc),
+            },
         )
         raise

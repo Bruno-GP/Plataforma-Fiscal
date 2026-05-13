@@ -110,6 +110,7 @@ class JobsRepository:
         tipo: str | None = None,
         data_inicio: date | None = None,
         data_fim: date | None = None,
+        cnpj_emitente: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[int, list[dict[str, Any]]]:
@@ -129,6 +130,17 @@ class JobsRepository:
         if data_fim:
             filters.append("criado_em < (%s::date + INTERVAL '1 day')")
             params.append(data_fim)
+        if cnpj_emitente:
+            filters.append(
+                """
+                (
+                    payload->>'cnpj_emitente' = %s
+                    OR payload->>'cnpj_empresa_origem' = %s
+                    OR payload->>'emitente_cnpj' = %s
+                )
+                """
+            )
+            params.extend([cnpj_emitente, cnpj_emitente, cnpj_emitente])
 
         where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
 
@@ -225,6 +237,7 @@ class JobsRepository:
         tipo: str | None = None,
         data_inicio: date | None = None,
         data_fim: date | None = None,
+        cnpj_emitente: str | None = None,
     ) -> dict[str, Any]:
         self._ensure_table()
         filters: list[str] = []
@@ -242,6 +255,17 @@ class JobsRepository:
         if data_fim:
             filters.append("criado_em < (%s::date + INTERVAL '1 day')")
             params.append(data_fim)
+        if cnpj_emitente:
+            filters.append(
+                """
+                (
+                    payload->>'cnpj_emitente' = %s
+                    OR payload->>'cnpj_empresa_origem' = %s
+                    OR payload->>'emitente_cnpj' = %s
+                )
+                """
+            )
+            params.extend([cnpj_emitente, cnpj_emitente, cnpj_emitente])
 
         where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
 

@@ -66,6 +66,9 @@ Todas as rotas abaixo estao em roteadores com dependencia de autenticacao. O esc
 | `GET /api/reforma-tributaria/documentos/{origem_documento}/{documento_id}/tributos` | Sim | Sim | `emitente_cnpj` | Origem aceita apenas `nfe` ou `sped`. |
 | `GET /api/reforma-tributaria/itens/{origem_item}/{item_id}/tributos` | Sim | Sim | `emitente_cnpj` | Origem aceita apenas `nfe` ou `sped`. |
 | `GET /api/reforma-tributaria/memoria-calculo` | Sim | Sim | `emitente_cnpj` | Limite maximo de pagina: 1000. |
+| `GET /api/jobs` | Sim | Sim | CNPJ no payload do job | Lista apenas jobs do CNPJ autenticado. |
+| `GET /api/jobs/{job_id}` | Sim | Sim | CNPJ no payload do job | Retorna `404` para jobs inexistentes ou de outra empresa. |
+| `GET /api/jobs/metrics` | Sim | Sim | CNPJ no payload do job | Agrega apenas jobs do CNPJ autenticado. |
 
 ## CORS
 
@@ -94,7 +97,7 @@ Riscos restantes:
 
 Obrigatorias ou sensiveis em producao:
 
-- `AUTH_SECRET_KEY`: trocar o valor padrao `dev-secret-change-me`.
+- `AUTH_SECRET_KEY`: trocar o valor padrao `dev-secret-change-me` ou `change-me`; em producao a API exige segredo forte com pelo menos 32 caracteres.
 - `POSTGRES_PASSWORD` e credenciais SPED.
 - `OPENAI_API_KEY`, quando relatorios IA forem usados.
 - configuracoes de cookie: `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_COOKIE_DOMAIN`.
@@ -111,6 +114,7 @@ O relatorio IA e apoio analitico. Ele pode interpretar dados incorretamente e na
 - Usar `AUTH_SECRET_KEY` forte e rotacionavel.
 - Usar HTTPS e `AUTH_COOKIE_SECURE=true`.
 - Restringir CORS ao dominio real do painel.
+- Evitar wildcard em `CORS_ALLOW_ORIGINS` e regex ampla em `CORS_ALLOW_ORIGIN_REGEX`; a API falha no startup quando essa configuracao esta insegura em producao.
 - Evitar expor Swagger publicamente sem controle adicional.
 - Aplicar rate limiting em login e upload no proxy ou infraestrutura.
 - Registrar auditoria de login, rejeicoes de upload e negacoes de acesso.

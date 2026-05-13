@@ -185,6 +185,8 @@ curl -X POST "http://localhost:8000/api/nfe/xml/importar?cnpj_empresa_origem=123
 
 Os endpoints de processamento de importados nao executam trabalho pesado no request. Eles criam registro em `processing_jobs`, enviam a tarefa ao Celery e retornam `job_id`.
 
+Os endpoints `GET /api/jobs`, `GET /api/jobs/{job_id}` e `GET /api/jobs/metrics` exigem autenticacao. A listagem e as metricas retornam apenas jobs vinculados ao CNPJ da sessao autenticada. A consulta de um `job_id` de outra empresa retorna `404`, para nao expor a existencia do job.
+
 Tipos atuais:
 
 - `NFE_PROCESSAMENTO_IMPORTADOS`
@@ -202,7 +204,7 @@ Status possiveis:
 ### `GET /api/jobs/{job_id}`
 
 - Retorna `id`, `tipo`, `status`, `mensagem`, `total_itens`, `itens_processados`, `erro`, `criado_em`, `iniciado_em`, `finalizado_em`.
-- Erros comuns: `404` job inexistente.
+- Erros comuns: `401` sem autenticacao; `404` job inexistente ou fora do escopo da empresa autenticada.
 
 ### `GET /api/jobs`
 

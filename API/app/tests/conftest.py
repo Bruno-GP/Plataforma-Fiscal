@@ -12,7 +12,7 @@ API_DIR = APP_DIR.parent
 if str(API_DIR) not in sys.path:
     sys.path.insert(0, str(API_DIR))
 
-from app.core.security import AuthenticatedUser, require_company_scope
+from app.core.security import AuthenticatedUser, get_current_user, require_company_scope
 from app.main import app
 
 
@@ -35,7 +35,16 @@ def test_user() -> AuthenticatedUser:
 
 @pytest.fixture
 def client(test_user):
+    app.dependency_overrides[get_current_user] = lambda: test_user
     app.dependency_overrides[require_company_scope] = lambda: test_user
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def unauthenticated_client():
+    app.dependency_overrides.clear()
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

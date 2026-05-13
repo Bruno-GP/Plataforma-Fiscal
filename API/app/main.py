@@ -21,6 +21,7 @@ from app.core.config import (
     get_cors_allow_origin_regex,
     get_cors_allow_origins,
     is_production,
+    validate_production_config,
 )
 from app.core.logger import configure_logging, log_request_cycle
 from app.services.db_schema_service import (
@@ -34,6 +35,7 @@ from app.services.db_schema_service import (
 )
 
 configure_logging()
+validate_production_config()
 
 app = FastAPI(
     title="API - Agente Extrator NFe",

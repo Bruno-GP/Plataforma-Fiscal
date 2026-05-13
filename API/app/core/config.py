@@ -114,6 +114,43 @@ def get_cors_allow_credentials() -> bool:
     return os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() == "true"
 
 
+def validate_production_config() -> None:
+    if not is_production():
+        return
+
+    errors: list[str] = []
+    auth_secret = get_auth_secret_key().strip()
+    insecure_auth_secrets = {"dev-secret-change-me", "change-me", ""}
+
+    if auth_secret in insecure_auth_secrets or len(auth_secret) < 32:
+        errors.append("AUTH_SECRET_KEY deve ser forte, exclusivo e ter pelo menos 32 caracteres")
+
+    cors_origins = [
+        origin.strip()
+        for origin in get_cors_allow_origins().split(",")
+        if origin.strip()
+    ]
+    cors_origin_regex = get_cors_allow_origin_regex().strip()
+
+    if not cors_origins and not cors_origin_regex:
+        errors.append("CORS_ALLOW_ORIGINS ou CORS_ALLOW_ORIGIN_REGEX deve ser definido")
+
+    if "*" in cors_origins:
+        errors.append("CORS_ALLOW_ORIGINS nao deve usar wildcard em producao")
+
+    if cors_origin_regex in {".*", "^.*$", ".*$"}:
+        errors.append("CORS_ALLOW_ORIGIN_REGEX nao deve aceitar qualquer origem em producao")
+
+    if not get_session_cookie_secure():
+        errors.append("AUTH_COOKIE_SECURE deve estar habilitado em producao")
+
+    if get_session_cookie_samesite() == "none" and not get_session_cookie_secure():
+        errors.append("AUTH_COOKIE_SAMESITE=none exige cookie secure")
+
+    if errors:
+        raise RuntimeError("Configuracao de producao insegura: " + "; ".join(errors) + ".")
+
+
 def get_login_max_failed_attempts() -> int:
     raw_value = os.getenv("AUTH_MAX_FAILED_ATTEMPTS", "5").strip()
     try:

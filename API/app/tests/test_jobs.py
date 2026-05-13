@@ -6,7 +6,7 @@ import pytest
 from app.models.jobs.schemas import JobStatus
 
 
-def _job_row(job_id=None, status="QUEUED", tipo="NFE_PROCESSAMENTO_IMPORTADOS"):
+def _job_row(job_id=None, status="QUEUED", tipo="NFE_PROCESSAMENTO_IMPORTADOS", cnpj="12345678000190"):
     return {
         "id": job_id or uuid4(),
         "tipo": tipo,
@@ -18,7 +18,7 @@ def _job_row(job_id=None, status="QUEUED", tipo="NFE_PROCESSAMENTO_IMPORTADOS"):
         "criado_em": datetime.now(timezone.utc),
         "iniciado_em": None,
         "finalizado_em": None,
-        "payload": {},
+        "payload": {"cnpj_emitente": cnpj},
     }
 
 
@@ -29,13 +29,25 @@ class FakeJobsRepository:
         return {**self.rows[0], "id": job_id}
 
     def list(self, **kwargs):
-        return len(self.rows), self.rows
+        cnpj_emitente = kwargs.get("cnpj_emitente")
+        rows = [
+            row
+            for row in self.rows
+            if not cnpj_emitente or row.get("payload", {}).get("cnpj_emitente") == cnpj_emitente
+        ]
+        return len(rows), rows
 
     def metrics(self, **kwargs):
+        cnpj_emitente = kwargs.get("cnpj_emitente")
+        rows = [
+            row
+            for row in self.rows
+            if not cnpj_emitente or row.get("payload", {}).get("cnpj_emitente") == cnpj_emitente
+        ]
         return {
-            "total_jobs": 1,
-            "por_status": {"QUEUED": 1},
-            "por_tipo": {"NFE_PROCESSAMENTO_IMPORTADOS": 1},
+            "total_jobs": len(rows),
+            "por_status": {"QUEUED": len(rows)} if rows else {},
+            "por_tipo": {"NFE_PROCESSAMENTO_IMPORTADOS": len(rows)} if rows else {},
             "duracao_media_ms": {},
         }
 
@@ -66,6 +78,57 @@ def test_metricas_jobs(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["por_status"]["QUEUED"] == 1
+
+
+def test_jobs_exigem_autenticacao(unauthenticated_client, monkeypatch):
+    monkeypatch.setattr("app.api.jobs.routes.JobsRepository", FakeJobsRepository)
+
+    assert unauthenticated_client.get("/api/jobs").status_code == 401
+    assert unauthenticated_client.get(f"/api/jobs/{uuid4()}").status_code == 401
+    assert unauthenticated_client.get("/api/jobs/metrics").status_code == 401
+
+
+def test_listar_jobs_filtra_por_empresa_autenticada(client, monkeypatch):
+    class ScopedRepo(FakeJobsRepository):
+        rows = [
+            _job_row(cnpj="12345678000190"),
+            _job_row(cnpj="99999999000199"),
+        ]
+
+    monkeypatch.setattr("app.api.jobs.routes.JobsRepository", ScopedRepo)
+
+    response = client.get("/api/jobs")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert len(payload["resultados"]) == 1
+
+
+def test_metricas_jobs_filtra_por_empresa_autenticada(client, monkeypatch):
+    class ScopedRepo(FakeJobsRepository):
+        rows = [
+            _job_row(cnpj="12345678000190"),
+            _job_row(cnpj="99999999000199"),
+        ]
+
+    monkeypatch.setattr("app.api.jobs.routes.JobsRepository", ScopedRepo)
+
+    response = client.get("/api/jobs/metrics")
+
+    assert response.status_code == 200
+    assert response.json()["total_jobs"] == 1
+
+
+def test_obter_job_de_outra_empresa_retorna_404(client, monkeypatch):
+    class ForeignRepo(FakeJobsRepository):
+        rows = [_job_row(cnpj="99999999000199")]
+
+    monkeypatch.setattr("app.api.jobs.routes.JobsRepository", ForeignRepo)
+
+    response = client.get(f"/api/jobs/{uuid4()}")
+
+    assert response.status_code == 404
 
 
 def test_endpoint_nfe_processar_importados_retorna_202(client, monkeypatch):

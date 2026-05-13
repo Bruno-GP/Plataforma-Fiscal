@@ -213,7 +213,7 @@ Evite depender de Redis/Celery em testes unitarios. Quando for necessario valida
 
 ### Fase 2: banco e processamento
 
-- Criacao sob demanda de `notas_xml_importados` e `sped_importados`.
+- Validacao de que `notas_xml_importados` e `sped_importados` existem via Alembic antes da importacao.
 - Marcacao de `processado_em` apos processamento.
 - Pendencias antes/depois do processamento.
 - Fixtures anonimizadas de XML e SPED com totais esperados.

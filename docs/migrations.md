@@ -53,7 +53,8 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 
 - O startup nao executa DDL por padrao. `ENABLE_STARTUP_SCHEMA_ENSURE=true` e fallback transitorio para banco legado.
 - `notas_xml_importados`, `sped_importados` e `processing_jobs` estao na migration inicial.
-- Parte dos services ainda possui `_garantir_tabela` defensivo. A meta e remover esses fallbacks apos validar ambientes existentes.
+- Services de importacao XML/SPED validam as tabelas de staging antes do uso, mas nao criam/alteram essas tabelas em runtime.
+- Parte dos services ainda possui DDL defensivo para estruturas analiticas SPED. A meta e remover esses fallbacks apos validar ambientes existentes.
 - Downgrade destrutivo amplo nao foi automatizado por seguranca; rollback de producao deve usar backup/restore planejado.
 
 ## Inventario por tipo de criacao
@@ -64,11 +65,11 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 | Script SQL auxiliar | `municipios_catalogo`, `ncm_catalogo`, `ncm_tributacao`. |
 | Migration manual | `tem_sped` em `empresas`, `ncm_tributacao`, indices fiscais, `tributos`, `regras_tributarias`, `regras_tributarias_vigencias`, `aliquotas_tributarias`, `apuracao_tributaria`, `ajustes_tributarios`, `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`, `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`, colunas SPED de processamento. |
 | Startup | `tem_sped`, `ncm_catalogo`, `ncm_tributacao`, `municipios_catalogo`, indices fiscais, estruturas das migrations `004` a `006`. |
-| Service sob demanda | `notas_xml_importados`, `sped_importados`, `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`. |
+| Service sob demanda | `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`. |
 
 ## Fragilidades
 
-- Ainda ha DDL defensivo em services, mantido temporariamente por compatibilidade.
+- Ainda ha DDL defensivo em services para estruturas analiticas SPED, mantido temporariamente por compatibilidade.
 - O mesmo objeto pode ser criado por mais de um caminho (`ncm_tributacao`, estruturas da Reforma, `sped_kpis_fiscal`).
 - Um ambiente pode parecer saudavel no `/health` e ainda assim nao ter todas as tabelas necessarias para um fluxo fiscal especifico.
 

@@ -46,6 +46,8 @@ def test_alembic_revisions_and_sql_migrations_cover_expected_database_objects():
         "CREATE TABLE IF NOT EXISTS empresas",
         "CREATE TABLE IF NOT EXISTS notas",
         "CREATE TABLE IF NOT EXISTS notas_itens",
+        "CREATE TABLE IF NOT EXISTS notas_xml_importados",
+        "CREATE TABLE IF NOT EXISTS sped_importados",
         "CREATE TABLE IF NOT EXISTS processing_jobs",
         "CONSTRAINT ck_processing_jobs_status",
     ]:
@@ -73,6 +75,26 @@ def test_alembic_revisions_and_sql_migrations_cover_expected_database_objects():
         "CONSTRAINT ck_debitos_tributarios_valores",
     ]:
         assert expected in reforma_memoria
+
+
+def test_staging_import_services_do_not_mutate_database_schema():
+    xml_import_service = (
+        APP_DIR / "services" / "nfe" / "xml_importacao_service.py"
+    ).read_text(encoding="utf-8")
+    sped_import_service = (
+        APP_DIR / "services" / "sped" / "sped_importacao_service.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden_fragments = [
+        "CREATE TABLE IF NOT EXISTS notas_xml_importados",
+        "ALTER TABLE notas_xml_importados",
+        "CREATE TABLE IF NOT EXISTS sped_importados",
+        "ALTER TABLE sped_importados",
+    ]
+
+    service_source = f"{xml_import_service}\n{sped_import_service}"
+    for fragment in forbidden_fragments:
+        assert fragment not in service_source
 
 
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):

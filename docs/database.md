@@ -32,8 +32,8 @@ Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estru
 | `API/SQL/migrations/*.sql` | Evolucoes manuais numeradas legadas. |
 | `API/app/alembic/` | Caminho operacional recomendado para novas migrations versionadas. |
 | `API/app/services/db_schema_service.py` | DDL opcional no startup da API para colunas, tabelas auxiliares, indices e Reforma Tributaria. |
-| `API/app/services/nfe/xml_importacao_service.py` | Cria/ajusta `notas_xml_importados` sob demanda. |
-| `API/app/services/sped/sped_importacao_service.py` | Cria/ajusta tabelas de staging e tabelas analiticas SPED sob demanda. |
+| `API/app/services/nfe/xml_importacao_service.py` | Valida `notas_xml_importados` antes do uso; a tabela e criada por Alembic. |
+| `API/app/services/sped/sped_importacao_service.py` | Valida `sped_importados` antes do uso; tabelas analiticas SPED ainda possuem DDL defensivo sob demanda. |
 
 ## Estruturas criadas no startup
 
@@ -98,14 +98,14 @@ Com `ENABLE_STARTUP_SCHEMA_ENSURE=true`, o startup executa DDL idempotente em `d
 
 Fragilidade: se habilitado em ambiente persistente, o startup pode alterar schema sem um registro formal de migration aplicada.
 
-### Criadas sob demanda por service
+### Validadas ou criadas por service
 
-- `notas_xml_importados`: criada por `XMLImportacaoService._garantir_tabela`.
-- `sped_importados`: criada por `SpedImportacaoService._garantir_tabela`.
+- `notas_xml_importados`: criada pela migration inicial Alembic; `XMLImportacaoService` apenas valida se a tabela e as colunas esperadas existem antes do uso.
+- `sped_importados`: criada pela migration inicial Alembic; `SpedImportacaoService` apenas valida se a tabela e as colunas esperadas existem antes do uso.
 - `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`: criadas por `SpedImportacaoService._garantir_tabelas_analiticas`.
 - `public.sped_kpis_fiscal`: tambem pode ser criada/ajustada por `SpedConsultaService`.
 
-Fragilidade: tabelas sob demanda podem nao existir em um banco recem-provisionado ate o primeiro uso do fluxo correspondente.
+Fragilidade restante: tabelas analiticas SPED ainda podem ser criadas/ajustadas em runtime. As tabelas de staging de importacao ja dependem de Alembic e falham cedo se as migrations nao tiverem sido aplicadas.
 
 ## Checklist de banco pronto
 
@@ -114,7 +114,7 @@ Fragilidade: tabelas sob demanda podem nao existir em um banco recem-provisionad
 - Banco SPED criado quando houver empresas `tem_sped=true`.
 - `public.empresas` existe antes do startup tentar adicionar `tem_sped`.
 - Migrations `001` a `007` avaliadas e aplicadas na ordem adequada.
-- Tabelas de staging (`notas_xml_importados`, `sped_importados`) criadas apos primeiro uso ou validadas manualmente.
+- Tabelas de staging (`notas_xml_importados`, `sped_importados`) criadas pela migration inicial Alembic.
 - Tabelas da Reforma Tributaria existentes: `tributos`, `apuracao_tributaria`, `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`, `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`.
 - Catalogos NCM/IBPT e municipios carregados quando as telas dependentes forem usadas.
 - Backups testados antes de qualquer DDL em producao.

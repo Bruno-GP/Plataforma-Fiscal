@@ -46,7 +46,7 @@ class SpedImportacaoService:
       user=self.config["user"],
       password=self.config["password"],
     ) as conn:
-      self._garantir_tabela(conn)
+      self._validar_tabela_staging(conn)
 
       for nome_arquivo, conteudo in arquivos:
         cnpj_arquivo = self._extrair_cnpj_sped(conteudo)
@@ -137,7 +137,7 @@ class SpedImportacaoService:
       user=self.config["user"],
       password=self.config["password"],
     ) as conn:
-      self._garantir_tabela(conn)
+      self._validar_tabela_staging(conn)
 
       with conn.cursor() as cur:
         cur.execute(
@@ -169,7 +169,7 @@ class SpedImportacaoService:
       user=self.config["user"],
       password=self.config["password"],
     ) as conn:
-      self._garantir_tabela(conn)
+      self._validar_tabela_staging(conn)
       self._garantir_tabelas_analiticas(conn)
 
       with conn.cursor() as cur:
@@ -712,26 +712,41 @@ class SpedImportacaoService:
           ),
         )
 
-  def _garantir_tabela(self, conn: psycopg.Connection) -> None:
+  def _validar_tabela_staging(self, conn: psycopg.Connection) -> None:
+    required_columns = {
+      "id",
+      "cnpj_emitente",
+      "nome_arquivo",
+      "hash_arquivo",
+      "tamanho_bytes",
+      "conteudo_txt",
+      "processado_em",
+      "criado_em",
+    }
+
     with conn.cursor() as cur:
+      cur.execute("SELECT to_regclass('public.sped_importados')")
+      if cur.fetchone()[0] is None:
+        raise RuntimeError(
+          "Tabela public.sped_importados nao encontrada. Execute as migrations Alembic antes de importar SPED."
+        )
+
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS sped_importados (
-          id BIGSERIAL PRIMARY KEY,
-          cnpj_emitente VARCHAR(20) NOT NULL,
-          nome_arquivo TEXT NOT NULL,
-          hash_arquivo VARCHAR(64) NOT NULL,
-          tamanho_bytes BIGINT,
-          conteudo_txt BYTEA,
-          processado_em TIMESTAMPTZ,
-          criado_em TIMESTAMPTZ DEFAULT NOW(),
-          UNIQUE (cnpj_emitente, hash_arquivo)
-        )
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'sped_importados'
         """
       )
+      existing_columns = {row[0] for row in cur.fetchall()}
 
-      cur.execute("ALTER TABLE sped_importados ADD COLUMN IF NOT EXISTS conteudo_txt BYTEA")
-      cur.execute("ALTER TABLE sped_importados ADD COLUMN IF NOT EXISTS processado_em TIMESTAMPTZ")
+    missing_columns = sorted(required_columns - existing_columns)
+    if missing_columns:
+      raise RuntimeError(
+        "Tabela public.sped_importados incompleta. Execute as migrations Alembic. "
+        f"Colunas ausentes: {', '.join(missing_columns)}."
+      )
       
   def _garantir_tabelas_analiticas(self, conn: psycopg.Connection) -> None:
     with conn.cursor() as cur:

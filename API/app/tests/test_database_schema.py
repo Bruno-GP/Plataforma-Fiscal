@@ -41,6 +41,9 @@ def test_alembic_revisions_and_sql_migrations_cover_expected_database_objects():
     reforma_memoria = (
         MIGRATIONS_DIR / "006_add_reforma_tributaria_creditos_debitos_memoria.sql"
     ).read_text(encoding="utf-8")
+    login_security = (
+        ALEMBIC_DIR / "20260515_0004_login_security_columns.py"
+    ).read_text(encoding="utf-8")
 
     for expected in [
         "CREATE TABLE IF NOT EXISTS empresas",
@@ -75,6 +78,13 @@ def test_alembic_revisions_and_sql_migrations_cover_expected_database_objects():
         "CONSTRAINT ck_debitos_tributarios_valores",
     ]:
         assert expected in reforma_memoria
+
+    for expected in [
+        "ADD COLUMN IF NOT EXISTS tentativas_falhas",
+        "ADD COLUMN IF NOT EXISTS bloqueado_ate",
+        "ADD COLUMN IF NOT EXISTS ultimo_login_em",
+    ]:
+        assert expected in login_security
 
 
 def test_staging_import_services_do_not_mutate_database_schema():
@@ -111,15 +121,32 @@ def test_jobs_repository_does_not_mutate_database_schema():
         assert fragment not in jobs_repository
 
 
+def test_login_service_does_not_mutate_database_schema():
+    login_service = (
+        APP_DIR / "services" / "nfe" / "auth" / "login_service.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden_fragments = [
+        "ALTER TABLE public.login",
+        "ADD COLUMN IF NOT EXISTS tentativas_falhas",
+        "ADD COLUMN IF NOT EXISTS bloqueado_ate",
+        "ADD COLUMN IF NOT EXISTS ultimo_login_em",
+    ]
+
+    for fragment in forbidden_fragments:
+        assert fragment not in login_service
+
+
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 
-    assert revision == "20260511_0003"
+    assert revision == "20260515_0004"
 
 
 def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):
     expected_tables = {
         "empresas",
+        "login",
         "notas_processamentos",
         "notas",
         "notas_itens",
@@ -161,6 +188,21 @@ def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):
     assert columns["emitente_cnpj"] == ("character varying", "NO")
     assert columns["data_emissao"] == ("date", "NO")
     assert columns["valor_total_nf"][0] == "numeric"
+
+    login_columns = {
+        row[0]: (row[1], row[2])
+        for row in fetch_all(
+            migrated_db,
+            """
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'login'
+            """,
+        )
+    }
+    assert login_columns["tentativas_falhas"] == ("integer", "NO")
+    assert login_columns["bloqueado_ate"] == ("timestamp with time zone", "YES")
+    assert login_columns["ultimo_login_em"] == ("timestamp with time zone", "YES")
 
     constraints = {
         row[0]

@@ -17,7 +17,6 @@ from app.core.config import (
     get_login_success_cache_ttl_seconds,
     get_password_min_length,
 )
-from app.services.db_schema_service import ensure_empresas_tem_sped_column
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
 
@@ -38,6 +37,20 @@ class LoginResult:
 class LoginService:
     _schema_lock = Lock()
     _schema_ensured = False
+    _required_columns_by_table = {
+        "empresas": {"id", "cnpj", "nome", "tem_sped"},
+        "login": {
+            "id",
+            "empresa_id",
+            "cnpj",
+            "email",
+            "senha",
+            "criado_em",
+            "tentativas_falhas",
+            "bloqueado_ate",
+            "ultimo_login_em",
+        },
+    }
     _auth_cache_lock = Lock()
     _auth_refresh_lock = Lock()
     _auth_cache: dict[str, tuple[float, LoginResult]] = {}
@@ -75,32 +88,39 @@ class LoginService:
         with LoginService._schema_lock:
             if LoginService._schema_ensured:
                 return
-            ensure_empresas_tem_sped_column()
             with psycopg.connect(**self.conn_params) as conn:
-                self._ensure_login_security_columns(conn)
+                self._validate_base_schema(conn)
             LoginService._schema_ensured = True
 
-    def _ensure_login_security_columns(self, conn: psycopg.Connection) -> None:
+    def _validate_base_schema(self, conn: psycopg.Connection) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                ALTER TABLE public.login
-                ADD COLUMN IF NOT EXISTS tentativas_falhas INTEGER NOT NULL DEFAULT 0
-                """
+                SELECT table_name, column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = ANY(%s)
+                """,
+                (list(self._required_columns_by_table),),
             )
-            cur.execute(
-                """
-                ALTER TABLE public.login
-                ADD COLUMN IF NOT EXISTS bloqueado_ate TIMESTAMPTZ
-                """
+            existing_columns: dict[str, set[str]] = {
+                table_name: set()
+                for table_name in self._required_columns_by_table
+            }
+            for table_name, column_name in cur.fetchall():
+                existing_columns[str(table_name)].add(str(column_name))
+
+        missing_parts = []
+        for table_name, required_columns in self._required_columns_by_table.items():
+            missing_columns = sorted(required_columns - existing_columns[table_name])
+            if missing_columns:
+                missing_parts.append(f"{table_name}: {', '.join(missing_columns)}")
+
+        if missing_parts:
+            raise RuntimeError(
+                "Schema de autenticacao incompleto. Execute as migrations Alembic. "
+                f"Colunas ausentes em public: {'; '.join(missing_parts)}."
             )
-            cur.execute(
-                """
-                ALTER TABLE public.login
-                ADD COLUMN IF NOT EXISTS ultimo_login_em TIMESTAMPTZ
-                """
-            )
-        conn.commit()
 
     def _validar_forca_senha(self, senha: str) -> None:
         min_length = get_password_min_length()

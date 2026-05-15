@@ -32,6 +32,7 @@ Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estru
 | `API/SQL/migrations/*.sql` | Evolucoes manuais numeradas legadas. |
 | `API/app/alembic/` | Caminho operacional recomendado para novas migrations versionadas. |
 | `API/app/services/db_schema_service.py` | DDL opcional no startup da API para colunas, tabelas auxiliares, indices e Reforma Tributaria. |
+| `API/app/services/nfe/auth/login_service.py` | Valida as colunas usadas por autenticacao e lockout antes do uso; a evolucao do schema fica em Alembic. |
 | `API/app/services/nfe/xml_importacao_service.py` | Valida `notas_xml_importados` antes do uso; a tabela e criada por Alembic. |
 | `API/app/services/sped/sped_importacao_service.py` | Valida `sped_importados` antes do uso; tabelas analiticas SPED ainda possuem DDL defensivo sob demanda. |
 
@@ -84,6 +85,7 @@ Scripts auxiliares:
 - `005_add_reforma_tributaria_documentos_itens.sql`: cria `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`.
 - `006_add_reforma_tributaria_creditos_debitos_memoria.sql`: cria `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`.
 - `007_add_sped_processing_columns.sql`: altera `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`.
+- Alembic `20260515_0004`: adiciona `tentativas_falhas`, `bloqueado_ate` e `ultimo_login_em` em `public.login`.
 
 ### Criadas no startup
 
@@ -103,6 +105,7 @@ Fragilidade: se habilitado em ambiente persistente, o startup pode alterar schem
 - `notas_xml_importados`: criada pela migration inicial Alembic; `XMLImportacaoService` apenas valida se a tabela e as colunas esperadas existem antes do uso.
 - `sped_importados`: criada pela migration inicial Alembic; `SpedImportacaoService` apenas valida se a tabela e as colunas esperadas existem antes do uso.
 - `processing_jobs`: criada pela migration inicial Alembic; `JobsRepository` apenas valida se a tabela, colunas e constraint de status existem antes do uso.
+- `login`: criada pela migration inicial Alembic e complementada pela migration `20260515_0004`; `LoginService` apenas valida as colunas de autenticacao antes do uso.
 - `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`: criadas por `SpedImportacaoService._garantir_tabelas_analiticas`.
 - `public.sped_kpis_fiscal`: tambem pode ser criada/ajustada por `SpedConsultaService`.
 
@@ -115,7 +118,7 @@ Fragilidade restante: tabelas analiticas SPED ainda podem ser criadas/ajustadas 
 - Banco SPED criado quando houver empresas `tem_sped=true`.
 - `public.empresas` existe antes do startup tentar adicionar `tem_sped`.
 - Migrations `001` a `007` avaliadas e aplicadas na ordem adequada.
-- Tabelas de staging (`notas_xml_importados`, `sped_importados`) e controle de jobs (`processing_jobs`) criadas pela migration inicial Alembic.
+- Tabelas de staging (`notas_xml_importados`, `sped_importados`), controle de jobs (`processing_jobs`) e colunas de seguranca de login criadas por Alembic.
 - Tabelas da Reforma Tributaria existentes: `tributos`, `apuracao_tributaria`, `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`, `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`.
 - Catalogos NCM/IBPT e municipios carregados quando as telas dependentes forem usadas.
 - Backups testados antes de qualquer DDL em producao.

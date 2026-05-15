@@ -2,11 +2,11 @@ import json
 
 from functools import lru_cache
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
+
+from app.core.http_client import ExternalServiceError, get_json
 
 router = APIRouter(prefix="/geo", tags=["geo"])
 
@@ -96,20 +96,14 @@ def obter_geojson_municipios_por_uf(uf: str) -> JSONResponse:
 
         return JSONResponse(content={"type": "FeatureCollection", "features": features_filtradas})
 
-    url = _IBGE_GEOJSON_URL.format(uf=uf_normalizada)
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/geo+json, application/json"})
-
     try:
-        with urlopen(req, timeout=20) as response:
-            payload = response.read().decode("utf-8")
-    except HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"Falha ao carregar GeoJSON do IBGE (HTTP {exc.code}).") from exc
-    except URLError as exc:
-        raise HTTPException(status_code=502, detail="Falha de conexão ao carregar GeoJSON do IBGE.") from exc
-
-    try:
-        data = json.loads(payload)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail="Resposta inválida ao carregar GeoJSON do IBGE.") from exc
+        data = get_json(
+            _IBGE_GEOJSON_URL.format(uf=uf_normalizada),
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/geo+json, application/json"},
+            timeout_seconds=20.0,
+            service_name="IBGE",
+        )
+    except ExternalServiceError as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao carregar GeoJSON do IBGE: {exc}") from exc
 
     return JSONResponse(content=data)

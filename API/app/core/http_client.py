@@ -22,12 +22,13 @@ def get_json(
     url: str,
     *,
     params: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
     timeout_seconds: float = 30.0,
     service_name: str,
 ) -> Any:
     try:
         with httpx.Client(timeout=timeout_seconds) as client:
-            response = client.get(url, params=params)
+            response = client.get(url, params=params, headers=headers)
             response.raise_for_status()
             return response.json()
     except httpx.TimeoutException as exc:

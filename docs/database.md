@@ -102,6 +102,7 @@ Fragilidade: se habilitado em ambiente persistente, o startup pode alterar schem
 
 - `notas_xml_importados`: criada pela migration inicial Alembic; `XMLImportacaoService` apenas valida se a tabela e as colunas esperadas existem antes do uso.
 - `sped_importados`: criada pela migration inicial Alembic; `SpedImportacaoService` apenas valida se a tabela e as colunas esperadas existem antes do uso.
+- `processing_jobs`: criada pela migration inicial Alembic; `JobsRepository` apenas valida se a tabela, colunas e constraint de status existem antes do uso.
 - `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`: criadas por `SpedImportacaoService._garantir_tabelas_analiticas`.
 - `public.sped_kpis_fiscal`: tambem pode ser criada/ajustada por `SpedConsultaService`.
 
@@ -114,7 +115,7 @@ Fragilidade restante: tabelas analiticas SPED ainda podem ser criadas/ajustadas 
 - Banco SPED criado quando houver empresas `tem_sped=true`.
 - `public.empresas` existe antes do startup tentar adicionar `tem_sped`.
 - Migrations `001` a `007` avaliadas e aplicadas na ordem adequada.
-- Tabelas de staging (`notas_xml_importados`, `sped_importados`) criadas pela migration inicial Alembic.
+- Tabelas de staging (`notas_xml_importados`, `sped_importados`) e controle de jobs (`processing_jobs`) criadas pela migration inicial Alembic.
 - Tabelas da Reforma Tributaria existentes: `tributos`, `apuracao_tributaria`, `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`, `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`.
 - Catalogos NCM/IBPT e municipios carregados quando as telas dependentes forem usadas.
 - Backups testados antes de qualquer DDL em producao.

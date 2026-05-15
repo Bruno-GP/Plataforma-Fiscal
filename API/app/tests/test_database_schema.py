@@ -97,6 +97,20 @@ def test_staging_import_services_do_not_mutate_database_schema():
         assert fragment not in service_source
 
 
+def test_jobs_repository_does_not_mutate_database_schema():
+    jobs_repository = (
+        APP_DIR / "repositories" / "jobs_repository.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden_fragments = [
+        "CREATE TABLE IF NOT EXISTS processing_jobs",
+        "CREATE INDEX IF NOT EXISTS idx_processing_jobs",
+    ]
+
+    for fragment in forbidden_fragments:
+        assert fragment not in jobs_repository
+
+
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 

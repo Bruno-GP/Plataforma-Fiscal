@@ -15,6 +15,19 @@ from app.services.nfe.postres_config import carregar_config_postgres, opcoes_con
 
 class JobsRepository:
     _schema_ensured = False
+    _required_columns = {
+        "id",
+        "tipo",
+        "status",
+        "mensagem",
+        "total_itens",
+        "itens_processados",
+        "erro",
+        "criado_em",
+        "iniciado_em",
+        "finalizado_em",
+        "payload",
+    }
 
     def __init__(self) -> None:
         self.config = carregar_config_postgres()
@@ -38,28 +51,36 @@ class JobsRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS processing_jobs (
-                        id UUID PRIMARY KEY,
-                        tipo VARCHAR(80) NOT NULL,
-                        status VARCHAR(30) NOT NULL,
-                        mensagem TEXT,
-                        total_itens INTEGER DEFAULT 0,
-                        itens_processados INTEGER DEFAULT 0,
-                        erro TEXT,
-                        criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                        iniciado_em TIMESTAMPTZ,
-                        finalizado_em TIMESTAMPTZ,
-                        payload JSONB,
-                        CONSTRAINT ck_processing_jobs_status
-                            CHECK (status IN ('PENDING', 'QUEUED', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELED'))
-                    );
-
-                    CREATE INDEX IF NOT EXISTS idx_processing_jobs_status ON processing_jobs (status);
-                    CREATE INDEX IF NOT EXISTS idx_processing_jobs_tipo ON processing_jobs (tipo);
-                    CREATE INDEX IF NOT EXISTS idx_processing_jobs_criado_em ON processing_jobs (criado_em DESC);
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'processing_jobs'
                     """
                 )
-            conn.commit()
+                existing_columns = {str(row["column_name"]) for row in cur.fetchall()}
+
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM information_schema.table_constraints
+                    WHERE table_schema = 'public'
+                      AND table_name = 'processing_jobs'
+                      AND constraint_name = 'ck_processing_jobs_status'
+                    """
+                )
+                has_status_constraint = cur.fetchone() is not None
+
+        missing_columns = sorted(self._required_columns - existing_columns)
+        if missing_columns:
+            raise RuntimeError(
+                "Tabela public.processing_jobs incompleta ou ausente. Execute as migrations Alembic. "
+                f"Colunas ausentes: {', '.join(missing_columns)}."
+            )
+
+        if not has_status_constraint:
+            raise RuntimeError(
+                "Constraint public.ck_processing_jobs_status ausente. Execute as migrations Alembic."
+            )
 
         JobsRepository._schema_ensured = True
 

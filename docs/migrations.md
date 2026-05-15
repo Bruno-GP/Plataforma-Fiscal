@@ -54,6 +54,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 - O startup nao executa DDL por padrao. `ENABLE_STARTUP_SCHEMA_ENSURE=true` e fallback transitorio para banco legado.
 - `notas_xml_importados`, `sped_importados` e `processing_jobs` estao na migration inicial.
 - Services de importacao XML/SPED validam as tabelas de staging antes do uso, mas nao criam/alteram essas tabelas em runtime.
+- `JobsRepository` valida `processing_jobs` antes do uso, mas nao cria/altera essa tabela em runtime.
 - Parte dos services ainda possui DDL defensivo para estruturas analiticas SPED. A meta e remover esses fallbacks apos validar ambientes existentes.
 - Downgrade destrutivo amplo nao foi automatizado por seguranca; rollback de producao deve usar backup/restore planejado.
 

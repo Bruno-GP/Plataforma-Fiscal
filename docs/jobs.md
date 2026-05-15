@@ -64,7 +64,7 @@ Com Docker Compose, os servicos `celery-worker-default`, `celery-worker-nfe` e `
 
 ## Tabela de controle
 
-A tabela `processing_jobs` e criada automaticamente pelo `JobsRepository` se ainda nao existir. Campos principais:
+A tabela `processing_jobs` e criada pela migration inicial Alembic. O `JobsRepository` apenas valida a existencia da tabela, das colunas esperadas e da constraint de status antes do uso. Campos principais:
 
 - `id`
 - `tipo`

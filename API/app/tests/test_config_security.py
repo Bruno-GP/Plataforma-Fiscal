@@ -1,6 +1,7 @@
 import pytest
 
 from app.core.config import validate_production_config
+from app.main import ensure_database_schema
 
 
 def test_validate_production_config_ignora_desenvolvimento(monkeypatch):
@@ -53,3 +54,10 @@ def test_validate_production_config_aceita_producao_segura(monkeypatch):
     monkeypatch.setenv("CORS_ALLOW_ORIGIN_REGEX", "")
 
     validate_production_config()
+
+
+def test_startup_schema_ensure_flag_falha_com_orientacao_alembic(monkeypatch):
+    monkeypatch.setenv("ENABLE_STARTUP_SCHEMA_ENSURE", "true")
+
+    with pytest.raises(RuntimeError, match="migrations Alembic"):
+        ensure_database_schema()

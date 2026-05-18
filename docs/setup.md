@@ -12,7 +12,7 @@ Variaveis principais:
 - `OPENAI_API_KEY`
 - `APP_ENV` ou `ENVIRONMENT`
 - `LOG_LEVEL`
-- `ENABLE_STARTUP_SCHEMA_ENSURE=false`
+- `ENABLE_STARTUP_SCHEMA_ENSURE` nao deve ser habilitado; use Alembic para schema.
 
 ## Subir ambiente completo
 
@@ -108,4 +108,4 @@ alembic -c API/app/alembic.ini downgrade -1
 alembic -c API/app/alembic.ini revision -m "descricao"
 ```
 
-O startup da API nao deve ser o mecanismo principal de DDL. `ENABLE_STARTUP_SCHEMA_ENSURE=true` existe apenas como fallback transitorio para bancos legados.
+O startup da API nao executa DDL. `ENABLE_STARTUP_SCHEMA_ENSURE=true` foi descontinuado e faz a API falhar cedo. Aplique Alembic antes de subir API, workers ou jobs.

@@ -55,7 +55,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 
 ## Pontos de atencao
 
-- O startup nao executa DDL por padrao. `ENABLE_STARTUP_SCHEMA_ENSURE=true` e fallback transitorio para banco legado.
+- O startup nao executa DDL. `ENABLE_STARTUP_SCHEMA_ENSURE=true` foi descontinuado e falha cedo com orientacao para aplicar Alembic.
 - `notas_xml_importados`, `sped_importados` e `processing_jobs` estao na migration inicial.
 - As colunas de seguranca de `public.login` (`tentativas_falhas`, `bloqueado_ate`, `ultimo_login_em`) estao na revision Alembic `20260515_0004`.
 - Services de importacao XML/SPED validam as tabelas de staging antes do uso, mas nao criam/alteram essas tabelas em runtime.
@@ -65,7 +65,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 - `LoginService` valida as colunas de autenticacao antes do uso, mas nao cria/altera `public.login` em runtime.
 - `SpedConsultaService` valida `sped_kpis_fiscal` antes de listar KPIs, mas nao cria/altera essa tabela em runtime.
 - `SpedImportacaoService` valida staging e tabelas analiticas SPED antes do uso, mas nao cria/altera essas tabelas em runtime.
-- O DDL defensivo restante esta concentrado no fallback opcional de startup para bancos legados.
+- Os helpers legados em `db_schema_service.py` nao sao chamados no startup e devem ser removidos em uma limpeza futura.
 - Downgrade destrutivo amplo nao foi automatizado por seguranca; rollback de producao deve usar backup/restore planejado.
 
 ## Inventario por tipo de criacao
@@ -75,13 +75,13 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 | Script SQL base | `empresas`, `sped_importacoes`, `participantes`, `produtos`, `documentos_fiscais`, `documento_itens`, `tributos_itens`, `resumo_cfop_cst`, `apuracao_icms`, `apuracao_ipi`, `inventario`, `ajustes_fiscais`, `kpis_sped_fiscal`. |
 | Script SQL auxiliar | `municipios_catalogo`, `ncm_catalogo`, `ncm_tributacao`. |
 | Migration manual/Alembic | `tem_sped` em `empresas`, `ncm_tributacao`, indices fiscais, `tributos`, `regras_tributarias`, `regras_tributarias_vigencias`, `aliquotas_tributarias`, `apuracao_tributaria`, `ajustes_tributarios`, `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`, `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`, colunas SPED de processamento, colunas de seguranca de `login`. |
-| Startup | `tem_sped`, `ncm_catalogo`, `ncm_tributacao`, `municipios_catalogo`, indices fiscais, estruturas das migrations `004` a `006`. |
+| Startup | Nenhuma estrutura. A API exige schema aplicado previamente por Alembic. |
 | Service sob demanda | Nenhuma estrutura operacional recomendada. Services validam schema e falham cedo quando Alembic nao foi aplicado. |
 
 ## Fragilidades
 
-- Ainda ha DDL defensivo no fallback opcional de startup, mantido temporariamente por compatibilidade com bancos legados.
-- O mesmo objeto pode ser criado por mais de um caminho (`ncm_tributacao` e estruturas da Reforma ainda aparecem tanto em Alembic quanto no fallback de startup).
+- Ainda ha helpers legados de DDL em `db_schema_service.py`, mantidos temporariamente como referencia historica.
+- O mesmo objeto ainda aparece em scripts SQL legados e em Alembic; o caminho operacional recomendado e Alembic.
 - Um ambiente pode parecer saudavel no `/health` e ainda assim nao ter todas as tabelas necessarias para um fluxo fiscal especifico.
 
 ## Validacao minima pos-migration

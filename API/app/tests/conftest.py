@@ -49,15 +49,6 @@ def unauthenticated_client():
         yield test_client
     app.dependency_overrides.clear()
 
-
-@pytest.fixture(autouse=True)
-def disable_schema_ensure_in_unit_tests(monkeypatch):
-    monkeypatch.setattr(
-        "app.services.db_schema_service.ensure_empresas_tem_sped_column",
-        lambda: None,
-    )
-
-
 def _psycopg_url(url: str) -> str:
     return url.replace("postgresql+psycopg://", "postgresql://", 1)
 

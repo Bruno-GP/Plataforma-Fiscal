@@ -209,6 +209,23 @@ def test_sped_importacao_service_does_not_mutate_analytic_database_schema():
         assert fragment not in sped_importacao_service
 
 
+def test_api_startup_does_not_mutate_database_schema():
+    main_source = (APP_DIR / "main.py").read_text(encoding="utf-8")
+
+    forbidden_fragments = [
+        "ensure_empresas_tem_sped_column",
+        "ensure_ncm_ibpt_tables",
+        "ensure_municipios_catalogo_table",
+        "ensure_reforma_tributaria_base_schema",
+        "ensure_reforma_tributaria_documentos_itens_schema",
+        "ensure_reforma_tributaria_creditos_debitos_memoria_schema",
+        "ensure_fiscal_analysis_indexes",
+    ]
+
+    for fragment in forbidden_fragments:
+        assert fragment not in main_source
+
+
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 

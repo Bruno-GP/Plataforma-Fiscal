@@ -1,6 +1,6 @@
 # Banco de Dados
 
-Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estrutura ainda combina migrations versionadas, scripts SQL legados, DDL defensivo em services e um fallback opcional de schema no startup da API.
+Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estrutura operacional deve ser criada por migrations versionadas; scripts SQL legados ficam como referencia historica.
 
 ## Arquivos de referencia no codigo
 
@@ -31,7 +31,7 @@ Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estru
 | `API/app/models/nfe/Tables/FISCAL Schema Tables.sql` | Schema historico do modulo fiscal/NFe. Validar antes de reaplicar. |
 | `API/SQL/migrations/*.sql` | Evolucoes manuais numeradas legadas. |
 | `API/app/alembic/` | Caminho operacional recomendado para novas migrations versionadas. |
-| `API/app/services/db_schema_service.py` | DDL opcional no startup da API para colunas, tabelas auxiliares, indices e Reforma Tributaria. |
+| `API/app/services/db_schema_service.py` | Helpers legados de DDL. Nao sao chamados no startup da API; manter apenas como referencia ate remocao planejada. |
 | `API/app/services/company_profile_service.py` | Valida `public.empresas.tem_sped` antes de consultar o perfil operacional da empresa. |
 | `API/app/services/NCM/ibpt_sync_service.py` | Valida `ncm_catalogo` e `ncm_tributacao` antes de sincronizar dados IBPT. |
 | `API/app/services/nfe/auth/login_service.py` | Valida as colunas usadas por autenticacao e lockout antes do uso; a evolucao do schema fica em Alembic. |
@@ -39,19 +39,11 @@ Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estru
 | `API/app/services/sped/sped_importacao_service.py` | Valida `sped_importados` e o schema analitico SPED antes do uso; as tabelas sao criadas por Alembic. |
 | `API/app/services/sped/sped_consulta_service.py` | Valida `sped_kpis_fiscal` antes de listar KPIs SPED. |
 
-## Estruturas criadas no startup
+## Startup da API
 
-Quando `ENABLE_STARTUP_SCHEMA_ENSURE=true`, `API/app/main.py` chama:
+O startup da API nao executa DDL. `ENABLE_STARTUP_SCHEMA_ENSURE=true` foi descontinuado e faz a API falhar cedo com orientacao para aplicar Alembic.
 
-- `ensure_empresas_tem_sped_column`: adiciona `public.empresas.tem_sped`.
-- `ensure_ncm_ibpt_tables`: cria `public.ncm_catalogo` e `public.ncm_tributacao`.
-- `ensure_municipios_catalogo_table`: cria `public.municipios_catalogo`.
-- `ensure_fiscal_analysis_indexes`: cria indices funcionais para analise fiscal NFe/SPED.
-- `ensure_reforma_tributaria_base_schema`: aplica `004_add_reforma_tributaria_base.sql`.
-- `ensure_reforma_tributaria_documentos_itens_schema`: aplica `005_add_reforma_tributaria_documentos_itens.sql`.
-- `ensure_reforma_tributaria_creditos_debitos_memoria_schema`: aplica `006_add_reforma_tributaria_creditos_debitos_memoria.sql`.
-
-Essas chamadas ajudam em desenvolvimento e em bancos legados, mas nao substituem migrations versionadas em producao.
+Use `alembic -c API/app/alembic.ini upgrade head` antes de iniciar API, workers ou jobs.
 
 ## Tabelas por origem de criacao
 
@@ -92,18 +84,9 @@ Scripts auxiliares:
 
 ### Criadas no startup
 
-Com `ENABLE_STARTUP_SCHEMA_ENSURE=true`, o startup executa DDL idempotente em `db_schema_service.py`:
+Nenhuma. O caminho operacional e Alembic.
 
-- altera `public.empresas` para garantir `tem_sped`;
-- cria `public.ncm_catalogo`;
-- cria `public.ncm_tributacao`;
-- cria `public.municipios_catalogo`;
-- cria indices funcionais de analise fiscal;
-- reaplica as estruturas das migrations `004`, `005` e `006`.
-
-Fragilidade: se habilitado em ambiente persistente, o startup pode alterar schema sem um registro formal de migration aplicada.
-
-### Validadas ou criadas por service
+### Validadas por service
 
 - `notas_xml_importados`: criada pela migration inicial Alembic; `XMLImportacaoService` apenas valida se a tabela e as colunas esperadas existem antes do uso.
 - `sped_importados`: criada pela migration inicial Alembic; `SpedImportacaoService` apenas valida se a tabela e as colunas esperadas existem antes do uso.
@@ -114,14 +97,14 @@ Fragilidade: se habilitado em ambiente persistente, o startup pode alterar schem
 - `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`: criadas pela migration inicial Alembic; `SpedImportacaoService` valida tabelas, colunas e constraints antes de processar importacoes.
 - `public.sped_kpis_fiscal`: `SpedConsultaService` apenas valida se a tabela e as colunas esperadas existem antes de listar KPIs.
 
-Fragilidade restante: o fallback opcional de startup ainda pode criar estruturas auxiliares quando `ENABLE_STARTUP_SCHEMA_ENSURE=true`. As tabelas de staging, jobs, autenticacao, IBPT e analiticas SPED ja dependem de Alembic e falham cedo se as migrations nao tiverem sido aplicadas.
+As tabelas de staging, jobs, autenticacao, IBPT e analiticas SPED dependem de Alembic e falham cedo se as migrations nao tiverem sido aplicadas.
 
 ## Checklist de banco pronto
 
 - PostgreSQL acessivel pela API.
 - Banco principal criado e com tabelas base de NFe/XML.
 - Banco SPED criado quando houver empresas `tem_sped=true`.
-- `public.empresas` existe antes do startup tentar adicionar `tem_sped`.
+- `public.empresas` existe com `tem_sped`.
 - Migrations `001` a `007` avaliadas e aplicadas na ordem adequada.
 - Tabelas de staging (`notas_xml_importados`, `sped_importados`), controle de jobs (`processing_jobs`) e colunas de seguranca de login criadas por Alembic.
 - Tabelas da Reforma Tributaria existentes: `tributos`, `apuracao_tributaria`, `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`, `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`.
@@ -131,7 +114,6 @@ Fragilidade restante: o fallback opcional de startup ainda pode criar estruturas
 ## Riscos atuais
 
 - Scripts SQL legados nao possuem tabela propria de controle de aplicacao; Alembic deve ser o caminho principal para novas mudancas.
-- Parte do schema pode ser criada automaticamente no startup quando o fallback estiver habilitado, dificultando auditoria de quando uma mudanca entrou.
 - Scripts SQL estao distribuídos em varios diretorios.
 - Reaplicar scripts historicos sem revisao pode conflitar com estruturas ja ajustadas pelo codigo.
 - Ambientes podem divergir silenciosamente se uma migration manual for esquecida.

@@ -152,6 +152,22 @@ def test_company_profile_service_does_not_mutate_database_schema():
         assert fragment not in company_profile_service
 
 
+def test_ibpt_sync_service_does_not_mutate_database_schema():
+    ibpt_sync_service = (
+        APP_DIR / "services" / "NCM" / "ibpt_sync_service.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden_fragments = [
+        "ensure_ncm_ibpt_tables",
+        "CREATE TABLE IF NOT EXISTS public.ncm_catalogo",
+        "CREATE TABLE IF NOT EXISTS public.ncm_tributacao",
+        "CREATE INDEX IF NOT EXISTS idx_ncm_tributacao",
+    ]
+
+    for fragment in forbidden_fragments:
+        assert fragment not in ibpt_sync_service
+
+
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 

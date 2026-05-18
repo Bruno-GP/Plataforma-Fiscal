@@ -25,6 +25,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 - `API/SQL/migrations/007_add_sped_processing_columns.sql`
 - `API/app/services/db_schema_service.py`
 - `API/app/services/company_profile_service.py`
+- `API/app/services/NCM/ibpt_sync_service.py`
 - `API/app/services/nfe/auth/login_service.py`
 - `API/app/services/nfe/xml_importacao_service.py`
 - `API/app/services/sped/sped_importacao_service.py`
@@ -58,6 +59,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 - As colunas de seguranca de `public.login` (`tentativas_falhas`, `bloqueado_ate`, `ultimo_login_em`) estao na revision Alembic `20260515_0004`.
 - Services de importacao XML/SPED validam as tabelas de staging antes do uso, mas nao criam/alteram essas tabelas em runtime.
 - `CompanyProfileService` valida `public.empresas.tem_sped` antes do uso, mas nao cria/altera `public.empresas` em runtime.
+- `IBPTSyncService` valida `ncm_catalogo` e `ncm_tributacao` antes da sincronizacao, mas nao cria/altera essas tabelas em runtime.
 - `JobsRepository` valida `processing_jobs` antes do uso, mas nao cria/altera essa tabela em runtime.
 - `LoginService` valida as colunas de autenticacao antes do uso, mas nao cria/altera `public.login` em runtime.
 - Parte dos services ainda possui DDL defensivo para estruturas analiticas SPED. A meta e remover esses fallbacks apos validar ambientes existentes.

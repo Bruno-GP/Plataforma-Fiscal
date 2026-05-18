@@ -53,10 +53,6 @@ def unauthenticated_client():
 @pytest.fixture(autouse=True)
 def disable_schema_ensure_in_unit_tests(monkeypatch):
     monkeypatch.setattr(
-        "app.services.company_profile_service.ensure_empresas_tem_sped_column",
-        lambda: None,
-    )
-    monkeypatch.setattr(
         "app.services.db_schema_service.ensure_empresas_tem_sped_column",
         lambda: None,
     )

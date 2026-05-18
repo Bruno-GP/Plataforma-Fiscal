@@ -283,11 +283,12 @@ Implementacao atual:
 - Catalogo NCM e arquivos IBPT: `API/app/services/NCM/`
 - Services da Reforma Tributaria: `API/app/services/reforma_tributaria/`
 - Guia operacional: `API/docs/ibpt-cron.md`
-- Script manual de sincronizacao: `API/scripts/sync_ibpt.py`
+- Carga de dados de referencia: `API/docs/reference-seeds.md`
+- Scripts operacionais: `API/scripts/bootstrap_referencias.py` e `API/scripts/sync_ibpt.py`
 
 ## Banco de dados
 
-- O ambiente Docker executa Alembic antes de subir API e workers.
+- O ambiente Docker executa Alembic e depois `reference-seed` antes de subir API e workers.
 - A estrutura SQL esta distribuida entre `app/file/sql/`, `app/models/`, `alembic/` e `SQL/`.
 - Ha suporte para separacao entre base NFe e base SPED.
 - No startup, a aplicacao nao executa DDL. `ENABLE_STARTUP_SCHEMA_ENSURE=true` foi descontinuado e falha cedo orientando aplicar Alembic.

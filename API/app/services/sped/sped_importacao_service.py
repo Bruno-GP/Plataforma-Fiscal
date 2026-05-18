@@ -120,14 +120,6 @@ class SpedImportacaoService:
       "atualizado_em",
     },
   }
-  _required_analytic_constraints = {
-    "sped_empresas_pkey",
-    "sped_participantes_empresa_cnpj_codigo_key",
-    "sped_produtos_empresa_cnpj_codigo_key",
-    "sped_kpis_fiscal_cnpj_emitente_periodo_ano_periodo_mes_key",
-    "sped_apuracao_icms_empresa_cnpj_periodo_ano_periodo_mes_key",
-  }
-
   def __init__(self):
     self.config = carregar_config_postgres_sped()
     self._cache_municipios: dict[str, str | None] = {}
@@ -883,6 +875,17 @@ class SpedImportacaoService:
       )
       existing_constraints = {str(row[0]) for row in cur.fetchall()}
 
+      cur.execute(
+        """
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = ANY(%s)
+        """,
+        (list(self._required_analytic_columns_by_table),),
+      )
+      existing_unique_guards = existing_constraints | {str(row[0]) for row in cur.fetchall()}
+
     missing_parts = []
     for table_name, required_columns in self._required_analytic_columns_by_table.items():
       missing_columns = sorted(required_columns - existing_columns[table_name])
@@ -895,11 +898,22 @@ class SpedImportacaoService:
         f"Colunas ausentes em public: {'; '.join(missing_parts)}."
       )
 
-    missing_constraints = sorted(self._required_analytic_constraints - existing_constraints)
-    if missing_constraints:
+    required_unique_groups = [
+      {"sped_empresas_pkey"},
+      {"sped_participantes_empresa_cnpj_codigo_key", "ux_participantes_empresa_codigo"},
+      {"sped_produtos_empresa_cnpj_codigo_key", "ux_produtos_empresa_codigo"},
+      {"sped_kpis_fiscal_cnpj_emitente_periodo_ano_periodo_mes_key", "ux_sped_kpis_fiscal_periodo"},
+      {"sped_apuracao_icms_empresa_cnpj_periodo_ano_periodo_mes_key", "ux_sped_apuracao_icms_periodo"},
+    ]
+    missing_unique_guards = [
+      " ou ".join(sorted(group))
+      for group in required_unique_groups
+      if not group & existing_unique_guards
+    ]
+    if missing_unique_guards:
       raise RuntimeError(
-        "Schema analitico SPED sem constraints esperadas. Execute as migrations Alembic. "
-        f"Constraints ausentes em public: {', '.join(missing_constraints)}."
+        "Schema analitico SPED sem unicidade esperada. Execute as migrations Alembic. "
+        f"Constraints/indices ausentes em public: {', '.join(missing_unique_guards)}."
       )
 
   def _normalizar_cnpj(self, cnpj: str | None) -> str | None:

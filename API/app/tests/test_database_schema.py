@@ -52,6 +52,12 @@ def test_alembic_revisions_and_sql_migrations_cover_expected_database_objects():
         "CREATE TABLE IF NOT EXISTS notas_xml_importados",
         "CREATE TABLE IF NOT EXISTS sped_importados",
         "CREATE TABLE IF NOT EXISTS processing_jobs",
+        "ALTER TABLE IF EXISTS sped_documentos_fiscais",
+        "ADD COLUMN IF NOT EXISTS origem_importacao_id",
+        "ALTER TABLE IF EXISTS sped_documento_itens",
+        "ADD COLUMN IF NOT EXISTS valor_pis",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_participantes_empresa_codigo",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_sped_kpis_fiscal_periodo",
         "CONSTRAINT ck_processing_jobs_status",
     ]:
         assert expected in initial_schema

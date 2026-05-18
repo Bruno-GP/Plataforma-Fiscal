@@ -305,11 +305,56 @@ def upgrade() -> None:
                 CHECK (status IN ('PENDING', 'QUEUED', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELED'))
         );
 
+        ALTER TABLE IF EXISTS empresas
+            ADD COLUMN IF NOT EXISTS tem_sped BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE IF EXISTS sped_participantes
+            ADD COLUMN IF NOT EXISTS municipio_nome VARCHAR(120),
+            ADD COLUMN IF NOT EXISTS uf CHAR(2);
+
+        ALTER TABLE IF EXISTS sped_documentos_fiscais
+            ADD COLUMN IF NOT EXISTS origem_importacao_id BIGINT;
+
+        ALTER TABLE IF EXISTS sped_documento_itens
+            ADD COLUMN IF NOT EXISTS cst_icms VARCHAR(3),
+            ADD COLUMN IF NOT EXISTS valor_bc_icms NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS aliquota_icms NUMERIC(9,4) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS valor_icms NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS valor_bc_ipi NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS aliquota_ipi NUMERIC(9,4) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS valor_ipi NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS valor_pis NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS valor_cofins NUMERIC(15,2) DEFAULT 0;
+
+        ALTER TABLE IF EXISTS sped_kpis_fiscal
+            ADD COLUMN IF NOT EXISTS ipi_valor NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS pis_valor NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS cofins_valor NUMERIC(15,2) DEFAULT 0;
+
+        ALTER TABLE IF EXISTS sped_apuracao_icms
+            ADD COLUMN IF NOT EXISTS total_debitos NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS ajustes_debitos NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS total_creditos NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS ajustes_creditos NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS saldo_apurado NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS valor_icms_recolher NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS saldo_credor_transportar NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS debitos_especiais NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+
         CREATE INDEX IF NOT EXISTS idx_notas_processamentos_empresa ON notas_processamentos (empresa_id);
         CREATE INDEX IF NOT EXISTS idx_notas_emitente_data ON notas (emitente_cnpj, data_emissao);
         CREATE INDEX IF NOT EXISTS idx_notas_itens_nota ON notas_itens (nota_id);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_notas_kpis_periodo ON notas_kpis (emitente_cnpj, periodo_ano, periodo_mes);
         CREATE INDEX IF NOT EXISTS idx_notas_xml_importados_cnpj ON notas_xml_importados (cnpj_emitente);
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_participantes_empresa_codigo
+            ON sped_participantes (empresa_cnpj, codigo);
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_produtos_empresa_codigo
+            ON sped_produtos (empresa_cnpj, codigo);
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_sped_kpis_fiscal_periodo
+            ON sped_kpis_fiscal (cnpj_emitente, periodo_ano, periodo_mes);
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_sped_apuracao_icms_periodo
+            ON sped_apuracao_icms (empresa_cnpj, periodo_ano, periodo_mes);
         CREATE INDEX IF NOT EXISTS idx_sped_documentos_empresa_tipo_data_normalizado
             ON sped_documentos_fiscais ((regexp_replace(COALESCE(empresa_cnpj, ''), '\\D', '', 'g')), tipo_operacao, data_emissao);
         CREATE INDEX IF NOT EXISTS idx_sped_documento_itens_documento ON sped_documento_itens (documento_id);

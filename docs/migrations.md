@@ -28,6 +28,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 - `API/app/services/NCM/ibpt_sync_service.py`
 - `API/app/services/nfe/auth/login_service.py`
 - `API/app/services/nfe/xml_importacao_service.py`
+- `API/app/services/sped/sped_consulta_service.py`
 - `API/app/services/sped/sped_importacao_service.py`
 
 ## Ordem recomendada
@@ -62,6 +63,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 - `IBPTSyncService` valida `ncm_catalogo` e `ncm_tributacao` antes da sincronizacao, mas nao cria/altera essas tabelas em runtime.
 - `JobsRepository` valida `processing_jobs` antes do uso, mas nao cria/altera essa tabela em runtime.
 - `LoginService` valida as colunas de autenticacao antes do uso, mas nao cria/altera `public.login` em runtime.
+- `SpedConsultaService` valida `sped_kpis_fiscal` antes de listar KPIs, mas nao cria/altera essa tabela em runtime.
 - Parte dos services ainda possui DDL defensivo para estruturas analiticas SPED. A meta e remover esses fallbacks apos validar ambientes existentes.
 - Downgrade destrutivo amplo nao foi automatizado por seguranca; rollback de producao deve usar backup/restore planejado.
 

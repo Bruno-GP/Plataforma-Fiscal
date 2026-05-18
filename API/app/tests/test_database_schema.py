@@ -168,6 +168,22 @@ def test_ibpt_sync_service_does_not_mutate_database_schema():
         assert fragment not in ibpt_sync_service
 
 
+def test_sped_consulta_service_does_not_mutate_database_schema():
+    sped_consulta_service = (
+        APP_DIR / "services" / "sped" / "sped_consulta_service.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden_fragments = [
+        "CREATE TABLE IF NOT EXISTS public.sped_kpis_fiscal",
+        "ALTER TABLE public.sped_kpis_fiscal",
+        "ADD COLUMN IF NOT EXISTS pis_valor",
+        "ADD COLUMN IF NOT EXISTS cofins_valor",
+    ]
+
+    for fragment in forbidden_fragments:
+        assert fragment not in sped_consulta_service
+
+
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 

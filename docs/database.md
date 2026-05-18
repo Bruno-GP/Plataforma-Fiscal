@@ -37,6 +37,7 @@ Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estru
 | `API/app/services/nfe/auth/login_service.py` | Valida as colunas usadas por autenticacao e lockout antes do uso; a evolucao do schema fica em Alembic. |
 | `API/app/services/nfe/xml_importacao_service.py` | Valida `notas_xml_importados` antes do uso; a tabela e criada por Alembic. |
 | `API/app/services/sped/sped_importacao_service.py` | Valida `sped_importados` antes do uso; tabelas analiticas SPED ainda possuem DDL defensivo sob demanda. |
+| `API/app/services/sped/sped_consulta_service.py` | Valida `sped_kpis_fiscal` antes de listar KPIs SPED. |
 
 ## Estruturas criadas no startup
 
@@ -111,7 +112,7 @@ Fragilidade: se habilitado em ambiente persistente, o startup pode alterar schem
 - `ncm_catalogo` e `ncm_tributacao`: criadas pela migration inicial Alembic; `IBPTSyncService` apenas valida as tabelas antes de sincronizar dados.
 - `login`: criada pela migration inicial Alembic e complementada pela migration `20260515_0004`; `LoginService` apenas valida as colunas de autenticacao antes do uso.
 - `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`: criadas por `SpedImportacaoService._garantir_tabelas_analiticas`.
-- `public.sped_kpis_fiscal`: tambem pode ser criada/ajustada por `SpedConsultaService`.
+- `public.sped_kpis_fiscal`: `SpedConsultaService` apenas valida se a tabela e as colunas esperadas existem antes de listar KPIs.
 
 Fragilidade restante: tabelas analiticas SPED ainda podem ser criadas/ajustadas em runtime. As tabelas de staging de importacao ja dependem de Alembic e falham cedo se as migrations nao tiverem sido aplicadas.
 

@@ -129,6 +129,26 @@ def _calcular_percentual_imposto(imposto_valor: Decimal, faturamento: Decimal) -
   return (imposto_valor / faturamento) * Decimal("100") if faturamento else Decimal("0.00")
 
 class SpedConsultaService:
+  _required_kpis_columns = {
+    "id",
+    "processamento_id",
+    "cnpj_emitente",
+    "periodo_ano",
+    "periodo_mes",
+    "total_documentos",
+    "total_itens",
+    "valor_total_saidas",
+    "valor_total_produtos",
+    "valor_total_frete",
+    "valor_total_descontos",
+    "icms_valor_debitado",
+    "ipi_valor",
+    "pis_valor",
+    "cofins_valor",
+    "ticket_medio",
+    "data_calculo",
+  }
+
   def __init__(self) -> None:
     config = carregar_config_postgres_sped()
     self.conn_params = {
@@ -186,7 +206,7 @@ class SpedConsultaService:
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
-          self._garantir_tabela_kpis(cur)
+          self._validar_tabela_kpis(cur)
           cur.execute(sql_kpis, params)
           rows = cur.fetchall()
 
@@ -224,33 +244,22 @@ class SpedConsultaService:
 
           return resultados
 
-  def _garantir_tabela_kpis(self, cur) -> None:
+  def _validar_tabela_kpis(self, cur) -> None:
     cur.execute(
       """
-      CREATE TABLE IF NOT EXISTS public.sped_kpis_fiscal (
-        id SERIAL PRIMARY KEY,
-        processamento_id INTEGER NOT NULL,
-        cnpj_emitente VARCHAR(14) NOT NULL,
-        periodo_ano INTEGER NOT NULL,
-        periodo_mes INTEGER NOT NULL,
-        total_documentos INTEGER DEFAULT 0,
-        total_itens INTEGER DEFAULT 0,
-        valor_total_saidas NUMERIC(15,2) DEFAULT 0,
-        valor_total_produtos NUMERIC(15,2) DEFAULT 0,
-        valor_total_frete NUMERIC(15,2) DEFAULT 0,
-        valor_total_descontos NUMERIC(15,2) DEFAULT 0,
-        icms_valor_debitado NUMERIC(15,2) DEFAULT 0,
-        ipi_valor NUMERIC(15,2) DEFAULT 0,
-        pis_valor NUMERIC(15,2) DEFAULT 0,
-        cofins_valor NUMERIC(15,2) DEFAULT 0,
-        ticket_medio NUMERIC(15,2) DEFAULT 0,
-        data_calculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (cnpj_emitente, periodo_ano, periodo_mes)
-      )
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'sped_kpis_fiscal'
       """
     )
-    cur.execute("ALTER TABLE public.sped_kpis_fiscal ADD COLUMN IF NOT EXISTS pis_valor NUMERIC(15,2) DEFAULT 0")
-    cur.execute("ALTER TABLE public.sped_kpis_fiscal ADD COLUMN IF NOT EXISTS cofins_valor NUMERIC(15,2) DEFAULT 0")
+    existing_columns = {str(row[0]) for row in cur.fetchall()}
+    missing_columns = sorted(self._required_kpis_columns - existing_columns)
+    if missing_columns:
+      raise RuntimeError(
+        "Tabela public.sped_kpis_fiscal incompleta ou ausente. Execute as migrations Alembic. "
+        f"Colunas ausentes: {', '.join(missing_columns)}."
+      )
 
   def _top_clientes(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:
     return self._safe_top_query(

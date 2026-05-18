@@ -184,6 +184,31 @@ def test_sped_consulta_service_does_not_mutate_database_schema():
         assert fragment not in sped_consulta_service
 
 
+def test_sped_importacao_service_does_not_mutate_analytic_database_schema():
+    sped_importacao_service = (
+        APP_DIR / "services" / "sped" / "sped_importacao_service.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden_fragments = [
+        "CREATE TABLE IF NOT EXISTS sped_empresas",
+        "CREATE TABLE IF NOT EXISTS sped_participantes",
+        "CREATE TABLE IF NOT EXISTS sped_produtos",
+        "CREATE TABLE IF NOT EXISTS sped_documentos_fiscais",
+        "CREATE TABLE IF NOT EXISTS sped_documento_itens",
+        "CREATE TABLE IF NOT EXISTS sped_kpis_fiscal",
+        "CREATE TABLE IF NOT EXISTS sped_apuracao_icms",
+        "ALTER TABLE sped_participantes",
+        "ALTER TABLE sped_documentos_fiscais",
+        "ALTER TABLE sped_documento_itens",
+        "ALTER TABLE sped_kpis_fiscal",
+        "ALTER TABLE sped_apuracao_icms",
+        "CREATE INDEX IF NOT EXISTS ix_sped_documentos_origem_importacao",
+    ]
+
+    for fragment in forbidden_fragments:
+        assert fragment not in sped_importacao_service
+
+
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 

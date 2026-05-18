@@ -36,7 +36,7 @@ Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estru
 | `API/app/services/NCM/ibpt_sync_service.py` | Valida `ncm_catalogo` e `ncm_tributacao` antes de sincronizar dados IBPT. |
 | `API/app/services/nfe/auth/login_service.py` | Valida as colunas usadas por autenticacao e lockout antes do uso; a evolucao do schema fica em Alembic. |
 | `API/app/services/nfe/xml_importacao_service.py` | Valida `notas_xml_importados` antes do uso; a tabela e criada por Alembic. |
-| `API/app/services/sped/sped_importacao_service.py` | Valida `sped_importados` antes do uso; tabelas analiticas SPED ainda possuem DDL defensivo sob demanda. |
+| `API/app/services/sped/sped_importacao_service.py` | Valida `sped_importados` e o schema analitico SPED antes do uso; as tabelas sao criadas por Alembic. |
 | `API/app/services/sped/sped_consulta_service.py` | Valida `sped_kpis_fiscal` antes de listar KPIs SPED. |
 
 ## Estruturas criadas no startup
@@ -111,10 +111,10 @@ Fragilidade: se habilitado em ambiente persistente, o startup pode alterar schem
 - `empresas.tem_sped`: criada pela migration inicial Alembic; `CompanyProfileService` apenas valida se a coluna existe antes do uso.
 - `ncm_catalogo` e `ncm_tributacao`: criadas pela migration inicial Alembic; `IBPTSyncService` apenas valida as tabelas antes de sincronizar dados.
 - `login`: criada pela migration inicial Alembic e complementada pela migration `20260515_0004`; `LoginService` apenas valida as colunas de autenticacao antes do uso.
-- `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`: criadas por `SpedImportacaoService._garantir_tabelas_analiticas`.
+- `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`: criadas pela migration inicial Alembic; `SpedImportacaoService` valida tabelas, colunas e constraints antes de processar importacoes.
 - `public.sped_kpis_fiscal`: `SpedConsultaService` apenas valida se a tabela e as colunas esperadas existem antes de listar KPIs.
 
-Fragilidade restante: tabelas analiticas SPED ainda podem ser criadas/ajustadas em runtime. As tabelas de staging de importacao ja dependem de Alembic e falham cedo se as migrations nao tiverem sido aplicadas.
+Fragilidade restante: o fallback opcional de startup ainda pode criar estruturas auxiliares quando `ENABLE_STARTUP_SCHEMA_ENSURE=true`. As tabelas de staging, jobs, autenticacao, IBPT e analiticas SPED ja dependem de Alembic e falham cedo se as migrations nao tiverem sido aplicadas.
 
 ## Checklist de banco pronto
 

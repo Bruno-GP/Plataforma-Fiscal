@@ -1,14 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { 
-  fetchNfeDashboardCompras,
-  fetchNfeDashboardVendas,
-  fetchNfeAnaliseVendas
-} from '@/services/nfe';
-import { 
-  fetchSpedDashboardCompras,
-  fetchSpedDashboardVendas,
-  fetchSpedAnaliseVendas
-} from '@/services/sped';
+import { createFiscalSourceApi } from '@/services/fiscalSource';
+import { createFiscalPeriod, createFiscalQueryKey } from '@/utils/fiscalPeriod';
 
 interface DashboardQueryParams {
   emitenteCnpj?: string;
@@ -26,26 +18,24 @@ export function useDashboardComprasQueries({
   temSped,
   year,
   selectedMonth,
-  monthNumber,
   hasEmitenteCnpj
 }: DashboardQueryParams) {
+  const fiscalApi = createFiscalSourceApi(temSped);
+  const fiscalPeriod = createFiscalPeriod(year, selectedMonth);
+
   const dashboardQuery = useQuery({
-    queryKey: ['dashboard-compras', emitenteCnpj, temSped, year, selectedMonth],
-    queryFn: () =>
-      temSped
-        ? fetchSpedDashboardCompras({
-            emitente_cnpj: emitenteCnpj,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          })
-        : fetchNfeDashboardCompras({
-            emitente_cnpj: emitenteCnpj,
-            email: email,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          }),
+    queryKey: createFiscalQueryKey({
+      scope: 'dashboard-compras',
+      emitenteCnpj,
+      sourceKey: fiscalApi.sourceKey,
+      period: fiscalPeriod,
+    }),
+    queryFn: () => fiscalApi.dashboardCompras({
+      emitente_cnpj: emitenteCnpj,
+      email,
+      ...fiscalPeriod.params,
+      limite: 5,
+    }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
@@ -59,47 +49,41 @@ export function useDashboardVendasQueries({
   temSped,
   year,
   selectedMonth,
-  monthNumber,
   hasEmitenteCnpj
 }: DashboardQueryParams) {
+  const fiscalApi = createFiscalSourceApi(temSped);
+  const fiscalPeriod = createFiscalPeriod(year, selectedMonth);
+
   const dashboardQuery = useQuery({
-    queryKey: ['dashboard-vendas', emitenteCnpj, temSped, year, selectedMonth],
-    queryFn: () =>
-      temSped
-        ? fetchSpedDashboardVendas({
-            emitente_cnpj: emitenteCnpj,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          })
-        : fetchNfeDashboardVendas({
-            emitente_cnpj: emitenteCnpj,
-            email: email,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 5,
-          }),
+    queryKey: createFiscalQueryKey({
+      scope: 'dashboard-vendas',
+      emitenteCnpj,
+      sourceKey: fiscalApi.sourceKey,
+      period: fiscalPeriod,
+    }),
+    queryFn: () => fiscalApi.dashboardVendas({
+      emitente_cnpj: emitenteCnpj,
+      email,
+      ...fiscalPeriod.params,
+      limite: 5,
+    }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
   const mapQuery = useQuery({
-    queryKey: ['dashboard-vendas-mapa', emitenteCnpj, temSped, year, selectedMonth],
-    queryFn: () =>
-      temSped
-        ? fetchSpedAnaliseVendas({
-            emitente_cnpj: emitenteCnpj,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 500,
-          })
-        : fetchNfeAnaliseVendas({
-            emitente_cnpj: emitenteCnpj,
-            email: email,
-            periodo_ano: Number.isNaN(year) ? undefined : year,
-            periodo_mes: selectedMonth === 'all' ? undefined : monthNumber,
-            limite: 500,
-          }),
+    queryKey: createFiscalQueryKey({
+      scope: 'dashboard-vendas-mapa',
+      emitenteCnpj,
+      sourceKey: fiscalApi.sourceKey,
+      period: fiscalPeriod,
+    }),
+    queryFn: () => fiscalApi.analiseVendas({
+      emitente_cnpj: emitenteCnpj,
+      email,
+      ...fiscalPeriod.params,
+      limite: 500,
+    }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });

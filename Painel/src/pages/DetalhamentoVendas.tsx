@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useFiscalYears } from '@/hooks/useFiscalYears';
 import {
   DetalhamentoFiscalHierarquiaMode,
 } from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
@@ -30,21 +31,22 @@ import {
 } from '@/pages/components/detalhamentoVendasHelpers';
 import { Header } from '@/pages/components/Header';
 import { StatCard } from '@/pages/components/StatCard';
-import { monthLabels } from '@/services/utils';
 
 import { usePeriodFilter } from '@/hooks/usePeriodFilter';
 import { useDashboardVendasQueries } from '@/hooks/useDashboardQueries';
-import { fetchNfeKpis, fetchNfeNotasDetalhadas } from '@/services/nfe';
+import { fetchNfeNotasDetalhadas } from '@/services/nfe';
 import {
   fetchSpedAnaliseFiscalHierarquica,
-  fetchSpedKpis,
   type AnaliseFiscalHierarquicaResponse as SpedFiscalHierarchyResponse,
 } from '@/services/sped';
+import { createFiscalSourceApi } from '@/services/fiscalSource';
+import { createFiscalPeriod, createFiscalQueryKey } from '@/utils/fiscalPeriod';
 import {
   calculateChange,
   formatCurrency,
   formatPercent,
   hasValidEmitenteCnpj,
+  monthLabels,
   parseDecimal,
 } from '@/utils/formatters';
 
@@ -111,17 +113,23 @@ export default function DetalhamentoVendas() {
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
   const isSped = Boolean(user?.tem_sped);
+  const fiscalApi = createFiscalSourceApi(user?.tem_sped);
 
   const { selectedMonth, setSelectedMonth, selectedYear, setSelectedYear, monthNumber, year: yearNumber } = usePeriodFilter();
+  const fiscalPeriod = useMemo(
+    () => createFiscalPeriod(selectedYear, selectedMonth),
+    [selectedMonth, selectedYear],
+  );
   const [viewMode, setViewMode] = useState<'grafica' | 'detalhada'>('grafica');
   const [detailMode, setDetailMode] = useState<DetailMode>(isSped ? 'regiao' : 'nota');
 
   const yearsQuery = useQuery({
-    queryKey: ['detalhamento-vendas-anos', emitenteCnpj, isSped],
-    queryFn: () =>
-      isSped
-        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
-        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+    queryKey: createFiscalQueryKey({
+      scope: 'detalhamento-vendas-anos',
+      emitenteCnpj,
+      sourceKey: fiscalApi.sourceKey,
+    }),
+    queryFn: () => fiscalApi.kpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
@@ -147,8 +155,13 @@ export default function DetalhamentoVendas() {
   }, [detailMode, isSped]);
 
   const notasInfiniteQuery = useInfiniteQuery({
-    queryKey: ['detalhamento-vendas-notas', emitenteCnpj, selectedYear, selectedMonth],
-    queryFn: ({ pageParam = 0 }) => fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, tipo_operacao: 'vendas', limite: NOTAS_PAGE_SIZE, offset: pageParam }),
+    queryKey: createFiscalQueryKey({
+      scope: 'detalhamento-vendas-notas',
+      emitenteCnpj,
+      sourceKey: 'nfe',
+      period: fiscalPeriod,
+    }),
+    queryFn: ({ pageParam = 0 }) => fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, ...fiscalPeriod.params, tipo_operacao: 'vendas', limite: NOTAS_PAGE_SIZE, offset: pageParam }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       const loadedCount = allPages.reduce((total, page) => total + page.notas.length, 0);
@@ -159,13 +172,18 @@ export default function DetalhamentoVendas() {
   });
 
   const notasRegionQuery = useQuery({
-    queryKey: ['detalhamento-vendas-notas-regiao', emitenteCnpj, selectedYear, selectedMonth],
-    queryFn: () => fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, tipo_operacao: 'vendas', limite: 500, offset: 0 }).then(async (firstPage) => {
+    queryKey: createFiscalQueryKey({
+      scope: 'detalhamento-vendas-notas-regiao',
+      emitenteCnpj,
+      sourceKey: 'nfe',
+      period: fiscalPeriod,
+    }),
+    queryFn: () => fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, ...fiscalPeriod.params, tipo_operacao: 'vendas', limite: 500, offset: 0 }).then(async (firstPage) => {
       if (firstPage.total <= firstPage.notas.length) return firstPage;
       let offset = firstPage.notas.length;
       const notas = [...firstPage.notas];
       while (offset < firstPage.total) {
-        const nextPage = await fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, tipo_operacao: 'vendas', limite: 500, offset });
+        const nextPage = await fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, ...fiscalPeriod.params, tipo_operacao: 'vendas', limite: 500, offset });
         notas.push(...nextPage.notas);
         offset += nextPage.notas.length;
         if (nextPage.notas.length === 0) break;
@@ -177,24 +195,22 @@ export default function DetalhamentoVendas() {
   });
 
   const spedHierarchyQuery = useQuery<SpedFiscalHierarchyResponse>({
-    queryKey: ['detalhamento-vendas-sped-hierarquia', emitenteCnpj, selectedYear, selectedMonth],
-    queryFn: () => fetchSpedAnaliseFiscalHierarquica({ emitente_cnpj: emitenteCnpj, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, limite: 5000 }),
+    queryKey: createFiscalQueryKey({
+      scope: 'detalhamento-vendas-sped-hierarquia',
+      emitenteCnpj,
+      sourceKey: 'sped',
+      period: fiscalPeriod,
+    }),
+    queryFn: () => fetchSpedAnaliseFiscalHierarquica({ emitente_cnpj: emitenteCnpj, ...fiscalPeriod.params, limite: 5000 }),
     enabled: hasEmitenteCnpj && isSped && viewMode === 'detalhada',
     staleTime: 5 * 60 * 1000,
   });
 
-  const availableYears = useMemo(() => {
-    const years = new Set<number>();
-    for (const item of yearsQuery.data?.resultados ?? []) {
-      if (item.periodo_ano) years.add(item.periodo_ano);
-    }
-    return years.size ? [...years].sort((a, b) => b - a) : [new Date().getFullYear()];
-  }, [yearsQuery.data]);
-
-  useEffect(() => {
-    if (!availableYears.length) return;
-    if (!availableYears.includes(Number.parseInt(selectedYear, 10))) setSelectedYear(String(availableYears[0]));
-  }, [availableYears, selectedYear, setSelectedYear]);
+  const { availableYears } = useFiscalYears({
+    entries: yearsQuery.data?.resultados ?? [],
+    selectedYear,
+    setSelectedYear,
+  });
 
   const currentData = dashboardQuery.data?.resumo_atual;
   const previousData = dashboardQuery.data?.resumo_anterior;

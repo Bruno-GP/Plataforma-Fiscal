@@ -21,6 +21,7 @@ import {
   type ImportacaoXmlArquivoResultado,
   type ImportacaoXmlPendenciasResponse,
 } from '@/services/nfe';
+import { invalidateFiscalProcessingCache } from '@/utils/fiscalCache';
 
 type OperationStage = 'idle' | 'importing' | 'processing' | 'completed' | 'cancelled' | 'error';
 
@@ -264,15 +265,7 @@ export default function ImportacaoXML() {
         backendMessage: lastFinishedJob?.mensagem ?? undefined,
       });
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas-mapa'] }),
-        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-apuracao'] }),
-        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-memoria'] }),
-        queryClient.invalidateQueries({ queryKey: ['nfe-kpis'] }),
-        queryClient.invalidateQueries({ queryKey: ['nfe-kpis-years'] }),
-        queryClient.invalidateQueries({ queryKey: ['nfe-kpis-clientes'] }),
-      ]);
+      await invalidateFiscalProcessingCache(queryClient, 'nfe');
 
       await carregarPendenciasXml();
       navigate('/analise-vendas');

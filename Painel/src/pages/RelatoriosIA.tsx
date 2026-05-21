@@ -9,25 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  fetchNfeAnaliseClientes,
-  fetchNfeAnaliseCompras,
-  fetchNfeAnaliseVendas,
-  fetchNfeKpis,
-  parseDecimal,
-} from '@/services/nfe';
-import {
-  fetchSpedAnaliseClientes,
-  fetchSpedAnaliseCompras,
-  fetchSpedAnaliseVendas,
-  fetchSpedKpis,
-} from '@/services/sped';
-import { formatCurrency, monthLabels } from '@/services/utils';
-
-const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? '').replace(/\D/g, '');
-  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
-};
+import { useFiscalYears } from '@/hooks/useFiscalYears';
+import { parseDecimal } from '@/services/nfe';
+import { createFiscalSourceApi } from '@/services/fiscalSource';
+import { createFiscalPeriod, createFiscalQueryKey, getFiscalPeriodDescription } from '@/utils/fiscalPeriod';
+import { formatCurrency, hasValidEmitenteCnpj, monthLabels } from '@/utils/formatters';
 
 const monthOptions = [
   { value: 'all', label: 'Ano completo' },
@@ -72,43 +58,29 @@ export default function RelatoriosIA() {
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const usaSped = Boolean(user?.tem_sped);
-  const fonteDados = usaSped ? 'SPED Fiscal' : 'XML / NFe';
+  const fiscalApi = createFiscalSourceApi(user?.tem_sped);
+  const fiscalPeriod = useMemo(
+    () => createFiscalPeriod(selectedYear, selectedMonth),
+    [selectedMonth, selectedYear],
+  );
+  const fonteDados = fiscalApi.sourceLabel;
 
   const yearsQuery = useQuery({
-    queryKey: ['kpis-years', usaSped ? 'sped' : 'xml', emitenteCnpj],
-    queryFn: () =>
-      usaSped
-        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
-        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+    queryKey: createFiscalQueryKey({
+      scope: 'kpis-years',
+      emitenteCnpj,
+      sourceKey: fiscalApi.sourceKey,
+    }),
+    queryFn: () => fiscalApi.kpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
-  const yearOptions = useMemo(() => {
-    const resultados = yearsQuery.data?.resultados ?? [];
-    const uniqueYears = new Set<number>();
-
-    resultados.forEach((item) => {
-      if (item.periodo_ano) {
-        uniqueYears.add(item.periodo_ano);
-      }
-    });
-
-    return [...uniqueYears].sort((a, b) => b - a);
-  }, [yearsQuery.data]);
-
-  useEffect(() => {
-    if (!yearOptions.length) {
-      return;
-    }
-
-    if (!yearOptions.includes(Number.parseInt(selectedYear, 10))) {
-      setSelectedYear(String(yearOptions[0]));
-    }
-  }, [selectedYear, yearOptions]);
-
-  const availableYears = yearOptions.length ? yearOptions : [new Date().getFullYear()];
+  const { availableYears } = useFiscalYears({
+    entries: yearsQuery.data?.resultados ?? [],
+    selectedYear,
+    setSelectedYear,
+  });
 
   const formatoSelecionado = useMemo(
     () => reportFormatOptions.find((option) => option.value === formatoRelatorio) ?? reportFormatOptions[0],
@@ -120,14 +92,10 @@ export default function RelatoriosIA() {
     [tipoRelatorio],
   );
 
-  const periodoDescricao = useMemo(() => {
-    if (selectedMonth === 'all') {
-      return `Ano ${selectedYear}`;
-    }
-
-    const mes = Number.parseInt(selectedMonth, 10);
-    return `${monthLabels[mes - 1]} de ${selectedYear}`;
-  }, [selectedMonth, selectedYear]);
+  const periodoDescricao = useMemo(
+    () => getFiscalPeriodDescription(fiscalPeriod, monthLabels),
+    [fiscalPeriod],
+  );
 
   const reportTitle = useMemo(
     () => `Relatório ${formatoSelecionado.label.toLowerCase()} (${periodoDescricao})`,
@@ -286,31 +254,22 @@ export default function RelatoriosIA() {
     setErrorMessage(null);
 
     try {
-      const yearNumber = Number.parseInt(selectedYear, 10);
-      const monthNumber = Number.parseInt(selectedMonth, 10);
-
       const payload = {
         emitente_cnpj: emitenteCnpj,
-        periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-        periodo_mes: selectedMonth === 'all' || Number.isNaN(monthNumber) ? undefined : monthNumber,
+        ...fiscalPeriod.params,
         limite: 5,
         gerar_relatorio_ia: true,
         formato_relatorio: formatoRelatorio,
         layout: tipoRelatorio === 'vendas' ? layoutRelatorio : undefined,
       };
 
+      const requestOptions = { signal: abortController.signal };
       const response =
         tipoRelatorio === 'compras'
-          ? usaSped
-            ? await fetchSpedAnaliseCompras(payload, { signal: abortController.signal })
-            : await fetchNfeAnaliseCompras(payload, { signal: abortController.signal })
+          ? await fiscalApi.analiseCompras(payload, requestOptions)
           : tipoRelatorio === 'clientes'
-            ? usaSped
-              ? await fetchSpedAnaliseClientes(payload, { signal: abortController.signal })
-              : await fetchNfeAnaliseClientes(payload, { signal: abortController.signal })
-            : usaSped
-              ? await fetchSpedAnaliseVendas(payload, { signal: abortController.signal })
-              : await fetchNfeAnaliseVendas(payload, { signal: abortController.signal });
+            ? await fiscalApi.analiseClientes(payload, requestOptions)
+            : await fiscalApi.analiseVendas(payload, requestOptions);
 
       const total = 'total_comprado' in response ? response.total_comprado : response.total_vendido;
 

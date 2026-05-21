@@ -1,4 +1,4 @@
-import { monthLabels } from '@/services/utils';
+export const monthLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -23,12 +23,39 @@ export const resolvePeriodDescription = (year: number, month: string) => {
   return `${monthLabels[monthNumber - 1]} de ${year}`;
 };
 
-export const parseDecimal = (val: any): number => {
-  if (typeof val === 'number') return val;
-  if (typeof val === 'string') {
-    return parseFloat(val) || 0;
+export const parseDecimal = (value: unknown): number => {
+  if (typeof value === 'number') {
+    return value;
   }
-  return 0;
+
+  if (typeof value !== 'string') {
+    return 0;
+  }
+
+  const cleaned = value.replace(/[^\d,.-]/g, '');
+  if (!cleaned) {
+    return 0;
+  }
+
+  const hasComma = cleaned.includes(',');
+  const hasDot = cleaned.includes('.');
+
+  if (hasComma && hasDot) {
+    const lastComma = cleaned.lastIndexOf(',');
+    const lastDot = cleaned.lastIndexOf('.');
+
+    if (lastComma > lastDot) {
+      return Number(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
+    }
+
+    return Number(cleaned.replace(/,/g, '')) || 0;
+  }
+
+  if (hasComma) {
+    return Number(cleaned.replace(',', '.')) || 0;
+  }
+
+  return Number(cleaned) || 0;
 };
 
 export const calculateChange = (current: number | string, previous: number | string) => {

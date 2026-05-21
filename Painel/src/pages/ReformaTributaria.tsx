@@ -23,6 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFiscalYears } from '@/hooks/useFiscalYears';
 import { Header } from '@/pages/components/Header';
 import { StatCard } from '@/pages/components/StatCard';
 import { parseDecimal } from '@/services/fiscal';
@@ -35,12 +36,9 @@ import {
   type ApuracaoTributariaItem,
   type MemoriaCalculoTributariaItem,
 } from '@/services/reformaTributaria';
-import { formatCurrency, monthLabels } from '@/services/utils';
-
-const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? '').replace(/\D/g, '');
-  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
-};
+import { invalidateFiscalDashboardCache, invalidateReformaTributariaCache } from '@/utils/fiscalCache';
+import { createFiscalPeriod, createFiscalQueryKey } from '@/utils/fiscalPeriod';
+import { formatCurrency, hasValidEmitenteCnpj, monthLabels } from '@/utils/formatters';
 
 const formatPercent = (value: number | string | null | undefined) => {
   const parsed = parseDecimal(value);
@@ -64,10 +62,10 @@ export default function ReformaTributaria() {
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const monthNumber = Number.parseInt(selectedMonth, 10);
-  const yearNumber = Number.parseInt(selectedYear, 10);
-  const periodoAno = Number.isNaN(yearNumber) ? undefined : yearNumber;
-  const periodoMes = selectedMonth === 'all' ? undefined : monthNumber;
+  const fiscalPeriod = useMemo(
+    () => createFiscalPeriod(selectedYear, selectedMonth),
+    [selectedMonth, selectedYear],
+  );
   const tributoCodigo = selectedTributo === 'todos' ? undefined : selectedTributo;
   const origemBackfill = user?.tem_sped ? 'sped' : 'nfe';
 
@@ -78,11 +76,16 @@ export default function ReformaTributaria() {
   });
 
   const apuracaoQuery = useQuery({
-    queryKey: ['reforma-tributaria-apuracao', emitenteCnpj, periodoAno, periodoMes, tributoCodigo],
+    queryKey: createFiscalQueryKey({
+      scope: 'reforma-tributaria-apuracao',
+      emitenteCnpj,
+      sourceKey: origemBackfill,
+      period: fiscalPeriod,
+      extra: [tributoCodigo],
+    }),
     queryFn: ({ signal }) => fetchReformaApuracao({
       emitente_cnpj: emitenteCnpj,
-      periodo_ano: periodoAno,
-      periodo_mes: periodoMes,
+      ...fiscalPeriod.params,
       tributo_codigo: tributoCodigo,
     }, { signal }),
     enabled: hasEmitenteCnpj,
@@ -90,11 +93,16 @@ export default function ReformaTributaria() {
   });
 
   const memoriaQuery = useQuery({
-    queryKey: ['reforma-tributaria-memoria', emitenteCnpj, periodoAno, periodoMes, tributoCodigo],
+    queryKey: createFiscalQueryKey({
+      scope: 'reforma-tributaria-memoria',
+      emitenteCnpj,
+      sourceKey: origemBackfill,
+      period: fiscalPeriod,
+      extra: [tributoCodigo],
+    }),
     queryFn: ({ signal }) => fetchReformaMemoriaCalculo({
       emitente_cnpj: emitenteCnpj,
-      periodo_ano: periodoAno,
-      periodo_mes: periodoMes,
+      ...fiscalPeriod.params,
       tributo_codigo: tributoCodigo,
       limite: 80,
     }, { signal }),
@@ -110,23 +118,18 @@ export default function ReformaTributaria() {
       }),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-apuracao'] }),
-        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-memoria'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas-mapa'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-compras'] }),
+        invalidateReformaTributariaCache(queryClient),
+        invalidateFiscalDashboardCache(queryClient),
       ]);
     },
   });
 
-  const availableYears = useMemo(() => {
-    const years = new Set<number>();
-    for (const item of apuracaoQuery.data?.resultados ?? []) {
-      if (item.periodo_ano) years.add(item.periodo_ano);
-    }
-    years.add(new Date().getFullYear());
-    return [...years].sort((a, b) => b - a);
-  }, [apuracaoQuery.data]);
+  const { availableYears } = useFiscalYears({
+    entries: apuracaoQuery.data?.resultados ?? [],
+    selectedYear,
+    setSelectedYear,
+    includeCurrentYear: true,
+  });
 
   useEffect(() => {
     setSearchTerm('');

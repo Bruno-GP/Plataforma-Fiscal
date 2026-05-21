@@ -19,6 +19,7 @@ import {
   type ImportacaoSpedArquivoResultado,
   type ImportacaoSpedPendenciasResponse,
 } from '@/services/sped';
+import { invalidateFiscalProcessingCache } from '@/utils/fiscalCache';
 
 const MAX_SPED_FILES = 500;
 
@@ -139,14 +140,7 @@ export default function ImportacaoSPED() {
         },
       });
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas-mapa'] }),
-        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-apuracao'] }),
-        queryClient.invalidateQueries({ queryKey: ['reforma-tributaria-memoria'] }),
-        queryClient.invalidateQueries({ queryKey: ['kpis'] }),
-        queryClient.invalidateQueries({ queryKey: ['kpis-years'] }),
-      ]);
+      await invalidateFiscalProcessingCache(queryClient, 'sped');
 
       await carregarPendencias();
 

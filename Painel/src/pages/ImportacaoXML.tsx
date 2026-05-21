@@ -9,7 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { waitForJob, type ProcessingJobResponse } from '@/services/jobs';
+import { useImportFileQueue, type ImportFileItem } from '@/hooks/useImportFileQueue';
+import { useProcessingJobFlow } from '@/hooks/useProcessingJobFlow';
+import type { ProcessingJobResponse } from '@/services/jobs';
 import { saveFiscalOperation } from '@/services/operations';
 import {
   consultarPendenciasXmlImportados,
@@ -20,11 +22,6 @@ import {
   type ImportacaoXmlPendenciasResponse,
 } from '@/services/nfe';
 
-interface XmlFileItem {
-  id: string;
-  file: File;
-}
-
 type OperationStage = 'idle' | 'importing' | 'processing' | 'completed' | 'cancelled' | 'error';
 
 const MAX_XML_FILES = 10000;
@@ -33,26 +30,14 @@ const IMPORT_PROGRESS_MAX = 55;
 const PROCESS_PROGRESS_START = 55;
 const PROCESS_PROGRESS_END = 100;
 
-const formatFileSize = (size: number): string => {
-  if (size >= 1024 * 1024) {
-    return `${(size / (1024 * 1024)).toFixed(2)} MB`;
-  }
-
-  if (size >= 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
-
-  return `${size} B`;
-};
-
 const formatElapsedTime = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}m ${remainingSeconds}s`;
 };
 
-const chunkFiles = (files: XmlFileItem[], size: number): XmlFileItem[][] => {
-  const chunks: XmlFileItem[][] = [];
+const chunkFiles = (files: ImportFileItem[], size: number): ImportFileItem[][] => {
+  const chunks: ImportFileItem[][] = [];
 
   for (let index = 0; index < files.length; index += size) {
     chunks.push(files.slice(index, index + size));
@@ -67,7 +52,23 @@ export default function ImportacaoXML() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const [selectedFiles, setSelectedFiles] = useState<XmlFileItem[]>([]);
+  const {
+    selectedFiles,
+    addFiles,
+    clearFiles,
+    totalSize,
+    formatFileSize,
+  } = useImportFileQueue({
+    maxFiles: MAX_XML_FILES,
+    acceptedExtensions: ['.xml'],
+    onLimitExceeded: () => {
+      toast({
+        title: 'Limite atingido',
+        description: 'Você pode importar no maximo 10000 XMLs por vez.',
+        variant: 'destructive',
+      });
+    },
+  });
   const [isImporting, setIsImporting] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
   const [results, setResults] = useState<ImportacaoXmlArquivoResultado[]>([]);
@@ -76,17 +77,17 @@ export default function ImportacaoXML() {
   const [operationStage, setOperationStage] = useState<OperationStage>('idle');
   const [operationProgress, setOperationProgress] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [currentJob, setCurrentJob] = useState<ProcessingJobResponse | null>(null);
-  const [currentJobMessage, setCurrentJobMessage] = useState<string | null>(null);
+  const {
+    currentJob,
+    jobMessage: currentJobMessage,
+    setJobMessage: setCurrentJobMessage,
+    resetJobState,
+    trackCreatedJob,
+  } = useProcessingJobFlow();
 
   const operationAbortRef = useRef<AbortController | null>(null);
   const elapsedIntervalRef = useRef<number | null>(null);
   const processingAnimationRef = useRef<number | null>(null);
-
-  const totalSize = useMemo(
-    () => selectedFiles.reduce((acc, item) => acc + item.file.size, 0),
-    [selectedFiles],
-  );
 
   const progressLabel = useMemo(() => {
     const progressText = `${Math.round(operationProgress)}% - ${formatElapsedTime(elapsedSeconds)}`;
@@ -166,52 +167,14 @@ export default function ImportacaoXML() {
     };
   }, []);
 
-  const addFiles = (files: FileList | null) => {
-    if (!files?.length) {
-      return;
-    }
-
-    const xmlFiles = Array.from(files).filter((file) => file.name.toLowerCase().endsWith('.xml'));
-
-    if (!xmlFiles.length) {
-      return;
-    }
-
-    setSelectedFiles((prev) => {
-      const existingNames = new Set(prev.map((item) => item.file.name));
-      const availableSlots = MAX_XML_FILES - prev.length;
-
-      const newItems = xmlFiles
-        .filter((file) => !existingNames.has(file.name))
-        .slice(0, Math.max(availableSlots, 0))
-        .map((file) => ({
-          id: `${file.name}-${file.lastModified}`,
-          file,
-        }));
-
-      const nextFiles = [...prev, ...newItems];
-
-      if (nextFiles.length >= MAX_XML_FILES && xmlFiles.length > newItems.length) {
-        toast({
-          title: 'Limite atingido',
-          description: 'Você pode importar no máximo 10000 XMLs por vez.',
-          variant: 'destructive',
-        });
-      }
-
-      return nextFiles;
-    });
-  };
-
   const clearList = () => {
-    setSelectedFiles([]);
+    clearFiles();
     setImportedCount(0);
     setResults([]);
     setOperationStage('idle');
     setOperationProgress(0);
     setElapsedSeconds(0);
-    setCurrentJob(null);
-    setCurrentJobMessage(null);
+    resetJobState();
   };
 
   const stopProcessingAnimation = () => {
@@ -274,17 +237,12 @@ export default function ImportacaoXML() {
           backendMessage: createdJob.message,
         });
 
-        const finishedJob = await waitForJob(createdJob.job_id, {
+        const finishedJob = await trackCreatedJob(createdJob, {
           signal: abortController.signal,
-          onUpdate: (job) => {
-            setCurrentJob(job);
-            setCurrentJobMessage(job.mensagem ?? `Status do processamento: ${job.status}`);
-          },
         });
 
         stopProcessingAnimation();
         setOperationProgress(Math.round(rangeEnd));
-        setCurrentJob(finishedJob);
         lastFinishedJob = finishedJob;
       }
 
@@ -349,8 +307,7 @@ export default function ImportacaoXML() {
     setElapsedSeconds(0);
     setOperationProgress(0);
     setOperationStage('importing');
-    setCurrentJob(null);
-    setCurrentJobMessage(null);
+    resetJobState();
 
     const importResults: ImportacaoXmlArquivoResultado[] = [];
     const batches = chunkFiles(selectedFiles, XML_IMPORT_BATCH_SIZE);
@@ -387,7 +344,7 @@ export default function ImportacaoXML() {
         cnpj: user.emitente_cnpj,
       });
 
-      setSelectedFiles([]);
+      clearFiles();
       await carregarPendenciasXml();
 
       const cnpjsParaProcessar = listarCnpjsXmlImportados(importResults);

@@ -15,17 +15,16 @@ import {
   DetalhamentoFiscalHierarquiaMode,
 } from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
 import { DetalhamentoVendasDashboardMode } from '@/pages/components/DetalhamentoVendasDashboardMode';
-import {
-  DetalhamentoVendasFiscalMode,
-  type FiscalNcmSummary,
-} from '@/pages/components/DetalhamentoVendasFiscalMode';
+import { DetalhamentoVendasFiscalMode } from '@/pages/components/DetalhamentoVendasFiscalMode';
 import { DetalhamentoVendasModeSelector } from '@/pages/components/DetalhamentoVendasModeSelector';
 import { DetalhamentoVendasNotaMode } from '@/pages/components/DetalhamentoVendasNotaMode';
 import { DetalhamentoVendasRegiaoMode } from '@/pages/components/DetalhamentoVendasRegiaoMode';
 import {
+  buildSpedFiscalNcmHierarchy,
   buildSpedFiscalHierarchyState,
   buildRegionHierarchy,
   type DetailMode,
+  filterSpedHierarchyRows,
   filterNotasBySearch,
   filterRegionHierarchyBySearch,
 } from '@/pages/components/detalhamentoVendasHelpers';
@@ -51,62 +50,6 @@ import {
 } from '@/utils/formatters';
 
 const NOTAS_PAGE_SIZE = 100;
-type SpedHierarchyRow = SpedFiscalHierarchyResponse['hierarquia'][number];
-
-const normalizeSearchValue = (value: string | number | null | undefined) =>
-  String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-
-const filterSpedHierarchyRows = (rows: SpedHierarchyRow[], search: string) => {
-  const query = normalizeSearchValue(search);
-  if (!query) return rows;
-
-  return rows.filter((row) =>
-    [row.estado, row.cidade, row.uf, row.ncm, row.descricao_ncm, row.produto_codigo, row.produto, row.faturamento, row.imposto_valor]
-      .some((value) => normalizeSearchValue(value).includes(query)),
-  );
-};
-
-const buildSpedFiscalHierarchy = (rows: SpedHierarchyRow[]): FiscalNcmSummary[] => {
-  const ncmMap = new Map<string, FiscalNcmSummary>();
-  rows.forEach((row) => {
-    if (row.sem_item_detalhado) {
-      return;
-    }
-
-    const ncm = String(row.ncm ?? '00000000').trim() || '00000000';
-    const description = String(row.descricao_ncm ?? 'NCM sem descricao').trim() || 'NCM sem descricao';
-    const productCode = String(row.produto_codigo ?? 'SEM-CODIGO').trim() || 'SEM-CODIGO';
-    const productDescription = String(row.produto ?? 'Produto sem descricao').trim() || 'Produto sem descricao';
-    const total = parseDecimal(row.faturamento ?? 0);
-    const taxValue = parseDecimal(row.imposto_valor ?? 0);
-
-    let ncmEntry = ncmMap.get(ncm);
-    if (!ncmEntry) {
-      ncmEntry = { key: `fiscal-ncm-${ncm}`, ncm, description, total: 0, taxValue: 0, taxPercent: 0, products: [] };
-      ncmMap.set(ncm, ncmEntry);
-    }
-    ncmEntry.total += total;
-    ncmEntry.taxValue += taxValue;
-
-    let productEntry = ncmEntry.products.find((item) => item.code === productCode);
-    if (!productEntry) {
-      productEntry = { key: `fiscal-product-${ncm}-${productCode}`, code: productCode, description: productDescription, totalValue: 0, taxValue: 0, taxPercent: 0 };
-      ncmEntry.products.push(productEntry);
-    }
-
-    productEntry.totalValue += total;
-    productEntry.taxValue += taxValue;
-  });
-
-  return [...ncmMap.values()].map((ncmEntry) => ({
-    ...ncmEntry,
-    taxPercent: ncmEntry.total ? (ncmEntry.taxValue / ncmEntry.total) * 100 : 0,
-    products: ncmEntry.products.map((productEntry) => ({
-      ...productEntry,
-      taxPercent: productEntry.totalValue ? (productEntry.taxValue / productEntry.totalValue) * 100 : 0,
-    })).sort((a, b) => b.totalValue - a.totalValue),
-  })).sort((a, b) => b.total - a.total);
-};
 
 export default function DetalhamentoVendas() {
   const { user } = useAuth();
@@ -243,7 +186,7 @@ export default function DetalhamentoVendas() {
   const spedRows = useMemo(() => spedHierarchyQuery.data?.hierarquia ?? [], [spedHierarchyQuery.data?.hierarquia]);
   const filteredSpedRows = useMemo(() => filterSpedHierarchyRows(spedRows, searchTerm), [spedRows, searchTerm]);
   const spedRegionHierarchy = useMemo(() => buildSpedFiscalHierarchyState(filteredSpedRows), [filteredSpedRows]);
-  const spedFiscalHierarchy = useMemo(() => buildSpedFiscalHierarchy(filteredSpedRows), [filteredSpedRows]);
+  const spedFiscalHierarchy = useMemo(() => buildSpedFiscalNcmHierarchy(filteredSpedRows), [filteredSpedRows]);
 
   const noteAccordionValues = useMemo(() => filteredNotas.map((nota) => `${nota.numero_nf}-${nota.data_emissao}`), [filteredNotas]);
   const noteClientAccordionValues = useMemo(() => filteredNotas.map((nota) => `cliente-${nota.numero_nf}-${nota.data_emissao}`), [filteredNotas]);

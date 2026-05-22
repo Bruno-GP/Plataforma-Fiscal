@@ -26,6 +26,19 @@ from app.services.fiscal_analysis import (
   obter_total_tributos_reforma_documentos,
   obter_regiao_por_uf,
 )
+from app.services.fiscal_hierarchy import (
+  calcular_percentual_imposto,
+  construir_filtros_hierarquia_nfe,
+  construir_item_cidade,
+  construir_item_estado,
+  construir_item_hierarquia_completa,
+  construir_item_ncm,
+  construir_item_produto,
+  construir_resposta_hierarquia_fiscal,
+  deve_montar_hierarquia_legado,
+  normalizar_paginacao_hierarquia,
+  resolver_nivel_hierarquia,
+)
 from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("NFeConsultaService")
@@ -1332,46 +1345,23 @@ class NFeConsultaService:
     if not cnpj_filtrado:
       raise ValueError("Informe um emitente_cnpj valido.")
 
-    filtros = [
-      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
-      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
-    ]
-    parametros: list[object] = [cnpj_filtrado]
-
-    if periodo_ano is not None:
-      filtros.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
-      parametros.append(periodo_ano)
-
-    if periodo_mes is not None:
-      filtros.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
-      parametros.append(periodo_mes)
-
-    if estado and estado.strip():
-      filtros.append("UPPER(COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), 'Sem UF')) = %s")
-      parametros.append(estado.strip().upper())
-
-    if cidade and cidade.strip():
-      filtros.append("UPPER(COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nao identificada')) = %s")
-      parametros.append(cidade.strip().upper())
-
-    if ncm and ncm.strip():
-      filtros.append("regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g') = %s")
-      parametros.append("".join(ch for ch in ncm if ch.isdigit()))
-
-    if produto_codigo and produto_codigo.strip():
-      filtros.append("COALESCE(NULLIF(TRIM(i.produto_codigo), ''), 'SEM-CODIGO') = %s")
-      parametros.append(produto_codigo.strip())
-
-    where_clause = " AND ".join(filtros)
-    limite_consulta = limite if limite is not None else 100000
-    offset_consulta = max(offset, 0)
-    modo_legado_hierarquia_completa = (
-      nivel_atual is None
-      and not estado
-      and not cidade
-      and not ncm
-      and not produto_codigo
-      and offset_consulta == 0
+    where_clause, parametros = construir_filtros_hierarquia_nfe(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      estado,
+      cidade,
+      ncm,
+      produto_codigo,
+    )
+    limite_consulta, offset_consulta = normalizar_paginacao_hierarquia(limite, offset)
+    modo_legado_hierarquia_completa = deve_montar_hierarquia_legado(
+      nivel_atual,
+      estado,
+      cidade,
+      ncm,
+      produto_codigo,
+      offset_consulta,
     )
 
     base_cte = f"""
@@ -1476,11 +1466,7 @@ class NFeConsultaService:
 
         total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
         total_impostos = resumo_row[1] if resumo_row else Decimal("0.00")
-        percentual_total = (
-          (total_impostos / total_faturamento) * Decimal("100")
-          if total_faturamento
-          else Decimal("0.00")
-        )
+        percentual_total = calcular_percentual_imposto(total_impostos, total_faturamento)
         hierarquia: list[dict] = []
         if modo_legado_hierarquia_completa:
           cur.execute(
@@ -1502,21 +1488,19 @@ class NFeConsultaService:
             (limite_consulta,),
           )
           hierarquia = [
-            {
-              "estado": uf_item,
-              "cidade": cidade_item,
-              "uf": uf_item,
-              "ncm": ncm_item,
-              "descricao_ncm": descricao_item,
-              "produto_codigo": codigo_item,
-              "produto": produto_item,
-              "faturamento": faturamento or Decimal("0.00"),
-              "imposto_valor": imposto_valor or Decimal("0.00"),
-              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
-            }
+            construir_item_hierarquia_completa(
+              uf_item,
+              cidade_item,
+              ncm_item,
+              descricao_item,
+              codigo_item,
+              produto_item,
+              faturamento,
+              imposto_valor,
+            )
             for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor in cur.fetchall()
           ]
-        nivel_resolvido = nivel_atual or ("produto" if ncm else "ncm" if cidade else "cidade" if estado else "estado")
+        nivel_resolvido = resolver_nivel_hierarquia(nivel_atual, estado, cidade, ncm)
         itens_nivel_atual: list[dict] = []
         por_estado: list[dict] = []
         por_cidade: list[dict] = []
@@ -1542,12 +1526,7 @@ class NFeConsultaService:
             (limite_consulta, offset_consulta),
           )
           por_estado = [
-            {
-              "estado": uf_item,
-              "faturamento": faturamento or Decimal("0.00"),
-              "imposto_valor": imposto_valor or Decimal("0.00"),
-              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
-            }
+            construir_item_estado(uf_item, faturamento, imposto_valor)
             for uf_item, faturamento, imposto_valor in cur.fetchall()
           ]
           itens_nivel_atual = por_estado
@@ -1570,13 +1549,7 @@ class NFeConsultaService:
             (limite_consulta, offset_consulta),
           )
           por_cidade = [
-            {
-              "cidade": cidade_item,
-              "uf": uf_item,
-              "faturamento": faturamento or Decimal("0.00"),
-              "imposto_valor": imposto_valor or Decimal("0.00"),
-              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
-            }
+            construir_item_cidade(cidade_item, uf_item, faturamento, imposto_valor)
             for cidade_item, uf_item, faturamento, imposto_valor in cur.fetchall()
           ]
           itens_nivel_atual = por_cidade
@@ -1600,14 +1573,13 @@ class NFeConsultaService:
             (limite_consulta, offset_consulta),
           )
           por_ncm = [
-            {
-              "ncm": ncm_item,
-              "descricao": descricao_item,
-              "quantidade_produtos": quantidade_produtos or 0,
-              "faturamento": faturamento or Decimal("0.00"),
-              "imposto_valor": imposto_valor or Decimal("0.00"),
-              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
-            }
+            construir_item_ncm(
+              ncm_item,
+              descricao_item,
+              quantidade_produtos,
+              faturamento,
+              imposto_valor,
+            )
             for ncm_item, descricao_item, quantidade_produtos, faturamento, imposto_valor in cur.fetchall()
           ]
           itens_nivel_atual = por_ncm
@@ -1630,49 +1602,40 @@ class NFeConsultaService:
             (limite_consulta, offset_consulta),
           )
           por_produto = [
-            {
-              "produto_codigo": codigo_item,
-              "produto": produto_item,
-              "faturamento": faturamento or Decimal("0.00"),
-              "imposto_valor": imposto_valor or Decimal("0.00"),
-              "imposto_percentual": (((imposto_valor or Decimal("0.00")) / (faturamento or Decimal("0.00"))) * Decimal("100")) if faturamento else Decimal("0.00"),
-            }
+            construir_item_produto(codigo_item, produto_item, faturamento, imposto_valor)
             for codigo_item, produto_item, faturamento, imposto_valor in cur.fetchall()
           ]
           itens_nivel_atual = por_produto
 
-    return {
-      "emitente_cnpj": cnpj_filtrado,
-      "periodo_ano": periodo_ano,
-      "periodo_mes": periodo_mes,
-      "nivel_atual": nivel_resolvido,
-      "offset": offset_consulta,
-      "limite": limite_consulta,
-      "total_registros_nivel": total_registros_nivel,
-      "possui_mais_registros": (offset_consulta + len(itens_nivel_atual)) < total_registros_nivel,
-      "total_faturamento": total_faturamento or Decimal("0.00"),
-      "total_impostos": total_impostos or Decimal("0.00"),
-      "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-        self.conn_params,
-        "nfe",
-        cnpj_filtrado,
-        periodo_ano,
-        periodo_mes,
-        "saida",
-      ),
-      "percentual_impostos_sobre_faturamento": percentual_total,
-      "quantidade_documentos": resumo_row[2] if resumo_row else 0,
-      "total_estados": resumo_row[3] if resumo_row else 0,
-      "total_cidades": resumo_row[4] if resumo_row else 0,
-      "total_ncms": resumo_row[5] if resumo_row else 0,
-      "total_produtos": resumo_row[6] if resumo_row else 0,
-      "hierarquia": hierarquia,
-      "itens_nivel_atual": itens_nivel_atual,
-      "por_estado": por_estado,
-      "por_cidade": por_cidade,
-      "por_ncm": por_ncm,
-      "por_produto": por_produto,
-    }
+    total_tributos_reforma = obter_total_tributos_reforma_documentos(
+      self.conn_params,
+      "nfe",
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      "saida",
+    )
+
+    return construir_resposta_hierarquia_fiscal(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      nivel_resolvido,
+      offset_consulta,
+      limite_consulta,
+      total_registros_nivel,
+      total_faturamento,
+      total_impostos,
+      total_tributos_reforma,
+      percentual_total,
+      resumo_row,
+      hierarquia,
+      itens_nivel_atual,
+      por_estado,
+      por_cidade,
+      por_ncm,
+      por_produto,
+    )
 
   def analisar_clientes(
     self,

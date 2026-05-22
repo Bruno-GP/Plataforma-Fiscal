@@ -7,6 +7,8 @@ from app.repositories.jobs_repository import JobsRepository
 
 
 class JobService:
+    """Cria jobs persistidos e despacha tasks Celery para filas fiscais específicas."""
+
     def __init__(self, repository: JobsRepository | None = None) -> None:
         self.repository = repository or JobsRepository()
 
@@ -16,6 +18,8 @@ class JobService:
         return bool(getattr(conf, "task_always_eager", False))
 
     def _response_after_dispatch(self, *, job: dict[str, Any], task: Any, payload: dict[str, Any], queue: str) -> JobCreateResponse:
+        """Normaliza a resposta quando Celery roda em modo eager nos testes ou em fila real."""
+
         task.apply_async(
             args=[str(job["id"]), payload],
             queue=queue,

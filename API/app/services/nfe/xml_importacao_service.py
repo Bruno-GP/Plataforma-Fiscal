@@ -18,6 +18,8 @@ class XMLImportacaoResultado:
 
 
 class XMLImportacaoService:
+  """Gerencia o staging de XMLs antes do processamento assíncrono de KPIs."""
+
   def __init__(self):
     self.config = carregar_config_postgres()
 
@@ -26,6 +28,8 @@ class XMLImportacaoService:
     arquivos: Iterable[tuple[str, bytes]],
     cnpj_empresa_origem: str,
   ) -> list[XMLImportacaoResultado]:
+    """Valida CNPJ/autorização e persiste XMLs únicos por hash no staging."""
+
     resultados: list[XMLImportacaoResultado] = []
     
     cnpj_empresa_origem_normalizado = self._normalizar_cnpj(cnpj_empresa_origem)
@@ -168,6 +172,8 @@ class XMLImportacaoService:
       )
 
   def listar_xmls_importados_nao_processados(self, cnpj_emitente: str) -> list[tuple[int, str, bytes]]:
+    """Retorna XMLs pendentes em ordem estável para o worker processar em lote."""
+
     cnpj_emitente_normalizado = self._normalizar_cnpj(cnpj_emitente)
     if not cnpj_emitente_normalizado:
       return []
@@ -197,6 +203,8 @@ class XMLImportacaoService:
       return [(row[0], row[1], bytes(row[2]) if row[2] else b"") for row in rows]
 
   def marcar_como_processados(self, ids_xml: list[int]) -> None:
+    """Marca XMLs como processados somente após o job concluir a consolidação com sucesso."""
+
     if not ids_xml:
       return
 

@@ -12,6 +12,8 @@ logger = logging.getLogger("ReformaTributariaSyncService")
 
 
 class ReformaTributariaSyncService:
+  """Sincroniza dados fiscais consolidados para as tabelas da Reforma Tributária."""
+
   TRIBUTOS_LEGADOS_NFE = ("ICMS", "IPI", "PIS", "COFINS")
   TRIBUTOS_LEGADOS_SPED = ("ICMS",)
   TRIBUTOS_REFORMA = ("CBS", "IBS", "IBS_UF", "IBS_MUN", "IS")
@@ -21,6 +23,8 @@ class ReformaTributariaSyncService:
     conn: psycopg.Connection,
     emitente_cnpj: str,
   ) -> list[dict]:
+    """Reprocessa todos os períodos NFe encontrados para recompor apuração/memória."""
+
     cnpj = normalizar_cnpj(emitente_cnpj)
     if not cnpj:
       # logger.warning("Backfill NFe ignorado: CNPJ invalido recebido=%s", emitente_cnpj)
@@ -85,6 +89,8 @@ class ReformaTributariaSyncService:
     conn: psycopg.Connection,
     emitente_cnpj: str,
   ) -> list[dict]:
+    """Atualiza apuração e memória SPED para todos os períodos já carregados."""
+
     cnpj = normalizar_cnpj(emitente_cnpj)
     if not cnpj:
       # logger.warning("Backfill SPED ignorado: CNPJ invalido recebido=%s", emitente_cnpj)
@@ -141,6 +147,8 @@ class ReformaTributariaSyncService:
     periodo_ano: int,
     periodo_mes: int,
   ) -> dict:
+    """Recria a visão tributária NFe do período a partir de notas, itens e XMLs importados."""
+
     cnpj = normalizar_cnpj(emitente_cnpj)
     if not cnpj:
       # logger.warning("Sincronizacao NFe ignorada: CNPJ invalido recebido=%s", emitente_cnpj)
@@ -193,6 +201,8 @@ class ReformaTributariaSyncService:
     conn: psycopg.Connection,
     emitente_cnpj: str,
   ) -> None:
+    """Replica a apuração ICMS do SPED para a tabela unificada da Reforma Tributária."""
+
     cnpj = normalizar_cnpj(emitente_cnpj)
     if not cnpj:
       return
@@ -246,6 +256,8 @@ class ReformaTributariaSyncService:
     conn: psycopg.Connection,
     emitente_cnpj: str,
   ) -> None:
+    """Recria documentos, itens, créditos/débitos e memória ICMS derivados do SPED."""
+
     cnpj = normalizar_cnpj(emitente_cnpj)
     if not cnpj:
       return
@@ -951,6 +963,8 @@ class ReformaTributariaSyncService:
     periodo_ano: int,
     periodo_mes: int,
   ) -> dict:
+    """Extrai CBS/IBS/IS diretamente dos XMLs importados para complementar a base NFe."""
+
     resumo = {
       "xmls_importados_lidos": 0,
       "xmls_periodo": 0,

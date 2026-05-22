@@ -19,6 +19,8 @@ logger = logging.getLogger("workers.nfe")
     retry_kwargs={"max_retries": 3},
 )
 def processar_nfe_importados_task(job_id: str, payload: dict) -> dict:
+    """Processa XMLs pendentes e só finaliza o staging depois da consolidação fiscal."""
+
     repository = JobsRepository()
     started_at = time.perf_counter()
     cnpj_emitente = str(payload.get("cnpj_emitente") or "")

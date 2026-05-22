@@ -10,6 +10,9 @@ const CITY_UF_SUFFIX_REGEX = /^(.*?)(?:\s*[-/]\s*|\s*\(\s*)([A-Z]{2})(?:\s*\))?$
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+/**
+ * Normaliza rótulos que podem chegar como cidade separada de UF ou como "Cidade - UF".
+ */
 export const normalizeCityUfLabel = (cityValue?: string | null, ufValue?: string | null) => {
   const fallbackCity = 'Cidade nao identificada';
   const cityRaw = normalizeWhitespace(String(cityValue ?? ''));
@@ -28,6 +31,9 @@ export const normalizeCityUfLabel = (cityValue?: string | null, ufValue?: string
   return resolvedUf ? `${resolvedCity} - ${resolvedUf}` : resolvedCity;
 };
 
+/**
+ * Monta itens padronizados para cards de ranking a partir de respostas NFe/SPED heterogêneas.
+ */
 export function buildRankingItems(
   baseItems: BaseRankingItem[],
   titleField: string,

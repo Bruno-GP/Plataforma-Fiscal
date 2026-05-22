@@ -23,6 +23,8 @@ class SpedImportacaoResultado:
   mensagem: str
 
 class SpedImportacaoService:
+  """Gerencia staging, carga analítica e pós-processamento de arquivos SPED importados."""
+
   _required_analytic_columns_by_table = {
     "sped_empresas": {
       "cnpj",
@@ -130,6 +132,8 @@ class SpedImportacaoService:
     arquivos: Iterable[tuple[str, bytes]],
     cnpj_empresa_origem: str,
   ) -> list[SpedImportacaoResultado]:
+    """Valida o registro 0000, evita duplicidade por hash e guarda o TXT no staging."""
+
     resultados: list[SpedImportacaoResultado] = []
     cnpj_normalizado = self._normalizar_cnpj(cnpj_empresa_origem)
 
@@ -251,6 +255,8 @@ class SpedImportacaoService:
     return int(row[0] or 0) if row else 0
 
   def processar_importados(self, cnpj_emitente: str) -> tuple[Counter, int, list[int]]:
+    """Carrega arquivos pendentes nas tabelas analíticas e retorna IDs aptos a finalização."""
+
     cnpj_normalizado = self._normalizar_cnpj(cnpj_emitente)
     if not cnpj_normalizado:
       raise ValueError("CNPJ emitente inválido.")
@@ -304,6 +310,8 @@ class SpedImportacaoService:
     return contador_registros, total_linhas, ids_processados
 
   def marcar_como_processados(self, ids_sped: list[int]) -> None:
+    """Marca SPEDs como processados após a carga analítica e sincronização fiscal concluírem."""
+
     if not ids_sped:
       return
 

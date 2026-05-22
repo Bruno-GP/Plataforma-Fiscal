@@ -25,6 +25,10 @@ interface RunProcessingJobOptions {
 export const isJobAbortError = (error: unknown) =>
   error instanceof DOMException && error.name === 'AbortError';
 
+/**
+ * Encapsula criação, polling e cancelamento local de jobs assíncronos do backend.
+ * Cancelar aqui interrompe o acompanhamento da tela; um job já enfileirado pode continuar no backend.
+ */
 export function useProcessingJobFlow() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentJob, setCurrentJob] = useState<ProcessingJobResponse | null>(null);
@@ -48,6 +52,9 @@ export function useProcessingJobFlow() {
 
   const getCurrentJob = useCallback(() => currentJobRef.current, []);
 
+  /**
+   * Acompanha um job já criado sem criar outro, útil quando a tela precisa orquestrar etapas próprias.
+   */
   const trackCreatedJob = useCallback(
     async (
       createdJob: JobCreateResponse,

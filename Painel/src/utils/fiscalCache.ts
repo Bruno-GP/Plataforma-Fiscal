@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 type FiscalCacheSource = 'nfe' | 'sped';
 
+// Consultas que dependem dos dados consolidados após importação/processamento fiscal.
 const DASHBOARD_QUERY_KEYS = [
   ['dashboard-vendas'],
   ['dashboard-vendas-mapa'],
@@ -40,6 +41,9 @@ export const invalidateReformaTributariaCache = (queryClient: QueryClient) =>
 export const invalidateFiscalKpiCache = (queryClient: QueryClient, source: FiscalCacheSource) =>
   invalidateQueryKeys(queryClient, FISCAL_KPI_QUERY_KEYS[source]);
 
+/**
+ * Deve ser chamado após jobs fiscais concluídos para atualizar visões derivadas do mesmo dado base.
+ */
 export const invalidateFiscalProcessingCache = (queryClient: QueryClient, source: FiscalCacheSource) =>
   Promise.all([
     invalidateFiscalDashboardCache(queryClient),

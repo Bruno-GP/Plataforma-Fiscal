@@ -20,6 +20,8 @@ logger = logging.getLogger("workers.sped")
     retry_kwargs={"max_retries": 3},
 )
 def processar_sped_importados_task(job_id: str, payload: dict) -> dict:
+    """Processa SPEDs pendentes e mantém o job como fonte de progresso para o frontend."""
+
     repository = JobsRepository()
     started_at = time.perf_counter()
     cnpj_emitente = str(payload.get("cnpj_emitente") or "")

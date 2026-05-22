@@ -1,5 +1,6 @@
 export type XmlImportOperationStage = 'idle' | 'importing' | 'processing' | 'completed' | 'cancelled' | 'error';
 
+// A barra reserva os primeiros 55% para upload/staging e o restante para jobs assíncronos.
 export const XML_IMPORT_PROGRESS_MAX = 55;
 export const XML_PROCESS_PROGRESS_START = 55;
 export const XML_PROCESS_PROGRESS_END = 100;
@@ -20,6 +21,9 @@ export const chunkItems = <T>(items: T[], size: number): T[][] => {
   return chunks;
 };
 
+/**
+ * Distribui a etapa de processamento por CNPJ dentro da faixa visual pós-importação.
+ */
 export const getProcessingProgressRange = (
   index: number,
   totalItems: number,
@@ -36,6 +40,9 @@ export const getProcessingProgressRange = (
   };
 };
 
+/**
+ * Limita o progresso da importação à faixa reservada antes do processamento assíncrono.
+ */
 export const getImportProgress = (
   importedItems: number,
   totalItems: number,
@@ -48,6 +55,9 @@ export const getImportProgress = (
   return Math.round((importedItems / totalItems) * maxProgress);
 };
 
+/**
+ * Centraliza os textos da barra para manter a página livre de regras de estado visual.
+ */
 export const buildXmlImportProgressLabel = ({
   stage,
   progress,

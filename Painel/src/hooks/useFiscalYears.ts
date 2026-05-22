@@ -30,6 +30,9 @@ export const getLatestFiscalEntry = <T extends FiscalYearEntry>(entries: T[] = [
     return (b.periodo_mes ?? 0) - (a.periodo_mes ?? 0);
   })[0];
 
+/**
+ * Deriva anos disponíveis a partir dos períodos retornados pela API e mantém fallback determinístico.
+ */
 export const deriveFiscalYears = (
   entries: FiscalYearEntry[] = [],
   { includeCurrentYear = false, fallbackYear }: { includeCurrentYear?: boolean; fallbackYear?: number } = {},
@@ -53,6 +56,9 @@ export const deriveFiscalYears = (
 export const normalizeFiscalYears = (years?: number[], fallbackYear = new Date().getFullYear()) =>
   years?.length ? [...years].sort((a, b) => b - a) : [fallbackYear];
 
+/**
+ * Garante que o ano selecionado exista na lista derivada antes de páginas dispararem queries.
+ */
 export function useFiscalYears<T extends FiscalYearEntry>({
   entries = [],
   selectedYear,

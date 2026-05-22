@@ -30,6 +30,9 @@ export const getFiscalSourceKey = (temSped?: boolean) => getFiscalSource(temSped
 
 export const getFiscalSourceLabel = (temSped?: boolean) => (temSped ? 'SPED Fiscal' : 'XML / NFe');
 
+/**
+ * Expõe APIs equivalentes por fonte fiscal; as páginas escolhem NFe/SPED sem duplicar chamadas.
+ */
 export const createFiscalSourceApi = (temSped?: boolean) => {
   const isSped = getFiscalSource(temSped) === 'sped';
 

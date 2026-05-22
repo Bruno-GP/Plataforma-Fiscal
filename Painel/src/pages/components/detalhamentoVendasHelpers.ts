@@ -141,6 +141,9 @@ const normalizeSpedCityName = (city?: string | null, uf?: string | null) => {
   return cityLabel.replace(suffixPattern, '').trim() || cityLabel;
 };
 
+/**
+ * Agrupa SPED em UF > cidade > NCM > produto preservando linhas sintéticas sem item detalhado no total.
+ */
 export const buildSpedFiscalHierarchyState = <TRow extends SpedHierarchyRow>(rows: TRow[]): FiscalHierarchyState[] => {
   const stateMap = new Map<string, FiscalHierarchyState>();
   const cityMap = new Map<string, FiscalHierarchyCity>();
@@ -226,6 +229,9 @@ const normalizeSearchValue = (value: string | number | null | undefined) =>
     .toLowerCase()
     .trim();
 
+/**
+ * Aplica busca textual sobre os campos visíveis da hierarquia SPED sem recalcular valores fiscais.
+ */
 export const filterSpedHierarchyRows = <TRow extends SpedHierarchyRow>(rows: TRow[], search: string) => {
   const query = normalizeSearchValue(search);
   if (!query) return rows;
@@ -248,6 +254,9 @@ export const filterSpedHierarchyRows = <TRow extends SpedHierarchyRow>(rows: TRo
   );
 };
 
+/**
+ * Monta a visão fiscal por NCM ignorando linhas SPED agregadas que não possuem produto detalhado.
+ */
 export const buildSpedFiscalNcmHierarchy = <TRow extends SpedHierarchyRow>(rows: TRow[]): FiscalHierarchyNcm[] => {
   const ncmMap = new Map<string, FiscalHierarchyNcm>();
 
@@ -369,6 +378,9 @@ const buildFilteredState = (state: RegionState, cities: RegionCity[]): RegionSta
   cities,
 });
 
+/**
+ * Constrói a árvore UF > cidade > cliente > produto preservando contagem de notas por nível.
+ */
 export const buildRegionHierarchy = (notas: NfeNotaDetalhada[]): RegionState[] => {
   const stateMap = new Map<string, RegionState>();
 
@@ -459,6 +471,9 @@ export const buildRegionHierarchy = (notas: NfeNotaDetalhada[]): RegionState[] =
     .sort((a, b) => b.total - a.total);
 };
 
+/**
+ * Filtra a árvore regional e recalcula totais dos nós preservados para manter os cards consistentes.
+ */
 export const filterRegionHierarchyBySearch = (regionHierarchy: RegionState[], search: string) => {
   const query = normalizeSearchValue(search);
   if (!query) return regionHierarchy;

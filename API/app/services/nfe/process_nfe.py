@@ -83,6 +83,8 @@ class ProcessarNFeService:
         cnpj_emitente: str,
         xmls_importados: list[tuple[int, str, bytes]],
     ) -> tuple[ProcessarNFeResponse, list[int]]:
+        """Converte XMLs do staging em entidades processáveis e devolve IDs aprovados para baixa."""
+
         cnpj_emitente_normalizado = normalizar_cnpj(cnpj_emitente)
         if not cnpj_emitente_normalizado:
             cnpj_emitente_normalizado = cnpj_emitente

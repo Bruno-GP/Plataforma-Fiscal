@@ -1,5 +1,9 @@
 export const ALL_MONTHS = 'all';
 
+/**
+ * Representa o período fiscal em dois formatos:
+ * `params` segue o contrato da API; `yearKey/monthKey` estabilizam as query keys.
+ */
 export interface FiscalPeriod {
   year?: number;
   month?: number;
@@ -19,6 +23,9 @@ interface FiscalQueryKeyInput {
   extra?: unknown[];
 }
 
+/**
+ * Normaliza os filtros de ano/mês vindos da UI antes de montar params e cache keys.
+ */
 export const createFiscalPeriod = (selectedYear: string | number, selectedMonth = ALL_MONTHS): FiscalPeriod => {
   const yearNumber = typeof selectedYear === 'number' ? selectedYear : Number.parseInt(selectedYear, 10);
   const monthNumber = Number.parseInt(selectedMonth, 10);
@@ -37,6 +44,9 @@ export const createFiscalPeriod = (selectedYear: string | number, selectedMonth 
   };
 };
 
+/**
+ * Mantém todas as queries fiscais com a mesma ordem de chaves para NFe e SPED.
+ */
 export const createFiscalQueryKey = ({
   scope,
   emitenteCnpj,

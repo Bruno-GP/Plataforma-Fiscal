@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FileText, FileUp, Loader2, Upload, X } from 'lucide-react';
+import { FileUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { useImportFileQueue, type ImportFileItem } from '@/hooks/useImportFileQueue';
+import { useImportFileQueue } from '@/hooks/useImportFileQueue';
 import { useProcessingJobFlow } from '@/hooks/useProcessingJobFlow';
+import { ImportacaoXmlActions } from '@/pages/components/ImportacaoXmlActions';
+import { ImportacaoXmlFileSelection } from '@/pages/components/ImportacaoXmlFileSelection';
+import { ImportacaoXmlOperationFeedback } from '@/pages/components/ImportacaoXmlOperationFeedback';
+import { ImportacaoXmlPendingNotice } from '@/pages/components/ImportacaoXmlPendingNotice';
+import { ImportacaoXmlResultsPanel } from '@/pages/components/ImportacaoXmlResultsPanel';
 import type { ProcessingJobResponse } from '@/services/jobs';
 import { saveFiscalOperation } from '@/services/operations';
 import {
@@ -22,30 +24,21 @@ import {
   type ImportacaoXmlPendenciasResponse,
 } from '@/services/nfe';
 import { invalidateFiscalProcessingCache } from '@/utils/fiscalCache';
+import {
+  buildXmlImportProgressLabel,
+  chunkItems,
+  getImportProgress,
+  getProcessingProgressRange,
+  XML_IMPORT_PROGRESS_MAX,
+  XML_PROCESS_PROGRESS_END,
+  XML_PROCESS_PROGRESS_START,
+  type XmlImportOperationStage,
+} from '@/utils/xmlImportProgress';
 
-type OperationStage = 'idle' | 'importing' | 'processing' | 'completed' | 'cancelled' | 'error';
+type OperationStage = XmlImportOperationStage;
 
 const MAX_XML_FILES = 10000;
 const XML_IMPORT_BATCH_SIZE = 200;
-const IMPORT_PROGRESS_MAX = 55;
-const PROCESS_PROGRESS_START = 55;
-const PROCESS_PROGRESS_END = 100;
-
-const formatElapsedTime = (seconds: number): string => {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}m ${remainingSeconds}s`;
-};
-
-const chunkFiles = (files: ImportFileItem[], size: number): ImportFileItem[][] => {
-  const chunks: ImportFileItem[][] = [];
-
-  for (let index = 0; index < files.length; index += size) {
-    chunks.push(files.slice(index, index + size));
-  }
-
-  return chunks;
-};
 
 export default function ImportacaoXML() {
   const queryClient = useQueryClient();
@@ -90,26 +83,17 @@ export default function ImportacaoXML() {
   const elapsedIntervalRef = useRef<number | null>(null);
   const processingAnimationRef = useRef<number | null>(null);
 
-  const progressLabel = useMemo(() => {
-    const progressText = `${Math.round(operationProgress)}% - ${formatElapsedTime(elapsedSeconds)}`;
+  const progressLabel = useMemo(
+    () => buildXmlImportProgressLabel({
+      stage: operationStage,
+      progress: operationProgress,
+      elapsedSeconds,
+      jobMessage: currentJobMessage,
+    }),
+    [currentJobMessage, elapsedSeconds, operationProgress, operationStage],
+  );
 
-    switch (operationStage) {
-      case 'importing':
-        return `Importando XMLs - ${progressText}`;
-      case 'processing':
-        return `${currentJobMessage ?? 'Processamento em fila'} - ${progressText}`;
-      case 'completed':
-        return `Processamento terminado - 100% - ${formatElapsedTime(elapsedSeconds)}`;
-      case 'cancelled':
-        return `Operação cancelada - ${progressText}`;
-      case 'error':
-        return `Falha no processamento - ${progressText}`;
-      default:
-        return `0% - ${formatElapsedTime(elapsedSeconds)}`;
-    }
-  }, [currentJobMessage, elapsedSeconds, operationProgress, operationStage]);
-
-  const possuiPendenciasNaoProcessadas = (pendenciasXml?.total_pendentes ?? 0) > 0;
+  const pendingXmlCount = pendenciasXml?.total_pendentes ?? 0;
 
   const carregarPendenciasXml = useCallback(async () => {
     if (!user?.emitente_cnpj) {
@@ -211,16 +195,18 @@ export default function ImportacaoXML() {
 
     setIsProcessing(true);
     setOperationStage('processing');
-    setOperationProgress((current) => Math.max(current, PROCESS_PROGRESS_START));
+    setOperationProgress((current) => Math.max(current, XML_PROCESS_PROGRESS_START));
 
     try {
       let lastFinishedJob: ProcessingJobResponse | null = null;
 
       for (const [index, cnpj] of cnpjs.entries()) {
-        const rangeStart =
-          PROCESS_PROGRESS_START + (index / cnpjs.length) * (PROCESS_PROGRESS_END - PROCESS_PROGRESS_START);
-        const rangeEnd =
-          PROCESS_PROGRESS_START + ((index + 1) / cnpjs.length) * (PROCESS_PROGRESS_END - PROCESS_PROGRESS_START);
+        const { rangeStart, rangeEnd } = getProcessingProgressRange(
+          index,
+          cnpjs.length,
+          XML_PROCESS_PROGRESS_START,
+          XML_PROCESS_PROGRESS_END,
+        );
 
         setOperationProgress((current) => Math.max(current, Math.round(rangeStart)));
         startProcessingAnimation(Math.round(rangeStart), Math.max(Math.round(rangeEnd) - 3, Math.round(rangeStart)));
@@ -303,7 +289,7 @@ export default function ImportacaoXML() {
     resetJobState();
 
     const importResults: ImportacaoXmlArquivoResultado[] = [];
-    const batches = chunkFiles(selectedFiles, XML_IMPORT_BATCH_SIZE);
+    const batches = chunkItems(selectedFiles, XML_IMPORT_BATCH_SIZE);
 
     try {
       for (const batch of batches) {
@@ -318,7 +304,7 @@ export default function ImportacaoXML() {
         setImportedCount((count) => count + batch.length);
 
         const importedFiles = Math.min(importedCount + batch.length, selectedFiles.length);
-        const importProgress = Math.round((importedFiles / selectedFiles.length) * IMPORT_PROGRESS_MAX);
+        const importProgress = getImportProgress(importedFiles, selectedFiles.length, XML_IMPORT_PROGRESS_MAX);
         setOperationProgress(importProgress);
       }
 
@@ -428,133 +414,35 @@ export default function ImportacaoXML() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-8 text-center">
-            <Input
-              id="xml-files"
-              type="file"
-              accept=".xml,text/xml,application/xml"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                addFiles(event.target.files);
-                event.currentTarget.value = '';
-              }}
-            />
-            <Button
-              asChild
-              variant="secondary"
-              size="lg"
-              disabled={isImporting || isProcessing || selectedFiles.length >= MAX_XML_FILES}
-            >
-              <label htmlFor="xml-files" className="cursor-pointer">
-                <FileUp className="mr-2 h-4 w-4" />
-                Importar arquivos XMLs
-              </label>
-            </Button>
+          <ImportacaoXmlFileSelection
+            addFiles={addFiles}
+            formatFileSize={formatFileSize}
+            isDisabled={isImporting || isProcessing}
+            maxFiles={MAX_XML_FILES}
+            selectedFiles={selectedFiles}
+            totalSize={totalSize}
+          />
 
-            <p className="text-sm text-muted-foreground">
-              {selectedFiles.length}/{MAX_XML_FILES} arquivo(s) • {formatFileSize(totalSize)}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <Button
-              variant="outline"
-              onClick={clearList}
-              disabled={!selectedFiles.length || isImporting || isProcessing}
-            >
-              <X className="mr-2 h-4 w-4" />
-              Limpar lista
-            </Button>
-
-            <Button onClick={startImport} disabled={!selectedFiles.length || isImporting || isProcessing}>
-              {isImporting || isProcessing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="mr-2 h-4 w-4" />
-              )}
-              {isImporting ? 'Importando...' : isProcessing ? 'Processando...' : 'Importar e processar'}
-            </Button>
-
-            {(isImporting || isProcessing) && (
-              <Button variant="destructive" onClick={cancelOperation}>
-                <X className="mr-2 h-4 w-4" />
-                Parar acompanhamento
-              </Button>
-            )}
-          </div>
+          <ImportacaoXmlActions
+            isImporting={isImporting}
+            isProcessing={isProcessing}
+            onCancel={cancelOperation}
+            onClear={clearList}
+            onStart={startImport}
+            selectedCount={selectedFiles.length}
+          />
 
           {hasOperationFeedback && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <p className="font-medium text-foreground">
-                  {operationStage === 'processing'
-                    ? 'Processando'
-                    : operationStage === 'completed'
-                      ? 'Processamento terminado'
-                      : operationStage === 'cancelled'
-                        ? 'Operação cancelada'
-                        : operationStage === 'error'
-                          ? 'Falha no processamento'
-                          : 'Início do processamento'}
-                </p>
-                <span className="text-muted-foreground">{progressLabel}</span>
-              </div>
-              <Progress value={operationProgress} />
-              {currentJob && (
-                <p className="text-xs text-muted-foreground">
-                  Job {currentJob.job_id} - {currentJob.status}
-                  {currentJob.total_itens > 0
-                    ? ` - ${currentJob.itens_processados}/${currentJob.total_itens} item(ns)`
-                    : ''}
-                </p>
-              )}
-            </div>
+            <ImportacaoXmlOperationFeedback
+              currentJob={currentJob}
+              progress={operationProgress}
+              progressLabel={progressLabel}
+              stage={operationStage}
+            />
           )}
+          <ImportacaoXmlPendingNotice pendingCount={pendingXmlCount} />
 
-          {possuiPendenciasNaoProcessadas && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Ainda faltam XMLs a serem processados ({pendenciasXml?.total_pendentes}). Uma nova operação volta a
-              processar os pendentes automaticamente.
-            </div>
-          )}
-
-          <div className="rounded-lg border">
-            {selectedFiles.length ? (
-              <ul className="max-h-72 divide-y overflow-auto">
-                {selectedFiles.map((item) => (
-                  <li key={item.id} className="px-4 py-3">
-                    <p className="truncate text-sm font-medium">{item.file.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatFileSize(item.file.size)}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                <FileText className="mx-auto mb-2 h-5 w-5" />
-                Nenhum arquivo XML selecionado.
-              </div>
-            )}
-          </div>
-
-          {!!results.length && (
-            <div className="space-y-2 rounded-lg border p-4">
-              <h2 className="font-medium">Resultado da importação</h2>
-              <p className="text-sm text-muted-foreground">
-                XMLs avaliados: {Math.max(importedCount, results.length)} • Importados:{' '}
-                {results.filter((item) => item.status === 'importado').length} • Duplicados:{' '}
-                {results.filter((item) => item.status === 'duplicado').length} • Erros:{' '}
-                {results.filter((item) => item.status === 'erro').length}
-              </p>
-              <ul className="max-h-40 space-y-1 overflow-auto text-sm text-muted-foreground">
-                {results.map((result, index) => (
-                  <li key={`${result.arquivo}-${index}`}>
-                    <strong>{result.arquivo}:</strong> {result.mensagem}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <ImportacaoXmlResultsPanel importedCount={importedCount} results={results} />
         </CardContent>
       </Card>
     </div>

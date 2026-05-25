@@ -111,7 +111,7 @@ export default function AnaliseFiscalCfop() {
     <div className="space-y-6 py-6">
       <Header title="Analise fiscal" subtitle="KPIs por CFOP com drill-down hierarquico no mesmo padrao visual do detalhamento de vendas." selectedMonth={selectedMonth} selectedYear={selectedYear} availableYears={availableYears} monthLabels={monthLabels} onMonthChange={setSelectedMonth} onYearChange={setSelectedYear} />
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{stats.map((stat) => <StatCard key={stat.title} {...stat} isLoading={cfopQuery.isLoading} />)}</div>
+      <div className="stat-card-grid">{stats.map((stat) => <StatCard key={stat.title} {...stat} isLoading={cfopQuery.isLoading} />)}</div>
 
       <Card className="border border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_28px_90px_-52px_rgba(15,23,42,1)]"><CardContent className="space-y-5 p-6"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div className="space-y-2"><Badge className="border border-sky-400/20 bg-sky-400/10 text-sky-100 hover:bg-sky-400/10">Drill-down hierarquico</Badge><h2 className="text-2xl font-semibold tracking-tight">Estado {'>'} Cidade {'>'} NCM {'>'} Produto</h2><p className="max-w-3xl text-sm text-slate-300">Estrutura igual ao detalhamento de vendas, separando os KPIs de topo da navegacao hierarquica.</p></div><Button type="button" variant="secondary" className="gap-2 bg-white text-slate-900 hover:bg-slate-100" asChild><Link to="/detalhamento-vendas">Abrir detalhamento de vendas<ArrowRight className="h-4 w-4" /></Link></Button></div></CardContent></Card>
 

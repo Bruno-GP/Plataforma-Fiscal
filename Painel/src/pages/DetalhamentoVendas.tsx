@@ -284,7 +284,7 @@ export default function DetalhamentoVendas() {
     <div className="space-y-6 py-6">
       <Header title="Detalhamento de vendas" subtitle="Visao de dashboard e expansao hierarquica por nota, regiao ou leitura fiscal." selectedMonth={selectedMonth} selectedYear={selectedYear} availableYears={availableYears} monthLabels={monthLabels} onMonthChange={setSelectedMonth} onYearChange={setSelectedYear} />
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stat-card-grid">
         {stats.map((stat) => <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />)}
       </div>
 

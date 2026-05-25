@@ -171,7 +171,7 @@ export default function AnaliseFiscal() {
         </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="stat-card-grid">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />
         ))}

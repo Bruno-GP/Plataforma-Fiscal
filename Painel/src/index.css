@@ -154,6 +154,74 @@
 }
 
 @layer components {
+  .stat-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17.5rem), 1fr));
+    gap: 1.5rem;
+    align-items: stretch;
+  }
+
+  .stat-card {
+    container-type: inline-size;
+    display: flex;
+    min-width: 0;
+    height: 100%;
+    flex-direction: column;
+  }
+
+  .stat-card__value {
+    display: block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    font-size: clamp(1.35rem, 7cqw, 1.875rem);
+    line-height: 1.1;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @container (max-width: 18rem) {
+    .stat-card__value {
+      font-size: clamp(1.2rem, 6.5cqw, 1.55rem);
+    }
+  }
+
+  @container (max-width: 14rem) {
+    .stat-card__value {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .taxvision-sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(56 189 248 / 0.55) rgb(15 23 42 / 0.35);
+    scrollbar-gutter: stable;
+  }
+
+  .taxvision-sidebar-scroll::-webkit-scrollbar {
+    width: 0.55rem;
+  }
+
+  .taxvision-sidebar-scroll::-webkit-scrollbar-track {
+    border-radius: 9999px;
+    background: rgb(15 23 42 / 0.42);
+  }
+
+  .taxvision-sidebar-scroll::-webkit-scrollbar-thumb {
+    min-height: 3rem;
+    border: 2px solid rgb(17 24 39);
+    border-radius: 9999px;
+    background:
+      linear-gradient(180deg, rgb(56 189 248 / 0.78), rgb(16 185 129 / 0.72));
+  }
+
+  .taxvision-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background:
+      linear-gradient(180deg, rgb(125 211 252 / 0.95), rgb(52 211 153 / 0.9));
+  }
+
   .tv-card {
     border: 1px solid rgb(51 65 85 / 0.82);
     background:

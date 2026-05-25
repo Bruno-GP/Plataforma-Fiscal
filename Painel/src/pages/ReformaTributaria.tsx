@@ -262,7 +262,7 @@ export default function ReformaTributaria() {
         </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stat-card-grid">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} isLoading={apuracaoQuery.isLoading || memoriaQuery.isLoading} />
         ))}

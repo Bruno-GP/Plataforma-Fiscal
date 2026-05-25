@@ -57,7 +57,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 <div className="mx-auto flex min-h-11 max-w-[1440px] items-center gap-2 px-4 py-2 text-sm text-amber-100 md:px-8 xl:px-10">
                   <span>
                     Ainda faltam XMLs a serem processados ({totalPendentes}). O processamento pode entrar em fila e
-                    continuar em andamento; acompanhe pela tela de importação ou pela central.
+                    continuar em andamento; acompanhe pela tela de importacao ou pela central.
                   </span>
                   <Link to="/inconsistencias" className="ml-auto whitespace-nowrap font-semibold text-amber-200 underline">
                     Abrir central

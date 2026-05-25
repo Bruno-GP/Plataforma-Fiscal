@@ -51,7 +51,7 @@ export function StatCard({
           {isLoading ? 'Carregando...' : value}
         </div>
         <p className={cn('mt-3 text-xs font-semibold', trendTone)}>
-          {isLoading ? '--' : appendPreviousMonthLabel ? `${description} vs mes anterior` : description}
+          {isLoading ? '--' : appendPreviousMonthLabel ? `${description} vs mês anterior` : description}
         </p>
       </CardContent>
     </Card>

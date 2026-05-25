@@ -31,6 +31,12 @@ from app.services.fiscal_hierarchy import (
   normalizar_paginacao_hierarquia,
   resolver_nivel_hierarquia,
 )
+from app.services.fiscal_purchases import (
+  construir_filtros_compras_sped,
+  construir_params_com_limite_compras,
+  construir_ranking_fornecedores_compras,
+  construir_resposta_analise_compras,
+)
 from app.services.fiscal_sales import (
   construir_filtros_vendas_sped,
   construir_params_com_limite,
@@ -485,17 +491,11 @@ class SpedConsultaService:
     limite: int = 5,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'entrada'"]
-    params: list[object] = [cnpj]
-
-    if periodo_ano:
-      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
-      params.append(periodo_ano)
-    if periodo_mes:
-      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
-      params.append(periodo_mes)
-
-    where_clause = " AND ".join(filtros)
+    where_clause, params = construir_filtros_compras_sped(
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+    )
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
@@ -522,7 +522,7 @@ class SpedConsultaService:
           ORDER BY 2 DESC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite_compras(params, limite)),
         )
 
         top_fornecedores_quantidade = self._safe_top_fornecedor_query(
@@ -538,7 +538,7 @@ class SpedConsultaService:
           ORDER BY 3 DESC, 2 DESC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite_compras(params, limite)),
         )
 
         top_produtos_valor = self._safe_top_produto_query(
@@ -555,7 +555,7 @@ class SpedConsultaService:
           ORDER BY 2 DESC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite_compras(params, limite)),
         )
 
         top_produtos_quantidade = self._safe_top_produto_query(
@@ -572,35 +572,38 @@ class SpedConsultaService:
           ORDER BY 3 DESC, 2 DESC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite_compras(params, limite)),
         )
 
-        return {
-          "emitente_cnpj": cnpj,
-          "periodo_ano": periodo_ano,
-          "periodo_mes": periodo_mes,
-          "total_comprado": total_comprado,
-          "total_impostos_complementares": obter_total_impostos_complementares_documentos(
-            self.conn_params,
-            "sped",
-            cnpj,
-            periodo_ano,
-            periodo_mes,
-            "entrada",
-          ),
-          "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-            self.conn_params,
-            "sped",
-            cnpj,
-            periodo_ano,
-            periodo_mes,
-            "entrada",
-          ),
-          "top_fornecedores_valor": top_fornecedores_valor,
-          "top_fornecedores_quantidade": top_fornecedores_quantidade,
-          "top_produtos_valor": top_produtos_valor,
-          "top_produtos_quantidade": top_produtos_quantidade,
-        }
+        total_impostos_complementares = obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "sped",
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          "entrada",
+        )
+        total_tributos_reforma = obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "sped",
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          "entrada",
+        )
+
+        return construir_resposta_analise_compras(
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          total_comprado,
+          total_impostos_complementares,
+          total_tributos_reforma,
+          top_fornecedores_valor,
+          top_fornecedores_quantidade,
+          top_produtos_valor,
+          top_produtos_quantidade,
+        )
         
   def analisar_vendas(
     self,
@@ -1406,14 +1409,7 @@ class SpedConsultaService:
   def _safe_top_fornecedor_query(self, cur, sql: str, params: tuple[object, ...]) -> list[dict]:
     try:
       cur.execute(sql, params)
-      return [
-        {
-          "fornecedor": fornecedor,
-          "valor_total": valor_total or Decimal("0.00"),
-          "quantidade_documentos": quantidade_documentos or 0,
-        }
-        for fornecedor, valor_total, quantidade_documentos in cur.fetchall()
-      ]
+      return construir_ranking_fornecedores_compras(cur.fetchall())
     except psycopg.errors.UndefinedTable:
       return []
     

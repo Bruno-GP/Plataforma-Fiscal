@@ -45,6 +45,13 @@ from app.services.fiscal_hierarchy import (
   normalizar_paginacao_hierarquia,
   resolver_nivel_hierarquia,
 )
+from app.services.fiscal_purchases import (
+  construir_filtros_compras_nfe,
+  construir_params_com_limite_compras,
+  construir_ranking_fornecedores_compras,
+  construir_ranking_produtos_compras,
+  construir_resposta_analise_compras,
+)
 from app.services.fiscal_sales import (
   construir_params_com_limite,
   construir_ranking_cfops_vendas,
@@ -796,26 +803,11 @@ class NFeConsultaService:
     if not cnpj_filtrado:
       raise ValueError("Informe um emitente_cnpj válido.")
 
-    filtros_docs = [
-      (
-        "("
-        "regexp_replace(COALESCE(n.destinatario_documento, ''), '\\D', '', 'g') = %s "
-        "OR regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s"
-        ")"
-      ),
-      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('1','2','3')",
-    ]
-    parametros: list[object] = [cnpj_filtrado, cnpj_filtrado]
-
-    if periodo_ano:
-      filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
-      parametros.append(periodo_ano)
-
-    if periodo_mes:
-      filtros_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
-      parametros.append(periodo_mes)
-
-    where_clause = " AND ".join(filtros_docs)
+    where_clause, parametros = construir_filtros_compras_nfe(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+    )
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
@@ -846,16 +838,9 @@ class NFeConsultaService:
           ORDER BY 2 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite_compras(parametros, limite),
         )
-        top_fornecedores_valor = [
-          {
-            "fornecedor": fornecedor,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_documentos": quantidade_documentos or 0,
-          }
-          for fornecedor, valor_total, quantidade_documentos in cur.fetchall()
-        ]
+        top_fornecedores_valor = construir_ranking_fornecedores_compras(cur.fetchall())
 
         cur.execute(
           f"""
@@ -871,16 +856,9 @@ class NFeConsultaService:
           ORDER BY 3 DESC, 2 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite_compras(parametros, limite),
         )
-        top_fornecedores_quantidade = [
-          {
-            "fornecedor": fornecedor,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_documentos": quantidade_documentos or 0,
-          }
-          for fornecedor, valor_total, quantidade_documentos in cur.fetchall()
-        ]
+        top_fornecedores_quantidade = construir_ranking_fornecedores_compras(cur.fetchall())
 
         cur.execute(
           f"""
@@ -896,16 +874,9 @@ class NFeConsultaService:
           ORDER BY 2 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite_compras(parametros, limite),
         )
-        top_produtos_valor = [
-          {
-            "produto": produto,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_total": quantidade_total or Decimal("0.00"),
-          }
-          for produto, valor_total, quantidade_total in cur.fetchall()
-        ]
+        top_produtos_valor = construir_ranking_produtos_compras(cur.fetchall())
 
         cur.execute(
           f"""
@@ -921,43 +892,39 @@ class NFeConsultaService:
           ORDER BY 3 DESC, 2 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite_compras(parametros, limite),
         )
-        top_produtos_quantidade = [
-          {
-            "produto": produto,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_total": quantidade_total or Decimal("0.00"),
-          }
-          for produto, valor_total, quantidade_total in cur.fetchall()
-        ]
+        top_produtos_quantidade = construir_ranking_produtos_compras(cur.fetchall())
 
-    return {
-      "emitente_cnpj": cnpj_filtrado,
-      "periodo_ano": periodo_ano,
-      "periodo_mes": periodo_mes,
-      "total_comprado": total_comprado or Decimal("0.00"),
-      "total_impostos_complementares": obter_total_impostos_complementares_documentos(
-        self.conn_params,
-        "nfe",
-        cnpj_filtrado,
-        periodo_ano,
-        periodo_mes,
-        "entrada",
-      ),
-      "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-        self.conn_params,
-        "nfe",
-        cnpj_filtrado,
-        periodo_ano,
-        periodo_mes,
-        "entrada",
-      ),
-      "top_fornecedores_valor": top_fornecedores_valor,
-      "top_fornecedores_quantidade": top_fornecedores_quantidade,
-      "top_produtos_valor": top_produtos_valor,
-      "top_produtos_quantidade": top_produtos_quantidade,
-    }
+    total_impostos_complementares = obter_total_impostos_complementares_documentos(
+      self.conn_params,
+      "nfe",
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      "entrada",
+    )
+    total_tributos_reforma = obter_total_tributos_reforma_documentos(
+      self.conn_params,
+      "nfe",
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      "entrada",
+    )
+
+    return construir_resposta_analise_compras(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      total_comprado,
+      total_impostos_complementares,
+      total_tributos_reforma,
+      top_fornecedores_valor,
+      top_fornecedores_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+    )
     
   def analisar_vendas(
     self,

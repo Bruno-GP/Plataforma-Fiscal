@@ -5,16 +5,17 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(  
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold ring-offset-background transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/80",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground active:bg-accent/80",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/70",
-        ghost: "hover:bg-accent hover:text-accent-foreground active:bg-accent/80",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "bg-sky-500 text-slate-950 shadow-[0_14px_32px_-20px_rgba(56,189,248,0.95)] hover:bg-sky-400 active:bg-sky-500",
+        destructive: "bg-rose-500 text-slate-950 shadow-[0_14px_32px_-20px_rgba(248,113,113,0.8)] hover:bg-rose-400 active:bg-rose-500",
+        outline: "border border-slate-700 bg-slate-950/45 text-slate-100 hover:border-sky-500/70 hover:bg-slate-900 active:bg-slate-800",
+        secondary: "border border-slate-700 bg-slate-800/90 text-slate-100 hover:border-slate-600 hover:bg-slate-700 active:bg-slate-800",
+        ghost: "text-slate-300 hover:bg-slate-800/75 hover:text-slate-50 active:bg-slate-800",
+        link: "text-sky-300 underline-offset-4 hover:text-sky-200 hover:underline",
+        success: "bg-emerald-500 text-slate-950 shadow-[0_14px_32px_-20px_rgba(52,211,153,0.85)] hover:bg-emerald-400 active:bg-emerald-500",
       },
       size: {
         default: "h-10 px-4 py-2",

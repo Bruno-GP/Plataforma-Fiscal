@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import { ChevronRight } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
-import { calculateAbcCurve } from '@/services/analysisABC';
-
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import { AbcAnalysisReport } from '@/pages/components/abcAnalysisReport';
+import { calculateAbcCurve } from '@/services/analysisABC';
 
 interface RankingItem {
   key: string;
@@ -42,7 +42,7 @@ export function RankingCard({
   totalValue,
   listClassName,
   showAbcReport = true,
-  showAbcClassification = true
+  showAbcClassification = true,
 }: RankingCardProps) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
@@ -61,10 +61,7 @@ export function RankingCard({
   }, [items]);
 
   const selectedItem = useMemo(() => {
-    if (!items.length) {
-      return null;
-    }
-    if (!selectedKey) {
+    if (!items.length || !selectedKey) {
       return null;
     }
 
@@ -73,53 +70,59 @@ export function RankingCard({
 
   const hasSelection = Boolean(selectedItem);
   const selectedPercent = selectedItem?.percent ?? 100;
-  const headlineLabel = selectedItem ? 'Faturamento selecionado' : 'Faturamento Total';
+  const headlineLabel = selectedItem ? 'Selecionado' : 'Total analisado';
   const headlineValue = selectedItem?.value ?? totalValue;
-  const captionTitle = selectedItem?.title ?? 'Faturamento Total';
+  const captionTitle = selectedItem?.title ?? 'Base do periodo';
   const progressValue = Math.min(Math.max(selectedPercent, 0), 100);
 
   return (
-    <Card className="rounded-2xl border-slate-800/70 bg-gradient-to-br from-slate-950/80 via-slate-900/85 to-slate-950/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_45px_-30px_rgba(0,0,0,0.9)] backdrop-blur">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+    <Card className="overflow-hidden">
+      <CardHeader className="tv-panel-header">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle>{title}</CardTitle>
+            <CardDescription className="mt-2">{description}</CardDescription>
+          </div>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-950/45 text-sky-300">
+            <ChevronRight className="h-4 w-4" />
+          </div>
+        </div>
       </CardHeader>
-      <CardContent onClick={() => setSelectedKey(null)}>
+      <CardContent onClick={() => setSelectedKey(null)} className="p-5">
         <div className="space-y-4">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">{loadingMessage}</p>
+            <div className="rounded-md border border-dashed border-slate-700 bg-slate-950/30 px-4 py-8 text-center text-sm text-slate-400">
+              {loadingMessage}
+            </div>
           ) : items.length ? (
             <>
-              <div className="space-y-2 rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{headlineLabel}</span>
-                  <span className="font-medium text-foreground">{headlineValue}</span>
+              <div className="space-y-2 rounded-md border border-slate-700/70 bg-slate-950/35 p-4">
+                <div className="flex items-center justify-between gap-4 text-sm">
+                  <span className="font-medium text-slate-400">{headlineLabel}</span>
+                  <span className="truncate font-semibold text-slate-50">{headlineValue}</span>
                 </div>
-                <Progress
-                  value={progressValue}
-                  className="h-2 border border-slate-800/80 bg-slate-900/80 [&>div]:bg-sky-500 [&>div]:transition-all [&>div]:duration-500 [&>div]:ease-out"
-                />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{captionTitle}</span>
+                <Progress value={progressValue} className="h-2 [&>div]:bg-sky-400" />
+                <div className="flex items-center justify-between gap-4 text-xs text-slate-500">
+                  <span className="truncate">{captionTitle}</span>
                   <span>
                     {selectedItem?.percent !== null
-                      ? `${selectedPercent.toFixed(1)}% do período`
-                      : 'Participação não informada'}
+                      ? `${selectedPercent.toFixed(1)}% do periodo`
+                      : 'Participacao nao informada'}
                   </span>
                 </div>
               </div>
-              <div className={listClassName}>
-                {items.map((item) => {
+
+              <div className={cn('space-y-1', listClassName)}>
+                {items.map((item, index) => {
                   const isSelected = item.key === selectedItem?.key;
                   const isMuted = hasSelection && !isSelected;
-
                   const abcData = showAbcClassification ? abcCurveMap.get(item.key) : null;
-
-                  const abcBadgeClassName = abcData?.abcClass === 'A'
-                    ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300'
-                    : abcData?.abcClass === 'B'
-                      ? 'border-amber-500/40 bg-amber-500/20 text-amber-300'
-                      : 'border-sky-500/40 bg-sky-500/20 text-sky-300';
+                  const abcBadgeClassName =
+                    abcData?.abcClass === 'A'
+                      ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300'
+                      : abcData?.abcClass === 'B'
+                        ? 'border-amber-500/40 bg-amber-500/20 text-amber-300'
+                        : 'border-sky-500/40 bg-sky-500/20 text-sky-300';
 
                   return (
                     <button
@@ -129,52 +132,35 @@ export function RankingCard({
                         event.stopPropagation();
                         setSelectedKey(item.key);
                       }}
-                      className={`flex w-full items-center justify-between gap-3 border-b border-slate-800/70 pb-2 text-left transition-colors duration-300 last:border-0 ${
-                        isMuted ? 'text-slate-500' : 'hover:text-foreground/90'
-                      }`}
+                      className={cn(
+                        'grid w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-3 text-left transition-colors duration-200 hover:bg-slate-800/50',
+                        isSelected && 'bg-slate-800/70',
+                        isMuted && 'opacity-50',
+                      )}
                     >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p
-                            className={`font-medium transition-colors duration-300 ${
-                              isSelected || !hasSelection ? 'text-foreground' : ''
-                            } ${isMuted ? 'text-slate-400' : ''}`}
-                          >
-                            {item.title}
-                          </p>
+                      <span className="font-mono text-sm font-semibold text-sky-300">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="truncate font-semibold text-slate-100">{item.title}</span>
                           {abcData && (
-                            <Badge
-                              variant="outline"
-                              className={`h-5 rounded-md px-1.5 py-0 text-[10px] ${abcBadgeClassName}`}
-                            >
+                            <Badge variant="outline" className={`h-5 px-1.5 py-0 text-[10px] ${abcBadgeClassName}`}>
                               Classe {abcData.abcClass}
                             </Badge>
                           )}
                           {item.badgeLabel && (
-                            <Badge
-                              variant="outline"
-                              className={`h-5 rounded-md px-1.5 py-0 text-[10px] ${item.badgeClassName ?? ''}`}
-                            >
+                            <Badge variant="outline" className={`h-5 px-1.5 py-0 text-[10px] ${item.badgeClassName ?? ''}`}>
                               {item.badgeLabel}
                             </Badge>
                           )}
-                        </div>
-                        <p
-                          className={`text-sm transition-colors duration-300 ${
-                            isMuted ? 'text-slate-500' : 'text-muted-foreground'
-                          }`}
-                        >
+                        </span>
+                        <span className="mt-1 block truncate text-sm text-slate-400">
                           {item.subtitle}
-                          {abcData && ` · Acumulado ${abcData.cumulativePercent.toFixed(1)}%`}
-                        </p>
-                      </div>
-                      <span
-                        className={`text-sm font-medium transition-colors duration-300 ${
-                          isSelected || !hasSelection ? 'text-foreground' : ''
-                        } ${isMuted ? 'text-slate-400' : ''}`}
-                      >
-                        {item.value}
+                          {abcData && ` - Acumulado ${abcData.cumulativePercent.toFixed(1)}%`}
+                        </span>
                       </span>
+                      <span className="text-right text-sm font-semibold text-slate-50">{item.value}</span>
                     </button>
                   );
                 })}
@@ -182,8 +168,8 @@ export function RankingCard({
 
               {showAbcReport && (
                 <AbcAnalysisReport
-                  title="Relatório ABC"
-                  description="Distribuição dos itens por relevância no período"
+                  title="Relatorio ABC"
+                  description="Distribuicao dos itens por relevancia no periodo"
                   items={items.map((item) => ({
                     key: item.key,
                     label: item.title,
@@ -194,7 +180,9 @@ export function RankingCard({
               )}
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+            <div className="rounded-md border border-dashed border-slate-700 bg-slate-950/30 px-4 py-8 text-center text-sm text-slate-400">
+              {emptyMessage}
+            </div>
           )}
         </div>
       </CardContent>

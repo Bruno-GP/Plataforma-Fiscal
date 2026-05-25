@@ -92,7 +92,97 @@
   }
 }
 
+@layer base {
+  html {
+    background: hsl(var(--background));
+  }
+
+  body {
+    font-feature-settings:
+      "cv02",
+      "cv03",
+      "cv04",
+      "cv11";
+  }
+
+  :root,
+  .dark {
+    --bg-app: #08111f;
+    --bg-sidebar: #111827;
+    --bg-card: #172033;
+    --bg-card-soft: #1d293d;
+    --border-subtle: #334155;
+    --text-primary: #e5e7eb;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --primary-accent: #38bdf8;
+    --primary-strong: #0ea5e9;
+    --success-accent: #34d399;
+    --warning-accent: #facc15;
+    --danger-accent: #f87171;
+    --purple-accent: #818cf8;
+
+    --background: 216 59% 8%;
+    --foreground: 220 33% 96%;
+    --card: 220 34% 15%;
+    --card-foreground: 220 33% 96%;
+    --popover: 220 34% 15%;
+    --popover-foreground: 220 33% 96%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 218 30% 19%;
+    --secondary-foreground: 220 33% 96%;
+    --muted: 218 25% 20%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 198 89% 48%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 83% 64%;
+    --destructive-foreground: 222 47% 11%;
+    --border: 215 25% 28%;
+    --input: 215 25% 28%;
+    --ring: 199 89% 48%;
+    --radius: 0.5rem;
+    --sidebar-background: 221 39% 14%;
+    --sidebar-foreground: 220 33% 96%;
+    --sidebar-primary: 160 84% 39%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 221 31% 18%;
+    --sidebar-accent-foreground: 220 33% 96%;
+    --sidebar-border: 215 25% 28%;
+    --sidebar-ring: 199 89% 48%;
+  }
+}
+
 @layer components {
+  .tv-card {
+    border: 1px solid rgb(51 65 85 / 0.82);
+    background:
+      linear-gradient(180deg, rgb(29 41 61 / 0.88), rgb(23 32 51 / 0.94)),
+      rgb(23 32 51);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.035),
+      0 20px 48px -36px rgb(0 0 0 / 0.95);
+  }
+
+  .tv-panel-header {
+    border-bottom: 1px solid rgb(51 65 85 / 0.82);
+    background: rgb(15 23 42 / 0.34);
+  }
+
+  .tv-table-head {
+    background: rgb(8 17 31 / 0.72);
+    color: rgb(148 163 184);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .tv-focus-ring {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(56 189 248 / 0.18);
+  }
+
   .ia-report-surface {
     position: relative;
   }

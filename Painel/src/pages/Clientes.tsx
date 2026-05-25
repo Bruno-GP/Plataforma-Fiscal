@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Receipt, ShieldAlert, TrendingUp } from 'lucide-react';
+import { Search, Receipt, ShieldAlert, TrendingUp, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -164,26 +165,102 @@ export default function Clientes() {
         ))}
       </div>
 
-      <div className="space-y-3">
-        <Input
-          placeholder="Buscar clientes..."
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          className="max-w-sm"
-        />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)]">
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 rounded-lg border border-slate-700/80 bg-slate-950/25 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-100">Listagem de clientes</p>
+              <p className="text-xs text-slate-400">{filteredClientes.length} clientes no recorte atual</p>
+            </div>
+            <div className="relative w-full md:max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <Input
+                placeholder="Buscar clientes..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
 
-        <RankingCard
-          title="Ranking de Clientes"
-          description="Lista de clientes por participacao no faturamento com indicacao simples de risco"
-          items={topClientesItems}
-          isLoading={kpisQuery.isLoading}
-          loadingMessage="Carregando clientes..."
-          emptyMessage="Nenhum cliente encontrado."
-          totalValue={formatCurrency(totalReceita)}
-          listClassName="max-h-[420px] overflow-y-auto pr-1"
-          showAbcReport={false}
-          showAbcClassification={false}
-        />
+          <RankingCard
+            title="Ranking de Clientes"
+            description="Clientes por participacao no faturamento e indicacao de risco"
+            items={topClientesItems}
+            isLoading={kpisQuery.isLoading}
+            loadingMessage="Carregando clientes..."
+            emptyMessage="Nenhum cliente encontrado."
+            totalValue={formatCurrency(totalReceita)}
+            listClassName="max-h-[520px] overflow-y-auto pr-1"
+            showAbcReport={false}
+            showAbcClassification={false}
+          />
+        </div>
+
+        <div className="space-y-6">
+          <Card className="overflow-hidden">
+            <CardHeader className="tv-panel-header">
+              <CardTitle>Distribuicao de risco</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5 p-5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-md border border-emerald-400/25 bg-emerald-400/10 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-300">Baixo</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-50">{clientesSemRisco}</p>
+                </div>
+                <div className="rounded-md border border-rose-400/25 bg-rose-400/10 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-300">Critico</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-50">{clientesEmRisco}</p>
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="text-slate-300">Conformidade geral</span>
+                  <span className="font-semibold text-emerald-300">
+                    {filteredClientes.length
+                      ? `${Math.round((clientesSemRisco / filteredClientes.length) * 100)}%`
+                      : '0%'}
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-950">
+                  <div
+                    className="h-full rounded-full bg-emerald-400"
+                    style={{
+                      width: filteredClientes.length
+                        ? `${Math.round((clientesSemRisco / filteredClientes.length) * 100)}%`
+                        : '0%',
+                    }}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <CardHeader className="tv-panel-header">
+              <CardTitle>Maiores contribuintes</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 p-5">
+              {topClientesItems.slice(0, 4).map((cliente, index) => (
+                <div key={cliente.key} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-1 py-2">
+                  <span className="font-mono text-sm font-semibold text-sky-300">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-slate-100">{cliente.title}</span>
+                    <span className="text-xs text-slate-400">{cliente.subtitle}</span>
+                  </span>
+                  <span className="text-sm font-semibold text-slate-50">{cliente.percent?.toFixed(1) ?? '0.0'}%</span>
+                </div>
+              ))}
+
+              {!topClientesItems.length && (
+                <div className="rounded-md border border-dashed border-slate-700 bg-slate-950/30 px-4 py-8 text-center text-sm text-slate-400">
+                  <Users className="mx-auto mb-2 h-5 w-5" />
+                  Nenhum cliente no recorte atual.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

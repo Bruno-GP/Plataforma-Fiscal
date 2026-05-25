@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { Header } from '@/pages/components/Header';
-import { RankingPanelGroup, RankingConfig } from '@/pages/components/RankingPanelGroup';
+import { RankingPanelGroup } from '@/pages/components/RankingPanelGroup';
 import { StatCard } from '@/pages/components/StatCard';
 import { EvolucaoChart } from '@/pages/components/EvolucaoChart';
 
@@ -171,7 +171,7 @@ export default function AnaliseFiscal() {
         </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />
         ))}

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Header } from './components/Header';
-import { RankingPanelGroup, RankingConfig } from './components/RankingPanelGroup';
+import { RankingPanelGroup } from './components/RankingPanelGroup';
 import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
 import { EvolucaoChart } from './components/EvolucaoChart';
@@ -204,7 +204,7 @@ export default function Dashboard({
       />
 
       <div className="flex justify-end">
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="h-10">
           <Link to="/detalhamento-vendas">Abrir detalhamento analítico</Link>
         </Button>
       </div>
@@ -218,7 +218,7 @@ export default function Dashboard({
         </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />
         ))}

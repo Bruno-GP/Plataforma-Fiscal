@@ -8,8 +8,6 @@ from fastapi import HTTPException, status
 from app.core.cache import ttl_cache
 from app.models.nfe.schemas import (
   DashboardVendasResponse,
-  KPIComparativoQuantidade,
-  KPIComparativoValor,
   KPIsComparativo,
   NFeKPI,
   NFeKPIConsulta,
@@ -47,7 +45,7 @@ from app.services.fiscal_hierarchy import (
   resolver_nivel_hierarquia,
 )
 from app.services.fiscal_kpis import (
-  calcular_variacao_percentual,
+  construir_comparativo_kpis,
   construir_dashboard_vendas_response,
   construir_nfe_kpi_consulta_de_row,
   construir_nfe_kpi_de_row,
@@ -56,6 +54,7 @@ from app.services.fiscal_kpis import (
   construir_serie_mensal_dashboard,
   obter_anos_disponiveis_kpis,
   resolver_ano_referencia_dashboard,
+  resolver_periodo_anterior_kpi,
   selecionar_resultados_dashboard,
 )
 from app.services.fiscal_purchases import (
@@ -1572,13 +1571,12 @@ class NFeConsultaService:
     periodo_anterior_ano: Optional[int] = None,
     periodo_anterior_mes: Optional[int] = None,
   ) -> Optional[KPIsComparativo]:
-    if periodo_anterior_ano is None or periodo_anterior_mes is None:
-      if periodo_mes == 1:
-        periodo_anterior_mes = 12
-        periodo_anterior_ano = periodo_ano - 1
-      else:
-        periodo_anterior_mes = periodo_mes - 1
-        periodo_anterior_ano = periodo_ano
+    periodo_anterior_ano, periodo_anterior_mes = resolver_periodo_anterior_kpi(
+      periodo_ano,
+      periodo_mes,
+      periodo_anterior_ano,
+      periodo_anterior_mes,
+    )
 
     kpi_atual = self._buscar_kpi_periodo(
       periodo_ano=periodo_ano,
@@ -1594,111 +1592,4 @@ class NFeConsultaService:
     if not kpi_atual:
       return None
     
-    return self._montar_comparativo(kpi_atual, kpi_anterior)
-
-  def _montar_comparativo(
-    self,
-    kpi_atual: NFeKPI,
-    kpi_anterior: Optional[NFeKPI],
-  ) -> KPIsComparativo:
-    anterior = kpi_anterior or NFeKPI(
-      emitente_cnpj=kpi_atual.emitente_cnpj,
-      id=0,
-      processamento_id=0,
-      total_vendas=0,
-      quantidade_notas=0,
-      ticket_medio=0,
-      maior_nota=0,
-      menor_nota=0,
-      total_icms=0,
-      total_ipi=0,
-      total_pis=0,
-      total_cofins=0,
-      top_clientes=[],
-      top_produtos=[],
-      top_cidades=[],
-    )
-
-    total_vendas_atual = Decimal(kpi_atual.total_vendas)
-    total_vendas_anterior = Decimal(anterior.total_vendas)
-    ticket_medio_atual = Decimal(kpi_atual.ticket_medio)
-    ticket_medio_anterior = Decimal(anterior.ticket_medio)
-    maior_nota_atual = Decimal(kpi_atual.maior_nota)
-    maior_nota_anterior = Decimal(anterior.maior_nota)
-    menor_nota_atual = Decimal(kpi_atual.menor_nota)
-    menor_nota_anterior = Decimal(anterior.menor_nota)
-    total_icms_atual = Decimal(kpi_atual.total_icms)
-    total_icms_anterior = Decimal(anterior.total_icms)
-    total_ipi_atual = Decimal(kpi_atual.total_ipi)
-    total_ipi_anterior = Decimal(anterior.total_ipi)
-    total_pis_atual = Decimal(kpi_atual.total_pis)
-    total_pis_anterior = Decimal(anterior.total_pis)
-    total_cofins_atual = Decimal(kpi_atual.total_cofins)
-    total_cofins_anterior = Decimal(anterior.total_cofins)
-
-    return KPIsComparativo(
-      total_vendas=KPIComparativoValor(
-        atual=total_vendas_atual,
-        anterior=total_vendas_anterior,
-        variacao_percentual=calcular_variacao_percentual(
-          total_vendas_atual, total_vendas_anterior
-        ),
-      ),
-      quantidade_notas=KPIComparativoQuantidade(
-        atual=kpi_atual.quantidade_notas,
-        anterior=anterior.quantidade_notas,
-        variacao_percentual=calcular_variacao_percentual(
-          Decimal(kpi_atual.quantidade_notas),
-          Decimal(anterior.quantidade_notas),
-        ),
-      ),
-      ticket_medio=KPIComparativoValor(
-        atual=ticket_medio_atual,
-        anterior=ticket_medio_anterior,
-        variacao_percentual=calcular_variacao_percentual(
-          ticket_medio_atual, ticket_medio_anterior
-        ),
-      ),
-      maior_nota=KPIComparativoValor(
-        atual=maior_nota_atual,
-        anterior=maior_nota_anterior,
-        variacao_percentual=calcular_variacao_percentual(
-          maior_nota_atual, maior_nota_anterior
-        ),
-      ),
-      menor_nota=KPIComparativoValor(
-        atual=menor_nota_atual,
-        anterior=menor_nota_anterior,
-        variacao_percentual=calcular_variacao_percentual(
-          menor_nota_atual, menor_nota_anterior
-        ),
-      ),
-      total_icms=KPIComparativoValor(
-        atual=total_icms_atual,
-        anterior=total_icms_anterior,
-        variacao_percentual=calcular_variacao_percentual(
-          total_icms_atual, total_icms_anterior
-        ),
-      ),
-      total_ipi=KPIComparativoValor(
-        atual=total_ipi_atual,
-        anterior=total_ipi_anterior,
-        variacao_percentual=calcular_variacao_percentual(
-          total_ipi_atual, total_ipi_anterior
-        ),
-      ),
-      total_pis=KPIComparativoValor(
-        atual=total_pis_atual,
-        anterior=total_pis_anterior,
-        variacao_percentual=calcular_variacao_percentual(
-          total_pis_atual, total_pis_anterior
-        ),
-      ),
-      total_cofins=KPIComparativoValor(
-        atual=total_cofins_atual,
-        anterior=total_cofins_anterior,
-        variacao_percentual=calcular_variacao_percentual(
-          total_cofins_atual, total_cofins_anterior
-        ),
-      ),
-    )
+    return construir_comparativo_kpis(kpi_atual, kpi_anterior)

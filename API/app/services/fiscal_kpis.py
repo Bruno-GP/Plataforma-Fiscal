@@ -5,6 +5,9 @@ from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_
 from app.models.nfe.schemas import (
   DashboardVendasResponse,
   DashboardVendasResumo,
+  KPIComparativoQuantidade,
+  KPIComparativoValor,
+  KPIsComparativo,
   NFeKPI,
   NFeKPIConsulta,
   SerieMensalVendasItem,
@@ -41,6 +44,114 @@ def calcular_variacao_percentual(
       return Decimal("0.00")
     return None
   return ((atual - anterior) / anterior * Decimal("100")).quantize(Decimal("0.01"))
+
+
+def resolver_periodo_anterior_kpi(
+  periodo_ano: int,
+  periodo_mes: int,
+  periodo_anterior_ano: Optional[int] = None,
+  periodo_anterior_mes: Optional[int] = None,
+) -> tuple[int, int]:
+  if periodo_anterior_ano is not None and periodo_anterior_mes is not None:
+    return periodo_anterior_ano, periodo_anterior_mes
+
+  if periodo_mes == 1:
+    return periodo_ano - 1, 12
+
+  return periodo_ano, periodo_mes - 1
+
+
+def criar_kpi_anterior_vazio(kpi_atual: NFeKPI) -> NFeKPI:
+  return NFeKPI(
+    emitente_cnpj=kpi_atual.emitente_cnpj,
+    id=0,
+    processamento_id=0,
+    total_vendas=0,
+    quantidade_notas=0,
+    ticket_medio=0,
+    maior_nota=0,
+    menor_nota=0,
+    total_icms=0,
+    total_ipi=0,
+    total_pis=0,
+    total_cofins=0,
+    top_clientes=[],
+    top_produtos=[],
+    top_cidades=[],
+  )
+
+
+def construir_comparativo_valor(atual, anterior) -> KPIComparativoValor:
+  atual_decimal = Decimal(atual)
+  anterior_decimal = Decimal(anterior)
+  return KPIComparativoValor(
+    atual=atual_decimal,
+    anterior=anterior_decimal,
+    variacao_percentual=calcular_variacao_percentual(
+      atual_decimal,
+      anterior_decimal,
+    ),
+  )
+
+
+def construir_comparativo_quantidade(
+  atual: int,
+  anterior: int,
+) -> KPIComparativoQuantidade:
+  return KPIComparativoQuantidade(
+    atual=atual,
+    anterior=anterior,
+    variacao_percentual=calcular_variacao_percentual(
+      Decimal(atual),
+      Decimal(anterior),
+    ),
+  )
+
+
+def construir_comparativo_kpis(
+  kpi_atual: NFeKPI,
+  kpi_anterior: Optional[NFeKPI],
+) -> KPIsComparativo:
+  anterior = kpi_anterior or criar_kpi_anterior_vazio(kpi_atual)
+
+  return KPIsComparativo(
+    total_vendas=construir_comparativo_valor(
+      kpi_atual.total_vendas,
+      anterior.total_vendas,
+    ),
+    quantidade_notas=construir_comparativo_quantidade(
+      kpi_atual.quantidade_notas,
+      anterior.quantidade_notas,
+    ),
+    ticket_medio=construir_comparativo_valor(
+      kpi_atual.ticket_medio,
+      anterior.ticket_medio,
+    ),
+    maior_nota=construir_comparativo_valor(
+      kpi_atual.maior_nota,
+      anterior.maior_nota,
+    ),
+    menor_nota=construir_comparativo_valor(
+      kpi_atual.menor_nota,
+      anterior.menor_nota,
+    ),
+    total_icms=construir_comparativo_valor(
+      kpi_atual.total_icms,
+      anterior.total_icms,
+    ),
+    total_ipi=construir_comparativo_valor(
+      kpi_atual.total_ipi,
+      anterior.total_ipi,
+    ),
+    total_pis=construir_comparativo_valor(
+      kpi_atual.total_pis,
+      anterior.total_pis,
+    ),
+    total_cofins=construir_comparativo_valor(
+      kpi_atual.total_cofins,
+      anterior.total_cofins,
+    ),
+  )
 
 
 def construir_nfe_kpi_de_row(row) -> NFeKPI:

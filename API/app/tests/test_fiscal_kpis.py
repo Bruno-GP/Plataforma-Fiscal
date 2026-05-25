@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from app.services.fiscal_kpis import (
     calcular_variacao_percentual,
+    construir_comparativo_kpis,
     construir_dashboard_vendas_response,
     construir_nfe_kpi_consulta_de_row,
     construir_nfe_kpi_de_row,
@@ -12,6 +13,7 @@ from app.services.fiscal_kpis import (
     normalizar_top_cidades,
     obter_anos_disponiveis_kpis,
     resolver_ano_referencia_dashboard,
+    resolver_periodo_anterior_kpi,
     selecionar_resultados_dashboard,
 )
 
@@ -43,6 +45,26 @@ def _consulta_kpi(
     ))
 
 
+def _nfe_kpi(total_vendas: Decimal = Decimal("100"), quantidade_notas: int = 2):
+    return construir_nfe_kpi_de_row((
+        "12345678000190",
+        1,
+        2,
+        total_vendas,
+        quantidade_notas,
+        Decimal("50"),
+        Decimal("80"),
+        Decimal("20"),
+        Decimal("10"),
+        Decimal("5"),
+        Decimal("3"),
+        Decimal("2"),
+        [],
+        [],
+        [],
+    ))
+
+
 def test_normalizar_top_cidades_ignora_itens_invalidos_e_fallback():
     cidades = normalizar_top_cidades([
         {"municipio": "Sao Paulo", "valor_total": Decimal("10")},
@@ -60,6 +82,35 @@ def test_calcular_variacao_percentual():
     assert calcular_variacao_percentual(Decimal("120"), Decimal("100")) == Decimal("20.00")
     assert calcular_variacao_percentual(Decimal("0"), Decimal("0")) == Decimal("0.00")
     assert calcular_variacao_percentual(Decimal("10"), Decimal("0")) is None
+
+
+def test_resolver_periodo_anterior_kpi():
+    assert resolver_periodo_anterior_kpi(2025, 7) == (2025, 6)
+    assert resolver_periodo_anterior_kpi(2025, 1) == (2024, 12)
+    assert resolver_periodo_anterior_kpi(2025, 7, 2024, 7) == (2024, 7)
+
+
+def test_construir_comparativo_kpis_com_periodo_anterior():
+    comparativo = construir_comparativo_kpis(
+        _nfe_kpi(Decimal("120"), 6),
+        _nfe_kpi(Decimal("100"), 4),
+    )
+
+    assert comparativo.total_vendas.atual == Decimal("120")
+    assert comparativo.total_vendas.anterior == Decimal("100")
+    assert comparativo.total_vendas.variacao_percentual == Decimal("20.00")
+    assert comparativo.quantidade_notas.atual == 6
+    assert comparativo.quantidade_notas.anterior == 4
+    assert comparativo.quantidade_notas.variacao_percentual == Decimal("50.00")
+
+
+def test_construir_comparativo_kpis_sem_periodo_anterior():
+    comparativo = construir_comparativo_kpis(_nfe_kpi(Decimal("120"), 6), None)
+
+    assert comparativo.total_vendas.anterior == Decimal("0")
+    assert comparativo.total_vendas.variacao_percentual is None
+    assert comparativo.quantidade_notas.anterior == 0
+    assert comparativo.quantidade_notas.variacao_percentual is None
 
 
 def test_construir_nfe_kpi_de_row():

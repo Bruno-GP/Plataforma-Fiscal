@@ -26,6 +26,12 @@ from app.services.fiscal_analysis import (
   obter_total_tributos_reforma_documentos,
   obter_regiao_por_uf,
 )
+from app.services.fiscal_clients import (
+  construir_filtros_clientes_nfe,
+  construir_params_ranking_clientes,
+  construir_ranking_clientes,
+  construir_resposta_analise_clientes,
+)
 from app.services.fiscal_hierarchy import (
   calcular_percentual_imposto,
   construir_filtros_hierarquia_nfe,
@@ -38,6 +44,15 @@ from app.services.fiscal_hierarchy import (
   deve_montar_hierarquia_legado,
   normalizar_paginacao_hierarquia,
   resolver_nivel_hierarquia,
+)
+from app.services.fiscal_sales import (
+  construir_params_com_limite,
+  construir_ranking_cfops_vendas,
+  construir_ranking_cidades_vendas,
+  construir_ranking_clientes_vendas,
+  construir_ranking_produtos_vendas,
+  construir_ranking_regioes_vendas,
+  construir_resposta_analise_vendas,
 )
 from app.services.nfe.postres_config import carregar_config_postgres
 
@@ -993,16 +1008,9 @@ class NFeConsultaService:
           ORDER BY 2 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite(parametros, limite),
         )
-        top_clientes_valor = [
-          {
-            "cliente": cliente,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_documentos": quantidade_documentos or 0,
-          }
-          for cliente, valor_total, quantidade_documentos in cur.fetchall()
-        ]
+        top_clientes_valor = construir_ranking_clientes_vendas(cur.fetchall())
 
         cur.execute(
           f"""
@@ -1018,16 +1026,9 @@ class NFeConsultaService:
           ORDER BY 3 DESC, 2 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite(parametros, limite),
         )
-        top_clientes_quantidade = [
-          {
-            "cliente": cliente,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_documentos": quantidade_documentos or 0,
-          }
-          for cliente, valor_total, quantidade_documentos in cur.fetchall()
-        ]
+        top_clientes_quantidade = construir_ranking_clientes_vendas(cur.fetchall())
 
         cur.execute(
           f"""
@@ -1043,16 +1044,9 @@ class NFeConsultaService:
           ORDER BY 2 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite(parametros, limite),
         )
-        top_produtos_valor = [
-          {
-            "produto": produto,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_total": quantidade_total or Decimal("0.00"),
-          }
-          for produto, valor_total, quantidade_total in cur.fetchall()
-        ]
+        top_produtos_valor = construir_ranking_produtos_vendas(cur.fetchall())
 
         cur.execute(
           f"""
@@ -1068,16 +1062,9 @@ class NFeConsultaService:
           ORDER BY 3 DESC, 2 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite(parametros, limite),
         )
-        top_produtos_quantidade = [
-          {
-            "produto": produto,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_total": quantidade_total or Decimal("0.00"),
-          }
-          for produto, valor_total, quantidade_total in cur.fetchall()
-        ]
+        top_produtos_quantidade = construir_ranking_produtos_vendas(cur.fetchall())
 
         cur.execute(
           f"""
@@ -1096,21 +1083,9 @@ class NFeConsultaService:
           ORDER BY 3 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite(parametros, limite),
         )
-        top_cfops_valor = [
-          {
-            "cfop": cfop,
-            "descricao": descricao,
-            "valor_total": valor_total or Decimal("0.00"),
-            "participacao_percentual": (
-              ((valor_total or Decimal("0.00")) / total_vendido) * Decimal("100")
-              if total_vendido
-              else Decimal("0.00")
-            ),
-          }
-          for cfop, descricao, valor_total in cur.fetchall()
-        ]
+        top_cfops_valor = construir_ranking_cfops_vendas(cur.fetchall(), total_vendido)
 
         cur.execute(
           f"""
@@ -1127,17 +1102,9 @@ class NFeConsultaService:
           ORDER BY 3 DESC, 1 ASC
           LIMIT %s
           """,
-          [*parametros, limite],
+          construir_params_com_limite(parametros, limite),
         )
-        top_cidades_valor = [
-          {
-            "cidade": cidade,
-            "uf": uf,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_documentos": quantidade_documentos or 0,
-          }
-          for cidade, uf, valor_total, quantidade_documentos in cur.fetchall()
-        ]
+        top_cidades_valor = construir_ranking_cidades_vendas(cur.fetchall())
 
         cur.execute(
           f"""
@@ -1154,58 +1121,44 @@ class NFeConsultaService:
           """,
           parametros,
         )
-        top_regioes_map: dict[str, dict[str, Decimal | int | str]] = {}
-        for uf, valor_total, quantidade_documentos in cur.fetchall():
-          regiao = obter_regiao_por_uf(uf)
-          if not regiao:
-            continue
+        top_regioes_valor = construir_ranking_regioes_vendas(
+          cur.fetchall(),
+          obter_regiao_por_uf,
+          limite,
+        )
 
-          acumulado = top_regioes_map.setdefault(
-            regiao,
-            {
-              "regiao": regiao,
-              "valor_total": Decimal("0.00"),
-              "quantidade_documentos": 0,
-            },
-          )
-          acumulado["valor_total"] = Decimal(str(acumulado["valor_total"])) + (valor_total or Decimal("0.00"))
-          acumulado["quantidade_documentos"] = int(acumulado["quantidade_documentos"]) + (quantidade_documentos or 0)
+    total_impostos_complementares = obter_total_impostos_complementares_documentos(
+      self.conn_params,
+      "nfe",
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      "saida",
+    )
+    total_tributos_reforma = obter_total_tributos_reforma_documentos(
+      self.conn_params,
+      "nfe",
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      "saida",
+    )
 
-        top_regioes_valor = sorted(
-          top_regioes_map.values(),
-          key=lambda item: Decimal(str(item["valor_total"])),
-          reverse=True,
-        )[:limite]
-
-    return {
-      "emitente_cnpj": cnpj_filtrado,
-      "periodo_ano": periodo_ano,
-      "periodo_mes": periodo_mes,
-      "total_vendido": total_vendido or Decimal("0.00"),
-      "total_impostos_complementares": obter_total_impostos_complementares_documentos(
-        self.conn_params,
-        "nfe",
-        cnpj_filtrado,
-        periodo_ano,
-        periodo_mes,
-        "saida",
-      ),
-      "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-        self.conn_params,
-        "nfe",
-        cnpj_filtrado,
-        periodo_ano,
-        periodo_mes,
-        "saida",
-      ),
-      "top_clientes_valor": top_clientes_valor,
-      "top_clientes_quantidade": top_clientes_quantidade,
-      "top_produtos_valor": top_produtos_valor,
-      "top_produtos_quantidade": top_produtos_quantidade,
-      "top_cfops_valor": top_cfops_valor,
-      "top_regioes_valor": top_regioes_valor,
-      "top_cidades_valor": top_cidades_valor,
-    }
+    return construir_resposta_analise_vendas(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      total_vendido,
+      total_impostos_complementares,
+      total_tributos_reforma,
+      top_clientes_valor,
+      top_clientes_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+      top_cfops_valor,
+      top_regioes_valor,
+      top_cidades_valor,
+    )
 
   @ttl_cache(ttl_seconds=15, maxsize=128)
   def analisar_fiscal_cfop(
@@ -1651,21 +1604,11 @@ class NFeConsultaService:
     if not cnpj_filtrado:
       raise ValueError("Informe um emitente_cnpj válido.")
 
-    filtros_docs = [
-      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
-      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
-    ]
-    parametros: list[object] = [cnpj_filtrado]
-
-    if periodo_ano:
-      filtros_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
-      parametros.append(periodo_ano)
-
-    if periodo_mes:
-      filtros_docs.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
-      parametros.append(periodo_mes)
-
-    where_clause = " AND ".join(filtros_docs)
+    where_clause, parametros = construir_filtros_clientes_nfe(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+    )
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
@@ -1714,18 +1657,9 @@ class NFeConsultaService:
           ORDER BY valor_total DESC, cliente ASC
           LIMIT %s
           """,
-          [total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *parametros, limite],
+          construir_params_ranking_clientes(total_vendido, parametros, limite),
         )
-        top_clientes_valor = [
-          {
-            "cliente": cliente,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_documentos": quantidade_documentos or 0,
-            "ticket_medio": ticket_medio or Decimal("0.00"),
-            "percentual_participacao": percentual_participacao or Decimal("0.00"),
-          }
-          for cliente, valor_total, quantidade_documentos, ticket_medio, percentual_participacao in cur.fetchall()
-        ]
+        top_clientes_valor = construir_ranking_clientes(cur.fetchall())
 
         cur.execute(
           f"""
@@ -1756,28 +1690,19 @@ class NFeConsultaService:
           ORDER BY quantidade_documentos DESC, valor_total DESC, cliente ASC
           LIMIT %s
           """,
-          [total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *parametros, limite],
+          construir_params_ranking_clientes(total_vendido, parametros, limite),
         )
-        top_clientes_quantidade = [
-          {
-            "cliente": cliente,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_documentos": quantidade_documentos or 0,
-            "ticket_medio": ticket_medio or Decimal("0.00"),
-            "percentual_participacao": percentual_participacao or Decimal("0.00"),
-          }
-          for cliente, valor_total, quantidade_documentos, ticket_medio, percentual_participacao in cur.fetchall()
-        ]
+        top_clientes_quantidade = construir_ranking_clientes(cur.fetchall())
 
-    return {
-      "emitente_cnpj": cnpj_filtrado,
-      "periodo_ano": periodo_ano,
-      "periodo_mes": periodo_mes,
-      "total_vendido": total_vendido or Decimal("0.00"),
-      "total_clientes": int(total_clientes or 0),
-      "top_clientes_valor": top_clientes_valor,
-      "top_clientes_quantidade": top_clientes_quantidade,
-    }
+    return construir_resposta_analise_clientes(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      total_vendido,
+      total_clientes,
+      top_clientes_valor,
+      top_clientes_quantidade,
+    )
       
   def comparar_kpis_mensal(
     self,

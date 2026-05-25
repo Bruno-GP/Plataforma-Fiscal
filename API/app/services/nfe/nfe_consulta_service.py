@@ -32,6 +32,10 @@ from app.services.fiscal_clients import (
   construir_ranking_clientes,
   construir_resposta_analise_clientes,
 )
+from app.services.fiscal_dimensions import (
+  construir_resposta_fiscal_cfop,
+  construir_resposta_fiscal_ncm,
+)
 from app.services.fiscal_hierarchy import (
   calcular_percentual_imposto,
   construir_filtros_hierarquia_nfe,
@@ -1165,26 +1169,14 @@ class NFeConsultaService:
       periodo_mes=periodo_mes,
     )
 
-    return {
-      "emitente_cnpj": cnpj_filtrado,
-      "periodo_ano": periodo_ano,
-      "periodo_mes": periodo_mes,
-      "total_movimentado": resultado["total_movimentado"],
-      "total_impostos_complementares": total_impostos_complementares,
-      "total_tributos_reforma": total_tributos_reforma,
-      "quantidade_documentos": resultado["quantidade_documentos"],
-      "quantidade_cfops": resultado["quantidade_dimensoes"],
-      "top_categorias": resultado["top_categorias"],
-      "top_cfops": [
-        {
-          "cfop": item["codigo"],
-          "descricao": item["descricao"],
-          "valor_total": item["valor_total"],
-          "participacao_percentual": item["participacao_percentual"],
-        }
-        for item in resultado["top_dimensoes"]
-      ],
-    }
+    return construir_resposta_fiscal_cfop(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      resultado,
+      total_impostos_complementares,
+      total_tributos_reforma,
+    )
 
   @ttl_cache(ttl_seconds=15, maxsize=128)
   def analisar_fiscal_ncm(
@@ -1224,25 +1216,14 @@ class NFeConsultaService:
       periodo_mes=periodo_mes,
     )
 
-    return {
-      "emitente_cnpj": cnpj_filtrado,
-      "periodo_ano": periodo_ano,
-      "periodo_mes": periodo_mes,
-      "total_movimentado": resultado["total_movimentado"],
-      "total_impostos_complementares": total_impostos_complementares,
-      "total_tributos_reforma": total_tributos_reforma,
-      "quantidade_documentos": resultado["quantidade_documentos"],
-      "quantidade_ncms": resultado["quantidade_dimensoes"],
-      "top_ncms": [
-        {
-          "ncm": item["codigo"],
-          "descricao": item["descricao"],
-          "valor_total": item["valor_total"],
-          "participacao_percentual": item["participacao_percentual"],
-        }
-        for item in resultado["top_dimensoes"]
-      ],
-    }
+    return construir_resposta_fiscal_ncm(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      resultado,
+      total_impostos_complementares,
+      total_tributos_reforma,
+    )
 
   @ttl_cache(ttl_seconds=15, maxsize=128)
   def analisar_fiscal_hierarquia(

@@ -3,7 +3,7 @@ from typing import Optional
 
 import psycopg
 
-from app.models.nfe.schemas import NFeKPI, NFeKPIConsulta
+from app.models.nfe.schemas import NFeKPIConsulta
 from app.services.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
@@ -35,6 +35,7 @@ from app.services.fiscal_hierarchy import (
   normalizar_paginacao_hierarquia,
   resolver_nivel_hierarquia,
 )
+from app.services.fiscal_kpis import construir_sped_kpi_consulta
 from app.services.fiscal_purchases import (
   construir_filtros_compras_sped,
   construir_params_com_limite_compras,
@@ -247,35 +248,14 @@ class SpedConsultaService:
 
           resultados: list[NFeKPIConsulta] = []
           for row in rows:
-            kpi_id, processamento_id, cnpj_emitente, ano, mes, total_vendas, total_docs, ticket_medio, maior_nota, menor_nota, total_icms, total_ipi, total_pis, total_cofins = row
+            ano = row[3]
+            mes = row[4]
             top_clientes = self._top_clientes(cur, cnpj, ano, mes)
             top_cidades = self._top_cidades(cur, cnpj, ano, mes)
             top_produtos = self._top_produtos(cur, cnpj, ano, mes)
-
             resultados.append(
-              NFeKPIConsulta(
-                  periodo_ano=ano,
-                  periodo_mes=mes,
-                  emitente_cnpj=cnpj_emitente,
-                  kpis=NFeKPI(
-                    id=kpi_id,
-                    processamento_id=processamento_id,
-                    emitente_cnpj=cnpj_emitente,
-                    total_vendas=total_vendas or Decimal("0.00"),
-                    quantidade_notas=total_docs or 0,
-                    ticket_medio=ticket_medio or Decimal("0.00"),
-                    maior_nota=maior_nota or Decimal("0.00"),
-                    menor_nota=menor_nota or Decimal("0.00"),
-                    total_icms=total_icms or Decimal("0.00"),
-                    total_ipi=total_ipi or Decimal("0.00"),
-                    total_pis=total_pis or Decimal("0.00"),
-                    total_cofins=total_cofins or Decimal("0.00"),
-                    top_clientes=top_clientes,
-                    top_produtos=top_produtos,
-                    top_cidades=top_cidades,
-                  ),
-                )
-              )
+              construir_sped_kpi_consulta(row, top_clientes, top_produtos, top_cidades)
+            )
 
           return resultados
 

@@ -5,17 +5,14 @@ from decimal import Decimal
 import psycopg
 from fastapi import HTTPException, status
 
-from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
 from app.core.cache import ttl_cache
 from app.models.nfe.schemas import (
   DashboardVendasResponse,
-  DashboardVendasResumo,
   KPIComparativoQuantidade,
   KPIComparativoValor,
   KPIsComparativo,
   NFeKPI,
   NFeKPIConsulta,
-  SerieMensalVendasItem,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.fiscal_analysis import (
@@ -48,6 +45,18 @@ from app.services.fiscal_hierarchy import (
   deve_montar_hierarquia_legado,
   normalizar_paginacao_hierarquia,
   resolver_nivel_hierarquia,
+)
+from app.services.fiscal_kpis import (
+  calcular_variacao_percentual,
+  construir_dashboard_vendas_response,
+  construir_nfe_kpi_consulta_de_row,
+  construir_nfe_kpi_de_row,
+  construir_periodos_dashboard,
+  construir_resumo_dashboard,
+  construir_serie_mensal_dashboard,
+  obter_anos_disponiveis_kpis,
+  resolver_ano_referencia_dashboard,
+  selecionar_resultados_dashboard,
 )
 from app.services.fiscal_purchases import (
   construir_filtros_compras_nfe,
@@ -344,11 +353,8 @@ class NFeConsultaService:
     limite: int = 5,
   ) -> DashboardVendasResponse:
     resultados_anos = self.listar_kpis(emitente_cnpj=emitente_cnpj, limite=120)
-    anos_disponiveis = sorted(
-      {item.periodo_ano for item in resultados_anos if item.periodo_ano},
-      reverse=True,
-    )
-    ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
+    anos_disponiveis = obter_anos_disponiveis_kpis(resultados_anos)
+    ano_referencia = resolver_ano_referencia_dashboard(periodo_ano, anos_disponiveis)
 
     if ano_referencia is None:
       raise HTTPException(
@@ -366,28 +372,22 @@ class NFeConsultaService:
       periodo_ano=ano_referencia - 1,
       limite=120,
     )
-    ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
-
-    if periodo_mes is not None:
-      resultados_filtrados = [item for item in resultados_ano_atual if item.periodo_mes == periodo_mes]
-      resultados_anteriores = (
-        [item for item in resultados_ano_atual if item.periodo_mes == mes_anterior]
-        if ano_anterior == ano_referencia
-        else [item for item in resultados_ano_anterior if item.periodo_mes == mes_anterior]
+    resultados_filtrados, resultados_anteriores, ano_anterior, mes_anterior = (
+      selecionar_resultados_dashboard(
+        resultados_ano_atual,
+        resultados_ano_anterior,
+        ano_referencia,
+        periodo_mes,
       )
-    else:
-      resultados_filtrados = resultados_ano_atual
-      resultados_anteriores = resultados_ano_anterior
+    )
 
-    periodos_tributos = {
-      (ano_referencia, periodo_mes),
-      (ano_anterior, mes_anterior),
-      *{
-        (ano_referencia, item.periodo_mes)
-        for item in resultados_ano_atual
-        if item.periodo_mes
-      },
-    }
+    periodos_tributos = construir_periodos_dashboard(
+      ano_referencia,
+      periodo_mes,
+      ano_anterior,
+      mes_anterior,
+      resultados_ano_atual,
+    )
     totais_tributos = obter_totais_tributos_documentos_por_periodo(
       self.conn_params,
       "nfe",
@@ -400,67 +400,31 @@ class NFeConsultaService:
       periodos=periodos_tributos,
     )
 
-    resumo_atual = resumir_vendas_por_kpis(
+    resumo_atual = construir_resumo_dashboard(
       resultados_filtrados,
-      DashboardVendasResumo,
+      (ano_referencia, periodo_mes),
+      totais_vendidos,
+      totais_tributos,
       limite,
-    ).model_copy(update={
-      "total_vendido": totais_vendidos.get((ano_referencia, periodo_mes), Decimal("0.00")),
-      **totais_tributos.get(
-        (ano_referencia, periodo_mes),
-        {
-          "total_impostos_complementares": Decimal("0.00"),
-          "total_tributos_reforma": Decimal("0.00"),
-        },
-      ),
-    })
-    resumo_anterior = resumir_vendas_por_kpis(
+    )
+    resumo_anterior = construir_resumo_dashboard(
       resultados_anteriores,
-      DashboardVendasResumo,
+      (ano_anterior, mes_anterior),
+      totais_vendidos,
+      totais_tributos,
       limite,
-    ).model_copy(update={
-      "total_vendido": totais_vendidos.get((ano_anterior, mes_anterior), Decimal("0.00")),
-      **totais_tributos.get(
-        (ano_anterior, mes_anterior),
-        {
-          "total_impostos_complementares": Decimal("0.00"),
-          "total_tributos_reforma": Decimal("0.00"),
-        },
-      ),
-    })
+    )
 
-    serie_mensal = [
-      SerieMensalVendasItem(
-        periodo_ano=ano_referencia,
-        periodo_mes=item.periodo_mes or 0,
-        total_vendido=totais_vendidos.get(
-          (ano_referencia, item.periodo_mes),
-          Decimal(str(item.kpis.total_vendas or 0)),
-        ),
-        quantidade_notas=int(item.kpis.quantidade_notas or 0),
-        total_impostos=(
-          Decimal(str(item.kpis.total_icms or 0))
-          + Decimal(str(item.kpis.total_ipi or 0))
-          + Decimal(str(item.kpis.total_pis or 0))
-          + Decimal(str(item.kpis.total_cofins or 0))
-        ),
-        total_impostos_complementares=totais_tributos.get(
-          (ano_referencia, item.periodo_mes),
-          {},
-        ).get("total_impostos_complementares", Decimal("0.00")),
-        total_tributos_reforma=totais_tributos.get(
-          (ano_referencia, item.periodo_mes),
-          {},
-        ).get("total_tributos_reforma", Decimal("0.00")),
-      )
-      for item in sorted(resultados_ano_atual, key=lambda resultado: resultado.periodo_mes or 0)
-      if item.periodo_mes
-    ]
+    serie_mensal = construir_serie_mensal_dashboard(
+      ano_referencia,
+      resultados_ano_atual,
+      totais_vendidos,
+      totais_tributos,
+    )
 
-    return DashboardVendasResponse(
-      status="ok",
+    return construir_dashboard_vendas_response(
       emitente_cnpj=emitente_cnpj,
-      periodo_ano=ano_referencia,
+      ano_referencia=ano_referencia,
       periodo_mes=periodo_mes,
       anos_disponiveis=anos_disponiveis,
       resumo_atual=resumo_atual,
@@ -628,37 +592,8 @@ class NFeConsultaService:
     if not row:
       return None
 
-    return NFeKPI(
-      emitente_cnpj=row[0],
-      id=row[1],
-      processamento_id=row[2],
-      total_vendas=row[3] or 0,
-      quantidade_notas=row[4] or 0,
-      ticket_medio=row[5] or 0,
-      maior_nota=row[6] or 0,
-      menor_nota=row[7] or 0,
-      total_icms=row[8] or 0,
-      total_ipi=row[9] or 0,
-      total_pis=row[10] or 0,
-      total_cofins=row[11] or 0,
-      top_clientes=row[12] or [],
-      top_produtos=row[13] or [],
-      top_cidades=self._normalizar_top_cidades(row[14]),  
-    )
+    return construir_nfe_kpi_de_row(row)
 
-  def _calcular_variacao_percentual(
-    self,
-    atual: Decimal,
-    anterior: Decimal,
-  ) -> Optional[Decimal]:
-    if anterior == 0:
-      if atual == 0:
-        return Decimal("0.00")
-      return None
-    return ((atual - anterior) / anterior * Decimal("100")).quantize(
-      Decimal("0.01")
-    )
-    
   def _normalizar_top_cidades(
     self,
     top_cidades: list[dict] | None,
@@ -762,30 +697,7 @@ class NFeConsultaService:
 
       resultados = []
       for row in kpis_rows:
-        resultados.append(
-          NFeKPIConsulta(
-            periodo_ano=row[0],
-            periodo_mes=row[1],
-            emitente_cnpj=row[2],
-            kpis=NFeKPI(
-              emitente_cnpj=row[2],
-              id=row[3],
-              processamento_id=row[4],
-              total_vendas=row[5] or 0,
-              quantidade_notas=row[6] or 0,
-              ticket_medio=row[7] or 0,
-              maior_nota=row[8] or 0,
-              menor_nota=row[9] or 0,
-              total_icms=row[10] or 0,
-              total_ipi=row[11] or 0,
-              total_pis=row[12] or 0,
-              total_cofins=row[13] or 0,
-              top_clientes=row[14] or [],
-              top_produtos=row[15] or [],
-              top_cidades=self._normalizar_top_cidades(row[16]),
-            ),
-          )
-        )
+        resultados.append(construir_nfe_kpi_consulta_de_row(row))
 
       return resultados
     
@@ -1728,14 +1640,14 @@ class NFeConsultaService:
       total_vendas=KPIComparativoValor(
         atual=total_vendas_atual,
         anterior=total_vendas_anterior,
-        variacao_percentual=self._calcular_variacao_percentual(
+        variacao_percentual=calcular_variacao_percentual(
           total_vendas_atual, total_vendas_anterior
         ),
       ),
       quantidade_notas=KPIComparativoQuantidade(
         atual=kpi_atual.quantidade_notas,
         anterior=anterior.quantidade_notas,
-        variacao_percentual=self._calcular_variacao_percentual(
+        variacao_percentual=calcular_variacao_percentual(
           Decimal(kpi_atual.quantidade_notas),
           Decimal(anterior.quantidade_notas),
         ),
@@ -1743,49 +1655,49 @@ class NFeConsultaService:
       ticket_medio=KPIComparativoValor(
         atual=ticket_medio_atual,
         anterior=ticket_medio_anterior,
-        variacao_percentual=self._calcular_variacao_percentual(
+        variacao_percentual=calcular_variacao_percentual(
           ticket_medio_atual, ticket_medio_anterior
         ),
       ),
       maior_nota=KPIComparativoValor(
         atual=maior_nota_atual,
         anterior=maior_nota_anterior,
-        variacao_percentual=self._calcular_variacao_percentual(
+        variacao_percentual=calcular_variacao_percentual(
           maior_nota_atual, maior_nota_anterior
         ),
       ),
       menor_nota=KPIComparativoValor(
         atual=menor_nota_atual,
         anterior=menor_nota_anterior,
-        variacao_percentual=self._calcular_variacao_percentual(
+        variacao_percentual=calcular_variacao_percentual(
           menor_nota_atual, menor_nota_anterior
         ),
       ),
       total_icms=KPIComparativoValor(
         atual=total_icms_atual,
         anterior=total_icms_anterior,
-        variacao_percentual=self._calcular_variacao_percentual(
+        variacao_percentual=calcular_variacao_percentual(
           total_icms_atual, total_icms_anterior
         ),
       ),
       total_ipi=KPIComparativoValor(
         atual=total_ipi_atual,
         anterior=total_ipi_anterior,
-        variacao_percentual=self._calcular_variacao_percentual(
+        variacao_percentual=calcular_variacao_percentual(
           total_ipi_atual, total_ipi_anterior
         ),
       ),
       total_pis=KPIComparativoValor(
         atual=total_pis_atual,
         anterior=total_pis_anterior,
-        variacao_percentual=self._calcular_variacao_percentual(
+        variacao_percentual=calcular_variacao_percentual(
           total_pis_atual, total_pis_anterior
         ),
       ),
       total_cofins=KPIComparativoValor(
         atual=total_cofins_atual,
         anterior=total_cofins_anterior,
-        variacao_percentual=self._calcular_variacao_percentual(
+        variacao_percentual=calcular_variacao_percentual(
           total_cofins_atual, total_cofins_anterior
         ),
       ),

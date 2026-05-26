@@ -88,12 +88,12 @@ const createNavigationGroups = (temSped?: boolean): NavigationGroup[] => {
         { label: 'Relatorios IA', path: '/relatorios-ia', icon: Sparkles },
       ],
     },
-    {
-      label: 'Configuracoes',
-      items: [
-        { label: 'Configuracoes', path: '/configuracoes', icon: Settings },
-      ],
-    },
+    // {
+    //   label: 'Configuracoes',
+    //   items: [
+    //     { label: 'Configuracoes', path: '/configuracoes', icon: Settings },
+    //   ],
+    // },
   ];
 };
 
@@ -151,16 +151,16 @@ export function AppSidebar() {
     >
       <SidebarHeader className="border-b border-slate-700/70 bg-[#111827] p-5 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-4">
         <div className="space-y-6 group-data-[collapsible=icon]:space-y-0">
-          <div className="text-xl font-bold text-sky-300 group-data-[collapsible=icon]:text-center group-data-[collapsible=icon]:text-lg">
+          {/* <div className="text-xl font-bold text-sky-300 group-data-[collapsible=icon]:text-center group-data-[collapsible=icon]:text-lg">
             <span className="group-data-[collapsible=icon]:hidden">TaxVision Pro</span>
             <span className="hidden group-data-[collapsible=icon]:inline">TV</span>
-          </div>
+          </div> */}
 
           <div className="space-y-1 group-data-[collapsible=icon]:hidden">
             <p className="truncate text-2xl font-semibold tracking-tight text-slate-100" title={companyName}>
               {companyName}
             </p>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Tax Specialist</p>
+            {/* <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Tax Specialist</p> */}
           </div>
         </div>
       </SidebarHeader>
@@ -200,13 +200,13 @@ export function AppSidebar() {
 
       <SidebarFooter className="mt-auto border-t border-slate-700/70 bg-[#111827] p-4 group-data-[collapsible=icon]:px-2">
         <div className="space-y-2">
-          <Button
+          {/* <Button
             variant="ghost"
             className="w-full justify-start gap-3 text-slate-300 hover:bg-slate-800 hover:text-slate-50 group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
           >
             <Headphones className="h-4 w-4" />
             <span className="group-data-[collapsible=icon]:hidden">Suporte</span>
-          </Button>
+          </Button> */}
           <Button
             variant="ghost"
             onClick={handleLogout}

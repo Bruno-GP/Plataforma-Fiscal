@@ -29,10 +29,10 @@ export function AppHeader() {
         <SidebarTrigger className="text-slate-300 hover:bg-slate-800 hover:text-slate-50 md:hidden" />
 
         <div className="flex shrink-0 items-center gap-3">
-          <span className="text-lg font-semibold text-sky-300">TaxVision Pro</span>
-          <span className="hidden h-6 w-px bg-slate-700 lg:block" />
+          {/* <span className="text-lg font-semibold text-sky-300">TaxVision Pro</span>
+          <span className="hidden h-6 w-px bg-slate-700 lg:block" /> */}
           <span className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 lg:block">
-            Fiscal Analytics
+            Análise Fiscal
           </span>
         </div>
 
@@ -45,7 +45,7 @@ export function AppHeader() {
           />
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+        {/* <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           <Button variant="ghost" size="icon" aria-label="Notificacoes" className="relative text-slate-300">
             <Bell className="h-5 w-5" />
             <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-400 ring-2 ring-[#08111f]" />
@@ -74,7 +74,7 @@ export function AppHeader() {
           >
             <LogOut className="h-4 w-4" />
           </Button>
-        </div>
+        </div> */}
       </div>
     </header>
   );

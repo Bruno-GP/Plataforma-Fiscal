@@ -297,6 +297,50 @@ def test_job_failed_simulado(monkeypatch, caplog):
     assert failed.erro_tipo == "ValueError"
 
 
+def test_nfe_job_falha_quando_processador_nao_consolida(monkeypatch, caplog):
+    updates = []
+
+    class Repo:
+        def mark_running(self, job_id, mensagem=None):
+            updates.append(("running", mensagem))
+
+        def update_progress(self, job_id, **kwargs):
+            updates.append(("progress", kwargs))
+
+        def update_status(self, job_id, status, **kwargs):
+            updates.append(("status", status, kwargs))
+
+    class Importacao:
+        def listar_xmls_importados_nao_processados(self, cnpj):
+            return [(1, "nfe.xml", b"<xml/>")]
+
+        def marcar_como_processados(self, ids):
+            updates.append(("marcar", ids))
+
+    class Processador:
+        def executar_xmls_importados(self, cnpj_emitente, xmls_importados):
+            erro = {"mensagem": "Falha fiscal"}
+            return type("Resp", (), {"status": "erro", "erros": [erro]})(), []
+
+    monkeypatch.setattr("app.workers.nfe_tasks.JobsRepository", Repo)
+    monkeypatch.setattr("app.workers.nfe_tasks.XMLImportacaoService", Importacao)
+    monkeypatch.setattr("app.workers.nfe_tasks.ProcessarNFeService", Processador)
+
+    from app.workers.nfe_tasks import processar_nfe_importados_task
+
+    with caplog.at_level(logging.ERROR, logger="workers.nfe"):
+        with pytest.raises(RuntimeError, match="Falha fiscal"):
+            processar_nfe_importados_task.run("job-nfe-erro", {"cnpj_emitente": "12345678000190"})
+
+    assert ("marcar", []) not in updates
+    status_update = next(item for item in updates if item[0] == "status")
+    assert status_update[1] == JobStatus.FAILED
+    assert status_update[2]["erro"] == "Falha fiscal"
+    failed = next(record for record in caplog.records if record.message == "job_failed")
+    assert failed.erro_tipo == "RuntimeError"
+    assert failed.status == "FAILED"
+
+
 def test_sped_job_success_loga_contexto_operacional(monkeypatch, caplog):
     updates = []
 
@@ -341,3 +385,44 @@ def test_sped_job_success_loga_contexto_operacional(monkeypatch, caplog):
     assert completed.status == "SUCCESS"
     assert completed.total_itens == 1
     assert completed.itens_processados == 1
+
+
+def test_sped_job_falha_quando_processamento_nao_retorna_ids(monkeypatch, caplog):
+    updates = []
+
+    class Repo:
+        def mark_running(self, job_id, mensagem=None):
+            updates.append(("running", mensagem))
+
+        def update_progress(self, job_id, **kwargs):
+            updates.append(("progress", kwargs))
+
+        def update_status(self, job_id, status, **kwargs):
+            updates.append(("status", status, kwargs))
+
+    class Importacao:
+        def contar_pendentes(self, cnpj):
+            return 1
+
+        def processar_importados(self, cnpj):
+            return {}, 0, []
+
+        def marcar_como_processados(self, ids):
+            updates.append(("marcar", ids))
+
+    monkeypatch.setattr("app.workers.sped_tasks.JobsRepository", Repo)
+    monkeypatch.setattr("app.workers.sped_tasks.SpedImportacaoService", Importacao)
+
+    from app.workers.sped_tasks import processar_sped_importados_task
+
+    with caplog.at_level(logging.ERROR, logger="workers.sped"):
+        with pytest.raises(ValueError, match="Nenhum arquivo SPED pendente"):
+            processar_sped_importados_task.run("job-sped-erro", {"cnpj_emitente": "12345678000190"})
+
+    assert ("marcar", []) not in updates
+    assert any(item[0] == "progress" and item[1]["total_itens"] == 1 for item in updates)
+    status_update = next(item for item in updates if item[0] == "status")
+    assert status_update[1] == JobStatus.FAILED
+    failed = next(record for record in caplog.records if record.message == "job_failed")
+    assert failed.erro_tipo == "ValueError"
+    assert failed.status == "FAILED"

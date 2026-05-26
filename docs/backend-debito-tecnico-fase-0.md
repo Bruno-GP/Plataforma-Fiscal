@@ -206,6 +206,77 @@ Criterio para iniciar a Fase 2:
 - Preservar os contratos HTTP protegidos nesta fase.
 - Nao alterar schema ou regra fiscal junto com a criacao de repositories/use cases.
 
+## Progresso da Fase 2
+
+Primeira extracao concluida:
+
+- Criado `ReformaTributariaBackfillRepository`.
+- Removido da rota `POST /api/reforma-tributaria/backfill` o controle direto de conexao/transacao.
+- Mantido o contrato HTTP da rota.
+- Adicionado teste especifico para a rota delegar ao repository.
+- Adicionado teste especifico para o repository preservar origem, commit e chamada ao sync correto.
+
+Segunda extracao concluida:
+
+- Criado `NFeNotasRepository`.
+- Removido da rota `GET /api/nfe/notas/detalhado` o acesso direto a conexao PostgreSQL.
+- Mantida na rota a responsabilidade de contrato HTTP, resolucao de periodo, validacao de empresa e montagem do schema de resposta.
+- Movida para o repository a orquestracao de consulta de notas, paginacao e busca de tributos dos itens usando uma unica conexao.
+- Adicionado teste especifico para a rota delegar ao repository preservando periodo default, paginacao, tributos e descricao NCM.
+- Adicionado teste especifico para o repository preservar paginacao e coleta de tributos por item.
+
+Terceira extracao concluida:
+
+- Criado `montar_dashboard_compras` em `app.services.shared.compras_dashboard_service`.
+- Removida das rotas `GET /api/nfe/analise/compras/dashboard` e `GET /api/sped/analise/compras/dashboard` a montagem duplicada de anos disponiveis, periodo anterior, serie mensal e totais fiscais.
+- Centralizada em um service compartilhado a regra de dashboard de compras para NFe/SPED, mantendo a origem do documento como parametro explicito.
+- Mantidos os schemas publicos de resposta das duas rotas.
+- Adicionado teste especifico para o service compartilhado preservar periodo, serie mensal e repasse da origem fiscal.
+
+Quarta extracao concluida:
+
+- Criado `SpedConsultaService.consultar_dashboard_vendas`.
+- Removida da rota `GET /api/sped/analise/vendas/dashboard` a montagem direta de KPIs, serie mensal, resumo atual/anterior e totais fiscais.
+- Alinhada a rota SPED de vendas com o padrao ja usado em NFe: validar perfil e delegar a montagem para o service.
+- Mantido o schema publico `DashboardVendasResponse`.
+- Adicionado teste para a rota delegar ao service e teste direto para o service preservar periodos, serie mensal e totais fiscais.
+
+Quinta extracao concluida:
+
+- Criado `injetar_relatorio_ia` em `app.services.shared.ia_report_service`.
+- Removida da rota NFe a funcao local de injecao de relatorio IA.
+- Removida das rotas SPED de compras, vendas e clientes a duplicacao de disponibilidade OpenAI e chamada aos geradores de relatorio.
+- Centralizado o comportamento de indisponibilidade da integracao OpenAI e selecao do gerador por tipo de relatorio.
+- Adicionados testes para o helper compartilhado preencher `relatorio_ia` e preservar HTTP 503 quando OpenAI estiver indisponivel.
+
+Sexta extracao concluida:
+
+- Criado `executar_analise_com_relatorio_ia` em `app.services.shared.analise_relatorio_service`.
+- Reduzida a orquestracao duplicada nas rotas analiticas NFe/SPED de compras, vendas e clientes.
+- Mantidos nas rotas os contratos HTTP, validacoes de perfil/emitente e conversao de excecoes.
+- Centralizado o fluxo "executar analise, opcionalmente anexar relatorio IA e retornar resultado".
+- Adicionados testes para o helper executar a analise sem relatorio e injetar relatorio quando solicitado.
+
+Setima extracao concluida:
+
+- Criado `app.api.shared.company_validation`.
+- Movidas para helpers compartilhados as validacoes de perfil `validar_empresa_xml` e `validar_empresa_sped`.
+- Removida das rotas NFe/SPED a dependencia direta de `CompanyProfileService` para validacao de tipo de empresa.
+- Atualizados testes de rotas, uploads e jobs para usar o novo ponto de monkeypatch.
+- Adicionado teste direto para preservar as regras de bloqueio XML/SPED.
+
+Comando de verificacao usado:
+
+```powershell
+.\API\.venv-local\Scripts\python.exe -m pytest API/app/tests -q
+```
+
+Resultado atual:
+
+- 170 testes passaram.
+- 5 testes foram pulados por condicoes opcionais ja previstas na suite.
+- 3 warnings conhecidos de dependencias/deprecacoes.
+
 ## Referencias Existentes
 
 - `docs/api-contracts.md`

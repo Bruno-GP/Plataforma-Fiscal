@@ -134,7 +134,7 @@ def test_obter_job_de_outra_empresa_retorna_404(client, monkeypatch):
 
 def test_endpoint_nfe_processar_importados_retorna_202(client, monkeypatch):
     job_id = uuid4()
-    monkeypatch.setattr("app.api.nfe.routes.CompanyProfileService.empresa_tem_sped", lambda self, cnpj: False)
+    monkeypatch.setattr("app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped", lambda self, cnpj: False)
     monkeypatch.setattr("app.api.nfe.routes.XMLImportacaoService.contar_xmls_pendentes", lambda self, cnpj: 1)
     monkeypatch.setattr(
         "app.api.nfe.routes.JobService.criar_processamento_nfe_importados",
@@ -149,7 +149,7 @@ def test_endpoint_nfe_processar_importados_retorna_202(client, monkeypatch):
 
 def test_endpoint_sped_processar_importados_retorna_202(client, monkeypatch):
     job_id = uuid4()
-    monkeypatch.setattr("app.api.sped.routes.CompanyProfileService.empresa_tem_sped", lambda self, cnpj: True)
+    monkeypatch.setattr("app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped", lambda self, cnpj: True)
     monkeypatch.setattr("app.api.sped.routes.SpedImportacaoService.contar_pendentes", lambda self, cnpj: 1)
     monkeypatch.setattr(
         "app.api.sped.routes.JobService.criar_processamento_sped_importados",

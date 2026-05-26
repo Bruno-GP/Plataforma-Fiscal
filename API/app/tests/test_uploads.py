@@ -12,7 +12,7 @@ def _resultado(arquivo, cnpj, status, mensagem="ok"):
 
 def test_upload_xml_valido(client, fixtures_dir, monkeypatch):
     monkeypatch.setattr(
-        "app.api.nfe.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: False,
     )
     monkeypatch.setattr(
@@ -39,7 +39,7 @@ def test_upload_xml_valido(client, fixtures_dir, monkeypatch):
 
 def test_upload_xml_rejeita_empresa_sped(client, fixtures_dir, monkeypatch):
     monkeypatch.setattr(
-        "app.api.nfe.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: True,
     )
 
@@ -55,7 +55,7 @@ def test_upload_xml_rejeita_empresa_sped(client, fixtures_dir, monkeypatch):
 
 def test_upload_xml_preserva_resumo_parcial_importado_duplicado_e_erro(client, fixtures_dir, monkeypatch):
     monkeypatch.setattr(
-        "app.api.nfe.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: False,
     )
     monkeypatch.setattr(
@@ -90,7 +90,7 @@ def test_upload_xml_preserva_resumo_parcial_importado_duplicado_e_erro(client, f
 
 def test_upload_xml_invalido(client, fixtures_dir, monkeypatch):
     monkeypatch.setattr(
-        "app.api.nfe.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: False,
     )
 
@@ -105,7 +105,7 @@ def test_upload_xml_invalido(client, fixtures_dir, monkeypatch):
 
 def test_upload_xml_rejeita_extensao_nao_xml(client, monkeypatch):
     monkeypatch.setattr(
-        "app.api.nfe.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: False,
     )
 
@@ -121,7 +121,7 @@ def test_upload_xml_rejeita_extensao_nao_xml(client, monkeypatch):
 def test_upload_xml_limite(client, monkeypatch):
     monkeypatch.setenv("UPLOAD_MAX_XML_BYTES", "1024")
     monkeypatch.setattr(
-        "app.api.nfe.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: False,
     )
 
@@ -136,7 +136,7 @@ def test_upload_xml_limite(client, monkeypatch):
 
 def test_upload_sped_valido(client, fixtures_dir, monkeypatch):
     monkeypatch.setattr(
-        "app.api.sped.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: True,
     )
     monkeypatch.setattr(
@@ -163,7 +163,7 @@ def test_upload_sped_valido(client, fixtures_dir, monkeypatch):
 
 def test_upload_sped_rejeita_empresa_xml(client, fixtures_dir, monkeypatch):
     monkeypatch.setattr(
-        "app.api.sped.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: False,
     )
 
@@ -179,7 +179,7 @@ def test_upload_sped_rejeita_empresa_xml(client, fixtures_dir, monkeypatch):
 
 def test_upload_sped_preserva_resumo_parcial_importado_duplicado_e_erro(client, fixtures_dir, monkeypatch):
     monkeypatch.setattr(
-        "app.api.sped.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: True,
     )
     monkeypatch.setattr(
@@ -214,7 +214,7 @@ def test_upload_sped_preserva_resumo_parcial_importado_duplicado_e_erro(client, 
 
 def test_upload_sped_rejeita_extensao_nao_txt(client, monkeypatch):
     monkeypatch.setattr(
-        "app.api.sped.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: True,
     )
 
@@ -229,7 +229,7 @@ def test_upload_sped_rejeita_extensao_nao_txt(client, monkeypatch):
 
 def test_upload_sped_rejeita_txt_vazio(client, monkeypatch):
     monkeypatch.setattr(
-        "app.api.sped.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: True,
     )
 
@@ -244,7 +244,7 @@ def test_upload_sped_rejeita_txt_vazio(client, monkeypatch):
 
 def test_pendencias_xml_e_sped_preservam_shape(client, monkeypatch):
     monkeypatch.setattr(
-        "app.api.nfe.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: False,
     )
     monkeypatch.setattr("app.api.nfe.routes.XMLImportacaoService.contar_xmls_pendentes", lambda self, cnpj: 2)
@@ -252,7 +252,7 @@ def test_pendencias_xml_e_sped_preservam_shape(client, monkeypatch):
 
     xml = client.get("/api/nfe/xml/pendencias?cnpj_emitente=12345678000190")
     monkeypatch.setattr(
-        "app.api.sped.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: True,
     )
     sped = client.get("/api/sped/pendencias?cnpj_emitente=12345678000190")
@@ -275,7 +275,7 @@ def test_pendencias_xml_e_sped_preservam_shape(client, monkeypatch):
 
 def test_processar_importados_sem_pendencias_retorna_404(client, monkeypatch):
     monkeypatch.setattr(
-        "app.api.nfe.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: False,
     )
     monkeypatch.setattr("app.api.nfe.routes.XMLImportacaoService.contar_xmls_pendentes", lambda self, cnpj: 0)
@@ -283,7 +283,7 @@ def test_processar_importados_sem_pendencias_retorna_404(client, monkeypatch):
 
     xml = client.post("/api/nfe/xml/processar-importados?cnpj_emitente=12345678000190")
     monkeypatch.setattr(
-        "app.api.sped.routes.CompanyProfileService.empresa_tem_sped",
+        "app.api.shared.company_validation.CompanyProfileService.empresa_tem_sped",
         lambda self, cnpj: True,
     )
     sped = client.post("/api/sped/processar-importados?cnpj_emitente=12345678000190")

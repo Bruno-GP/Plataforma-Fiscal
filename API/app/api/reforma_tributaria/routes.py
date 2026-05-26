@@ -12,12 +12,11 @@ from app.models.reforma_tributaria.schemas import (
   ConsultaMemoriaCalculoTributariaResponse,
   ConsultaTributosResponse,
 )
-from app.services.nfe.postres_config import carregar_config_postgres
+from app.repositories.reforma_tributaria.backfill_repository import (
+  ReformaTributariaBackfillRepository,
+)
 from app.services.reforma_tributaria.reforma_tributaria_consulta_service import (
   ReformaTributariaConsultaService,
-)
-from app.services.reforma_tributaria.reforma_tributaria_sync_service import (
-  ReformaTributariaSyncService,
 )
 
 
@@ -53,28 +52,11 @@ def backfill_reforma_tributaria(
   origem: str = Query(default="nfe", pattern="^(nfe|sped)$"),
 ):
   # logger.info("Requisicao de backfill da Reforma recebida: emitente_cnpj=%s origem=%s", emitente_cnpj, origem)
-  config = carregar_config_postgres()
-  conn_params = {
-    "host": config["host"],
-    "port": config["port"],
-    "dbname": config["database"],
-    "user": config["user"],
-    "password": config["password"],
-  }
-
-  if config.get("conninfo"):
-    conn_params = {"conninfo": config["conninfo"]}
-  if config.get("sslmode"):
-    conn_params["sslmode"] = config["sslmode"]
-
   try:
-    with psycopg.connect(**conn_params) as conn:
-      sync_service = ReformaTributariaSyncService()
-      if origem == "sped":
-        resultados = sync_service.sincronizar_sped_todos_periodos(conn, emitente_cnpj)
-      else:
-        resultados = sync_service.sincronizar_nfe_todos_periodos(conn, emitente_cnpj)
-      conn.commit()
+    resultados = ReformaTributariaBackfillRepository().executar(
+      emitente_cnpj=emitente_cnpj,
+      origem=origem,
+    )
   except psycopg.Error as exc:
     logger.exception("Falha no backfill da Reforma: emitente_cnpj=%s origem=%s", emitente_cnpj, origem)
     raise HTTPException(

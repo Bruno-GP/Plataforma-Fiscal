@@ -1,6 +1,10 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from app.repositories.reforma_tributaria.backfill_repository import (
+    ReformaTributariaBackfillRepository,
+)
+
 
 CNPJ = "12345678000190"
 
@@ -135,6 +139,14 @@ class FakeSyncService:
         return [{"origem": "sped", "periodo_ano": 2025, "periodo_mes": 3, "documentos": 1}]
 
 
+class FakeBackfillRepository:
+    calls = []
+
+    def executar(self, **kwargs):
+        self.calls.append(kwargs)
+        return [{"origem": kwargs["origem"], "periodo_ano": 2025, "periodo_mes": 3, "documentos": 1}]
+
+
 def test_reforma_tributaria_lista_tributos_preserva_contrato(client, monkeypatch):
     FakeReformaConsultaService.instances = []
     monkeypatch.setattr(
@@ -218,17 +230,11 @@ def test_reforma_tributaria_memoria_preserva_paginacao_e_total(client, monkeypat
     assert payload["resultados"][0]["etapa_calculo"] == "rateio_documento"
 
 
-def test_reforma_tributaria_backfill_preserva_origem_e_commit(client, monkeypatch):
-    connection = FakeConnection()
-    FakeSyncService.calls = []
+def test_reforma_tributaria_backfill_rota_delega_para_repository(client, monkeypatch):
+    FakeBackfillRepository.calls = []
     monkeypatch.setattr(
-        "app.api.reforma_tributaria.routes.carregar_config_postgres",
-        lambda: {"host": "localhost", "port": 5432, "database": "test", "user": "u", "password": "p"},
-    )
-    monkeypatch.setattr("app.api.reforma_tributaria.routes.psycopg.connect", lambda **kwargs: connection)
-    monkeypatch.setattr(
-        "app.api.reforma_tributaria.routes.ReformaTributariaSyncService",
-        FakeSyncService,
+        "app.api.reforma_tributaria.routes.ReformaTributariaBackfillRepository",
+        FakeBackfillRepository,
     )
 
     response = client.post(f"/api/reforma-tributaria/backfill?emitente_cnpj={CNPJ}&origem=sped")
@@ -238,5 +244,30 @@ def test_reforma_tributaria_backfill_preserva_origem_e_commit(client, monkeypatc
     assert payload["status"] == "ok"
     assert payload["origem"] == "sped"
     assert payload["periodos_processados"] == 1
+    assert FakeBackfillRepository.calls == [{"emitente_cnpj": CNPJ, "origem": "sped"}]
+
+
+def test_reforma_tributaria_backfill_repository_preserva_origem_e_commit(monkeypatch):
+    connection = FakeConnection()
+    FakeSyncService.calls = []
+    monkeypatch.setattr(
+        "app.repositories.reforma_tributaria.backfill_repository.carregar_config_postgres",
+        lambda: {"host": "localhost", "port": 5432, "database": "test", "user": "u", "password": "p"},
+    )
+    monkeypatch.setattr(
+        "app.repositories.reforma_tributaria.backfill_repository.psycopg.connect",
+        lambda **kwargs: connection,
+    )
+    monkeypatch.setattr(
+        "app.repositories.reforma_tributaria.backfill_repository.ReformaTributariaSyncService",
+        FakeSyncService,
+    )
+
+    resultados = ReformaTributariaBackfillRepository().executar(
+        emitente_cnpj=CNPJ,
+        origem="sped",
+    )
+
+    assert resultados == [{"origem": "sped", "periodo_ano": 2025, "periodo_mes": 3, "documentos": 1}]
     assert connection.committed is True
     assert FakeSyncService.calls == [("sped", CNPJ)]

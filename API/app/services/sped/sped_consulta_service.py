@@ -3,7 +3,13 @@ from typing import Optional
 
 import psycopg
 
+from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
 from app.models.nfe.schemas import NFeKPIConsulta
+from app.models.sped.schemas import (
+  DashboardVendasResponse,
+  DashboardVendasResumo,
+  SerieMensalVendasItem,
+)
 from app.services.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
@@ -781,6 +787,122 @@ class SpedConsultaService:
           top_regioes_valor,
           top_cidades_valor,
         )
+
+  def consultar_dashboard_vendas(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: int = 5,
+  ) -> DashboardVendasResponse:
+    resultados_anos = self.listar_kpis(emitente_cnpj=emitente_cnpj, limite=120)
+    anos_disponiveis = sorted(
+      {item.periodo_ano for item in resultados_anos if item.periodo_ano},
+      reverse=True,
+    )
+    ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
+
+    if ano_referencia is None:
+      raise ValueError("Nenhum periodo disponivel para o emitente informado.")
+
+    resultados_ano_atual = self.listar_kpis(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia,
+      limite=120,
+    )
+    resultados_ano_anterior = self.listar_kpis(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia - 1,
+      limite=120,
+    )
+
+    if periodo_mes is not None:
+      resultados_filtrados = [item for item in resultados_ano_atual if item.periodo_mes == periodo_mes]
+      ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
+      resultados_anteriores = (
+        [item for item in resultados_ano_atual if item.periodo_mes == mes_anterior]
+        if ano_anterior == ano_referencia
+        else [item for item in resultados_ano_anterior if item.periodo_mes == mes_anterior]
+      )
+    else:
+      resultados_filtrados = resultados_ano_atual
+      resultados_anteriores = resultados_ano_anterior
+
+    serie_mensal = [
+      SerieMensalVendasItem(
+        periodo_ano=ano_referencia,
+        periodo_mes=item.periodo_mes or 0,
+        total_vendido=Decimal(str(item.kpis.total_vendas or 0)),
+        quantidade_notas=int(item.kpis.quantidade_notas or 0),
+        total_impostos=(
+          Decimal(str(item.kpis.total_icms or 0))
+          + Decimal(str(item.kpis.total_ipi or 0))
+          + Decimal(str(item.kpis.total_pis or 0))
+          + Decimal(str(item.kpis.total_cofins or 0))
+        ),
+        total_impostos_complementares=obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          ano_referencia,
+          item.periodo_mes,
+          "saida",
+        ),
+        total_tributos_reforma=obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          ano_referencia,
+          item.periodo_mes,
+          "saida",
+        ),
+      )
+      for item in sorted(resultados_ano_atual, key=lambda resultado: resultado.periodo_mes or 0)
+      if item.periodo_mes
+    ]
+
+    return DashboardVendasResponse(
+      status="ok",
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia,
+      periodo_mes=periodo_mes,
+      anos_disponiveis=anos_disponiveis,
+      resumo_atual=resumir_vendas_por_kpis(resultados_filtrados, DashboardVendasResumo, limite).model_copy(update={
+        "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          ano_referencia,
+          periodo_mes,
+          "saida",
+        ),
+        "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          ano_referencia,
+          periodo_mes,
+          "saida",
+        ),
+      }),
+      resumo_anterior=resumir_vendas_por_kpis(resultados_anteriores, DashboardVendasResumo, limite).model_copy(update={
+        "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          *obter_periodo_anterior(ano_referencia, periodo_mes),
+          "saida",
+        ),
+        "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          *obter_periodo_anterior(ano_referencia, periodo_mes),
+          "saida",
+        ),
+      }),
+      serie_mensal=serie_mensal,
+    )
 
   def analisar_fiscal_cfop(
     self,

@@ -27,24 +27,18 @@ export function MonthYearFilter({
   className,
 }: MonthYearFilterProps) {
   return (
-    <div className={cn('flex items-center gap-3', className)}>
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-slate-300">Mês:</span>
+    <div className={cn('grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:items-end', className)}>
+      <div className="space-y-1.5">
+        <span className="block text-xs font-medium text-slate-300">Mês</span>
         <Select value={selectedMonth} onValueChange={onMonthChange}>
-          <SelectTrigger className="w-36 bg-[#0E1525] text-white border-[#1E293B]">
+          <SelectTrigger className="h-9 w-full min-w-0 border-slate-700 bg-slate-900/80 text-slate-100 sm:w-36">
             <SelectValue placeholder={monthPlaceholder} />
           </SelectTrigger>
 
-          <SelectContent className="bg-[#0E1525] text-white border-[#1E293B]">
-            {includeAllMonths && (
-              <SelectItem value="all">Todos</SelectItem>
-            )}
+          <SelectContent className="border-slate-700 bg-slate-950 text-slate-100">
+            {includeAllMonths && <SelectItem value="all">Todos</SelectItem>}
             {monthLabels.map((label, index) => (
-              <SelectItem
-                key={label}
-                value={(index + 1).toString()}
-                className="focus:bg-[#1E293B]"
-              >
+              <SelectItem key={label} value={(index + 1).toString()}>
                 {label}
               </SelectItem>
             ))}
@@ -52,20 +46,16 @@ export function MonthYearFilter({
         </Select>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-slate-300">Ano:</span>
+      <div className="space-y-1.5">
+        <span className="block text-xs font-medium text-slate-300">Ano</span>
         <Select value={selectedYear} onValueChange={onYearChange}>
-          <SelectTrigger className="w-32 bg-[#0E1525] text-white border-[#1E293B]">
+          <SelectTrigger className="h-9 w-full min-w-0 border-slate-700 bg-slate-900/80 text-slate-100 sm:w-28">
             <SelectValue placeholder={yearPlaceholder} />
           </SelectTrigger>
 
-          <SelectContent className="bg-[#0E1525] text-white border-[#1E293B]">
+          <SelectContent className="border-slate-700 bg-slate-950 text-slate-100">
             {availableYears.map((yearOption) => (
-              <SelectItem
-                key={yearOption}
-                value={String(yearOption)}
-                className="focus:bg-[#1E293B]"
-              >
+              <SelectItem key={yearOption} value={String(yearOption)}>
                 {yearOption}
               </SelectItem>
             ))}

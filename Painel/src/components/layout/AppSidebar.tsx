@@ -149,15 +149,15 @@ export function AppSidebar() {
       collapsible="none"
       className="sticky top-0 h-svh w-64 shrink-0 border-r border-slate-700/70 bg-[#111827] text-slate-100"
     >
-      <SidebarHeader className="border-b border-slate-700/70 bg-[#111827] p-5 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-4">
-        <div className="space-y-6 group-data-[collapsible=icon]:space-y-0">
+      <SidebarHeader className="h-16 justify-center border-b border-slate-700/70 bg-[#111827] px-5 py-2 group-data-[collapsible=icon]:px-2">
+        <div className="min-w-0 space-y-6 group-data-[collapsible=icon]:space-y-0">
           {/* <div className="text-xl font-bold text-sky-300 group-data-[collapsible=icon]:text-center group-data-[collapsible=icon]:text-lg">
             <span className="group-data-[collapsible=icon]:hidden">TaxVision Pro</span>
             <span className="hidden group-data-[collapsible=icon]:inline">TV</span>
           </div> */}
 
-          <div className="space-y-1 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-2xl font-semibold tracking-tight text-slate-100" title={companyName}>
+          <div className="min-w-0 space-y-1 group-data-[collapsible=icon]:hidden">
+            <p className="line-clamp-2 break-words text-base font-semibold leading-tight tracking-tight text-slate-100" title={companyName}>
               {companyName}
             </p>
             {/* <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Tax Specialist</p> */}

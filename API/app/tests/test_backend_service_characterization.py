@@ -4,6 +4,12 @@ from decimal import Decimal
 import pytest
 
 from app.domain.nfe.extractor import ItemNota, NotaExtraida
+from app.repositories.reforma_tributaria.resumo_repository import coletar_resumo_periodo
+from app.repositories.reforma_tributaria.xml_importado_repository import (
+    inserir_tributo_reforma_item_importado,
+    remover_tributos_reforma_nota,
+    tabela_xml_importados_existe,
+)
 from app.services.fiscal_analysis import (
     FiscalDimensionConfig,
     _adicionar_limite,
@@ -14,6 +20,15 @@ from app.services.nfe.nfe_consulta_service import NFeConsultaService
 from app.services.nfe.nfe_itens_service import _limitar_texto
 from app.services.nfe.nfe_notas_service import NFeNotasService
 from app.services.reforma_tributaria.reforma_tributaria_sync_service import ReformaTributariaSyncService
+from app.services.reforma_tributaria.xml_helpers import (
+    encontrar_elemento_local,
+    encontrar_filho_local,
+    encontrar_filhos_local,
+    nome_local,
+    normalizar_numero_nf,
+    parse_xml_importado,
+    texto_filho_local,
+)
 from app.services.sped.sped_importacao_service import SpedImportacaoService
 
 
@@ -185,8 +200,7 @@ def test_nfe_itens_limitar_texto_preserva_truncamento():
 
 
 def test_reforma_sync_xml_helpers_preservam_busca_por_nome_local():
-    service = _reforma_sync_service()
-    root = service._parse_xml_importado(
+    root = parse_xml_importado(
         memoryview(
             b"""
             <nfe:root xmlns:nfe="http://www.portalfiscal.inf.br/nfe">
@@ -201,43 +215,41 @@ def test_reforma_sync_xml_helpers_preservam_busca_por_nome_local():
         )
     )
 
-    det = service._encontrar_elemento_local(root, "det")
-    prod = service._encontrar_filho_local(det, "prod")
+    det = encontrar_elemento_local(root, "det")
+    prod = encontrar_filho_local(det, "prod")
 
     assert root is not None
-    assert service._nome_local(root) == "root"
-    assert service._nome_local(None) == ""
-    assert service._texto_filho_local(prod, "cProd") == "001"
-    assert len(service._encontrar_filhos_local(root, "det")) == 2
-    assert service._parse_xml_importado(b"<xml") is None
+    assert nome_local(root) == "root"
+    assert nome_local(None) == ""
+    assert texto_filho_local(prod, "cProd") == "001"
+    assert len(encontrar_filhos_local(root, "det")) == 2
+    assert parse_xml_importado(b"<xml") is None
 
 
 def test_reforma_sync_normaliza_numero_nf_preserva_zeros_e_texto():
-    service = _reforma_sync_service()
-
-    assert service._normalizar_numero_nf("000123") == "123"
-    assert service._normalizar_numero_nf("0000") == "0"
-    assert service._normalizar_numero_nf("ABC001") == "ABC001"
-    assert service._normalizar_numero_nf("") == ""
+    assert normalizar_numero_nf("000123") == "123"
+    assert normalizar_numero_nf("0000") == "0"
+    assert normalizar_numero_nf("ABC001") == "ABC001"
+    assert normalizar_numero_nf("") == ""
 
 
 class FakeResumoCursor:
     def __init__(self, values):
         self.values = list(values)
         self.queries = []
+        self.rowcount = 1
 
-    def execute(self, sql, params):
+    def execute(self, sql, params=None):
         self.queries.append((sql, params))
 
     def fetchone(self):
         return [self.values.pop(0)]
 
 
-def test_reforma_sync_coletar_resumo_periodo_preserva_ordem_dos_contadores():
-    service = _reforma_sync_service()
+def test_reforma_resumo_repository_preserva_ordem_dos_contadores():
     cur = FakeResumoCursor([2, 5, 7, 3, 11, 1])
 
-    resumo = service._coletar_resumo_periodo(cur, "12345678000190", 2025, 3, "xml")
+    resumo = coletar_resumo_periodo(cur, "12345678000190", 2025, 3, "xml")
 
     assert resumo == {
         "documentos_tributos": 2,
@@ -250,6 +262,61 @@ def test_reforma_sync_coletar_resumo_periodo_preserva_ordem_dos_contadores():
     assert len(cur.queries) == 6
     assert cur.queries[0][1] == ("12345678000190", 2025, 3, "xml")
     assert cur.queries[-1][1] == ("12345678000190", 2025, 3)
+
+
+def test_reforma_xml_importado_repository_preserva_remocao_e_tabela():
+    cur = FakeResumoCursor(["public.notas_xml_importados"])
+
+    assert tabela_xml_importados_existe(cur) is True
+    remover_tributos_reforma_nota(cur, nota_id=123, codigos_tributos=("CBS", "IBS"))
+
+    assert cur.queries[0][0] == "SELECT to_regclass('public.notas_xml_importados')"
+    assert cur.queries[1][1] == (123, ["CBS", "IBS"])
+    assert cur.queries[2][1] == (123, ["CBS", "IBS"])
+
+
+def test_reforma_xml_importado_repository_insere_item_e_preserva_rowcount():
+    cur = FakeResumoCursor([])
+    tributo = {
+        "tributo_codigo": "CBS",
+        "cst_codigo": "000",
+        "classificacao_tributaria": "000001",
+        "base_calculo": Decimal("100.00"),
+        "aliquota": Decimal("1.00"),
+        "valor_tributo": Decimal("1.00"),
+    }
+
+    inseriu = inserir_tributo_reforma_item_importado(
+        cur=cur,
+        nota_item_id=10,
+        empresa_cnpj="12345678000190",
+        periodo_ano=2025,
+        periodo_mes=3,
+        numero_item=1,
+        produto_codigo="P1",
+        ncm="12345678",
+        cfop="5102",
+        tributo=tributo,
+    )
+
+    assert inseriu is True
+    assert cur.queries[-1][1][0] == 10
+    assert cur.queries[-1][1][15] == "CBS"
+
+    cur_sem_valor = FakeResumoCursor([])
+    assert inserir_tributo_reforma_item_importado(
+        cur=cur_sem_valor,
+        nota_item_id=10,
+        empresa_cnpj="12345678000190",
+        periodo_ano=2025,
+        periodo_mes=3,
+        numero_item=1,
+        produto_codigo="P1",
+        ncm="12345678",
+        cfop="5102",
+        tributo={"tributo_codigo": "CBS", "valor_tributo": Decimal("0.00")},
+    ) is False
+    assert cur_sem_valor.queries == []
 
 
 def test_fiscal_analysis_helpers_preservam_limite_regiao_e_case_categoria():

@@ -273,6 +273,45 @@ Comando de verificacao usado:
 
 Resultado atual:
 
+- 172 testes passaram.
+- 5 testes foram pulados por condicoes opcionais ja previstas na suite.
+- 3 warnings conhecidos de dependencias/deprecacoes.
+
+## Progresso da Fase 3
+
+Primeira refatoracao concluida:
+
+- Criado `app.services.reforma_tributaria.xml_helpers`.
+- Extraidos de `ReformaTributariaSyncService` os helpers puros de parse XML, busca por nome local, texto de filho e normalizacao de numero NF.
+- Atualizado o fluxo de backfill XML da Reforma para usar funcoes puras em vez de metodos privados do service.
+- Mantidas no `ReformaTributariaSyncService` as responsabilidades ainda acopladas a SQL/transacao para evitar mudança grande no primeiro corte da Fase 3.
+- Atualizados testes de caracterizacao para proteger o novo modulo puro.
+
+Segunda refatoracao concluida:
+
+- Criado `app.repositories.reforma_tributaria.resumo_repository`.
+- Movida para `coletar_resumo_periodo` a sequencia de consultas SQL que soma documentos, itens, debitos, creditos, memorias e apuracoes por periodo.
+- Reduzido o `ReformaTributariaSyncService` em mais uma responsabilidade de leitura/consulta sem alterar o fluxo transacional.
+- Atualizado teste de caracterizacao para validar o repository e preservar a ordem dos contadores.
+
+Terceira refatoracao concluida:
+
+- Criado `app.repositories.reforma_tributaria.xml_importado_repository`.
+- Movidas para repository as operacoes SQL auxiliares de XML importado da Reforma:
+  - verificar existencia de `notas_xml_importados`;
+  - remover tributos da Reforma de uma nota antes de reconstruir;
+  - inserir tributo da Reforma por item importado do XML.
+- Mantido o `ReformaTributariaSyncService` como coordenador do fluxo de backfill XML, sem manter esses detalhes SQL privados.
+- Adicionados testes para preservar parametros das remocoes, retorno por `rowcount` e comportamento sem valor de tributo.
+
+Comando de verificacao usado:
+
+```powershell
+.\API\.venv-local\Scripts\python.exe -m pytest API/app/tests -q
+```
+
+Resultado atual:
+
 - 170 testes passaram.
 - 5 testes foram pulados por condicoes opcionais ja previstas na suite.
 - 3 warnings conhecidos de dependencias/deprecacoes.

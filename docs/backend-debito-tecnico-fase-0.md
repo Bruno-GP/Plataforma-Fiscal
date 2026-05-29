@@ -312,12 +312,68 @@ Comando de verificacao usado:
 
 Resultado atual:
 
-- 170 testes passaram.
+- 172 testes passaram.
 - 5 testes foram pulados por condicoes opcionais ja previstas na suite.
 - 3 warnings conhecidos de dependencias/deprecacoes.
 
+## Progresso da Fase 4
+
+Primeira preparacao concluida:
+
+- Criado `docs/backend-architecture.md`.
+- Registrado o padrao recomendado para camadas `api`, `services`, `repositories`, `models/schemas` e `domain`.
+- Definidos criterios praticos para novas rotas, services, repositories e testes.
+- Incluido checklist para novas funcionalidades backend.
+- Documentada a ordem segura para refatoracoes futuras: proteger, extrair helpers, extrair repositories, separar services, padronizar schemas e remover legado.
+
+Segunda preparacao concluida:
+
+- Criado `docs/backend-pr-checklist.md`.
+- Transformadas as regras de arquitetura em checklist operacional de PR/backend.
+- Incluidos criterios de bloqueio para SQL em rota, services crescendo sem limite, duplicacao NFe/SPED, mudanca fiscal sem teste e migration sem plano.
+- Adicionado modelo copiavel para descricao de PR.
+- Referenciado o checklist no guia `docs/backend-architecture.md`.
+
+Terceira preparacao concluida:
+
+- Criado `docs/backend-target-structure.md`.
+- Documentada a estrutura alvo incremental para `api`, `domain`, `services`, `repositories`, `models`, `workers` e `shared`.
+- Mapeados os dominios recomendados: `nfe`, `sped`, `reforma_tributaria`, `empresas`, `usuarios`, `importacao`, `relatorios`, `dashboard` e `jobs`.
+- Incluido plano incremental de migracao para evitar reescrita completa.
+- Referenciado o mapa de estrutura no guia `docs/backend-architecture.md`.
+
+Quarta preparacao concluida:
+
+- Criado `docs/backend-error-handling.md`.
+- Documentado o padrao recomendado para excecoes, mensagens seguras e status HTTP.
+- Definido que rotas convertem erros para HTTP, services/use cases levantam erros de aplicacao e repositories nao importam FastAPI.
+- Mapeados status `400`, `401`, `403`, `404`, `409`, `422`, `502` e `503` para casos de uso esperados.
+- Integrado o padrao de erros ao guia de arquitetura e ao checklist de PR backend.
+
+Quinta preparacao concluida:
+
+- Criado `docs/backend-implementation-conventions.md`.
+- Registradas convencoes praticas para novas rotas, services, repositories, helpers, formatadores, transacoes e testes.
+- Definidos sinais de alerta para services grandes, metodos longos, conexoes duplicadas e uso indevido de `shared`.
+- Documentada a ordem recomendada para implementar novas features backend com menor risco de debito tecnico.
+- Referenciado o guia de convencoes no guia de arquitetura e no checklist de PR backend.
+
+Sexta preparacao concluida:
+
+- Criado `docs/backend-refactoring-roadmap.md`.
+- Definido roteiro incremental para refatorar arquivos P0/P1 com criterios de entrada, saida, rollback e matriz de risco.
+- Priorizada a ordem de ataque por dominio: NFe, SPED, Reforma Tributaria, Importacao/Jobs, Usuarios/Empresas e Relatorios/IA.
+- Registrado tamanho recomendado de PRs e indicadores de progresso para reducao real de debito tecnico.
+- Referenciado o roadmap no guia de arquitetura, convencoes de implementacao e checklist de PR backend.
+
 ## Referencias Existentes
 
+- `docs/backend-architecture.md`
+- `docs/backend-pr-checklist.md`
+- `docs/backend-target-structure.md`
+- `docs/backend-error-handling.md`
+- `docs/backend-implementation-conventions.md`
+- `docs/backend-refactoring-roadmap.md`
 - `docs/api-contracts.md`
 - `docs/testing.md`
 - `docs/importacao-processamento.md`

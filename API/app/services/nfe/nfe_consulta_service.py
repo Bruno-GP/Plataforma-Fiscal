@@ -77,6 +77,31 @@ from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("NFeConsultaService")
 
+CFOPS_FATURAMENTO_VENDA = (
+  "5101", "5102", "5103", "5104", "5105", "5106",
+  "5109", "5110", "5111", "5112", "5113", "5114", "5115",
+  "5116", "5117", "5118", "5119", "5120", "5122", "5123",
+  "5251", "5252", "5253", "5254", "5255", "5256", "5257", "5258",
+  "5401", "5402", "5403", "5405",
+  "5651", "5652", "5653", "5654", "5655", "5656",
+  "5922",
+  "6101", "6102", "6103", "6104", "6105", "6106",
+  "6107", "6108", "6109", "6110", "6111", "6112", "6113",
+  "6114", "6115", "6116", "6117", "6118", "6119", "6120",
+  "6122", "6123",
+  "6251", "6252", "6253", "6254", "6255", "6256", "6257", "6258",
+  "6401", "6402", "6403", "6404",
+  "6651", "6652", "6653", "6654", "6655", "6656",
+  "6922",
+  "7101", "7102", "7105", "7106", "7127",
+  "7251",
+  "7651", "7654",
+)
+
+
+def obter_cfops_faturamento_venda() -> list[str]:
+  return list(CFOPS_FATURAMENTO_VENDA)
+
 NFE_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
   from_clause="""
     public.notas AS n
@@ -324,11 +349,11 @@ class NFeConsultaService:
           JOIN public.notas_itens AS i
             ON i.nota_id = n.id
           WHERE regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s
-            AND LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')
+            AND regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)
             AND EXTRACT(YEAR FROM n.data_emissao)::int = ANY(%s)
           GROUP BY 1, 2
           """,
-          (cnpj_filtrado, anos),
+          (cnpj_filtrado, obter_cfops_faturamento_venda(), anos),
         )
         rows = cur.fetchall()
 

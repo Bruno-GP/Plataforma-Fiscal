@@ -60,15 +60,15 @@ export default function Login() {
             <WalletCards className="h-7 w-7" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-sky-300">TaxVision Pro</h1>
-            <p className="mt-2 text-base text-slate-300">Acesse sua plataforma analitica de impostos</p>
+            <h1 className="text-2xl font-bold text-sky-300">Painel da Gestão Prática</h1>
+            <p className="mt-2 text-base text-slate-300">Acesse a plataforma de análise estratégica do seu negócio</p>
           </div>
         </div>
 
         <Card className="w-full max-w-md overflow-hidden border-slate-600/80 bg-[#172033]/95">
           <div className="h-1 bg-sky-400" />
           <CardHeader className="pb-4 text-center">
-            <CardTitle className="text-xl">Painel de Gestao</CardTitle>
+            {/* <CardTitle className="text-xl">Painel de Gestao</CardTitle> */}
             <CardDescription>Entre com suas credenciais corporativas</CardDescription>
           </CardHeader>
           <CardContent>

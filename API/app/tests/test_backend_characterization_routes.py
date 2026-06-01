@@ -7,6 +7,7 @@ import psycopg
 from app.domain.nfe.extractor import ItemNota, NotaExtraida
 from app.api.shared.company_validation import validar_empresa_sped, validar_empresa_xml
 from app.repositories.nfe.notas_repository import NFeNotasRepository
+from app.services.nfe.nfe_consulta_service import NFeConsultaService
 from app.services.sped.sped_consulta_service import SpedConsultaService
 from app.services.shared.analise_relatorio_service import executar_analise_com_relatorio_ia
 from app.services.shared.compras_dashboard_service import montar_dashboard_compras
@@ -365,6 +366,43 @@ def test_dashboard_compras_compartilhado_preserva_periodos_e_origem(monkeypatch)
     assert len(dashboard["serie_mensal"]) == 12
     assert ("nfe", 2025, 12, "entrada") in chamadas_totais
     assert ("nfe", 2024, None, "entrada") in chamadas_totais
+
+
+def test_nfe_dashboard_vendas_preserva_total_dos_kpis(monkeypatch):
+    service = object.__new__(NFeConsultaService)
+    service.conn_params = {"dbname": "test"}
+
+    def fake_listar_kpis(**kwargs):
+        if kwargs.get("periodo_ano") == 2024:
+            return [_kpi_item(periodo_ano=2024, periodo_mes=12, total_vendas=Decimal("120.00"))]
+        return [
+            _kpi_item(periodo_ano=2025, periodo_mes=1, total_vendas=Decimal("300.00")),
+            _kpi_item(periodo_ano=2025, periodo_mes=2, total_vendas=Decimal("400.00")),
+        ]
+
+    def fail_listar_totais_vendas_brutos_por_periodo(**kwargs):
+        raise AssertionError("dashboard de vendas NFe nao deve recomputar total por itens")
+
+    service.listar_kpis = fake_listar_kpis
+    service.listar_totais_vendas_brutos_por_periodo = fail_listar_totais_vendas_brutos_por_periodo
+    monkeypatch.setattr(
+        "app.services.nfe.nfe_consulta_service.obter_totais_tributos_documentos_por_periodo",
+        lambda *args, **kwargs: {},
+    )
+
+    dashboard = service.consultar_dashboard_vendas(
+        emitente_cnpj=CNPJ,
+        periodo_ano=2025,
+        periodo_mes=None,
+        limite=5,
+    )
+
+    assert dashboard.periodo_ano == 2025
+    assert dashboard.resumo_atual.total_vendido == Decimal("700.00")
+    assert [item.total_vendido for item in dashboard.serie_mensal] == [
+        Decimal("300.00"),
+        Decimal("400.00"),
+    ]
 
 
 def test_sped_dashboard_vendas_service_preserva_periodos_e_totais(monkeypatch):

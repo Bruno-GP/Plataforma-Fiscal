@@ -157,7 +157,7 @@ export default function DetalhamentoVendas() {
 
   const currentData = dashboardQuery.data?.resumo_atual;
   const previousData = dashboardQuery.data?.resumo_anterior;
-  const totalFaturamento = parseDecimal(mapQuery.data?.total_vendido ?? currentData?.total_vendido ?? 0);
+  const totalFaturamento = parseDecimal(currentData?.total_vendido ?? 0);
 
   const totalSalesChange = calculateChange(totalFaturamento, previousData?.total_vendido ?? 0);
   const ticketChange = calculateChange(currentData?.ticket_medio ?? 0, previousData?.ticket_medio ?? 0);

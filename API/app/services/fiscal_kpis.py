@@ -307,12 +307,14 @@ def construir_resumo_dashboard(
   totais_tributos: dict[tuple[int, Optional[int]], dict[str, Decimal]],
   limite: int,
 ) -> DashboardVendasResumo:
-  return resumir_vendas_por_kpis(
+  resumo = resumir_vendas_por_kpis(
     resultados,
     DashboardVendasResumo,
     limite,
-  ).model_copy(update={
-    "total_vendido": totais_vendidos.get(periodo, Decimal("0.00")),
+  )
+
+  return resumo.model_copy(update={
+    "total_vendido": totais_vendidos.get(periodo, resumo.total_vendido),
     **totais_tributos.get(
       periodo,
       {

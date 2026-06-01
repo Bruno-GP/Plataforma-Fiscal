@@ -151,10 +151,13 @@ def test_nfe_consulta_monta_filtros_vendas_itens_com_periodo():
     )
 
     assert "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s" in where_clause
-    assert "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')" in where_clause
+    assert "regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)" in where_clause
     assert "EXTRACT(YEAR FROM n.data_emissao) = %s" in where_clause
     assert "EXTRACT(MONTH FROM n.data_emissao) = %s" in where_clause
-    assert params == ["12345678000190", 2025, 3]
+    cfops_faturamento = params[1]
+    assert "5102" in cfops_faturamento
+    assert "5152" not in cfops_faturamento
+    assert params == ["12345678000190", cfops_faturamento, 2025, 3]
 
 
 def test_nfe_consulta_monta_filtros_vendas_itens_exige_cnpj_valido():

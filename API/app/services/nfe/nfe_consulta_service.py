@@ -65,6 +65,7 @@ from app.services.fiscal_purchases import (
   construir_resposta_analise_compras,
 )
 from app.services.fiscal_sales import (
+  CFOPS_FATURAMENTO_VENDA,
   construir_params_com_limite,
   construir_ranking_cfops_vendas,
   construir_ranking_cidades_vendas,
@@ -72,35 +73,11 @@ from app.services.fiscal_sales import (
   construir_ranking_produtos_vendas,
   construir_ranking_regioes_vendas,
   construir_resposta_analise_vendas,
+  obter_cfops_faturamento_venda,
 )
 from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("NFeConsultaService")
-
-CFOPS_FATURAMENTO_VENDA = (
-  "5101", "5102", "5103", "5104", "5105", "5106",
-  "5109", "5110", "5111", "5112", "5113", "5114", "5115",
-  "5116", "5117", "5118", "5119", "5120", "5122", "5123",
-  "5251", "5252", "5253", "5254", "5255", "5256", "5257", "5258",
-  "5401", "5402", "5403", "5405",
-  "5651", "5652", "5653", "5654", "5655", "5656",
-  "5922",
-  "6101", "6102", "6103", "6104", "6105", "6106",
-  "6107", "6108", "6109", "6110", "6111", "6112", "6113",
-  "6114", "6115", "6116", "6117", "6118", "6119", "6120",
-  "6122", "6123",
-  "6251", "6252", "6253", "6254", "6255", "6256", "6257", "6258",
-  "6401", "6402", "6403", "6404",
-  "6651", "6652", "6653", "6654", "6655", "6656",
-  "6922",
-  "7101", "7102", "7105", "7106", "7127",
-  "7251",
-  "7651", "7654",
-)
-
-
-def obter_cfops_faturamento_venda() -> list[str]:
-  return list(CFOPS_FATURAMENTO_VENDA)
 
 NFE_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
   from_clause="""
@@ -244,9 +221,9 @@ class NFeConsultaService:
 
     filtros_vendas_docs = [
       "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
-      "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
+      "regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)",
     ]
-    parametros: list[object] = [cnpj_filtrado]
+    parametros: list[object] = [cnpj_filtrado, obter_cfops_faturamento_venda()]
 
     if periodo_ano:
       filtros_vendas_docs.append("EXTRACT(YEAR FROM n.data_emissao) = %s")
@@ -419,10 +396,7 @@ class NFeConsultaService:
       sorted(periodos_tributos, key=lambda periodo: (periodo[0], periodo[1] or 0)),
       "saida",
     )
-    totais_vendidos = self.listar_totais_vendas_brutos_por_periodo(
-      emitente_cnpj=emitente_cnpj,
-      periodos=periodos_tributos,
-    )
+    totais_vendidos: dict[tuple[int, int | None], Decimal] = {}
 
     resumo_atual = construir_resumo_dashboard(
       resultados_filtrados,

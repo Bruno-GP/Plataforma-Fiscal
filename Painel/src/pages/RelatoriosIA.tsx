@@ -9,25 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  fetchNfeAnaliseClientes,
-  fetchNfeAnaliseCompras,
-  fetchNfeAnaliseVendas,
-  fetchNfeKpis,
-  parseDecimal,
-} from '@/services/nfe';
-import {
-  fetchSpedAnaliseClientes,
-  fetchSpedAnaliseCompras,
-  fetchSpedAnaliseVendas,
-  fetchSpedKpis,
-} from '@/services/sped';
-import { formatCurrency, monthLabels } from '@/services/utils';
-
-const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? '').replace(/\D/g, '');
-  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
-};
+import { useFiscalYears } from '@/hooks/useFiscalYears';
+import { parseDecimal } from '@/services/nfe';
+import { createFiscalSourceApi } from '@/services/fiscalSource';
+import { createFiscalPeriod, createFiscalQueryKey, getFiscalPeriodDescription } from '@/utils/fiscalPeriod';
+import { formatCurrency, hasValidEmitenteCnpj, monthLabels } from '@/utils/formatters';
+import { printReportElement } from '@/utils/reportPrint';
 
 const monthOptions = [
   { value: 'all', label: 'Ano completo' },
@@ -72,43 +59,29 @@ export default function RelatoriosIA() {
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const usaSped = Boolean(user?.tem_sped);
-  const fonteDados = usaSped ? 'SPED Fiscal' : 'XML / NFe';
+  const fiscalApi = createFiscalSourceApi(user?.tem_sped);
+  const fiscalPeriod = useMemo(
+    () => createFiscalPeriod(selectedYear, selectedMonth),
+    [selectedMonth, selectedYear],
+  );
+  const fonteDados = fiscalApi.sourceLabel;
 
   const yearsQuery = useQuery({
-    queryKey: ['kpis-years', usaSped ? 'sped' : 'xml', emitenteCnpj],
-    queryFn: () =>
-      usaSped
-        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
-        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+    queryKey: createFiscalQueryKey({
+      scope: 'kpis-years',
+      emitenteCnpj,
+      sourceKey: fiscalApi.sourceKey,
+    }),
+    queryFn: () => fiscalApi.kpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
-  const yearOptions = useMemo(() => {
-    const resultados = yearsQuery.data?.resultados ?? [];
-    const uniqueYears = new Set<number>();
-
-    resultados.forEach((item) => {
-      if (item.periodo_ano) {
-        uniqueYears.add(item.periodo_ano);
-      }
-    });
-
-    return [...uniqueYears].sort((a, b) => b - a);
-  }, [yearsQuery.data]);
-
-  useEffect(() => {
-    if (!yearOptions.length) {
-      return;
-    }
-
-    if (!yearOptions.includes(Number.parseInt(selectedYear, 10))) {
-      setSelectedYear(String(yearOptions[0]));
-    }
-  }, [selectedYear, yearOptions]);
-
-  const availableYears = yearOptions.length ? yearOptions : [new Date().getFullYear()];
+  const { availableYears } = useFiscalYears({
+    entries: yearsQuery.data?.resultados ?? [],
+    selectedYear,
+    setSelectedYear,
+  });
 
   const formatoSelecionado = useMemo(
     () => reportFormatOptions.find((option) => option.value === formatoRelatorio) ?? reportFormatOptions[0],
@@ -120,14 +93,10 @@ export default function RelatoriosIA() {
     [tipoRelatorio],
   );
 
-  const periodoDescricao = useMemo(() => {
-    if (selectedMonth === 'all') {
-      return `Ano ${selectedYear}`;
-    }
-
-    const mes = Number.parseInt(selectedMonth, 10);
-    return `${monthLabels[mes - 1]} de ${selectedYear}`;
-  }, [selectedMonth, selectedYear]);
+  const periodoDescricao = useMemo(
+    () => getFiscalPeriodDescription(fiscalPeriod, monthLabels),
+    [fiscalPeriod],
+  );
 
   const reportTitle = useMemo(
     () => `Relatório ${formatoSelecionado.label.toLowerCase()} (${periodoDescricao})`,
@@ -152,124 +121,13 @@ export default function RelatoriosIA() {
   );
 
   const handleExportPdf = () => {
-    if (!reportContainerRef.current) {
-      setErrorMessage('Não foi possível preparar o relatório para exportação.');
-      return;
-    }
+    const error = printReportElement({
+      container: reportContainerRef.current,
+      title: reportTitle,
+      subtitle: reportSubtitle,
+    });
 
-    setErrorMessage(null);
-
-    const reportHtml = reportContainerRef.current.innerHTML;
-    const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-      .map((node) => node.outerHTML)
-      .join('\n');
-
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-
-    const iframeDocument = iframe.contentDocument;
-    if (!iframeDocument) {
-      document.body.removeChild(iframe);
-      setErrorMessage('Não foi possível abrir a visualização de impressão do PDF.');
-      return;
-    }
-
-    iframeDocument.open();
-    iframeDocument.write(`
-      <!doctype html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>${reportTitle}</title>
-          ${styleTags}
-          <style>
-            body {
-              margin: 0;
-              padding: 32px;
-              background:
-                radial-gradient(circle at top right, rgb(37 99 235 / 0.18), transparent 24rem),
-                linear-gradient(180deg, rgb(15 23 42 / 0.98), rgb(2 6 23 / 1));
-              color: #e2e8f0;
-              font-family: ui-sans-serif, system-ui, sans-serif;
-            }
-
-            .pdf-shell {
-              max-width: 1120px;
-              margin: 0 auto;
-            }
-
-            .pdf-header {
-              margin-bottom: 20px;
-              padding: 20px 22px;
-              border: 1px solid rgb(51 65 85 / 0.72);
-              border-radius: 24px;
-              background: linear-gradient(180deg, rgb(15 23 42 / 0.92), rgb(15 23 42 / 0.7));
-            }
-
-            .pdf-title {
-              margin: 0;
-              font-size: 28px;
-              font-weight: 700;
-              color: #f8fafc;
-            }
-
-            .pdf-subtitle {
-              margin: 8px 0 0;
-              font-size: 14px;
-              color: #94a3b8;
-            }
-
-            @page {
-              size: A4;
-              margin: 12mm;
-            }
-
-            @media print {
-              body {
-                padding: 0;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="pdf-shell">
-            <div class="pdf-header">
-              <h1 class="pdf-title">${reportTitle}</h1>
-              <p class="pdf-subtitle">${reportSubtitle}</p>
-            </div>
-            ${reportHtml}
-          </div>
-        </body>
-      </html>
-    `);
-    iframeDocument.close();
-
-    const printFrame = iframe.contentWindow;
-    if (!printFrame) {
-      document.body.removeChild(iframe);
-      setErrorMessage('Não foi possível iniciar a geração do PDF.');
-      return;
-    }
-
-    window.setTimeout(() => {
-      printFrame.focus();
-      printFrame.print();
-      window.setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 1000);
-    }, 250);
+    setErrorMessage(error);
   };
 
   const handleGenerate = async () => {
@@ -286,31 +144,22 @@ export default function RelatoriosIA() {
     setErrorMessage(null);
 
     try {
-      const yearNumber = Number.parseInt(selectedYear, 10);
-      const monthNumber = Number.parseInt(selectedMonth, 10);
-
       const payload = {
         emitente_cnpj: emitenteCnpj,
-        periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber,
-        periodo_mes: selectedMonth === 'all' || Number.isNaN(monthNumber) ? undefined : monthNumber,
+        ...fiscalPeriod.params,
         limite: 5,
         gerar_relatorio_ia: true,
         formato_relatorio: formatoRelatorio,
         layout: tipoRelatorio === 'vendas' ? layoutRelatorio : undefined,
       };
 
+      const requestOptions = { signal: abortController.signal };
       const response =
         tipoRelatorio === 'compras'
-          ? usaSped
-            ? await fetchSpedAnaliseCompras(payload, { signal: abortController.signal })
-            : await fetchNfeAnaliseCompras(payload, { signal: abortController.signal })
+          ? await fiscalApi.analiseCompras(payload, requestOptions)
           : tipoRelatorio === 'clientes'
-            ? usaSped
-              ? await fetchSpedAnaliseClientes(payload, { signal: abortController.signal })
-              : await fetchNfeAnaliseClientes(payload, { signal: abortController.signal })
-            : usaSped
-              ? await fetchSpedAnaliseVendas(payload, { signal: abortController.signal })
-              : await fetchNfeAnaliseVendas(payload, { signal: abortController.signal });
+            ? await fiscalApi.analiseClientes(payload, requestOptions)
+            : await fiscalApi.analiseVendas(payload, requestOptions);
 
       const total = 'total_comprado' in response ? response.total_comprado : response.total_vendido;
 

@@ -1,32 +1,120 @@
 # Testes e Qualidade
 
-## Arquivos de referencia no codigo
+Este guia registra como rodar e evoluir os testes automatizados do projeto, com foco especial no back-end. A suite atual foi pensada para ser rapida e deterministica, deixando os cenarios pesados de banco, fila e carga para suites separadas.
+
+## Arquivos de referencia
+
+Back-end:
+
+- `API/app/tests/`
+- `API/app/tests/conftest.py`
+- `API/app/tests/fixtures/`
+- `API/app/requirements.txt`
+- `API/app/api/auth/routes.py`
+- `API/app/api/jobs/routes.py`
+- `API/app/api/nfe/routes.py`
+- `API/app/api/sped/routes.py`
+- `API/app/core/security.py`
+- `API/app/core/upload_security.py`
+- `API/app/workers/`
+
+Front-end:
 
 - `Painel/package.json`
 - `Painel/vitest.config.ts`
 - `Painel/src/test/`
-- `API/app/api/auth/routes.py`
-- `API/app/api/nfe/routes.py`
-- `API/app/api/sped/routes.py`
-- `API/app/api/reforma_tributaria/routes.py`
-- `API/app/core/security.py`
-- `API/app/core/upload_security.py`
+
+Carga e performance:
+
+- `k6-tests/README.md`
+- `k6-tests/scenarios/heavy/`
 
 ## Estado atual
 
-Frontend:
+### Back-end
+
+- A suite fica em `API/app/tests/` e usa `pytest`.
+- `conftest.py` ajusta o `sys.path`, cria um `TestClient` do FastAPI e sobrescreve `require_company_scope` com um usuario autenticado anonimo.
+- As fixtures anonimizadas ficam em `API/app/tests/fixtures/`.
+- Testes HTTP validam contratos de rotas sem exigir PostgreSQL, Redis ou Celery reais.
+- Dependencias externas e servicos de persistencia sao isolados com `monkeypatch`.
+- `test_database_schema.py` cobre contratos de migrations, estrutura, constraints, regras fiscais persistidas e consultas criticas. A parte que abre PostgreSQL so roda quando `PLATAFORMA_FISCAL_TEST_DATABASE_URL` aponta para um banco descartavel com `test` ou `teste` no nome.
+- `test_sped_reader.py` compara o parser atual de SPED com a versao otimizada em `polars`; o teste e pulado automaticamente se `polars` nao estiver instalado.
+- `test_jobs.py` cobre contratos de `/api/jobs`, disparo de jobs de importados e simulacoes de sucesso/falha do worker de NFe.
+
+### Front-end
 
 - Existem `vitest.config.ts` e testes em `Painel/src/test/`.
-- `package.json` nao possui script `test`.
-- Scripts existentes: `dev`, `build`, `lint`, `preview`.
+- `package.json` pode nao expor todos os comandos de teste esperados em CI; confira o arquivo antes de assumir `npm test`.
+- Scripts historicamente usados: `dev`, `build`, `lint`, `preview`.
 
-Backend:
+## Comandos
 
-- Existe suite minima em `API/app/tests/`.
-- Os testes usam fixtures anonimizadas em `API/app/tests/fixtures/`.
-- Testes HTTP isolam banco/fila com monkeypatch quando o objetivo e validar contrato.
+### Back-end
 
-## Comandos disponiveis hoje
+Instale as dependencias:
+
+```bash
+pip install -r API/app/requirements.txt
+```
+
+Rodando a partir da raiz:
+
+```bash
+python -m pytest API/app/tests
+```
+
+Rodando a partir de `API/app`:
+
+```bash
+cd API/app
+pytest
+```
+
+No Windows, usando a venv local do projeto quando existir:
+
+```powershell
+cd API
+.\.venv-local\Scripts\python.exe -m pytest app/tests
+```
+
+Para investigar um arquivo especifico:
+
+```bash
+python -m pytest API/app/tests/test_jobs.py -q
+```
+
+### Banco de teste PostgreSQL
+
+Os testes de banco usam PostgreSQL, Alembic e psycopg. Eles nunca devem apontar para producao. Por seguranca, a fixture recusa qualquer `PLATAFORMA_FISCAL_TEST_DATABASE_URL` cujo nome do banco nao contenha `test` ou `teste`.
+
+Exemplo com banco local descartavel ja criado:
+
+```powershell
+$env:PLATAFORMA_FISCAL_TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/plataforma_fiscal_test"
+cd API
+.\.venv-local\Scripts\python.exe -m pytest app/tests -q
+```
+
+O comando acima:
+
+- limpa apenas o schema `public` do banco informado;
+- executa `alembic upgrade head` em banco limpo;
+- valida a versao final em `alembic_version`;
+- testa existencia de tabelas, colunas, chaves primarias, foreign keys e checks;
+- insere dados ficticios e independentes;
+- valida consultas de listagem, filtro por periodo e totalizacao financeira.
+
+Falhas comuns:
+
+- `Defina PLATAFORMA_FISCAL_TEST_DATABASE_URL`: a suite rapida roda, mas os testes de integracao com banco sao pulados.
+- `deve apontar para um banco descartavel`: o nome do banco nao contem `test` ou `teste`; crie outro banco para evitar risco operacional.
+- teste de banco pulado por conexao: PostgreSQL nao esta ativo, porta/usuario/senha estao incorretos ou o banco de teste ainda nao foi criado.
+- erro em Alembic: alguma migration deixou de ser idempotente ou depende de objeto ausente no schema limpo.
+
+Ao adicionar novos testes de banco, prefira `test_database_schema.py` quando estiver validando schema, constraints e queries SQL criticas. Use dados ficticios, CNPJs artificiais e transacoes independentes; nao use dumps reais nem valores de clientes/fornecedores reais.
+
+### Front-end
 
 ```bash
 cd Painel
@@ -34,33 +122,84 @@ npm run lint
 npm run build
 ```
 
-Para rodar Vitest sem alterar `package.json`, use:
+Para rodar Vitest diretamente:
 
 ```bash
 cd Painel
 npx vitest run
 ```
 
-Backend:
+### Testes pesados
 
-```bash
-cd API/app
-pytest
+Os cenarios de carga ficam fora da suite rapida de `pytest` e devem seguir os guias de `k6-tests/`. Nao misture execucao de carga com a suite unitaria/contratual do back-end, porque elas tem objetivos, duracao e dependencias diferentes.
+
+## Padrao da suite back-end
+
+### Autenticacao nos testes HTTP
+
+O fixture `client` injeta um usuario autenticado com:
+
+- `cnpj="12345678000190"`
+- `empresa_id=1`
+- `tem_sped=False`
+
+Quando o teste precisa simular uma empresa SPED, ajuste o comportamento do servico consultado pela rota com `monkeypatch`, como nos testes de upload e processamento de SPED.
+
+### Isolamento de banco e fila
+
+Por padrao, testes de rota nao devem tocar banco real nem fila real. Prefira substituir repositorios, services e tasks nos pontos de uso da rota:
+
+```python
+monkeypatch.setattr("app.api.jobs.routes.JobsRepository", FakeJobsRepository)
 ```
 
-Ou, da raiz:
+Para workers, substitua as classes usadas dentro do modulo do worker:
 
-```bash
-python -m pytest API/app/tests
+```python
+monkeypatch.setattr("app.workers.nfe_tasks.JobsRepository", Repo)
+monkeypatch.setattr("app.workers.nfe_tasks.XMLImportacaoService", Importacao)
 ```
 
-## Lacunas
+### Fixtures fiscais
 
-- Falta script `test` no frontend.
-- Falta ampliar a suite backend com banco PostgreSQL descartavel.
-- Falta cobertura completa de regra fiscal NFe/SPED com massas maiores.
-- Falta teste de regressao para Reforma Tributaria e memoria de calculo.
-- Falta teste de autorizacao multiempresa.
+Use apenas massas anonimizadas em `API/app/tests/fixtures/`. As fixtures pequenas atuais cobrem:
+
+- NFe XML valida
+- NFe XML invalida
+- SPED TXT valido
+- SPED TXT invalido
+
+Ao adicionar uma fixture, documente no nome do arquivo qual fluxo ela cobre e evite dados reais de clientes, fornecedores, chaves de acesso ou valores sensiveis.
+
+### Uploads
+
+Testes de upload devem cobrir pelo menos:
+
+- extensao e tipo de arquivo aceitos
+- arquivo invalido
+- limite de tamanho por variavel de ambiente
+- regra de perfil da empresa, XML versus SPED
+- resumo retornado pela rota, como quantidade importada e mensagens
+
+### Jobs
+
+Testes de jobs devem separar tres niveis:
+
+- contrato HTTP de `/api/jobs`
+- contrato HTTP de `processar-importados`, esperando `202` e `job_id`
+- comportamento do worker com repositorios e processadores falsos
+
+Evite depender de Redis/Celery em testes unitarios. Quando for necessario validar fila real, crie uma suite de integracao separada e deixe claro no nome/comando que ela exige infraestrutura.
+
+## Lacunas conhecidas
+
+- Os testes de banco PostgreSQL ja existem, mas dependem de `PLATAFORMA_FISCAL_TEST_DATABASE_URL` para rodar em modo integracao.
+- Falta cobertura completa de regras fiscais NFe/SPED com massas maiores.
+- Falta regressao mais ampla para Reforma Tributaria e memoria de calculo.
+- Falta teste dedicado de autorizacao multiempresa para endpoints analiticos.
+- Falta suite de integracao para Redis/Celery com workers reais.
+- Falta cobertura automatizada de relatorios IA com cliente OpenAI fakeado.
+- Falta padronizar comando de teste do front-end no `package.json`, se o CI for exigir `npm test`.
 
 ## Plano de implementacao por fases
 
@@ -74,7 +213,7 @@ python -m pytest API/app/tests
 
 ### Fase 2: banco e processamento
 
-- Criacao sob demanda de `notas_xml_importados` e `sped_importados`.
+- Validacao de que `notas_xml_importados` e `sped_importados` existem via Alembic antes da importacao.
 - Marcacao de `processado_em` apos processamento.
 - Pendencias antes/depois do processamento.
 - Fixtures anonimizadas de XML e SPED com totais esperados.
@@ -92,7 +231,7 @@ python -m pytest API/app/tests
 - Memoria de calculo: primeiro testar estado vazio, porque nao foi encontrado service que popula `memoria_calculo_tributaria`; depois criar testes quando a populacao for implementada.
 - Testes negativos deixando claro que CBS, IBS e IS ainda nao possuem motor fiscal implementado.
 
-### Fase 4: frontend e integracao
+### Fase 4: front-end e integracao
 
 - Guards de rota XML/SPED.
 - Login, hidratacao e logout limpando sessao local.
@@ -104,9 +243,10 @@ python -m pytest API/app/tests
 
 ### Fase 5: CI
 
-- Adicionar script `test` ao `Painel/package.json`.
+- Adicionar script `test` ao `Painel/package.json`, se ainda nao existir.
 - Rodar `npm run lint`, `npm run build` e `npm test` no CI.
-- Criar suite backend com banco de teste descartavel.
+- Rodar `python -m pytest API/app/tests` no CI.
+- Criar suite back-end com banco de teste descartavel.
 - Rodar migrations em banco limpo no pipeline.
 - Publicar artefatos de cobertura e logs de falhas.
 - Bloquear merge quando testes de seguranca, importacao e Reforma Tributaria falharem.

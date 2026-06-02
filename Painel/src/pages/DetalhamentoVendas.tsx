@@ -8,123 +8,78 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+
 import { useAuth } from '@/contexts/AuthContext';
+import { useFiscalYears } from '@/hooks/useFiscalYears';
 import {
   DetalhamentoFiscalHierarquiaMode,
 } from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
-import {
-  DetalhamentoVendasFiscalMode,
-  type FiscalNcmSummary,
-} from '@/pages/components/DetalhamentoVendasFiscalMode';
+import { DetalhamentoVendasDashboardMode } from '@/pages/components/DetalhamentoVendasDashboardMode';
+import { DetalhamentoVendasFiscalMode } from '@/pages/components/DetalhamentoVendasFiscalMode';
 import { DetalhamentoVendasModeSelector } from '@/pages/components/DetalhamentoVendasModeSelector';
 import { DetalhamentoVendasNotaMode } from '@/pages/components/DetalhamentoVendasNotaMode';
 import { DetalhamentoVendasRegiaoMode } from '@/pages/components/DetalhamentoVendasRegiaoMode';
 import {
+  buildSpedFiscalNcmHierarchy,
   buildSpedFiscalHierarchyState,
   buildRegionHierarchy,
   type DetailMode,
+  filterSpedHierarchyRows,
   filterNotasBySearch,
   filterRegionHierarchyBySearch,
 } from '@/pages/components/detalhamentoVendasHelpers';
 import { Header } from '@/pages/components/Header';
 import { StatCard } from '@/pages/components/StatCard';
-import { monthLabels } from '@/services/utils';
 
 import { usePeriodFilter } from '@/hooks/usePeriodFilter';
 import { useDashboardVendasQueries } from '@/hooks/useDashboardQueries';
-import { fetchNfeKpis, fetchNfeNotasDetalhadas } from '@/services/nfe';
+import { fetchNfeNotasDetalhadas } from '@/services/nfe';
 import {
   fetchSpedAnaliseFiscalHierarquica,
-  fetchSpedKpis,
   type AnaliseFiscalHierarquicaResponse as SpedFiscalHierarchyResponse,
 } from '@/services/sped';
+import { createFiscalSourceApi } from '@/services/fiscalSource';
+import { createFiscalPeriod, createFiscalQueryKey } from '@/utils/fiscalPeriod';
 import {
   calculateChange,
   formatCurrency,
   formatPercent,
   hasValidEmitenteCnpj,
+  monthLabels,
   parseDecimal,
 } from '@/utils/formatters';
 
 const NOTAS_PAGE_SIZE = 100;
-type SpedHierarchyRow = SpedFiscalHierarchyResponse['hierarquia'][number];
-
-const normalizeSearchValue = (value: string | number | null | undefined) =>
-  String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-
-const filterSpedHierarchyRows = (rows: SpedHierarchyRow[], search: string) => {
-  const query = normalizeSearchValue(search);
-  if (!query) return rows;
-
-  return rows.filter((row) =>
-    [row.estado, row.cidade, row.uf, row.ncm, row.descricao_ncm, row.produto_codigo, row.produto, row.faturamento, row.imposto_valor]
-      .some((value) => normalizeSearchValue(value).includes(query)),
-  );
-};
-
-const buildSpedFiscalHierarchy = (rows: SpedHierarchyRow[]): FiscalNcmSummary[] => {
-  const ncmMap = new Map<string, FiscalNcmSummary>();
-  rows.forEach((row) => {
-    if (row.sem_item_detalhado) {
-      return;
-    }
-
-    const ncm = String(row.ncm ?? '00000000').trim() || '00000000';
-    const description = String(row.descricao_ncm ?? 'NCM sem descricao').trim() || 'NCM sem descricao';
-    const productCode = String(row.produto_codigo ?? 'SEM-CODIGO').trim() || 'SEM-CODIGO';
-    const productDescription = String(row.produto ?? 'Produto sem descricao').trim() || 'Produto sem descricao';
-    const total = parseDecimal(row.faturamento ?? 0);
-    const taxValue = parseDecimal(row.imposto_valor ?? 0);
-
-    let ncmEntry = ncmMap.get(ncm);
-    if (!ncmEntry) {
-      ncmEntry = { key: `fiscal-ncm-${ncm}`, ncm, description, total: 0, taxValue: 0, taxPercent: 0, products: [] };
-      ncmMap.set(ncm, ncmEntry);
-    }
-    ncmEntry.total += total;
-    ncmEntry.taxValue += taxValue;
-
-    let productEntry = ncmEntry.products.find((item) => item.code === productCode);
-    if (!productEntry) {
-      productEntry = { key: `fiscal-product-${ncm}-${productCode}`, code: productCode, description: productDescription, totalValue: 0, taxValue: 0, taxPercent: 0 };
-      ncmEntry.products.push(productEntry);
-    }
-
-    productEntry.totalValue += total;
-    productEntry.taxValue += taxValue;
-  });
-
-  return [...ncmMap.values()].map((ncmEntry) => ({
-    ...ncmEntry,
-    taxPercent: ncmEntry.total ? (ncmEntry.taxValue / ncmEntry.total) * 100 : 0,
-    products: ncmEntry.products.map((productEntry) => ({
-      ...productEntry,
-      taxPercent: productEntry.totalValue ? (productEntry.taxValue / productEntry.totalValue) * 100 : 0,
-    })).sort((a, b) => b.totalValue - a.totalValue),
-  })).sort((a, b) => b.total - a.total);
-};
 
 export default function DetalhamentoVendas() {
   const { user } = useAuth();
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
   const isSped = Boolean(user?.tem_sped);
+  const fiscalApi = createFiscalSourceApi(user?.tem_sped);
 
   const { selectedMonth, setSelectedMonth, selectedYear, setSelectedYear, monthNumber, year: yearNumber } = usePeriodFilter();
+  const fiscalPeriod = useMemo(
+    () => createFiscalPeriod(selectedYear, selectedMonth),
+    [selectedMonth, selectedYear],
+  );
+  const [viewMode, setViewMode] = useState<'grafica' | 'detalhada'>('grafica');
+  const [detailMode, setDetailMode] = useState<DetailMode>(isSped ? 'regiao' : 'nota');
 
   const yearsQuery = useQuery({
-    queryKey: ['detalhamento-vendas-anos', emitenteCnpj, isSped],
-    queryFn: () =>
-      isSped
-        ? fetchSpedKpis({ emitente_cnpj: emitenteCnpj, limite: 120 })
-        : fetchNfeKpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
+    queryKey: createFiscalQueryKey({
+      scope: 'detalhamento-vendas-anos',
+      emitenteCnpj,
+      sourceKey: fiscalApi.sourceKey,
+    }),
+    queryFn: () => fiscalApi.kpis({ emitente_cnpj: emitenteCnpj, limite: 120 }),
     enabled: hasEmitenteCnpj,
     staleTime: 5 * 60 * 1000,
   });
 
-  const { dashboardQuery, mapQuery } = useDashboardVendasQueries({ emitenteCnpj, email: user?.email, temSped: user?.tem_sped, year: yearNumber, selectedMonth, monthNumber, hasEmitenteCnpj });
+  const dashboardSelectedMonth = viewMode === 'grafica' ? 'all' : selectedMonth;
+  const { dashboardQuery, mapQuery } = useDashboardVendasQueries({ emitenteCnpj, email: user?.email, temSped: user?.tem_sped, year: yearNumber, selectedMonth: dashboardSelectedMonth, monthNumber, hasEmitenteCnpj });
 
-  const [detailMode, setDetailMode] = useState<DetailMode>(isSped ? 'regiao' : 'nota');
   const [openNoteValues, setOpenNoteValues] = useState<string[]>([]);
   const [openNoteClientValues, setOpenNoteClientValues] = useState<string[]>([]);
   const [openNcmValues, setOpenNcmValues] = useState<string[]>([]);
@@ -143,58 +98,66 @@ export default function DetalhamentoVendas() {
   }, [detailMode, isSped]);
 
   const notasInfiniteQuery = useInfiniteQuery({
-    queryKey: ['detalhamento-vendas-notas', emitenteCnpj, selectedYear, selectedMonth],
-    queryFn: ({ pageParam = 0 }) => fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, tipo_operacao: 'vendas', limite: NOTAS_PAGE_SIZE, offset: pageParam }),
+    queryKey: createFiscalQueryKey({
+      scope: 'detalhamento-vendas-notas',
+      emitenteCnpj,
+      sourceKey: 'nfe',
+      period: fiscalPeriod,
+    }),
+    queryFn: ({ pageParam = 0 }) => fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, ...fiscalPeriod.params, tipo_operacao: 'vendas', limite: NOTAS_PAGE_SIZE, offset: pageParam }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       const loadedCount = allPages.reduce((total, page) => total + page.notas.length, 0);
       return loadedCount < lastPage.total ? loadedCount : undefined;
     },
-    enabled: hasEmitenteCnpj && !isSped && detailMode === 'nota',
+    enabled: hasEmitenteCnpj && !isSped && viewMode === 'detalhada' && detailMode === 'nota',
     staleTime: 5 * 60 * 1000,
   });
 
   const notasRegionQuery = useQuery({
-    queryKey: ['detalhamento-vendas-notas-regiao', emitenteCnpj, selectedYear, selectedMonth],
-    queryFn: () => fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, tipo_operacao: 'vendas', limite: 500, offset: 0 }).then(async (firstPage) => {
+    queryKey: createFiscalQueryKey({
+      scope: 'detalhamento-vendas-notas-regiao',
+      emitenteCnpj,
+      sourceKey: 'nfe',
+      period: fiscalPeriod,
+    }),
+    queryFn: () => fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, ...fiscalPeriod.params, tipo_operacao: 'vendas', limite: 500, offset: 0 }).then(async (firstPage) => {
       if (firstPage.total <= firstPage.notas.length) return firstPage;
       let offset = firstPage.notas.length;
       const notas = [...firstPage.notas];
       while (offset < firstPage.total) {
-        const nextPage = await fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, tipo_operacao: 'vendas', limite: 500, offset });
+        const nextPage = await fetchNfeNotasDetalhadas({ emitente_cnpj: emitenteCnpj, email: user?.email, ...fiscalPeriod.params, tipo_operacao: 'vendas', limite: 500, offset });
         notas.push(...nextPage.notas);
         offset += nextPage.notas.length;
         if (nextPage.notas.length === 0) break;
       }
       return { status: firstPage.status, total: firstPage.total, notas };
     }),
-    enabled: hasEmitenteCnpj && !isSped && detailMode === 'regiao',
+    enabled: hasEmitenteCnpj && !isSped && viewMode === 'detalhada' && detailMode === 'regiao',
     staleTime: 5 * 60 * 1000,
   });
 
   const spedHierarchyQuery = useQuery<SpedFiscalHierarchyResponse>({
-    queryKey: ['detalhamento-vendas-sped-hierarquia', emitenteCnpj, selectedYear, selectedMonth],
-    queryFn: () => fetchSpedAnaliseFiscalHierarquica({ emitente_cnpj: emitenteCnpj, periodo_ano: Number.isNaN(yearNumber) ? undefined : yearNumber, periodo_mes: selectedMonth === 'all' ? undefined : monthNumber, limite: 5000 }),
-    enabled: hasEmitenteCnpj && isSped,
+    queryKey: createFiscalQueryKey({
+      scope: 'detalhamento-vendas-sped-hierarquia',
+      emitenteCnpj,
+      sourceKey: 'sped',
+      period: fiscalPeriod,
+    }),
+    queryFn: () => fetchSpedAnaliseFiscalHierarquica({ emitente_cnpj: emitenteCnpj, ...fiscalPeriod.params, limite: 5000 }),
+    enabled: hasEmitenteCnpj && isSped && viewMode === 'detalhada',
     staleTime: 5 * 60 * 1000,
   });
 
-  const availableYears = useMemo(() => {
-    const years = new Set<number>();
-    for (const item of yearsQuery.data?.resultados ?? []) {
-      if (item.periodo_ano) years.add(item.periodo_ano);
-    }
-    return years.size ? [...years].sort((a, b) => b - a) : [new Date().getFullYear()];
-  }, [yearsQuery.data]);
-
-  useEffect(() => {
-    if (!availableYears.length) return;
-    if (!availableYears.includes(Number.parseInt(selectedYear, 10))) setSelectedYear(String(availableYears[0]));
-  }, [availableYears, selectedYear, setSelectedYear]);
+  const { availableYears } = useFiscalYears({
+    entries: yearsQuery.data?.resultados ?? [],
+    selectedYear,
+    setSelectedYear,
+  });
 
   const currentData = dashboardQuery.data?.resumo_atual;
   const previousData = dashboardQuery.data?.resumo_anterior;
-  const totalFaturamento = parseDecimal(mapQuery.data?.total_vendido ?? currentData?.total_vendido ?? 0);
+  const totalFaturamento = parseDecimal(currentData?.total_vendido ?? 0);
 
   const totalSalesChange = calculateChange(totalFaturamento, previousData?.total_vendido ?? 0);
   const ticketChange = calculateChange(currentData?.ticket_medio ?? 0, previousData?.ticket_medio ?? 0);
@@ -223,7 +186,7 @@ export default function DetalhamentoVendas() {
   const spedRows = useMemo(() => spedHierarchyQuery.data?.hierarquia ?? [], [spedHierarchyQuery.data?.hierarquia]);
   const filteredSpedRows = useMemo(() => filterSpedHierarchyRows(spedRows, searchTerm), [spedRows, searchTerm]);
   const spedRegionHierarchy = useMemo(() => buildSpedFiscalHierarchyState(filteredSpedRows), [filteredSpedRows]);
-  const spedFiscalHierarchy = useMemo(() => buildSpedFiscalHierarchy(filteredSpedRows), [filteredSpedRows]);
+  const spedFiscalHierarchy = useMemo(() => buildSpedFiscalNcmHierarchy(filteredSpedRows), [filteredSpedRows]);
 
   const noteAccordionValues = useMemo(() => filteredNotas.map((nota) => `${nota.numero_nf}-${nota.data_emissao}`), [filteredNotas]);
   const noteClientAccordionValues = useMemo(() => filteredNotas.map((nota) => `cliente-${nota.numero_nf}-${nota.data_emissao}`), [filteredNotas]);
@@ -319,12 +282,34 @@ export default function DetalhamentoVendas() {
 
   return (
     <div className="space-y-6 py-6">
-      <Header title="Detalhamento de vendas" subtitle="Expansao hierarquica por nota, regiao ou leitura fiscal com visual alinhado a paleta azul-marinho." selectedMonth={selectedMonth} selectedYear={selectedYear} availableYears={availableYears} monthLabels={monthLabels} onMonthChange={setSelectedMonth} onYearChange={setSelectedYear} />
+      <Header title="Detalhamento de vendas" subtitle="Visao de dashboard e expansao hierarquica por nota, regiao ou leitura fiscal." selectedMonth={selectedMonth} selectedYear={selectedYear} availableYears={availableYears} monthLabels={monthLabels} onMonthChange={setSelectedMonth} onYearChange={setSelectedYear} />
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stat-card-grid">
         {stats.map((stat) => <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />)}
       </div>
 
+      <div className="flex flex-wrap gap-3 border-y border-slate-800/80 py-4">
+        {[
+          { key: 'grafica' as const, title: 'Visao grafica' },
+          { key: 'detalhada' as const, title: 'Visao detalhada' },
+        ].map((button) => {
+          const isActive = viewMode === button.key;
+
+          return (
+            <Button
+              key={button.key}
+              type="button"
+              variant={isActive ? 'secondary' : 'outline'}
+              onClick={() => setViewMode(button.key)}
+              className={isActive ? 'bg-white text-slate-900 hover:bg-slate-100' : 'border-slate-700 bg-slate-900/80 text-slate-100 hover:border-sky-500/60 hover:bg-slate-800'}
+            >
+              {button.title}
+            </Button>
+          );
+        })}
+      </div>
+
+      {viewMode === 'detalhada' && (
       <Card className="border border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_28px_90px_-52px_rgba(15,23,42,1)]">
         <CardContent className="space-y-5 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -333,14 +318,28 @@ export default function DetalhamentoVendas() {
               <h2 className="text-2xl font-semibold tracking-tight">{isSped ? (detailMode === 'fiscal' ? 'Expansao fiscal em 2 niveis' : 'Expansao em 4 niveis para SPED') : 'Expansao em 4 niveis'}</h2>
               <p className="max-w-3xl text-sm text-slate-300">{isSped ? 'No SPED, o detalhamento usa a hierarquia fiscal existente para leitura por regiao ou por NCM.' : 'Alterne entre leitura por nota ou por regiao e abra a hierarquia em camadas ate chegar aos produtos.'}</p>
             </div>
-            <Button asChild variant="secondary" className="gap-2 bg-white text-slate-900 hover:bg-slate-100"><Link to="/analise-vendas">Voltar ao dashboard<ArrowRight className="h-4 w-4" /></Link></Button>
+            <Button asChild variant="secondary" className="gap-2 bg-white text-slate-900 hover:bg-slate-100"><Link to="/analise-vendas">Voltar a Analise de Vendas<ArrowRight className="h-4 w-4" /></Link></Button>
           </div>
           <DetalhamentoVendasModeSelector detailMode={detailMode} onChange={setDetailMode} options={modeOptions} />
         </CardContent>
       </Card>
+      )}
 
       {detalhamentoError && <Alert variant="destructive"><AlertTitle>Erro ao carregar o detalhamento</AlertTitle><AlertDescription>{detalhamentoError instanceof Error ? detalhamentoError.message : 'Nao foi possivel consultar o detalhamento deste periodo.'}</AlertDescription></Alert>}
 
+      {viewMode === 'grafica' ? (
+        <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
+          <CardContent className="p-6">
+            <DetalhamentoVendasDashboardMode
+              dashboardData={dashboardQuery.data}
+              isLoading={dashboardQuery.isLoading || mapQuery.isLoading}
+              availableYears={availableYears}
+              selectedYear={selectedYear}
+              onYearChange={setSelectedYear}
+            />
+          </CardContent>
+        </Card>
+      ) : (
       <Card className="overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white shadow-[0_24px_70px_-44px_rgba(15,23,42,0.42)]">
         <CardContent className="p-0">
           <div className="border-b border-slate-800/80 px-6 py-4">
@@ -371,6 +370,7 @@ export default function DetalhamentoVendas() {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

@@ -1,23 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Scale, TrendingDown, TrendingUp, Users, Percent } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Header } from './components/Header';
-import { RankingPanelGroup, RankingConfig } from './components/RankingPanelGroup';
+import { RankingPanelGroup } from './components/RankingPanelGroup';
 import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
 import { EvolucaoChart } from './components/EvolucaoChart';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { monthLabels } from '../services/utils';
 import { usePeriodFilter } from '@/hooks/usePeriodFilter';
 import { useDashboardVendasQueries } from '@/hooks/useDashboardQueries';
+import { useFiscalYearList } from '@/hooks/useFiscalYears';
 import {
   formatCurrency,
   formatPercent,
   hasValidEmitenteCnpj,
+  monthLabels,
   parseDecimal,
   safePercentage,
   calculateChange,
@@ -57,20 +58,16 @@ export default function Dashboard({
     hasEmitenteCnpj,
   });
 
-  const availableYears = dashboardQuery.data?.anos_disponiveis?.length
-    ? dashboardQuery.data.anos_disponiveis
-    : [year];
-
-  useEffect(() => {
-    if (!dashboardQuery.data?.anos_disponiveis?.length) return;
-    if (!dashboardQuery.data.anos_disponiveis.includes(year)) {
-      setSelectedYear(String(dashboardQuery.data.anos_disponiveis[0]));
-    }
-  }, [dashboardQuery.data?.anos_disponiveis, year, setSelectedYear]);
+  const { availableYears } = useFiscalYearList({
+    years: dashboardQuery.data?.anos_disponiveis,
+    selectedYear,
+    setSelectedYear,
+    fallbackYear: year,
+  });
 
   const currentData = dashboardQuery.data?.resumo_atual;
   const previousData = dashboardQuery.data?.resumo_anterior;
-  const totalFaturamento = parseDecimal(mapQuery.data?.total_vendido ?? currentData?.total_vendido ?? 0);
+  const totalFaturamento = parseDecimal(currentData?.total_vendido ?? 0);
 
   const totalSalesChange = calculateChange(totalFaturamento, previousData?.total_vendido ?? 0);
   const ticketChange = calculateChange(currentData?.ticket_medio ?? 0, previousData?.ticket_medio ?? 0);
@@ -207,7 +204,7 @@ export default function Dashboard({
       />
 
       <div className="flex justify-end">
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="h-10">
           <Link to="/detalhamento-vendas">Abrir detalhamento analítico</Link>
         </Button>
       </div>
@@ -221,7 +218,7 @@ export default function Dashboard({
         </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="stat-card-grid">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />
         ))}

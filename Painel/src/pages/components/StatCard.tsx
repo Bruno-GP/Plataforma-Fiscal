@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 interface StatCardProps {
   title: string;
@@ -23,25 +24,33 @@ export function StatCard({
   accentClass = 'border-l-slate-700',
   appendPreviousMonthLabel = true,
 }: StatCardProps) {
+  const trendTone =
+    trend === 'up'
+      ? 'text-emerald-300'
+      : trend === 'down'
+        ? 'text-rose-300'
+        : 'text-slate-400';
+
   return (
     <Card
-      className={`rounded-2xl border-l-4 border-slate-800/70 bg-gradient-to-br from-slate-950/80 via-slate-900/85 to-slate-950/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_45px_-30px_rgba(0,0,0,0.9)] backdrop-blur ${accentClass}`}
+      className={cn(
+        'stat-card group min-h-[156px] border-l-4 bg-gradient-to-br from-[#172033] via-[#121c31] to-[#0b1425] transition-transform duration-200 hover:-translate-y-0.5 hover:border-slate-500/80',
+        accentClass,
+      )}
     >
-      <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <CardTitle className="text-sm font-medium text-slate-300">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-slate-300/80" />
+      <CardHeader className="flex min-w-0 flex-row items-start justify-between gap-4 pb-3">
+        <CardTitle className="min-w-0 flex-1 text-sm font-semibold leading-snug text-slate-300 [overflow-wrap:break-word]">
+          {title}
+        </CardTitle>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-700/80 bg-slate-950/45 text-sky-300 transition-colors group-hover:border-sky-400/50">
+          <Icon className="h-4 w-4" />
+        </div>
       </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-semibold text-white font-bold">{isLoading ? 'Carregando...' : value}</div>
-        <p
-          className={`mt-2 text-xs font-medium ${
-            trend === 'up'
-              ? 'text-emerald-400'
-              : trend === 'down'
-                ? 'text-rose-400'
-                : 'text-slate-400'
-          }`}
-        >
+      <CardContent className="flex min-w-0 flex-1 flex-col justify-end pt-0">
+        <div className="stat-card__value font-bold text-slate-50">
+          {isLoading ? 'Carregando...' : value}
+        </div>
+        <p className={cn('mt-3 text-xs font-semibold leading-snug [overflow-wrap:break-word]', trendTone)}>
           {isLoading ? '--' : appendPreviousMonthLabel ? `${description} vs mês anterior` : description}
         </p>
       </CardContent>

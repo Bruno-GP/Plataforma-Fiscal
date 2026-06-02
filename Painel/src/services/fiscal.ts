@@ -17,40 +17,7 @@ export interface FiscalQueryParams {
 
 export const MAX_FISCAL_LIMIT = 5000;
 
-export const parseDecimal = (value: unknown): number => {
-  if (typeof value === 'number') {
-    return value;
-  }
-
-  if (typeof value !== 'string') {
-    return 0;
-  }
-
-  const cleaned = value.replace(/[^\d,.-]/g, '');
-  if (!cleaned) {
-    return 0;
-  }
-
-  const hasComma = cleaned.includes(',');
-  const hasDot = cleaned.includes('.');
-
-  if (hasComma && hasDot) {
-    const lastComma = cleaned.lastIndexOf(',');
-    const lastDot = cleaned.lastIndexOf('.');
-
-    if (lastComma > lastDot) {
-      return Number(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
-    }
-
-    return Number(cleaned.replace(/,/g, '')) || 0;
-  }
-
-  if (hasComma) {
-    return Number(cleaned.replace(',', '.')) || 0;
-  }
-
-  return Number(cleaned) || 0;
-};
+export { parseDecimal } from '@/utils/formatters';
 
 export const normalizeCnpjParam = (value?: string): string | null => {
   if (!value) {

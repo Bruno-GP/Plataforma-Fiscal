@@ -1,34 +1,33 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Box, Package, Scale, ShoppingCart, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatCurrency, monthLabels } from '@/services/utils';
 import { Header } from '@/pages/components/Header';
-import { RankingPanelGroup, RankingConfig } from '@/pages/components/RankingPanelGroup';
+import { RankingPanelGroup } from '@/pages/components/RankingPanelGroup';
 import { StatCard } from '@/pages/components/StatCard';
 import { EvolucaoChart } from '@/pages/components/EvolucaoChart';
 
 import { usePeriodFilter } from '@/hooks/usePeriodFilter';
 import { useDashboardComprasQueries } from '@/hooks/useDashboardQueries';
+import { useFiscalYearList } from '@/hooks/useFiscalYears';
 import {
   formatPercent,
+  formatCurrency,
   hasValidEmitenteCnpj,
+  monthLabels,
   parseDecimal,
-  safePercentage,
+  resolvePeriodDescription,
   calculateChange,
 } from '@/utils/formatters';
-
-const resolvePeriodDescription = (year: number, month: string) => {
-  if (month === 'all') {
-    return `Acumulado em ${year}`;
-  }
-
-  const monthNumber = Number.parseInt(month, 10);
-  return `${monthLabels[monthNumber - 1]} de ${year}`;
-};
+import {
+  buildPurchaseQuantityRankingItems,
+  buildPurchaseValueRankingItems,
+  sumDecimalField,
+  sumNumberField,
+} from '@/utils/rankingUtils';
 
 export default function AnaliseFiscal() {
   const { user } = useAuth();
@@ -54,16 +53,12 @@ export default function AnaliseFiscal() {
     hasEmitenteCnpj,
   });
 
-  const availableYears = dashboardQuery.data?.anos_disponiveis?.length
-    ? dashboardQuery.data.anos_disponiveis
-    : [year];
-
-  useEffect(() => {
-    if (!dashboardQuery.data?.anos_disponiveis?.length) return;
-    if (!dashboardQuery.data.anos_disponiveis.includes(year)) {
-      setSelectedYear(String(dashboardQuery.data.anos_disponiveis[0]));
-    }
-  }, [dashboardQuery.data?.anos_disponiveis, year, setSelectedYear]);
+  const { availableYears } = useFiscalYearList({
+    years: dashboardQuery.data?.anos_disponiveis,
+    selectedYear,
+    setSelectedYear,
+    fallbackYear: year,
+  });
 
   const currentData = dashboardQuery.data?.resumo_atual;
   const previousData = dashboardQuery.data?.resumo_anterior;
@@ -71,22 +66,10 @@ export default function AnaliseFiscal() {
   const currentTotalComprado = parseDecimal(currentData?.total_comprado ?? 0);
   const previousTotalComprado = parseDecimal(previousData?.total_comprado ?? 0);
   
-  const currentDocCount = (currentData?.top_fornecedores_quantidade ?? []).reduce(
-    (acc: number, row: any) => acc + (row.quantidade_documentos ?? 0),
-    0,
-  );
-  const previousDocCount = (previousData?.top_fornecedores_quantidade ?? []).reduce(
-    (acc: number, row: any) => acc + (row.quantidade_documentos ?? 0),
-    0,
-  );
-  const currentItemCount = (currentData?.top_produtos_quantidade ?? []).reduce(
-    (acc: number, row: any) => acc + parseDecimal(row.quantidade_total ?? 0),
-    0,
-  );
-  const previousItemCount = (previousData?.top_produtos_quantidade ?? []).reduce(
-    (acc: number, row: any) => acc + parseDecimal(row.quantidade_total ?? 0),
-    0,
-  );
+  const currentDocCount = sumNumberField(currentData?.top_fornecedores_quantidade ?? [], 'quantidade_documentos');
+  const previousDocCount = sumNumberField(previousData?.top_fornecedores_quantidade ?? [], 'quantidade_documentos');
+  const currentItemCount = sumDecimalField(currentData?.top_produtos_quantidade ?? [], 'quantidade_total');
+  const previousItemCount = sumDecimalField(previousData?.top_produtos_quantidade ?? [], 'quantidade_total');
   
   const currentTicketMedio = currentDocCount ? currentTotalComprado / currentDocCount : 0;
   const previousTicketMedio = previousDocCount ? previousTotalComprado / previousDocCount : 0;
@@ -188,7 +171,7 @@ export default function AnaliseFiscal() {
         </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="stat-card-grid">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} isLoading={dashboardQuery.isLoading} />
         ))}
@@ -202,53 +185,29 @@ export default function AnaliseFiscal() {
             title: "Top Fornecedores",
             description: "Fornecedores com maior valor de compras no período",
             emptyMessage: "Sem dados para o período selecionado.",
-            items: (currentData?.top_fornecedores_valor ?? []).slice(0, 5).map((row: any, index: number) => {
-              const valorTotal = parseDecimal(row.valor_total);
-              const percentual = safePercentage(valorTotal, currentTotalComprado);
-              return {
-                key: `${row.fornecedor}-${index}`,
-                title: row.fornecedor,
-                subtitle: `${row.quantidade_documentos} documentos`,
-                value: formatCurrency(valorTotal),
-                rawValue: valorTotal,
-                percent: percentual,
-              };
+            items: buildPurchaseValueRankingItems(currentData?.top_fornecedores_valor ?? [], {
+              titleField: 'fornecedor',
+              fallbackTitle: 'Fornecedor nao identificado',
+              totalValue: currentTotalComprado,
+              subtitle: (row) => `${row.quantidade_documentos} documentos`,
             })
           },
           {
             title: "Top Produtos por Valor",
             description: "Produtos com maior valor de compra no período",
             emptyMessage: "Sem dados para o período selecionado.",
-            items: (currentData?.top_produtos_valor ?? []).slice(0, 5).map((row: any, index: number) => {
-              const valorTotal = parseDecimal(row.valor_total);
-              const percentual = safePercentage(valorTotal, currentTotalComprado);
-              return {
-                key: `${row.produto}-${index}`,
-                title: row.produto,
-                subtitle: `Qtd. ${parseDecimal(row.quantidade_total).toFixed(2)}`,
-                value: formatCurrency(valorTotal),
-                rawValue: valorTotal,
-                percent: percentual,
-              };
+            items: buildPurchaseValueRankingItems(currentData?.top_produtos_valor ?? [], {
+              titleField: 'produto',
+              fallbackTitle: 'Produto nao identificado',
+              totalValue: currentTotalComprado,
+              subtitle: (row) => `Qtd. ${parseDecimal(row.quantidade_total).toFixed(2)}`,
             })
           },
           {
             title: "Top Produtos por Quantidade",
             description: "Produtos mais comprados no período",
             emptyMessage: "Sem dados para o período selecionado.",
-            items: (currentData?.top_produtos_quantidade ?? []).slice(0, 5).map((row: any, index: number) => {
-              const quantidade = parseDecimal(row.quantidade_total);
-              const percentual = safePercentage(quantidade, currentItemCount);
-              const valorTotal = parseDecimal(row.valor_total);
-              return {
-                key: `${row.produto}-${index}-quantidade`,
-                title: row.produto,
-                subtitle: `${quantidade.toFixed(2)} itens comprados`,
-                value: formatCurrency(valorTotal),
-                rawValue: valorTotal,
-                percent: percentual,
-              };
-            })
+            items: buildPurchaseQuantityRankingItems(currentData?.top_produtos_quantidade ?? [], currentItemCount)
           }
         ]}
       />

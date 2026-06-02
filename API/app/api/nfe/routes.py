@@ -1,23 +1,20 @@
 import psycopg
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File
 
-from app.api.shared.analytics import obter_periodo_anterior
+from app.api.shared.company_validation import validar_empresa_xml
 from app.core.upload_security import validate_xml_uploads
 from app.core.security import require_company_scope
 from app.models.jobs.schemas import JobCreateResponse
+from app.repositories.nfe.notas_repository import NFeNotasRepository
 from app.services.jobs.job_service import JobService
 from app.services.nfe.process_nfe import ProcessarNFeService
 from app.services.nfe.nfe_consulta_service import NFeConsultaService
-from app.services.nfe.nfe_notas_service import NFeNotasService
 from app.services.NCM.ncm_catalog_service import NCMCatalogService
-from app.services.company_profile_service import CompanyProfileService
 from app.services.nfe.xml_importacao_service import XMLImportacaoService
-from app.services.AI.openai_report_service import OpenAIReportService
-from app.services.fiscal_analysis import (
-  obter_total_impostos_complementares_documentos,
-  obter_total_tributos_reforma_documentos,
-)
+from app.services.shared.analise_relatorio_service import executar_analise_com_relatorio_ia
+from app.services.shared.compras_dashboard_service import montar_dashboard_compras
 from app.models.nfe.schemas import (
   ComparativoKPIMensalResponse,
   NFeItem,
@@ -39,7 +36,6 @@ from app.models.nfe.schemas import (
   AnaliseClientesResponse,
   DashboardComprasResponse,
   DashboardVendasResponse,
-  SerieMensalComprasItem,
 )
 
 router = APIRouter()
@@ -48,11 +44,15 @@ router = APIRouter()
 
 nfe_router = APIRouter(prefix="/nfe", tags=["NFe"], dependencies=[Depends(require_company_scope)])
 
+@lru_cache(maxsize=1)
+def get_nfe_consulta_service() -> NFeConsultaService:
+  return NFeConsultaService()
+
 def get_emitente_resolvido_nfe(
   emitente_cnpj: str | None = Query(default=None),
   email: str | None = Query(default=None),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
   emitente_resolvido = service.resolver_emitente_cnpj(emitente_cnpj=emitente_cnpj, email=email)
   if not emitente_resolvido:
     raise HTTPException(
@@ -60,30 +60,6 @@ def get_emitente_resolvido_nfe(
       detail="Informe um emitente_cnpj válido ou um email cadastrado.",
     )
   return emitente_resolvido
-
-def injetar_relatorio_ia(resultado: dict, tipo: str, formato_relatorio: str, layout: str | None = None):
-  ia_service = OpenAIReportService()
-  if not ia_service.disponivel():
-    raise HTTPException(
-      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-      detail=(
-        "Integração com OpenAI indisponível. "
-        "Configure OPENAI_API_KEY no ambiente da API."
-      ),
-    )
-  if tipo == 'compras':
-    resultado["relatorio_ia"] = ia_service.gerar_relatorio_compras(resultado, formato_relatorio, layout)
-  elif tipo == 'vendas':
-    resultado["relatorio_ia"] = ia_service.gerar_relatorio_vendas(resultado, formato_relatorio, layout)
-  elif tipo == 'clientes':
-    resultado["relatorio_ia"] = ia_service.gerar_relatorio_clientes(resultado, formato_relatorio)
-
-def _validar_empresa_xml(cnpj: str):
-  if CompanyProfileService().empresa_tem_sped(cnpj):
-    raise HTTPException(
-      status_code=status.HTTP_400_BAD_REQUEST,
-      detail="Esta empresa está configurada para SPED Fiscal e não para XML.",
-    )
 
 def _nota_possui_tipo_operacao(nota, tipo_operacao: str) -> bool:
   if tipo_operacao == "todas":
@@ -116,7 +92,7 @@ async def importar_xml(
   arquivos: list[UploadFile] = File(...),
   cnpj_empresa_origem: str = Query(..., min_length=14, max_length=20),
 ):
-  _validar_empresa_xml(cnpj_empresa_origem)
+  validar_empresa_xml(cnpj_empresa_origem)
   
   if len(arquivos) > 10000:
     raise HTTPException(
@@ -159,7 +135,7 @@ async def importar_xml(
 """Informa quantos XMLs já importados ainda não foram processados."""
 @nfe_router.get("/xml/pendencias", response_model=ImportacaoXMLPendenciasResponse)
 def consultar_pendencias_xml(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
-  _validar_empresa_xml(cnpj_emitente)
+  validar_empresa_xml(cnpj_emitente)
   service_importacao = XMLImportacaoService()
   total_pendentes = service_importacao.contar_xmls_pendentes(cnpj_emitente)
 
@@ -177,7 +153,7 @@ def consultar_pendencias_xml(cnpj_emitente: str = Query(..., min_length=14, max_
   status_code=status.HTTP_202_ACCEPTED,
 )
 def processar_xmls_importados(cnpj_emitente: str = Query(..., min_length=14, max_length=20)):
-  _validar_empresa_xml(cnpj_emitente)
+  validar_empresa_xml(cnpj_emitente)
   service_importacao = XMLImportacaoService()
 
   if service_importacao.contar_xmls_pendentes(cnpj_emitente) == 0:
@@ -201,7 +177,7 @@ def consultar_kpis(
   limite: int = Query(default=100),
   offset: int = Query(default=0),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   resultados = service.listar_kpis(
     emitente_cnpj=emitente_resolvido,
@@ -227,19 +203,22 @@ def consultar_analise_compras_nfe(
   formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
   layout: str | None = Query(default=None),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
-    resultado = service.analisar_compras(
-      emitente_cnpj=emitente_resolvido,
-      periodo_ano=periodo_ano,
-      periodo_mes=periodo_mes,
-      limite=limite,
+    resultado = executar_analise_com_relatorio_ia(
+      analise_fn=service.analisar_compras,
+      analise_kwargs={
+        "emitente_cnpj": emitente_resolvido,
+        "periodo_ano": periodo_ano,
+        "periodo_mes": periodo_mes,
+        "limite": limite,
+      },
+      gerar_relatorio_ia=gerar_relatorio_ia,
+      tipo_relatorio="compras",
+      formato_relatorio=formato_relatorio,
+      layout=layout,
     )
-    
-    if gerar_relatorio_ia:
-      injetar_relatorio_ia(resultado, 'compras', formato_relatorio, layout)
-    
   except ValueError as exc:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
@@ -267,19 +246,22 @@ def consultar_analise_vendas_nfe(
   formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
   layout: str | None = Query(default=None),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
-    resultado = service.analisar_vendas(
-      emitente_cnpj=emitente_resolvido,
-      periodo_ano=periodo_ano,
-      periodo_mes=periodo_mes,
-      limite=limite,
+    resultado = executar_analise_com_relatorio_ia(
+      analise_fn=service.analisar_vendas,
+      analise_kwargs={
+        "emitente_cnpj": emitente_resolvido,
+        "periodo_ano": periodo_ano,
+        "periodo_mes": periodo_mes,
+        "limite": limite,
+      },
+      gerar_relatorio_ia=gerar_relatorio_ia,
+      tipo_relatorio="vendas",
+      formato_relatorio=formato_relatorio,
+      layout=layout,
     )
-
-    if gerar_relatorio_ia:
-      injetar_relatorio_ia(resultado, 'vendas', formato_relatorio, layout)
-
   except ValueError as exc:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
@@ -304,7 +286,7 @@ def consultar_analise_fiscal_cfop_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int | None = Query(default=1000, ge=1, le=5000),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
     resultado = service.analisar_fiscal_cfop(
@@ -328,7 +310,7 @@ def consultar_analise_fiscal_ncm_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int | None = Query(default=1000, ge=1, le=5000),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
     resultado = service.analisar_fiscal_ncm(
@@ -358,7 +340,7 @@ def consultar_analise_fiscal_hierarquia_nfe(
   limite: int | None = Query(default=1000, ge=1, le=5000),
   offset: int = Query(default=0, ge=0),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
     resultado = service.analisar_fiscal_hierarquia(
@@ -388,126 +370,24 @@ def consultar_dashboard_compras_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
 ):
-  service = NFeConsultaService()
-
-  anos_disponiveis = sorted(
-    {
-      item.periodo_ano
-      for item in service.listar_kpis(emitente_cnpj=emitente_resolvido, limite=120)
-      if item.periodo_ano
-    },
-    reverse=True,
-  )
-
-  ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
-  if ano_referencia is None:
-    raise HTTPException(
-      status_code=status.HTTP_404_NOT_FOUND,
-      detail="Nenhum perÃ­odo disponÃ­vel para o emitente informado.",
-    )
-
-  ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
+  service = get_nfe_consulta_service()
 
   try:
-    resumo_atual = service.analisar_compras(
+    dashboard = montar_dashboard_compras(
+      consulta_service=service,
       emitente_cnpj=emitente_resolvido,
-      periodo_ano=ano_referencia,
+      origem_documento="nfe",
+      periodo_ano=periodo_ano,
       periodo_mes=periodo_mes,
       limite=limite,
     )
-    resumo_anterior = service.analisar_compras(
-      emitente_cnpj=emitente_resolvido,
-      periodo_ano=ano_anterior,
-      periodo_mes=mes_anterior,
-      limite=limite,
-    )
-    serie_mensal = [
-      SerieMensalComprasItem(
-        periodo_ano=ano_referencia,
-        periodo_mes=mes,
-        total_comprado=service.analisar_compras(
-          emitente_cnpj=emitente_resolvido,
-          periodo_ano=ano_referencia,
-          periodo_mes=mes,
-          limite=limite,
-        )["total_comprado"],
-        total_impostos_complementares=obter_total_impostos_complementares_documentos(
-          service.conn_params,
-          "nfe",
-          emitente_resolvido,
-          ano_referencia,
-          mes,
-          "entrada",
-        ),
-        total_tributos_reforma=obter_total_tributos_reforma_documentos(
-          service.conn_params,
-          "nfe",
-          emitente_resolvido,
-          ano_referencia,
-          mes,
-          "entrada",
-        ),
-      )
-      for mes in range(1, 13)
-    ]
   except ValueError as exc:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail=str(exc),
     ) from exc
 
-  return DashboardComprasResponse(
-    status="ok",
-    emitente_cnpj=emitente_resolvido,
-    periodo_ano=ano_referencia,
-    periodo_mes=periodo_mes,
-    anos_disponiveis=anos_disponiveis,
-    resumo_atual=AnaliseComprasResponse(
-      status="ok",
-      **{
-        **resumo_atual,
-        "total_impostos_complementares": obter_total_impostos_complementares_documentos(
-          service.conn_params,
-          "nfe",
-          emitente_resolvido,
-          ano_referencia,
-          periodo_mes,
-          "entrada",
-        ),
-        "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-          service.conn_params,
-          "nfe",
-          emitente_resolvido,
-          ano_referencia,
-          periodo_mes,
-          "entrada",
-        ),
-      },
-    ),
-    resumo_anterior=AnaliseComprasResponse(
-      status="ok",
-      **{
-        **resumo_anterior,
-        "total_impostos_complementares": obter_total_impostos_complementares_documentos(
-          service.conn_params,
-          "nfe",
-          emitente_resolvido,
-          ano_anterior,
-          mes_anterior,
-          "entrada",
-        ),
-        "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-          service.conn_params,
-          "nfe",
-          emitente_resolvido,
-          ano_anterior,
-          mes_anterior,
-          "entrada",
-        ),
-      },
-    ),
-    serie_mensal=serie_mensal,
-  )
+  return DashboardComprasResponse(**dashboard)
 
 @nfe_router.get("/analise/vendas/dashboard", response_model=DashboardVendasResponse)
 def consultar_dashboard_vendas_nfe(
@@ -516,7 +396,7 @@ def consultar_dashboard_vendas_nfe(
   periodo_mes: int | None = Query(default=None),
   limite: int = Query(default=5, ge=1, le=20),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
   return service.consultar_dashboard_vendas(
     emitente_cnpj=emitente_resolvido,
     periodo_ano=periodo_ano,
@@ -533,19 +413,21 @@ def consultar_analise_clientes_nfe(
   gerar_relatorio_ia: bool = Query(default=False),
   formato_relatorio: str = Query(default="executivo", pattern="^(executivo|analitico)$"),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   try:
-    resultado = service.analisar_clientes(
-      emitente_cnpj=emitente_resolvido,
-      periodo_ano=periodo_ano,
-      periodo_mes=periodo_mes,
-      limite=limite,
+    resultado = executar_analise_com_relatorio_ia(
+      analise_fn=service.analisar_clientes,
+      analise_kwargs={
+        "emitente_cnpj": emitente_resolvido,
+        "periodo_ano": periodo_ano,
+        "periodo_mes": periodo_mes,
+        "limite": limite,
+      },
+      gerar_relatorio_ia=gerar_relatorio_ia,
+      tipo_relatorio="clientes",
+      formato_relatorio=formato_relatorio,
     )
-
-    if gerar_relatorio_ia:
-      injetar_relatorio_ia(resultado, 'clientes', formato_relatorio)
-
   except ValueError as exc:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
@@ -586,7 +468,7 @@ def comparar_kpis_mensal(
       periodo_anterior_mes = periodo_mes - 1
       periodo_anterior_ano = periodo_ano
 
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
   
   kpis = service.comparar_kpis_mensal(
     emitente_cnpj=emitente_resolvido,
@@ -626,7 +508,7 @@ def comparar_kpis_mensal(
 def comparar_kpis_mensal_atual(
   emitente_resolvido: str = Depends(get_emitente_resolvido_nfe),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
   
   try:
     periodos_disponiveis = service.obter_periodos_disponiveis(emitente_resolvido)
@@ -706,7 +588,7 @@ def consultar_notas_detalhadas(
   limite: int = Query(default=100, ge=1, le=500),
   offset: int = Query(default=0, ge=0),
 ):
-  service = NFeConsultaService()
+  service = get_nfe_consulta_service()
 
   if periodo_ano is None and periodo_mes is None:
     try:
@@ -725,34 +607,25 @@ def consultar_notas_detalhadas(
         detail=str(exc),
       ) from exc
 
-  _validar_empresa_xml(emitente_resolvido)
-  notas_service = NFeNotasService()
+  validar_empresa_xml(emitente_resolvido)
+  notas_repository = NFeNotasRepository()
   ncm_catalog_service = NCMCatalogService()
 
   try:
-    with psycopg.connect(**notas_service.conn_params) as conn:
-      notas = notas_service.listar_notas_periodo_para_operacao(
-        conn=conn,
-        cnpj_empresa=emitente_resolvido,
-        periodo_ano=periodo_ano,
-        periodo_mes=periodo_mes,
-        tipo_operacao=tipo_operacao,
-      )
-      notas_slice = notas[offset:offset + limite]
-      item_ids = [
-        item.id
-        for nota in notas_slice
-        for item in nota.itens
-        if getattr(item, "id", None) is not None
-      ]
-      tributos_por_item = notas_service.listar_tributos_itens(conn, item_ids)
+    total, notas_slice, tributos_por_item = notas_repository.listar_notas_detalhadas(
+      cnpj_empresa=emitente_resolvido,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+      tipo_operacao=tipo_operacao,
+      limite=limite,
+      offset=offset,
+    )
   except psycopg.Error as exc:
     raise HTTPException(
       status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
       detail="NÃ£o foi possÃ­vel consultar as notas deste perÃ­odo.",
     ) from exc
 
-  total = len(notas)
   notas_paginadas = [
     NFeNota(
       id=getattr(nota, "id", None),

@@ -88,6 +88,31 @@ export interface ConsultaMemoriaCalculoTributariaResponse {
   resultados: MemoriaCalculoTributariaItem[];
 }
 
+export interface BackfillReformaTributariaResponse {
+  status: string;
+  emitente_cnpj: string;
+  origem: 'nfe' | 'sped';
+  periodos_processados: number;
+  resultados: Array<{
+    origem: string;
+    periodo_ano: number;
+    periodo_mes: number;
+    documentos: number;
+    xmls_importados_lidos?: number;
+    xmls_periodo?: number;
+    xmls_com_reforma?: number;
+    notas_reforma_reconstruidas?: number;
+    itens_reforma_xml?: number;
+    tributos_reforma_inseridos?: number;
+    documentos_tributos?: number;
+    itens_tributos?: number;
+    debitos?: number;
+    creditos?: number;
+    memorias?: number;
+    apuracoes?: number;
+  }>;
+}
+
 export interface ReformaQueryParams extends FiscalQueryParams {
   tributo_codigo?: string;
   documento_tributo_id?: number;
@@ -157,6 +182,25 @@ export const fetchReformaMemoriaCalculo = async (
   }
 
   return response.json() as Promise<ConsultaMemoriaCalculoTributariaResponse>;
+};
+
+export const backfillReformaTributaria = async (
+  params: { emitente_cnpj: string; origem: 'nfe' | 'sped' },
+  options: RequestOptions = {},
+): Promise<BackfillReformaTributariaResponse> => {
+  const searchParams = buildFiscalSearchParams({ emitente_cnpj: params.emitente_cnpj });
+  searchParams.set('origem', params.origem);
+
+  const response = await apiFetch(`${API_BASE_URL}/reforma-tributaria/backfill?${searchParams.toString()}`, {
+    method: 'POST',
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    throw await readApiError(response, 'Falha ao sincronizar dados da Reforma Tributaria.');
+  }
+
+  return response.json() as Promise<BackfillReformaTributariaResponse>;
 };
 
 export const totalizarApuracao = (itens: ApuracaoTributariaItem[]) => {

@@ -3,13 +3,58 @@ from typing import Optional
 
 import psycopg
 
-from app.models.nfe.schemas import NFeKPI, NFeKPIConsulta
+from app.api.shared.analytics import obter_periodo_anterior, resumir_vendas_por_kpis
+from app.models.nfe.schemas import NFeKPIConsulta
+from app.models.sped.schemas import (
+  DashboardVendasResponse,
+  DashboardVendasResumo,
+  SerieMensalVendasItem,
+)
 from app.services.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
   obter_total_impostos_complementares_documentos,
   obter_total_tributos_reforma_documentos,
   obter_regiao_por_uf,
+)
+from app.services.fiscal_clients import (
+  construir_filtros_clientes_sped,
+  construir_params_ranking_clientes,
+  construir_ranking_clientes,
+  construir_resposta_analise_clientes,
+)
+from app.services.fiscal_dimensions import (
+  construir_resposta_fiscal_cfop,
+  construir_resposta_fiscal_ncm,
+)
+from app.services.fiscal_hierarchy import (
+  calcular_imposto_por_percentual,
+  calcular_percentual_imposto,
+  construir_filtros_hierarquia_sped,
+  construir_item_cidade,
+  construir_item_estado,
+  construir_item_hierarquia_completa,
+  construir_item_ncm,
+  construir_item_produto,
+  construir_resposta_hierarquia_fiscal,
+  deve_montar_hierarquia_legado,
+  normalizar_paginacao_hierarquia,
+  resolver_nivel_hierarquia,
+)
+from app.services.fiscal_kpis import construir_sped_kpi_consulta
+from app.services.fiscal_purchases import (
+  construir_filtros_compras_sped,
+  construir_params_com_limite_compras,
+  construir_ranking_fornecedores_compras,
+  construir_resposta_analise_compras,
+)
+from app.services.fiscal_sales import (
+  construir_filtros_vendas_sped,
+  construir_params_com_limite,
+  construir_ranking_cfops_vendas,
+  construir_ranking_cidades_vendas,
+  construir_ranking_regioes_vendas,
+  construir_resposta_analise_vendas,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.sped.postgres_config import carregar_config_postgres_sped
@@ -125,10 +170,27 @@ def _categoria_fiscal_case_sped() -> str:
     END
   """
 
-def _calcular_percentual_imposto(imposto_valor: Decimal, faturamento: Decimal) -> Decimal:
-  return (imposto_valor / faturamento) * Decimal("100") if faturamento else Decimal("0.00")
-
 class SpedConsultaService:
+  _required_kpis_columns = {
+    "id",
+    "processamento_id",
+    "cnpj_emitente",
+    "periodo_ano",
+    "periodo_mes",
+    "total_documentos",
+    "total_itens",
+    "valor_total_saidas",
+    "valor_total_produtos",
+    "valor_total_frete",
+    "valor_total_descontos",
+    "icms_valor_debitado",
+    "ipi_valor",
+    "pis_valor",
+    "cofins_valor",
+    "ticket_medio",
+    "data_calculo",
+  }
+
   def __init__(self) -> None:
     config = carregar_config_postgres_sped()
     self.conn_params = {
@@ -186,71 +248,39 @@ class SpedConsultaService:
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
-          self._garantir_tabela_kpis(cur)
+          self._validar_tabela_kpis(cur)
           cur.execute(sql_kpis, params)
           rows = cur.fetchall()
 
           resultados: list[NFeKPIConsulta] = []
           for row in rows:
-            kpi_id, processamento_id, cnpj_emitente, ano, mes, total_vendas, total_docs, ticket_medio, maior_nota, menor_nota, total_icms, total_ipi, total_pis, total_cofins = row
+            ano = row[3]
+            mes = row[4]
             top_clientes = self._top_clientes(cur, cnpj, ano, mes)
             top_cidades = self._top_cidades(cur, cnpj, ano, mes)
             top_produtos = self._top_produtos(cur, cnpj, ano, mes)
-
             resultados.append(
-              NFeKPIConsulta(
-                  periodo_ano=ano,
-                  periodo_mes=mes,
-                  emitente_cnpj=cnpj_emitente,
-                  kpis=NFeKPI(
-                    id=kpi_id,
-                    processamento_id=processamento_id,
-                    emitente_cnpj=cnpj_emitente,
-                    total_vendas=total_vendas or Decimal("0.00"),
-                    quantidade_notas=total_docs or 0,
-                    ticket_medio=ticket_medio or Decimal("0.00"),
-                    maior_nota=maior_nota or Decimal("0.00"),
-                    menor_nota=menor_nota or Decimal("0.00"),
-                    total_icms=total_icms or Decimal("0.00"),
-                    total_ipi=total_ipi or Decimal("0.00"),
-                    total_pis=total_pis or Decimal("0.00"),
-                    total_cofins=total_cofins or Decimal("0.00"),
-                    top_clientes=top_clientes,
-                    top_produtos=top_produtos,
-                    top_cidades=top_cidades,
-                  ),
-                )
-              )
+              construir_sped_kpi_consulta(row, top_clientes, top_produtos, top_cidades)
+            )
 
           return resultados
 
-  def _garantir_tabela_kpis(self, cur) -> None:
+  def _validar_tabela_kpis(self, cur) -> None:
     cur.execute(
       """
-      CREATE TABLE IF NOT EXISTS public.sped_kpis_fiscal (
-        id SERIAL PRIMARY KEY,
-        processamento_id INTEGER NOT NULL,
-        cnpj_emitente VARCHAR(14) NOT NULL,
-        periodo_ano INTEGER NOT NULL,
-        periodo_mes INTEGER NOT NULL,
-        total_documentos INTEGER DEFAULT 0,
-        total_itens INTEGER DEFAULT 0,
-        valor_total_saidas NUMERIC(15,2) DEFAULT 0,
-        valor_total_produtos NUMERIC(15,2) DEFAULT 0,
-        valor_total_frete NUMERIC(15,2) DEFAULT 0,
-        valor_total_descontos NUMERIC(15,2) DEFAULT 0,
-        icms_valor_debitado NUMERIC(15,2) DEFAULT 0,
-        ipi_valor NUMERIC(15,2) DEFAULT 0,
-        pis_valor NUMERIC(15,2) DEFAULT 0,
-        cofins_valor NUMERIC(15,2) DEFAULT 0,
-        ticket_medio NUMERIC(15,2) DEFAULT 0,
-        data_calculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (cnpj_emitente, periodo_ano, periodo_mes)
-      )
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'sped_kpis_fiscal'
       """
     )
-    cur.execute("ALTER TABLE public.sped_kpis_fiscal ADD COLUMN IF NOT EXISTS pis_valor NUMERIC(15,2) DEFAULT 0")
-    cur.execute("ALTER TABLE public.sped_kpis_fiscal ADD COLUMN IF NOT EXISTS cofins_valor NUMERIC(15,2) DEFAULT 0")
+    existing_columns = {str(row[0]) for row in cur.fetchall()}
+    missing_columns = sorted(self._required_kpis_columns - existing_columns)
+    if missing_columns:
+      raise RuntimeError(
+        "Tabela public.sped_kpis_fiscal incompleta ou ausente. Execute as migrations Alembic. "
+        f"Colunas ausentes: {', '.join(missing_columns)}."
+      )
 
   def _top_clientes(self, cur, cnpj: str, ano: int, mes: int) -> list[dict]:
     return self._safe_top_query(
@@ -451,17 +481,11 @@ class SpedConsultaService:
     limite: int = 5,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'entrada'"]
-    params: list[object] = [cnpj]
-
-    if periodo_ano:
-      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
-      params.append(periodo_ano)
-    if periodo_mes:
-      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
-      params.append(periodo_mes)
-
-    where_clause = " AND ".join(filtros)
+    where_clause, params = construir_filtros_compras_sped(
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+    )
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
@@ -488,7 +512,7 @@ class SpedConsultaService:
           ORDER BY 2 DESC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite_compras(params, limite)),
         )
 
         top_fornecedores_quantidade = self._safe_top_fornecedor_query(
@@ -504,7 +528,7 @@ class SpedConsultaService:
           ORDER BY 3 DESC, 2 DESC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite_compras(params, limite)),
         )
 
         top_produtos_valor = self._safe_top_produto_query(
@@ -521,7 +545,7 @@ class SpedConsultaService:
           ORDER BY 2 DESC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite_compras(params, limite)),
         )
 
         top_produtos_quantidade = self._safe_top_produto_query(
@@ -538,35 +562,38 @@ class SpedConsultaService:
           ORDER BY 3 DESC, 2 DESC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite_compras(params, limite)),
         )
 
-        return {
-          "emitente_cnpj": cnpj,
-          "periodo_ano": periodo_ano,
-          "periodo_mes": periodo_mes,
-          "total_comprado": total_comprado,
-          "total_impostos_complementares": obter_total_impostos_complementares_documentos(
-            self.conn_params,
-            "sped",
-            cnpj,
-            periodo_ano,
-            periodo_mes,
-            "entrada",
-          ),
-          "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-            self.conn_params,
-            "sped",
-            cnpj,
-            periodo_ano,
-            periodo_mes,
-            "entrada",
-          ),
-          "top_fornecedores_valor": top_fornecedores_valor,
-          "top_fornecedores_quantidade": top_fornecedores_quantidade,
-          "top_produtos_valor": top_produtos_valor,
-          "top_produtos_quantidade": top_produtos_quantidade,
-        }
+        total_impostos_complementares = obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "sped",
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          "entrada",
+        )
+        total_tributos_reforma = obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "sped",
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          "entrada",
+        )
+
+        return construir_resposta_analise_compras(
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          total_comprado,
+          total_impostos_complementares,
+          total_tributos_reforma,
+          top_fornecedores_valor,
+          top_fornecedores_quantidade,
+          top_produtos_valor,
+          top_produtos_quantidade,
+        )
         
   def analisar_vendas(
     self,
@@ -576,17 +603,11 @@ class SpedConsultaService:
     limite: Optional[int] = None,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
-    params: list[object] = [cnpj]
-
-    if periodo_ano:
-      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
-      params.append(periodo_ano)
-    if periodo_mes:
-      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
-      params.append(periodo_mes)
-
-    where_clause = " AND ".join(filtros)
+    where_clause, params = construir_filtros_vendas_sped(
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+    )
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
@@ -613,7 +634,7 @@ class SpedConsultaService:
           ORDER BY 2 DESC, 1 ASC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite(params, limite)),
         )
 
         top_clientes_quantidade = self._safe_top_cliente_query(
@@ -629,7 +650,7 @@ class SpedConsultaService:
           ORDER BY 3 DESC, 2 DESC, 1 ASC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite(params, limite)),
         )
 
         top_produtos_valor = self._safe_top_produto_query(
@@ -646,7 +667,7 @@ class SpedConsultaService:
           ORDER BY 2 DESC, 1 ASC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite(params, limite)),
         )
 
         top_produtos_quantidade = self._safe_top_produto_query(
@@ -663,7 +684,7 @@ class SpedConsultaService:
           ORDER BY 3 DESC, 2 DESC, 1 ASC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite(params, limite)),
         )
 
         cur.execute(
@@ -681,21 +702,9 @@ class SpedConsultaService:
           ORDER BY 3 DESC, 1 ASC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite(params, limite)),
         )
-        top_cfops_valor = [
-          {
-            "cfop": cfop,
-            "descricao": descricao,
-            "valor_total": valor_total or Decimal("0.00"),
-            "participacao_percentual": (
-              ((valor_total or Decimal("0.00")) / total_vendido) * Decimal("100")
-              if total_vendido
-              else Decimal("0.00")
-            ),
-          }
-          for cfop, descricao, valor_total in cur.fetchall()
-        ]
+        top_cfops_valor = construir_ranking_cfops_vendas(cur.fetchall(), total_vendido)
 
         cur.execute(
           f"""
@@ -720,17 +729,12 @@ class SpedConsultaService:
           ORDER BY 3 DESC, 1 ASC
           LIMIT %s
           """,
-          tuple([*params, limite]),
+          tuple(construir_params_com_limite(params, limite)),
         )
-        top_cidades_valor = [
-          {
-            "cidade": _normalizar_nome_cidade(cidade),
-            "uf": uf,
-            "valor_total": valor_total or Decimal("0.00"),
-            "quantidade_documentos": quantidade_documentos or 0,
-          }
-          for cidade, uf, valor_total, quantidade_documentos in cur.fetchall()
-        ]
+        top_cidades_valor = construir_ranking_cidades_vendas(
+          cur.fetchall(),
+          normalizar_cidade=_normalizar_nome_cidade,
+        )
 
         cur.execute(
           f"""
@@ -745,58 +749,160 @@ class SpedConsultaService:
           """,
           tuple(params),
         )
-        top_regioes_map: dict[str, dict[str, Decimal | int | str]] = {}
-        for uf, valor_total, quantidade_documentos in cur.fetchall():
-          regiao = obter_regiao_por_uf(uf)
-          if not regiao:
-            continue
+        top_regioes_valor = construir_ranking_regioes_vendas(
+          cur.fetchall(),
+          obter_regiao_por_uf,
+          limite,
+        )
 
-          acumulado = top_regioes_map.setdefault(
-            regiao,
-            {
-              "regiao": regiao,
-              "valor_total": Decimal("0.00"),
-              "quantidade_documentos": 0,
-            },
-          )
-          acumulado["valor_total"] = Decimal(str(acumulado["valor_total"])) + (valor_total or Decimal("0.00"))
-          acumulado["quantidade_documentos"] = int(acumulado["quantidade_documentos"]) + (quantidade_documentos or 0)
+        total_impostos_complementares = obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "sped",
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          "saida",
+        )
+        total_tributos_reforma = obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "sped",
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          "saida",
+        )
 
-        top_regioes_valor = sorted(
-          top_regioes_map.values(),
-          key=lambda item: Decimal(str(item["valor_total"])),
-          reverse=True,
-        )[:limite]
+        return construir_resposta_analise_vendas(
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          total_vendido,
+          total_impostos_complementares,
+          total_tributos_reforma,
+          top_clientes_valor,
+          top_clientes_quantidade,
+          top_produtos_valor,
+          top_produtos_quantidade,
+          top_cfops_valor,
+          top_regioes_valor,
+          top_cidades_valor,
+        )
 
-        return {
-          "emitente_cnpj": cnpj,
-          "periodo_ano": periodo_ano,
-          "periodo_mes": periodo_mes,
-          "total_vendido": total_vendido,
-          "total_impostos_complementares": obter_total_impostos_complementares_documentos(
-            self.conn_params,
-            "sped",
-            cnpj,
-            periodo_ano,
-            periodo_mes,
-            "saida",
-          ),
-          "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-            self.conn_params,
-            "sped",
-            cnpj,
-            periodo_ano,
-            periodo_mes,
-            "saida",
-          ),
-          "top_clientes_valor": top_clientes_valor,
-          "top_clientes_quantidade": top_clientes_quantidade,
-          "top_produtos_valor": top_produtos_valor,
-          "top_produtos_quantidade": top_produtos_quantidade,
-          "top_cfops_valor": top_cfops_valor,
-          "top_regioes_valor": top_regioes_valor,
-          "top_cidades_valor": top_cidades_valor,
-        }
+  def consultar_dashboard_vendas(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: int = 5,
+  ) -> DashboardVendasResponse:
+    resultados_anos = self.listar_kpis(emitente_cnpj=emitente_cnpj, limite=120)
+    anos_disponiveis = sorted(
+      {item.periodo_ano for item in resultados_anos if item.periodo_ano},
+      reverse=True,
+    )
+    ano_referencia = periodo_ano or (anos_disponiveis[0] if anos_disponiveis else None)
+
+    if ano_referencia is None:
+      raise ValueError("Nenhum periodo disponivel para o emitente informado.")
+
+    resultados_ano_atual = self.listar_kpis(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia,
+      limite=120,
+    )
+    resultados_ano_anterior = self.listar_kpis(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia - 1,
+      limite=120,
+    )
+
+    if periodo_mes is not None:
+      resultados_filtrados = [item for item in resultados_ano_atual if item.periodo_mes == periodo_mes]
+      ano_anterior, mes_anterior = obter_periodo_anterior(ano_referencia, periodo_mes)
+      resultados_anteriores = (
+        [item for item in resultados_ano_atual if item.periodo_mes == mes_anterior]
+        if ano_anterior == ano_referencia
+        else [item for item in resultados_ano_anterior if item.periodo_mes == mes_anterior]
+      )
+    else:
+      resultados_filtrados = resultados_ano_atual
+      resultados_anteriores = resultados_ano_anterior
+
+    serie_mensal = [
+      SerieMensalVendasItem(
+        periodo_ano=ano_referencia,
+        periodo_mes=item.periodo_mes or 0,
+        total_vendido=Decimal(str(item.kpis.total_vendas or 0)),
+        quantidade_notas=int(item.kpis.quantidade_notas or 0),
+        total_impostos=(
+          Decimal(str(item.kpis.total_icms or 0))
+          + Decimal(str(item.kpis.total_ipi or 0))
+          + Decimal(str(item.kpis.total_pis or 0))
+          + Decimal(str(item.kpis.total_cofins or 0))
+        ),
+        total_impostos_complementares=obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          ano_referencia,
+          item.periodo_mes,
+          "saida",
+        ),
+        total_tributos_reforma=obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          ano_referencia,
+          item.periodo_mes,
+          "saida",
+        ),
+      )
+      for item in sorted(resultados_ano_atual, key=lambda resultado: resultado.periodo_mes or 0)
+      if item.periodo_mes
+    ]
+
+    return DashboardVendasResponse(
+      status="ok",
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=ano_referencia,
+      periodo_mes=periodo_mes,
+      anos_disponiveis=anos_disponiveis,
+      resumo_atual=resumir_vendas_por_kpis(resultados_filtrados, DashboardVendasResumo, limite).model_copy(update={
+        "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          ano_referencia,
+          periodo_mes,
+          "saida",
+        ),
+        "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          ano_referencia,
+          periodo_mes,
+          "saida",
+        ),
+      }),
+      resumo_anterior=resumir_vendas_por_kpis(resultados_anteriores, DashboardVendasResumo, limite).model_copy(update={
+        "total_impostos_complementares": obter_total_impostos_complementares_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          *obter_periodo_anterior(ano_referencia, periodo_mes),
+          "saida",
+        ),
+        "total_tributos_reforma": obter_total_tributos_reforma_documentos(
+          self.conn_params,
+          "sped",
+          emitente_cnpj,
+          *obter_periodo_anterior(ano_referencia, periodo_mes),
+          "saida",
+        ),
+      }),
+      serie_mensal=serie_mensal,
+    )
 
   def analisar_fiscal_cfop(
     self,
@@ -829,26 +935,14 @@ class SpedConsultaService:
       periodo_mes=periodo_mes,
     )
 
-    return {
-      "emitente_cnpj": cnpj,
-      "periodo_ano": periodo_ano,
-      "periodo_mes": periodo_mes,
-      "total_movimentado": resultado["total_movimentado"],
-      "total_impostos_complementares": total_impostos_complementares,
-      "total_tributos_reforma": total_tributos_reforma,
-      "quantidade_documentos": resultado["quantidade_documentos"],
-      "quantidade_cfops": resultado["quantidade_dimensoes"],
-      "top_categorias": resultado["top_categorias"],
-      "top_cfops": [
-        {
-          "cfop": item["codigo"],
-          "descricao": item["descricao"],
-          "valor_total": item["valor_total"],
-          "participacao_percentual": item["participacao_percentual"],
-        }
-        for item in resultado["top_dimensoes"]
-      ],
-    }
+    return construir_resposta_fiscal_cfop(
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+      resultado,
+      total_impostos_complementares,
+      total_tributos_reforma,
+    )
 
   def analisar_fiscal_ncm(
     self,
@@ -881,25 +975,14 @@ class SpedConsultaService:
       periodo_mes=periodo_mes,
     )
 
-    return {
-      "emitente_cnpj": cnpj,
-      "periodo_ano": periodo_ano,
-      "periodo_mes": periodo_mes,
-      "total_movimentado": resultado["total_movimentado"],
-      "total_impostos_complementares": total_impostos_complementares,
-      "total_tributos_reforma": total_tributos_reforma,
-      "quantidade_documentos": resultado["quantidade_documentos"],
-      "quantidade_ncms": resultado["quantidade_dimensoes"],
-      "top_ncms": [
-        {
-          "ncm": item["codigo"],
-          "descricao": item["descricao"],
-          "valor_total": item["valor_total"],
-          "participacao_percentual": item["participacao_percentual"],
-        }
-        for item in resultado["top_dimensoes"]
-      ],
-    }
+    return construir_resposta_fiscal_ncm(
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+      resultado,
+      total_impostos_complementares,
+      total_tributos_reforma,
+    )
 
   def analisar_fiscal_hierarquia(
     self,
@@ -915,58 +998,29 @@ class SpedConsultaService:
     offset: int = 0,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros_documentos = [
-      "regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s",
-      "d.tipo_operacao = 'saida'",
-    ]
-    params: list[object] = [cnpj]
-    filtros_base: list[str] = []
-    params_base: list[object] = []
-
-    filtros_kpis = ["regexp_replace(cnpj_emitente, '\\D', '', 'g') = %s"]
-    params_kpis: list[object] = [cnpj]
-
-    if periodo_ano is not None:
-      filtros_documentos.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
-      params.append(periodo_ano)
-      filtros_kpis.append("periodo_ano = %s")
-      params_kpis.append(periodo_ano)
-
-    if periodo_mes is not None:
-      filtros_documentos.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
-      params.append(periodo_mes)
-      filtros_kpis.append("periodo_mes = %s")
-      params_kpis.append(periodo_mes)
-
-    if estado and estado.strip():
-      filtros_base.append("UPPER(estado) = %s")
-      params_base.append(estado.strip().upper())
-
-    if cidade and cidade.strip():
-      filtros_base.append("UPPER(cidade) = %s")
-      params_base.append(cidade.strip().upper())
-
-    if ncm and ncm.strip():
-      filtros_base.append("ncm = %s")
-      params_base.append("".join(ch for ch in ncm if ch.isdigit()) or "00000000")
-
-    if produto_codigo and produto_codigo.strip():
-      filtros_base.append("produto_codigo = %s")
-      params_base.append(produto_codigo.strip())
-
-    where_clause_documentos = " AND ".join(filtros_documentos)
-    where_clause_kpis = " AND ".join(filtros_kpis)
-    where_clause_base = " AND ".join(filtros_base) if filtros_base else "1 = 1"
-    limite_consulta = limite if limite is not None else 100000
-    offset_consulta = max(offset, 0)
-    params_cte: list[object] = [*params, *params]
-    modo_legado_hierarquia_completa = (
-      nivel_atual is None
-      and not estado
-      and not cidade
-      and not ncm
-      and not produto_codigo
-      and offset_consulta == 0
+    filtros_hierarquia = construir_filtros_hierarquia_sped(
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+      estado,
+      cidade,
+      ncm,
+      produto_codigo,
+    )
+    where_clause_documentos = filtros_hierarquia["where_documentos"]
+    where_clause_kpis = filtros_hierarquia["where_kpis"]
+    where_clause_base = filtros_hierarquia["where_base"]
+    params_kpis = filtros_hierarquia["params_kpis"]
+    params_base = filtros_hierarquia["params_base"]
+    params_cte = filtros_hierarquia["params_cte"]
+    limite_consulta, offset_consulta = normalizar_paginacao_hierarquia(limite, offset)
+    modo_legado_hierarquia_completa = deve_montar_hierarquia_legado(
+      nivel_atual,
+      estado,
+      cidade,
+      ncm,
+      produto_codigo,
+      offset_consulta,
     )
 
     base_cte = f"""
@@ -1106,12 +1160,12 @@ class SpedConsultaService:
         )
         row_faturamento_periodo = cur.fetchone()
         total_faturamento_periodo = row_faturamento_periodo[0] if row_faturamento_periodo else Decimal("0.00")
-        percentual_total = _calcular_percentual_imposto(total_impostos_periodo, total_faturamento_periodo)
+        percentual_total = calcular_percentual_imposto(total_impostos_periodo, total_faturamento_periodo)
         usar_impostos_complementares = total_impostos_complementares > 0
         total_impostos = (
           total_impostos_complementares
           if usar_impostos_complementares
-          else (total_faturamento * percentual_total) / Decimal("100") if total_faturamento else Decimal("0.00")
+          else calcular_imposto_por_percentual(total_faturamento, percentual_total)
         )
         hierarquia = []
         if modo_legado_hierarquia_completa:
@@ -1138,21 +1192,22 @@ class SpedConsultaService:
             faturamento_item = faturamento or Decimal("0.00")
             imposto_valor = imposto_complementar or Decimal("0.00")
             if not usar_impostos_complementares:
-              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
-            hierarquia.append({
-              "estado": uf_item,
-              "cidade": _normalizar_nome_cidade(cidade_item),
-              "uf": uf_item,
-              "ncm": ncm_item,
-              "descricao_ncm": descricao_item,
-              "produto_codigo": codigo_item,
-              "produto": produto_item,
-              "faturamento": faturamento_item,
-              "imposto_valor": imposto_valor,
-              "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
-              "sem_item_detalhado": sem_item_detalhado,
-            })
-        nivel_resolvido = nivel_atual or ("produto" if ncm else "ncm" if cidade else "cidade" if estado else "estado")
+              imposto_valor = calcular_imposto_por_percentual(faturamento_item, percentual_total)
+            hierarquia.append(
+              construir_item_hierarquia_completa(
+                uf_item,
+                cidade_item,
+                ncm_item,
+                descricao_item,
+                codigo_item,
+                produto_item,
+                faturamento_item,
+                imposto_valor,
+                normalizar_cidade=_normalizar_nome_cidade,
+                sem_item_detalhado=sem_item_detalhado,
+              )
+            )
+        nivel_resolvido = resolver_nivel_hierarquia(nivel_atual, estado, cidade, ncm)
         itens_nivel_atual: list[dict] = []
         por_estado: list[dict] = []
         por_cidade: list[dict] = []
@@ -1181,13 +1236,8 @@ class SpedConsultaService:
             faturamento_item = faturamento or Decimal("0.00")
             imposto_valor = imposto_complementar or Decimal("0.00")
             if not usar_impostos_complementares:
-              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
-            por_estado.append({
-              "estado": uf_item,
-              "faturamento": faturamento_item,
-              "imposto_valor": imposto_valor,
-              "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
-            })
+              imposto_valor = calcular_imposto_por_percentual(faturamento_item, percentual_total)
+            por_estado.append(construir_item_estado(uf_item, faturamento_item, imposto_valor))
           itens_nivel_atual = por_estado
         elif nivel_resolvido == "cidade":
           cur.execute("SELECT COUNT(DISTINCT CONCAT(cidade, '::', estado)) FROM tmp_sped_fiscal_hierarquia_base_filtrada")
@@ -1211,14 +1261,16 @@ class SpedConsultaService:
             faturamento_item = faturamento or Decimal("0.00")
             imposto_valor = imposto_complementar or Decimal("0.00")
             if not usar_impostos_complementares:
-              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
-            por_cidade.append({
-              "cidade": _normalizar_nome_cidade(cidade_item),
-              "uf": uf_item,
-              "faturamento": faturamento_item,
-              "imposto_valor": imposto_valor,
-              "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
-            })
+              imposto_valor = calcular_imposto_por_percentual(faturamento_item, percentual_total)
+            por_cidade.append(
+              construir_item_cidade(
+                cidade_item,
+                uf_item,
+                faturamento_item,
+                imposto_valor,
+                normalizar_cidade=_normalizar_nome_cidade,
+              )
+            )
           itens_nivel_atual = por_cidade
         elif nivel_resolvido == "ncm":
           cur.execute("SELECT COUNT(DISTINCT ncm) FROM tmp_sped_fiscal_hierarquia_base_filtrada WHERE NOT sem_item_detalhado")
@@ -1244,15 +1296,16 @@ class SpedConsultaService:
             faturamento_item = faturamento or Decimal("0.00")
             imposto_valor = imposto_complementar or Decimal("0.00")
             if not usar_impostos_complementares:
-              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
-            por_ncm.append({
-              "ncm": ncm_item,
-              "descricao": descricao_item,
-              "quantidade_produtos": quantidade_produtos or 0,
-              "faturamento": faturamento_item,
-              "imposto_valor": imposto_valor,
-              "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
-            })
+              imposto_valor = calcular_imposto_por_percentual(faturamento_item, percentual_total)
+            por_ncm.append(
+              construir_item_ncm(
+                ncm_item,
+                descricao_item,
+                quantidade_produtos,
+                faturamento_item,
+                imposto_valor,
+              )
+            )
           itens_nivel_atual = por_ncm
         else:
           cur.execute("SELECT COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) FROM tmp_sped_fiscal_hierarquia_base_filtrada WHERE NOT sem_item_detalhado")
@@ -1277,48 +1330,41 @@ class SpedConsultaService:
             faturamento_item = faturamento or Decimal("0.00")
             imposto_valor = imposto_complementar or Decimal("0.00")
             if not usar_impostos_complementares:
-              imposto_valor = (faturamento_item * percentual_total) / Decimal("100") if faturamento_item else Decimal("0.00")
-            por_produto.append({
-              "produto_codigo": codigo_item,
-              "produto": produto_item,
-              "faturamento": faturamento_item,
-              "imposto_valor": imposto_valor,
-              "imposto_percentual": _calcular_percentual_imposto(imposto_valor, faturamento_item),
-            })
+              imposto_valor = calcular_imposto_por_percentual(faturamento_item, percentual_total)
+            por_produto.append(
+              construir_item_produto(codigo_item, produto_item, faturamento_item, imposto_valor)
+            )
           itens_nivel_atual = por_produto
 
-    return {
-      "emitente_cnpj": cnpj,
-      "periodo_ano": periodo_ano,
-      "periodo_mes": periodo_mes,
-      "nivel_atual": nivel_resolvido,
-      "offset": offset_consulta,
-      "limite": limite_consulta,
-      "total_registros_nivel": total_registros_nivel,
-      "possui_mais_registros": (offset_consulta + len(itens_nivel_atual)) < total_registros_nivel,
-      "total_faturamento": total_faturamento or Decimal("0.00"),
-      "total_impostos": total_impostos or Decimal("0.00"),
-      "total_tributos_reforma": obter_total_tributos_reforma_documentos(
-        self.conn_params,
-        "sped",
-        cnpj,
-        periodo_ano,
-        periodo_mes,
-        "saida",
-      ),
-      "percentual_impostos_sobre_faturamento": percentual_total,
-      "quantidade_documentos": resumo_row[2] if resumo_row else 0,
-      "total_estados": resumo_row[3] if resumo_row else 0,
-      "total_cidades": resumo_row[4] if resumo_row else 0,
-      "total_ncms": resumo_row[5] if resumo_row else 0,
-      "total_produtos": resumo_row[6] if resumo_row else 0,
-      "hierarquia": hierarquia,
-      "itens_nivel_atual": itens_nivel_atual,
-      "por_estado": por_estado,
-      "por_cidade": por_cidade,
-      "por_ncm": por_ncm,
-      "por_produto": por_produto,
-    }
+    total_tributos_reforma = obter_total_tributos_reforma_documentos(
+      self.conn_params,
+      "sped",
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+      "saida",
+    )
+
+    return construir_resposta_hierarquia_fiscal(
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+      nivel_resolvido,
+      offset_consulta,
+      limite_consulta,
+      total_registros_nivel,
+      total_faturamento,
+      total_impostos,
+      total_tributos_reforma,
+      percentual_total,
+      resumo_row,
+      hierarquia,
+      itens_nivel_atual,
+      por_estado,
+      por_cidade,
+      por_ncm,
+      por_produto,
+    )
 
   def analisar_clientes(
     self,
@@ -1328,17 +1374,11 @@ class SpedConsultaService:
     limite: Optional[int] = None,
   ) -> dict:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = ["regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s", "d.tipo_operacao = 'saida'"]
-    params: list[object] = [cnpj]
-
-    if periodo_ano:
-      filtros.append("EXTRACT(YEAR FROM d.data_emissao) = %s")
-      params.append(periodo_ano)
-    if periodo_mes:
-      filtros.append("EXTRACT(MONTH FROM d.data_emissao) = %s")
-      params.append(periodo_mes)
-
-    where_clause = " AND ".join(filtros)
+    where_clause, params = construir_filtros_clientes_sped(
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+    )
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
@@ -1396,7 +1436,7 @@ class SpedConsultaService:
           ORDER BY valor_total DESC, cliente ASC
           LIMIT %s
           """,
-          tuple([total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *params, limite]),
+          tuple(construir_params_ranking_clientes(total_vendido, params, limite)),
         )
 
         top_clientes_quantidade = self._safe_top_cliente_analise_query(
@@ -1428,18 +1468,18 @@ class SpedConsultaService:
           ORDER BY quantidade_documentos DESC, valor_total DESC, cliente ASC
           LIMIT %s
           """,
-          tuple([total_vendido or Decimal("0.00"), total_vendido or Decimal("0.00"), *params, limite]),
+          tuple(construir_params_ranking_clientes(total_vendido, params, limite)),
         )
 
-        return {
-          "emitente_cnpj": cnpj,
-          "periodo_ano": periodo_ano,
-          "periodo_mes": periodo_mes,
-          "total_vendido": total_vendido or Decimal("0.00"),
-          "total_clientes": int(total_clientes or 0),
-          "top_clientes_valor": top_clientes_valor,
-          "top_clientes_quantidade": top_clientes_quantidade,
-        }
+        return construir_resposta_analise_clientes(
+          cnpj,
+          periodo_ano,
+          periodo_mes,
+          total_vendido,
+          total_clientes,
+          top_clientes_valor,
+          top_clientes_quantidade,
+        )
 
   def _safe_scalar_query(self, cur, sql: str, params: tuple[object, ...]) -> Decimal:
     try:
@@ -1452,14 +1492,7 @@ class SpedConsultaService:
   def _safe_top_fornecedor_query(self, cur, sql: str, params: tuple[object, ...]) -> list[dict]:
     try:
       cur.execute(sql, params)
-      return [
-        {
-          "fornecedor": fornecedor,
-          "valor_total": valor_total or Decimal("0.00"),
-          "quantidade_documentos": quantidade_documentos or 0,
-        }
-        for fornecedor, valor_total, quantidade_documentos in cur.fetchall()
-      ]
+      return construir_ranking_fornecedores_compras(cur.fetchall())
     except psycopg.errors.UndefinedTable:
       return []
     
@@ -1494,15 +1527,6 @@ class SpedConsultaService:
   def _safe_top_cliente_analise_query(self, cur, sql: str, params: tuple[object, ...]) -> list[dict]:
     try:
       cur.execute(sql, params)
-      return [
-        {
-          "cliente": cliente,
-          "valor_total": valor_total or Decimal("0.00"),
-          "quantidade_documentos": quantidade_documentos or 0,
-          "ticket_medio": ticket_medio or Decimal("0.00"),
-          "percentual_participacao": percentual_participacao or Decimal("0.00"),
-        }
-        for cliente, valor_total, quantidade_documentos, ticket_medio, percentual_participacao in cur.fetchall()
-      ]
+      return construir_ranking_clientes(cur.fetchall())
     except psycopg.errors.UndefinedTable:
       return []

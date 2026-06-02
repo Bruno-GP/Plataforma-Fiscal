@@ -128,6 +128,8 @@ type SpedHierarchyRow = {
   sem_item_detalhado?: boolean | null;
 };
 
+export type SpedFiscalHierarchyRow = SpedHierarchyRow;
+
 const normalizeSpedCityName = (city?: string | null, uf?: string | null) => {
   const cityLabel = String(city ?? '').trim();
   const ufLabel = String(uf ?? '').trim().toUpperCase();
@@ -139,6 +141,9 @@ const normalizeSpedCityName = (city?: string | null, uf?: string | null) => {
   return cityLabel.replace(suffixPattern, '').trim() || cityLabel;
 };
 
+/**
+ * Agrupa SPED em UF > cidade > NCM > produto preservando linhas sintéticas sem item detalhado no total.
+ */
 export const buildSpedFiscalHierarchyState = <TRow extends SpedHierarchyRow>(rows: TRow[]): FiscalHierarchyState[] => {
   const stateMap = new Map<string, FiscalHierarchyState>();
   const cityMap = new Map<string, FiscalHierarchyCity>();
@@ -224,6 +229,77 @@ const normalizeSearchValue = (value: string | number | null | undefined) =>
     .toLowerCase()
     .trim();
 
+/**
+ * Aplica busca textual sobre os campos visíveis da hierarquia SPED sem recalcular valores fiscais.
+ */
+export const filterSpedHierarchyRows = <TRow extends SpedHierarchyRow>(rows: TRow[], search: string) => {
+  const query = normalizeSearchValue(search);
+  if (!query) return rows;
+
+  return rows.filter((row) =>
+    includesSearch(
+      [
+        row.estado,
+        row.cidade,
+        row.uf,
+        row.ncm,
+        row.descricao_ncm,
+        row.produto_codigo,
+        row.produto,
+        row.faturamento,
+        row.imposto_valor,
+      ],
+      query,
+    ),
+  );
+};
+
+/**
+ * Monta a visão fiscal por NCM ignorando linhas SPED agregadas que não possuem produto detalhado.
+ */
+export const buildSpedFiscalNcmHierarchy = <TRow extends SpedHierarchyRow>(rows: TRow[]): FiscalHierarchyNcm[] => {
+  const ncmMap = new Map<string, FiscalHierarchyNcm>();
+
+  rows.forEach((row) => {
+    if (row.sem_item_detalhado) {
+      return;
+    }
+
+    const ncm = String(row.ncm ?? '00000000').trim() || '00000000';
+    const description = String(row.descricao_ncm ?? 'NCM sem descricao').trim() || 'NCM sem descricao';
+    const productCode = String(row.produto_codigo ?? 'SEM-CODIGO').trim() || 'SEM-CODIGO';
+    const productDescription = String(row.produto ?? 'Produto sem descricao').trim() || 'Produto sem descricao';
+    const total = parseDecimal(row.faturamento ?? 0);
+    const taxValue = parseDecimal(row.imposto_valor ?? 0);
+
+    let ncmEntry = ncmMap.get(ncm);
+    if (!ncmEntry) {
+      ncmEntry = { key: `fiscal-ncm-${ncm}`, ncm, description, total: 0, taxValue: 0, taxPercent: 0, products: [] };
+      ncmMap.set(ncm, ncmEntry);
+    }
+    ncmEntry.total += total;
+    ncmEntry.taxValue += taxValue;
+
+    let productEntry = ncmEntry.products.find((item) => item.code === productCode);
+    if (!productEntry) {
+      productEntry = { key: `fiscal-product-${ncm}-${productCode}`, code: productCode, description: productDescription, totalValue: 0, taxValue: 0, taxPercent: 0 };
+      ncmEntry.products.push(productEntry);
+    }
+
+    productEntry.totalValue += total;
+    productEntry.taxValue += taxValue;
+  });
+
+  return [...ncmMap.values()].map((ncmEntry) => ({
+    ...ncmEntry,
+    taxPercent: ncmEntry.total ? (ncmEntry.taxValue / ncmEntry.total) * 100 : 0,
+    products: ncmEntry.products.map((productEntry) => ({
+      ...productEntry,
+      taxPercent: productEntry.totalValue ? (productEntry.taxValue / productEntry.totalValue) * 100 : 0,
+    })).sort((a, b) => b.totalValue - a.totalValue),
+  })).sort((a, b) => b.total - a.total);
+};
+
 const includesSearch = (values: Array<string | number | null | undefined>, query: string) =>
   values.some((value) => normalizeSearchValue(value).includes(query));
 
@@ -302,6 +378,9 @@ const buildFilteredState = (state: RegionState, cities: RegionCity[]): RegionSta
   cities,
 });
 
+/**
+ * Constrói a árvore UF > cidade > cliente > produto preservando contagem de notas por nível.
+ */
 export const buildRegionHierarchy = (notas: NfeNotaDetalhada[]): RegionState[] => {
   const stateMap = new Map<string, RegionState>();
 
@@ -392,6 +471,9 @@ export const buildRegionHierarchy = (notas: NfeNotaDetalhada[]): RegionState[] =
     .sort((a, b) => b.total - a.total);
 };
 
+/**
+ * Filtra a árvore regional e recalcula totais dos nós preservados para manter os cards consistentes.
+ */
 export const filterRegionHierarchyBySearch = (regionHierarchy: RegionState[], search: string) => {
   const query = normalizeSearchValue(search);
   if (!query) return regionHierarchy;

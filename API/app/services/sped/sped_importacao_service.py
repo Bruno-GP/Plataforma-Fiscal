@@ -23,6 +23,105 @@ class SpedImportacaoResultado:
   mensagem: str
 
 class SpedImportacaoService:
+  """Gerencia staging, carga analítica e pós-processamento de arquivos SPED importados."""
+
+  _required_analytic_columns_by_table = {
+    "sped_empresas": {
+      "cnpj",
+      "razao_social",
+    },
+    "sped_participantes": {
+      "id",
+      "empresa_cnpj",
+      "codigo",
+      "nome",
+      "cnpj_cpf",
+      "municipio",
+      "municipio_nome",
+      "uf",
+    },
+    "sped_produtos": {
+      "id",
+      "empresa_cnpj",
+      "codigo",
+      "descricao",
+      "ncm",
+      "unidade",
+      "tipo_item",
+    },
+    "sped_documentos_fiscais": {
+      "id",
+      "empresa_cnpj",
+      "participante_id",
+      "modelo",
+      "serie",
+      "numero",
+      "chave_acesso",
+      "tipo_operacao",
+      "data_emissao",
+      "data_movimentacao",
+      "valor_total",
+      "valor_produtos",
+      "valor_frete",
+      "valor_desconto",
+      "situacao",
+      "origem_importacao_id",
+    },
+    "sped_documento_itens": {
+      "id",
+      "documento_id",
+      "produto_id",
+      "numero_item",
+      "cfop",
+      "quantidade",
+      "valor_unitario",
+      "valor_total",
+      "desconto",
+      "cst_icms",
+      "valor_bc_icms",
+      "aliquota_icms",
+      "valor_icms",
+      "valor_bc_ipi",
+      "aliquota_ipi",
+      "valor_ipi",
+      "valor_pis",
+      "valor_cofins",
+    },
+    "sped_kpis_fiscal": {
+      "id",
+      "processamento_id",
+      "cnpj_emitente",
+      "periodo_ano",
+      "periodo_mes",
+      "total_documentos",
+      "total_itens",
+      "valor_total_saidas",
+      "valor_total_produtos",
+      "valor_total_frete",
+      "valor_total_descontos",
+      "icms_valor_debitado",
+      "ipi_valor",
+      "pis_valor",
+      "cofins_valor",
+      "ticket_medio",
+      "data_calculo",
+    },
+    "sped_apuracao_icms": {
+      "id",
+      "empresa_cnpj",
+      "periodo_ano",
+      "periodo_mes",
+      "total_debitos",
+      "ajustes_debitos",
+      "total_creditos",
+      "ajustes_creditos",
+      "saldo_apurado",
+      "valor_icms_recolher",
+      "saldo_credor_transportar",
+      "debitos_especiais",
+      "atualizado_em",
+    },
+  }
   def __init__(self):
     self.config = carregar_config_postgres_sped()
     self._cache_municipios: dict[str, str | None] = {}
@@ -33,6 +132,8 @@ class SpedImportacaoService:
     arquivos: Iterable[tuple[str, bytes]],
     cnpj_empresa_origem: str,
   ) -> list[SpedImportacaoResultado]:
+    """Valida o registro 0000, evita duplicidade por hash e guarda o TXT no staging."""
+
     resultados: list[SpedImportacaoResultado] = []
     cnpj_normalizado = self._normalizar_cnpj(cnpj_empresa_origem)
 
@@ -46,7 +147,7 @@ class SpedImportacaoService:
       user=self.config["user"],
       password=self.config["password"],
     ) as conn:
-      self._garantir_tabela(conn)
+      self._validar_tabela_staging(conn)
 
       for nome_arquivo, conteudo in arquivos:
         cnpj_arquivo = self._extrair_cnpj_sped(conteudo)
@@ -137,7 +238,7 @@ class SpedImportacaoService:
       user=self.config["user"],
       password=self.config["password"],
     ) as conn:
-      self._garantir_tabela(conn)
+      self._validar_tabela_staging(conn)
 
       with conn.cursor() as cur:
         cur.execute(
@@ -154,6 +255,8 @@ class SpedImportacaoService:
     return int(row[0] or 0) if row else 0
 
   def processar_importados(self, cnpj_emitente: str) -> tuple[Counter, int, list[int]]:
+    """Carrega arquivos pendentes nas tabelas analíticas e retorna IDs aptos a finalização."""
+
     cnpj_normalizado = self._normalizar_cnpj(cnpj_emitente)
     if not cnpj_normalizado:
       raise ValueError("CNPJ emitente inválido.")
@@ -169,8 +272,8 @@ class SpedImportacaoService:
       user=self.config["user"],
       password=self.config["password"],
     ) as conn:
-      self._garantir_tabela(conn)
-      self._garantir_tabelas_analiticas(conn)
+      self._validar_tabela_staging(conn)
+      self._validar_tabelas_analiticas(conn)
 
       with conn.cursor() as cur:
         cur.execute(
@@ -207,6 +310,8 @@ class SpedImportacaoService:
     return contador_registros, total_linhas, ids_processados
 
   def marcar_como_processados(self, ids_sped: list[int]) -> None:
+    """Marca SPEDs como processados após a carga analítica e sincronização fiscal concluírem."""
+
     if not ids_sped:
       return
 
@@ -712,200 +817,112 @@ class SpedImportacaoService:
           ),
         )
 
-  def _garantir_tabela(self, conn: psycopg.Connection) -> None:
+  def _validar_tabela_staging(self, conn: psycopg.Connection) -> None:
+    required_columns = {
+      "id",
+      "cnpj_emitente",
+      "nome_arquivo",
+      "hash_arquivo",
+      "tamanho_bytes",
+      "conteudo_txt",
+      "processado_em",
+      "criado_em",
+    }
+
+    with conn.cursor() as cur:
+      cur.execute("SELECT to_regclass('public.sped_importados')")
+      if cur.fetchone()[0] is None:
+        raise RuntimeError(
+          "Tabela public.sped_importados nao encontrada. Execute as migrations Alembic antes de importar SPED."
+        )
+
+      cur.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'sped_importados'
+        """
+      )
+      existing_columns = {row[0] for row in cur.fetchall()}
+
+    missing_columns = sorted(required_columns - existing_columns)
+    if missing_columns:
+      raise RuntimeError(
+        "Tabela public.sped_importados incompleta. Execute as migrations Alembic. "
+        f"Colunas ausentes: {', '.join(missing_columns)}."
+      )
+      
+  def _validar_tabelas_analiticas(self, conn: psycopg.Connection) -> None:
     with conn.cursor() as cur:
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS sped_importados (
-          id BIGSERIAL PRIMARY KEY,
-          cnpj_emitente VARCHAR(20) NOT NULL,
-          nome_arquivo TEXT NOT NULL,
-          hash_arquivo VARCHAR(64) NOT NULL,
-          tamanho_bytes BIGINT,
-          conteudo_txt BYTEA,
-          processado_em TIMESTAMPTZ,
-          criado_em TIMESTAMPTZ DEFAULT NOW(),
-          UNIQUE (cnpj_emitente, hash_arquivo)
-        )
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = ANY(%s)
+        """,
+        (list(self._required_analytic_columns_by_table),),
+      )
+      existing_columns: dict[str, set[str]] = {
+        table_name: set()
+        for table_name in self._required_analytic_columns_by_table
+      }
+      for table_name, column_name in cur.fetchall():
+        existing_columns[str(table_name)].add(str(column_name))
+
+      cur.execute(
         """
+        SELECT constraint_name
+        FROM information_schema.table_constraints
+        WHERE table_schema = 'public'
+          AND table_name = ANY(%s)
+          AND constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+        """,
+        (list(self._required_analytic_columns_by_table),),
+      )
+      existing_constraints = {str(row[0]) for row in cur.fetchall()}
+
+      cur.execute(
+        """
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = ANY(%s)
+        """,
+        (list(self._required_analytic_columns_by_table),),
+      )
+      existing_unique_guards = existing_constraints | {str(row[0]) for row in cur.fetchall()}
+
+    missing_parts = []
+    for table_name, required_columns in self._required_analytic_columns_by_table.items():
+      missing_columns = sorted(required_columns - existing_columns[table_name])
+      if missing_columns:
+        missing_parts.append(f"{table_name}: {', '.join(missing_columns)}")
+
+    if missing_parts:
+      raise RuntimeError(
+        "Schema analitico SPED incompleto. Execute as migrations Alembic. "
+        f"Colunas ausentes em public: {'; '.join(missing_parts)}."
       )
 
-      cur.execute("ALTER TABLE sped_importados ADD COLUMN IF NOT EXISTS conteudo_txt BYTEA")
-      cur.execute("ALTER TABLE sped_importados ADD COLUMN IF NOT EXISTS processado_em TIMESTAMPTZ")
-      
-  def _garantir_tabelas_analiticas(self, conn: psycopg.Connection) -> None:
-    with conn.cursor() as cur:
-      cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sped_empresas (
-          cnpj CHAR(14) PRIMARY KEY,
-          razao_social VARCHAR(255)
-        )
-        """
+    required_unique_groups = [
+      {"sped_empresas_pkey"},
+      {"sped_participantes_empresa_cnpj_codigo_key", "ux_participantes_empresa_codigo"},
+      {"sped_produtos_empresa_cnpj_codigo_key", "ux_produtos_empresa_codigo"},
+      {"sped_kpis_fiscal_cnpj_emitente_periodo_ano_periodo_mes_key", "ux_sped_kpis_fiscal_periodo"},
+      {"sped_apuracao_icms_empresa_cnpj_periodo_ano_periodo_mes_key", "ux_sped_apuracao_icms_periodo"},
+    ]
+    missing_unique_guards = [
+      " ou ".join(sorted(group))
+      for group in required_unique_groups
+      if not group & existing_unique_guards
+    ]
+    if missing_unique_guards:
+      raise RuntimeError(
+        "Schema analitico SPED sem unicidade esperada. Execute as migrations Alembic. "
+        f"Constraints/indices ausentes em public: {', '.join(missing_unique_guards)}."
       )
-      cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sped_participantes (
-          id SERIAL PRIMARY KEY,
-          empresa_cnpj CHAR(14),
-          codigo VARCHAR(60),
-          nome VARCHAR(255),
-          cnpj_cpf VARCHAR(14),
-          municipio VARCHAR(100),
-          municipio_nome VARCHAR(120),
-          uf CHAR(2),
-          UNIQUE (empresa_cnpj, codigo)
-        )
-        """
-      )
-      cur.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_participantes_empresa_codigo
-        ON sped_participantes (empresa_cnpj, codigo)
-        """
-      )
-      cur.execute("ALTER TABLE sped_participantes ADD COLUMN IF NOT EXISTS uf CHAR(2)")
-      cur.execute("ALTER TABLE sped_participantes ADD COLUMN IF NOT EXISTS municipio_nome VARCHAR(120)")
-      cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sped_produtos (
-          id SERIAL PRIMARY KEY,
-          empresa_cnpj CHAR(14),
-          codigo VARCHAR(60),
-          descricao VARCHAR(255),
-          ncm VARCHAR(10),
-          unidade VARCHAR(10),
-          tipo_item VARCHAR(10),
-          UNIQUE (empresa_cnpj, codigo)
-        )
-        """
-      )
-      cur.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_produtos_empresa_codigo
-        ON sped_produtos (empresa_cnpj, codigo)
-        """
-      )
-      cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sped_documentos_fiscais (
-          id SERIAL PRIMARY KEY,
-          empresa_cnpj CHAR(14),
-          participante_id INT,
-          modelo INT,
-          serie VARCHAR(10),
-          numero INT,
-          chave_acesso VARCHAR(44),
-          tipo_operacao VARCHAR(10),
-          data_emissao DATE,
-          data_movimentacao DATE,
-          valor_total NUMERIC(15,2),
-          valor_produtos NUMERIC(15,2),
-          valor_frete NUMERIC(15,2),
-          valor_desconto NUMERIC(15,2),
-          situacao VARCHAR(20),
-          origem_importacao_id BIGINT
-        )
-        """
-      )
-      cur.execute("ALTER TABLE sped_documentos_fiscais ADD COLUMN IF NOT EXISTS origem_importacao_id BIGINT")
-      cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS ix_sped_documentos_origem_importacao
-        ON sped_documentos_fiscais (origem_importacao_id)
-        """
-      )
-      cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sped_documento_itens (
-          id SERIAL PRIMARY KEY,
-          documento_id INT,
-          produto_id INT,
-          numero_item INT,
-          cfop VARCHAR(4),
-          quantidade NUMERIC(15,4),
-          valor_unitario NUMERIC(15,6),
-          valor_total NUMERIC(15,2),
-          desconto NUMERIC(15,2),
-          cst_icms VARCHAR(3),
-          valor_bc_icms NUMERIC(15,2) DEFAULT 0,
-          aliquota_icms NUMERIC(9,4) DEFAULT 0,
-          valor_icms NUMERIC(15,2) DEFAULT 0,
-          valor_bc_ipi NUMERIC(15,2) DEFAULT 0,
-          aliquota_ipi NUMERIC(9,4) DEFAULT 0,
-          valor_ipi NUMERIC(15,2) DEFAULT 0,
-          valor_pis NUMERIC(15,2) DEFAULT 0,
-          valor_cofins NUMERIC(15,2) DEFAULT 0
-        )
-        """
-      )
-      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS cst_icms VARCHAR(3)")
-      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_bc_icms NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS aliquota_icms NUMERIC(9,4) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_icms NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_bc_ipi NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS aliquota_ipi NUMERIC(9,4) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_ipi NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_pis NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_documento_itens ADD COLUMN IF NOT EXISTS valor_cofins NUMERIC(15,2) DEFAULT 0")
-      cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sped_kpis_fiscal (
-          id SERIAL PRIMARY KEY,
-          processamento_id INTEGER NOT NULL,
-          cnpj_emitente VARCHAR(14) NOT NULL,
-          periodo_ano INTEGER NOT NULL,
-          periodo_mes INTEGER NOT NULL,
-          total_documentos INTEGER DEFAULT 0,
-          total_itens INTEGER DEFAULT 0,
-          valor_total_saidas NUMERIC(15,2) DEFAULT 0,
-          valor_total_produtos NUMERIC(15,2) DEFAULT 0,
-          valor_total_frete NUMERIC(15,2) DEFAULT 0,
-          valor_total_descontos NUMERIC(15,2) DEFAULT 0,
-          icms_valor_debitado NUMERIC(15,2) DEFAULT 0,
-          ipi_valor NUMERIC(15,2) DEFAULT 0,
-          pis_valor NUMERIC(15,2) DEFAULT 0,
-          cofins_valor NUMERIC(15,2) DEFAULT 0,
-          ticket_medio NUMERIC(15,2) DEFAULT 0,
-          data_calculo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE (cnpj_emitente, periodo_ano, periodo_mes)
-        )
-        """
-      )
-      cur.execute("ALTER TABLE sped_kpis_fiscal ADD COLUMN IF NOT EXISTS ipi_valor NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_kpis_fiscal ADD COLUMN IF NOT EXISTS pis_valor NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_kpis_fiscal ADD COLUMN IF NOT EXISTS cofins_valor NUMERIC(15,2) DEFAULT 0")
-      
-      cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sped_apuracao_icms (
-          id SERIAL PRIMARY KEY,
-          empresa_cnpj CHAR(14) NOT NULL,
-          periodo_ano INTEGER NOT NULL,
-          periodo_mes INTEGER NOT NULL,
-          total_debitos NUMERIC(15,2) DEFAULT 0,
-          ajustes_debitos NUMERIC(15,2) DEFAULT 0,
-          total_creditos NUMERIC(15,2) DEFAULT 0,
-          ajustes_creditos NUMERIC(15,2) DEFAULT 0,
-          saldo_apurado NUMERIC(15,2) DEFAULT 0,
-          valor_icms_recolher NUMERIC(15,2) DEFAULT 0,
-          saldo_credor_transportar NUMERIC(15,2) DEFAULT 0,
-          debitos_especiais NUMERIC(15,2) DEFAULT 0,
-          atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE (empresa_cnpj, periodo_ano, periodo_mes)
-        )
-        """
-      )
-      
-      cur.execute("ALTER TABLE sped_apuracao_icms ADD COLUMN IF NOT EXISTS total_debitos NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_apuracao_icms ADD COLUMN IF NOT EXISTS ajustes_debitos NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_apuracao_icms ADD COLUMN IF NOT EXISTS total_creditos NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_apuracao_icms ADD COLUMN IF NOT EXISTS ajustes_creditos NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_apuracao_icms ADD COLUMN IF NOT EXISTS saldo_apurado NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_apuracao_icms ADD COLUMN IF NOT EXISTS valor_icms_recolher NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_apuracao_icms ADD COLUMN IF NOT EXISTS saldo_credor_transportar NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_apuracao_icms ADD COLUMN IF NOT EXISTS debitos_especiais NUMERIC(15,2) DEFAULT 0")
-      cur.execute("ALTER TABLE sped_apuracao_icms ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP")
 
   def _normalizar_cnpj(self, cnpj: str | None) -> str | None:
     if not cnpj:

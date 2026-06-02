@@ -21,19 +21,12 @@ from app.core.config import (
     get_cors_allow_origin_regex,
     get_cors_allow_origins,
     is_production,
+    validate_production_config,
 )
 from app.core.logger import configure_logging, log_request_cycle
-from app.services.db_schema_service import (
-    ensure_empresas_tem_sped_column,
-    ensure_fiscal_analysis_indexes,
-    ensure_municipios_catalogo_table,
-    ensure_ncm_ibpt_tables,
-    ensure_reforma_tributaria_base_schema,
-    ensure_reforma_tributaria_creditos_debitos_memoria_schema,
-    ensure_reforma_tributaria_documentos_itens_schema,
-)
 
 configure_logging()
+validate_production_config()
 
 app = FastAPI(
     title="API - Agente Extrator NFe",
@@ -94,13 +87,10 @@ app.include_router(api_router, prefix="/api")
 def ensure_database_schema() -> None:
     if os.getenv("ENABLE_STARTUP_SCHEMA_ENSURE", "false").strip().lower() not in {"1", "true", "yes"}:
         return
-    ensure_empresas_tem_sped_column()
-    ensure_ncm_ibpt_tables()
-    ensure_municipios_catalogo_table()
-    ensure_fiscal_analysis_indexes()
-    ensure_reforma_tributaria_base_schema()
-    ensure_reforma_tributaria_documentos_itens_schema()
-    ensure_reforma_tributaria_creditos_debitos_memoria_schema()
+    raise RuntimeError(
+        "ENABLE_STARTUP_SCHEMA_ENSURE foi descontinuado. "
+        "Aplique as migrations Alembic antes de iniciar a API."
+    )
 
 
 @app.get("/health")

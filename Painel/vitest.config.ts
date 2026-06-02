@@ -8,6 +8,22 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html", "lcov"],
+      reportsDirectory: "./coverage",
+      exclude: [
+        "coverage/**",
+        "dist/**",
+        "e2e/**",
+        "*.config.*",
+        "lighthouserc.cjs",
+        "src/test/**",
+        "src/**/*.d.ts",
+        "src/main.tsx",
+        "src/components/ui/**",
+      ],
+    },
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },

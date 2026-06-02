@@ -6,6 +6,7 @@ from datetime import date
 import psycopg
 
 from app.domain.nfe.extractor import NotaExtraida, ItemNota
+from app.services.fiscal_sales import obter_cfops_faturamento_venda
 from app.services.nfe.postres_config import carregar_config_postgres
 from app.services.nfe.empresa_service import normalizar_cnpj
 
@@ -323,9 +324,9 @@ class NFeNotasService:
         elif tipo_operacao == "vendas":
             filtros.extend([
                 "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
-                "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
+                "regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)",
             ])
-            parametros.append(cnpj_normalizado)
+            parametros.extend([cnpj_normalizado, obter_cfops_faturamento_venda()])
         else:
             filtros.append(
                 "("

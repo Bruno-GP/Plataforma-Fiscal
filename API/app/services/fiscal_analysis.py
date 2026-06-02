@@ -136,27 +136,30 @@ def obter_total_impostos_complementares_documentos(
         filtros.append("t.codigo = ANY(%s)")
         parametros.append(codigos_tributos)
 
-    with psycopg.connect(**conn_params) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT COALESCE(
-                  SUM(
-                    COALESCE(
-                      NULLIF(dt.valor_tributo, 0),
-                      dt.valor_debito - dt.valor_credito,
+    try:
+        with psycopg.connect(**conn_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT COALESCE(
+                      SUM(
+                        COALESCE(
+                          NULLIF(dt.valor_tributo, 0),
+                          dt.valor_debito - dt.valor_credito,
+                          0
+                        )
+                      ),
                       0
-                    )
-                  ),
-                  0
-                ) AS total_impostos
-                FROM public.documentos_fiscais_tributos dt
-                {join_tributos}
-                WHERE {' AND '.join(filtros)}
-                """,
-                parametros,
-            )
-            row = cur.fetchone()
+                    ) AS total_impostos
+                    FROM public.documentos_fiscais_tributos dt
+                    {join_tributos}
+                    WHERE {' AND '.join(filtros)}
+                    """,
+                    parametros,
+                )
+                row = cur.fetchone()
+    except psycopg.errors.UndefinedTable:
+        return Decimal("0.00")
 
     return row[0] if row else Decimal("0.00")
 
@@ -178,6 +181,98 @@ def obter_total_tributos_reforma_documentos(
         tipo_operacao=tipo_operacao,
         codigos_tributos=["CBS", "IBS", "IBS_UF", "IBS_MUN", "IS"],
     )
+
+
+def obter_totais_tributos_documentos_por_periodo(
+    conn_params: dict[str, object],
+    origem_documento: str,
+    emitente_cnpj: str,
+    periodos: list[tuple[int, Optional[int]]],
+    tipo_operacao: Optional[str] = None,
+) -> dict[tuple[int, Optional[int]], dict[str, Decimal]]:
+    if not periodos:
+        return {}
+
+    coluna_documento = "nota_id" if origem_documento == "nfe" else "sped_documento_id"
+    anos = sorted({ano for ano, _mes in periodos})
+    filtros = [
+        f"dt.{coluna_documento} IS NOT NULL",
+        "regexp_replace(dt.empresa_cnpj, '\\D', '', 'g') = %s",
+        "COALESCE(dt.periodo_ano, EXTRACT(YEAR FROM dt.data_emissao)::int) = ANY(%s)",
+    ]
+    parametros: list[object] = [emitente_cnpj, anos]
+
+    if tipo_operacao is not None:
+        filtros.append("dt.tipo_operacao = %s")
+        parametros.append(tipo_operacao)
+
+    totais = {
+        periodo: {
+            "total_impostos_complementares": Decimal("0.00"),
+            "total_tributos_reforma": Decimal("0.00"),
+        }
+        for periodo in periodos
+    }
+    periodos_set = set(periodos)
+    codigos_tributos_reforma = ["CBS", "IBS", "IBS_UF", "IBS_MUN", "IS"]
+
+    try:
+        with psycopg.connect(**conn_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                      COALESCE(dt.periodo_ano, EXTRACT(YEAR FROM dt.data_emissao)::int) AS periodo_ano,
+                      COALESCE(dt.periodo_mes, EXTRACT(MONTH FROM dt.data_emissao)::int) AS periodo_mes,
+                      COALESCE(
+                        SUM(
+                          COALESCE(
+                            NULLIF(dt.valor_tributo, 0),
+                            dt.valor_debito - dt.valor_credito,
+                            0
+                          )
+                        ),
+                        0
+                      ) AS total_impostos_complementares,
+                      COALESCE(
+                        SUM(
+                          CASE
+                            WHEN t.codigo = ANY(%s) THEN COALESCE(
+                              NULLIF(dt.valor_tributo, 0),
+                              dt.valor_debito - dt.valor_credito,
+                              0
+                            )
+                            ELSE 0
+                          END
+                        ),
+                        0
+                      ) AS total_tributos_reforma
+                    FROM public.documentos_fiscais_tributos dt
+                    LEFT JOIN public.tributos t ON t.id = dt.tributo_id
+                    WHERE {' AND '.join(filtros)}
+                    GROUP BY 1, 2
+                    """,
+                    [codigos_tributos_reforma, *parametros],
+                )
+                rows = cur.fetchall()
+    except psycopg.errors.UndefinedTable:
+        return totais
+
+    for ano, mes, total_impostos, total_reforma in rows:
+        if ano is None:
+            continue
+
+        chave_mensal = (int(ano), int(mes)) if mes is not None else None
+        if chave_mensal in periodos_set:
+            totais[chave_mensal]["total_impostos_complementares"] += total_impostos or Decimal("0.00")
+            totais[chave_mensal]["total_tributos_reforma"] += total_reforma or Decimal("0.00")
+
+        chave_anual = (int(ano), None)
+        if chave_anual in periodos_set:
+            totais[chave_anual]["total_impostos_complementares"] += total_impostos or Decimal("0.00")
+            totais[chave_anual]["total_tributos_reforma"] += total_reforma or Decimal("0.00")
+
+    return totais
 
 
 def analisar_fiscal_por_dimensao(

@@ -19,10 +19,21 @@ logger = logging.getLogger("workers.nfe")
     retry_kwargs={"max_retries": 3},
 )
 def processar_nfe_importados_task(job_id: str, payload: dict) -> dict:
+    """Processa XMLs pendentes e só finaliza o staging depois da consolidação fiscal."""
+
     repository = JobsRepository()
     started_at = time.perf_counter()
     cnpj_emitente = str(payload.get("cnpj_emitente") or "")
-    logger.info("job_started", extra={"job_id": job_id, "tipo_job": "NFE_PROCESSAMENTO_IMPORTADOS", "etapa": "start"})
+    logger.info(
+        "job_started",
+        extra={
+            "job_id": job_id,
+            "tipo_job": "NFE_PROCESSAMENTO_IMPORTADOS",
+            "cnpj_emitente": cnpj_emitente,
+            "etapa": "start",
+            "status": "RUNNING",
+        },
+    )
     repository.mark_running(job_id, mensagem="Processando XMLs importados")
 
     try:
@@ -54,6 +65,8 @@ def processar_nfe_importados_task(job_id: str, payload: dict) -> dict:
             extra={
                 "job_id": job_id,
                 "tipo_job": "NFE_PROCESSAMENTO_IMPORTADOS",
+                "cnpj_emitente": cnpj_emitente,
+                "etapa": "complete",
                 "status": "SUCCESS",
                 "duracao_ms": duracao_ms,
                 "total_itens": len(xmls_importados),
@@ -62,9 +75,19 @@ def processar_nfe_importados_task(job_id: str, payload: dict) -> dict:
         )
         return {"status": "SUCCESS", "job_id": job_id}
     except Exception as exc:
+        duracao_ms = round((time.perf_counter() - started_at) * 1000, 2)
         repository.update_status(job_id, JobStatus.FAILED, mensagem="Falha no processamento NFe", erro=str(exc))
         logger.exception(
             "job_failed",
-            extra={"job_id": job_id, "tipo_job": "NFE_PROCESSAMENTO_IMPORTADOS", "status": "FAILED", "erro": str(exc)},
+            extra={
+                "job_id": job_id,
+                "tipo_job": "NFE_PROCESSAMENTO_IMPORTADOS",
+                "cnpj_emitente": cnpj_emitente,
+                "etapa": "failed",
+                "status": "FAILED",
+                "duracao_ms": duracao_ms,
+                "erro_tipo": type(exc).__name__,
+                "erro": str(exc),
+            },
         )
         raise

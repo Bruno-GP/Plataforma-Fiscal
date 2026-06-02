@@ -17,7 +17,7 @@ Backend em FastAPI responsavel por autenticacao, importacao fiscal, processament
 - Modulo `/api/reforma-tributaria` com tributos, apuracao, documentos, itens e memoria de calculo.
 - Referencia ao material operacional em `API/docs/ibpt-cron.md`.
 - Registro das migracoes e scripts SQL em `API/app/alembic/`, `API/app/alembic.ini` e `API/SQL/`.
-- Registro do startup opcional que garante colunas e tabelas auxiliares no banco quando `ENABLE_STARTUP_SCHEMA_ENSURE=true`.
+- Registro de que o startup nao executa DDL e de que o schema deve ser aplicado via Alembic antes da API.
 
 ### O que foi tirado
 
@@ -46,6 +46,7 @@ Backend em FastAPI responsavel por autenticacao, importacao fiscal, processament
 - [Relatorios com IA](../docs/relatorios-ia.md)
 - [Deploy](../docs/deploy.md)
 - [Auditoria operacional](../docs/auditoria-operacional.md)
+- [Testes e qualidade](../docs/testing.md)
 
 ## Stack
 
@@ -282,14 +283,15 @@ Implementacao atual:
 - Catalogo NCM e arquivos IBPT: `API/app/services/NCM/`
 - Services da Reforma Tributaria: `API/app/services/reforma_tributaria/`
 - Guia operacional: `API/docs/ibpt-cron.md`
-- Script manual de sincronizacao: `API/scripts/sync_ibpt.py`
+- Carga de dados de referencia: `API/docs/reference-seeds.md`
+- Scripts operacionais: `API/scripts/bootstrap_referencias.py` e `API/scripts/sync_ibpt.py`
 
 ## Banco de dados
 
-- O ambiente Docker executa Alembic antes de subir API e workers.
+- O ambiente Docker executa Alembic e depois `reference-seed` antes de subir API e workers.
 - A estrutura SQL esta distribuida entre `app/file/sql/`, `app/models/`, `alembic/` e `SQL/`.
 - Ha suporte para separacao entre base NFe e base SPED.
-- No startup, a aplicacao so tenta garantir a coluna `tem_sped`, tabelas auxiliares de NCM/IBPT, indices de analise fiscal e estruturas da Reforma Tributaria quando `ENABLE_STARTUP_SCHEMA_ENSURE=true`.
+- No startup, a aplicacao nao executa DDL. `ENABLE_STARTUP_SCHEMA_ENSURE=true` foi descontinuado e falha cedo orientando aplicar Alembic.
 - As migracoes da Reforma Tributaria estao em `004_add_reforma_tributaria_base.sql`, `005_add_reforma_tributaria_documentos_itens.sql` e `006_add_reforma_tributaria_creditos_debitos_memoria.sql`.
 - O detalhamento de ordem, riscos e checklist esta em [../docs/database.md](../docs/database.md) e [../docs/migrations.md](../docs/migrations.md).
 

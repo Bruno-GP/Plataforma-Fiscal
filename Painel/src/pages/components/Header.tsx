@@ -23,10 +23,10 @@ export function Header({
   onYearChange,
  }: HeaderProps) {
   return (
-    <div className="flex items-center justify-between">
-      <div>
-        <h1 className="text-3xl font-bold">{title}</h1>
-        <p className="text-muted-foreground">{subtitle}</p>
+    <div className="flex flex-col gap-4 pt-2 md:flex-row md:items-end md:justify-between">
+      <div className="space-y-1">
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-100 md:text-4xl">{title}</h1>
+        <p className="max-w-3xl text-base text-slate-300">{subtitle}</p>
       </div>
       <MonthYearFilter
         selectedMonth={selectedMonth}
@@ -35,6 +35,7 @@ export function Header({
         monthLabels={monthLabels}
         onMonthChange={onMonthChange}
         onYearChange={onYearChange}
+        className="shrink-0"
       />
     </div>
   );

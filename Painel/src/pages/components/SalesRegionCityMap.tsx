@@ -724,25 +724,25 @@ export function SalesRegionCityMap({
   const isMapLoading = brazilMapQuery.isLoading || (isCityView && cidadesGeoJsonQuery.isLoading);
 
   return (
-    <section className="rounded-xl border bg-background p-4 md:p-6">
+    <section className="tv-card rounded-lg p-4 md:p-6">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">
+          <h2 className="text-lg font-semibold text-slate-100">
             {isCityView ? 'Mapa de vendas por cidade' : 'Mapa de vendas por região'}
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-400">
             {isCityView
               ? 'Visualização focada no estado com maior faturamento, exibindo as cidades com seus respectivos valores.'
               : 'Intensidade no GeoJSON geográfico real representa a participação de faturamento por estado e região.'}
           </p>
         </div>
-        <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+        <div className="inline-flex rounded-md border border-slate-700 bg-slate-950/45 p-1">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={() => setMapViewMode('regiao')}
-            className={`rounded-md px-3 transition-all duration-200 ${!isCityView ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground' : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'}`}
+            className={`rounded-md px-3 transition-all duration-200 ${!isCityView ? 'bg-sky-500 text-slate-950 shadow-sm hover:bg-sky-400 hover:text-slate-950' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'}`}
           >
             Por Região
           </Button>
@@ -751,7 +751,7 @@ export function SalesRegionCityMap({
             variant="ghost"
             size="sm"
             onClick={handleCityViewClick}
-            className={`rounded-md px-3 transition-all duration-200 ${isCityView ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground' : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'}`}
+            className={`rounded-md px-3 transition-all duration-200 ${isCityView ? 'bg-sky-500 text-slate-950 shadow-sm hover:bg-sky-400 hover:text-slate-950' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'}`}
           >
             Por Cidade
           </Button>
@@ -791,14 +791,14 @@ export function SalesRegionCityMap({
       </Dialog>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-        <div className="relative h-[420px] overflow-hidden rounded-lg border bg-slate-100 dark:bg-slate-950">
+        <div className="relative h-[420px] overflow-hidden rounded-lg border border-slate-700/80 bg-slate-950">
           <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.20)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.20)_1px,transparent_1px)] bg-[size:32px_32px]" />
-          <div className="absolute left-4 top-4 z-20 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
+          <div className="absolute left-4 top-4 z-20 rounded-md border border-slate-700 bg-slate-950/90 px-3 py-2 text-xs text-slate-300 shadow-sm backdrop-blur">
             {isCityView ? 'Brasil • Visão de vendas por cidade' : 'Brasil • Visão de vendas por região'}
           </div>
 
           {isMapLoading ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-muted-foreground">
+            <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-slate-400">
               Carregando mapa geográfico do Brasil...
             </div>
           ) : (
@@ -919,17 +919,17 @@ export function SalesRegionCityMap({
             </svg>
           )}
 
-          <div className="absolute bottom-3 right-3 z-20 rounded-md border bg-background/95 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur">
+          <div className="absolute bottom-3 right-3 z-20 rounded-md border border-slate-700 bg-slate-950/90 px-3 py-2 text-xs text-slate-400 shadow-sm backdrop-blur">
             Tons mais fortes = maior participação
           </div>
         </div>
 
         <div className="space-y-3">
           {isCityView && selectedCityData && (
-            <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Cidade selecionada no mapa</p>
-              <p className="text-sm font-semibold text-foreground">{selectedCityData.name}</p>
-              <p className="text-sm text-muted-foreground">
+            <div className="rounded-md border border-sky-400/40 bg-sky-400/10 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Cidade selecionada no mapa</p>
+              <p className="text-sm font-semibold text-slate-100">{selectedCityData.name}</p>
+              <p className="text-sm text-slate-400">
                 {formatCurrency(selectedCityData.value)} • {selectedCityData.percentual.toFixed(1)}% do total
               </p>
             </div>
@@ -937,13 +937,13 @@ export function SalesRegionCityMap({
 
           {isCityView
             ? topCidadesDoEstadoSelecionado.map((item) => (
-              <div key={item.key} className="rounded-md border bg-background p-3">
+              <div key={item.key} className="rounded-md border border-slate-700/80 bg-slate-950/35 p-3">
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium">{item.title}</span>
-                  <span className="text-muted-foreground">{item.percent?.toFixed(1) ?? '0.0'}%</span>
+                  <span className="font-medium text-slate-100">{item.title}</span>
+                  <span className="text-slate-400">{item.percent?.toFixed(1) ?? '0.0'}%</span>
                 </div>
 
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-950">
                   <div
                     className="h-full rounded-full transition-all duration-300"
                     style={{
@@ -952,16 +952,16 @@ export function SalesRegionCityMap({
                     }}
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">{item.value}</p>
+                <p className="text-sm text-slate-400">{item.value}</p>
               </div>
             ))
             : dadosRegiaoMapa.map((item) => (
-              <div key={item.regiao} className="rounded-md border bg-background p-3">
+              <div key={item.regiao} className="rounded-md border border-slate-700/80 bg-slate-950/35 p-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{item.regiao}</span>
-                  <span className="text-muted-foreground">{item.percentual.toFixed(1)}%</span>
+                  <span className="font-medium text-slate-100">{item.regiao}</span>
+                  <span className="text-slate-400">{item.percentual.toFixed(1)}%</span>
                 </div>
-                <p className="text-sm text-muted-foreground">{formatCurrency(item.valor)}</p>
+                <p className="text-sm text-slate-400">{formatCurrency(item.valor)}</p>
               </div>
             ))}
 

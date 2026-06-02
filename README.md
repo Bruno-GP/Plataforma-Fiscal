@@ -21,6 +21,7 @@ Cada modulo possui seu proprio guia e a documentacao operacional fica em `docs/`
 - [Setup local](docs/setup.md)
 - [Processamento de dados](docs/data-processing.md)
 - [Jobs assincronos](docs/jobs.md)
+- [Mapeamento de busca XML na SEFAZ](docs/mapeamento-busca-xml-sefaz.md)
 - [Troubleshooting de jobs](docs/troubleshooting-jobs.md)
 - [Deploy](docs/deploy.md)
 - [Checklist de producao](docs/production-checklist.md)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FileText, FileUp, Upload, Database } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { waitForJob, type ProcessingJobResponse } from '@/services/jobs';
+import { useImportFileQueue } from '@/hooks/useImportFileQueue';
+import { isJobAbortError, useProcessingJobFlow } from '@/hooks/useProcessingJobFlow';
 import { saveFiscalOperation } from '@/services/operations';
 import {
   consultarPendenciasSped,
@@ -18,11 +19,7 @@ import {
   type ImportacaoSpedArquivoResultado,
   type ImportacaoSpedPendenciasResponse,
 } from '@/services/sped';
-
-interface SpedFileItem {
-  id: string;
-  file: File;
-}
+import { invalidateFiscalProcessingCache } from '@/utils/fiscalCache';
 
 const MAX_SPED_FILES = 500;
 
@@ -32,25 +29,31 @@ export default function ImportacaoSPED() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [selectedFiles, setSelectedFiles] = useState<SpedFileItem[]>([]);
+  const {
+    selectedFiles,
+    setSelectedFiles,
+    addFiles,
+    totalSize,
+    formatFileSize,
+  } = useImportFileQueue({
+    maxFiles: MAX_SPED_FILES,
+    acceptedExtensions: ['.txt'],
+  });
   const [isImporting, setIsImporting] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
   const [results, setResults] = useState<ImportacaoSpedArquivoResultado[]>([]);
   const [pendencias, setPendencias] = useState<ImportacaoSpedPendenciasResponse | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [currentJob, setCurrentJob] = useState<ProcessingJobResponse | null>(null);
-  const [jobMessage, setJobMessage] = useState<string | null>(null);
-  const processingAbortRef = useRef<AbortController | null>(null);
-
-  const totalSize = useMemo(() => selectedFiles.reduce((acc, item) => acc + item.file.size, 0), [selectedFiles]);
+  const {
+    isProcessing,
+    currentJob,
+    jobMessage,
+    resetJobState,
+    runProcessingJob,
+    cancelProcessing,
+    getCurrentJob,
+  } = useProcessingJobFlow();
 
   const progressValue = selectedFiles.length ? (importedCount / selectedFiles.length) * 100 : 0;
-
-  const formatFileSize = (size: number) => {
-    if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(2)} MB`;
-    if (size >= 1024) return `${(size / 1024).toFixed(1)} KB`;
-    return `${size} B`;
-  };
 
   const carregarPendencias = useCallback(async () => {
     if (!user?.emitente_cnpj) return;
@@ -67,37 +70,13 @@ export default function ImportacaoSPED() {
     void carregarPendencias();
   }, [carregarPendencias]);
 
-  useEffect(() => {
-    return () => {
-      processingAbortRef.current?.abort();
-    };
-  }, []);
-
-  const addFiles = (files: FileList | null) => {
-    if (!files?.length) return;
-
-    const txtFiles = Array.from(files).filter((file) => file.name.toLowerCase().endsWith('.txt'));
-
-    setSelectedFiles((prev) => {
-      const existingNames = new Set(prev.map((item) => item.file.name));
-      const availableSlots = MAX_SPED_FILES - prev.length;
-      const newItems = txtFiles
-        .filter((file) => !existingNames.has(file.name))
-        .slice(0, Math.max(availableSlots, 0))
-        .map((file) => ({ id: `${file.name}-${file.lastModified}`, file }));
-
-      return [...prev, ...newItems];
-    });
-  };
-
   const importarArquivos = async () => {
     if (!selectedFiles.length || isImporting || !user?.emitente_cnpj) return;
 
     setIsImporting(true);
     setImportedCount(0);
     setResults([]);
-    setCurrentJob(null);
-    setJobMessage(null);
+    resetJobState();
 
     const importResults: ImportacaoSpedArquivoResultado[] = [];
 
@@ -144,43 +123,24 @@ export default function ImportacaoSPED() {
   const processarImportados = async () => {
     if (!user?.emitente_cnpj || isProcessing) return;
 
-    processingAbortRef.current?.abort();
-    const abortController = new AbortController();
-    processingAbortRef.current = abortController;
-
-    setIsProcessing(true);
-    setCurrentJob(null);
-    setJobMessage(null);
-
     try {
-      const createdJob = await processarSpedsImportados(user.emitente_cnpj, { signal: abortController.signal });
-      setJobMessage(createdJob.message);
-      saveFiscalOperation({
-        type: 'sped-process',
-        status: 'queued',
-        title: 'Processamento SPED enviado para fila',
-        description: createdJob.message,
-        cnpj: user.emitente_cnpj,
-        jobId: createdJob.job_id,
-        jobStatus: createdJob.status,
-        backendMessage: createdJob.message,
-      });
-
-      const finishedJob = await waitForJob(createdJob.job_id, {
-        signal: abortController.signal,
-        onUpdate: (job) => {
-          setCurrentJob(job);
-          setJobMessage(job.mensagem ?? `Status do processamento: ${job.status}`);
+      const finishedJob = await runProcessingJob({
+        createJob: (signal) => processarSpedsImportados(user.emitente_cnpj, { signal }),
+        onCreated: (createdJob) => {
+          saveFiscalOperation({
+            type: 'sped-process',
+            status: 'queued',
+            title: 'Processamento SPED enviado para fila',
+            description: createdJob.message,
+            cnpj: user.emitente_cnpj,
+            jobId: createdJob.job_id,
+            jobStatus: createdJob.status,
+            backendMessage: createdJob.message,
+          });
         },
       });
-      setCurrentJob(finishedJob);
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-vendas-mapa'] }),
-        queryClient.invalidateQueries({ queryKey: ['kpis'] }),
-        queryClient.invalidateQueries({ queryKey: ['kpis-years'] }),
-      ]);
+      await invalidateFiscalProcessingCache(queryClient, 'sped');
 
       await carregarPendencias();
 
@@ -200,16 +160,18 @@ export default function ImportacaoSPED() {
       });
       navigate('/analise-vendas');
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      const latestJob = getCurrentJob();
+
+      if (isJobAbortError(error)) {
         saveFiscalOperation({
           type: 'sped-process',
           status: 'cancelled',
           title: 'Acompanhamento SPED interrompido',
           description: 'O acompanhamento foi interrompido nesta tela. Um job ja criado pode continuar no backend.',
           cnpj: user?.emitente_cnpj ?? '',
-          jobId: currentJob?.job_id,
-          jobStatus: currentJob?.status,
-          backendMessage: currentJob?.mensagem ?? undefined,
+          jobId: latestJob?.job_id,
+          jobStatus: latestJob?.status,
+          backendMessage: latestJob?.mensagem ?? undefined,
         });
         toast({
           title: 'Acompanhamento interrompido',
@@ -224,25 +186,20 @@ export default function ImportacaoSPED() {
         title: 'Falha no processamento SPED',
         description: error instanceof Error ? error.message : 'Nao foi possivel processar os SPEDs.',
         cnpj: user?.emitente_cnpj ?? '',
-        jobId: currentJob?.job_id,
-        jobStatus: currentJob?.status,
-        backendMessage: currentJob?.mensagem ?? undefined,
+        jobId: latestJob?.job_id,
+        jobStatus: latestJob?.status,
+        backendMessage: latestJob?.mensagem ?? undefined,
       });
       toast({
         title: 'Falha no processamento',
         description: error instanceof Error ? error.message : 'Não foi possível processar os SPEDs.',
         variant: 'destructive',
       });
-    } finally {
-      if (processingAbortRef.current === abortController) {
-        processingAbortRef.current = null;
-      }
-      setIsProcessing(false);
     }
   };
 
   const pararAcompanhamento = () => {
-    processingAbortRef.current?.abort();
+    cancelProcessing();
   };
 
   return (

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Calculator, FileText, Landmark, ListFilter, ReceiptText, Search } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Calculator, FileText, Landmark, ListFilter, ReceiptText, RefreshCw, Search } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -22,10 +23,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFiscalYears } from '@/hooks/useFiscalYears';
 import { Header } from '@/pages/components/Header';
 import { StatCard } from '@/pages/components/StatCard';
 import { parseDecimal } from '@/services/fiscal';
 import {
+  backfillReformaTributaria,
   fetchReformaApuracao,
   fetchReformaMemoriaCalculo,
   fetchReformaTributos,
@@ -33,12 +36,9 @@ import {
   type ApuracaoTributariaItem,
   type MemoriaCalculoTributariaItem,
 } from '@/services/reformaTributaria';
-import { formatCurrency, monthLabels } from '@/services/utils';
-
-const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? '').replace(/\D/g, '');
-  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
-};
+import { invalidateFiscalDashboardCache, invalidateReformaTributariaCache } from '@/utils/fiscalCache';
+import { createFiscalPeriod, createFiscalQueryKey } from '@/utils/fiscalPeriod';
+import { formatCurrency, hasValidEmitenteCnpj, monthLabels } from '@/utils/formatters';
 
 const formatPercent = (value: number | string | null | undefined) => {
   const parsed = parseDecimal(value);
@@ -54,6 +54,7 @@ const statusVariant = (status: string) => {
 
 export default function ReformaTributaria() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const [selectedTributo, setSelectedTributo] = useState('todos');
@@ -61,11 +62,12 @@ export default function ReformaTributaria() {
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const monthNumber = Number.parseInt(selectedMonth, 10);
-  const yearNumber = Number.parseInt(selectedYear, 10);
-  const periodoAno = Number.isNaN(yearNumber) ? undefined : yearNumber;
-  const periodoMes = selectedMonth === 'all' ? undefined : monthNumber;
+  const fiscalPeriod = useMemo(
+    () => createFiscalPeriod(selectedYear, selectedMonth),
+    [selectedMonth, selectedYear],
+  );
   const tributoCodigo = selectedTributo === 'todos' ? undefined : selectedTributo;
+  const origemBackfill = user?.tem_sped ? 'sped' : 'nfe';
 
   const tributosQuery = useQuery({
     queryKey: ['reforma-tributaria-tributos'],
@@ -74,11 +76,16 @@ export default function ReformaTributaria() {
   });
 
   const apuracaoQuery = useQuery({
-    queryKey: ['reforma-tributaria-apuracao', emitenteCnpj, periodoAno, periodoMes, tributoCodigo],
+    queryKey: createFiscalQueryKey({
+      scope: 'reforma-tributaria-apuracao',
+      emitenteCnpj,
+      sourceKey: origemBackfill,
+      period: fiscalPeriod,
+      extra: [tributoCodigo],
+    }),
     queryFn: ({ signal }) => fetchReformaApuracao({
       emitente_cnpj: emitenteCnpj,
-      periodo_ano: periodoAno,
-      periodo_mes: periodoMes,
+      ...fiscalPeriod.params,
       tributo_codigo: tributoCodigo,
     }, { signal }),
     enabled: hasEmitenteCnpj,
@@ -86,11 +93,16 @@ export default function ReformaTributaria() {
   });
 
   const memoriaQuery = useQuery({
-    queryKey: ['reforma-tributaria-memoria', emitenteCnpj, periodoAno, periodoMes, tributoCodigo],
+    queryKey: createFiscalQueryKey({
+      scope: 'reforma-tributaria-memoria',
+      emitenteCnpj,
+      sourceKey: origemBackfill,
+      period: fiscalPeriod,
+      extra: [tributoCodigo],
+    }),
     queryFn: ({ signal }) => fetchReformaMemoriaCalculo({
       emitente_cnpj: emitenteCnpj,
-      periodo_ano: periodoAno,
-      periodo_mes: periodoMes,
+      ...fiscalPeriod.params,
       tributo_codigo: tributoCodigo,
       limite: 80,
     }, { signal }),
@@ -98,14 +110,26 @@ export default function ReformaTributaria() {
     staleTime: 2 * 60 * 1000,
   });
 
-  const availableYears = useMemo(() => {
-    const years = new Set<number>();
-    for (const item of apuracaoQuery.data?.resultados ?? []) {
-      if (item.periodo_ano) years.add(item.periodo_ano);
-    }
-    years.add(new Date().getFullYear());
-    return [...years].sort((a, b) => b - a);
-  }, [apuracaoQuery.data]);
+  const backfillMutation = useMutation({
+    mutationFn: () =>
+      backfillReformaTributaria({
+        emitente_cnpj: emitenteCnpj ?? '',
+        origem: origemBackfill,
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateReformaTributariaCache(queryClient),
+        invalidateFiscalDashboardCache(queryClient),
+      ]);
+    },
+  });
+
+  const { availableYears } = useFiscalYears({
+    entries: apuracaoQuery.data?.resultados ?? [],
+    selectedYear,
+    setSelectedYear,
+    includeCurrentYear: true,
+  });
 
   useEffect(() => {
     setSearchTerm('');
@@ -114,7 +138,7 @@ export default function ReformaTributaria() {
   const apuracoes = apuracaoQuery.data?.resultados ?? [];
   const memoria = memoriaQuery.data?.resultados ?? [];
   const totais = totalizarApuracao(apuracoes);
-  const tributosReforma = (tributosQuery.data?.resultados ?? []).filter((tributo) => tributo.tipo === 'reforma');
+  const tributosDisponiveis = tributosQuery.data?.resultados ?? [];
 
   const memoriaFiltrada = memoria.filter((item) => {
     const termo = searchTerm.trim().toLowerCase();
@@ -188,7 +212,7 @@ export default function ReformaTributaria() {
               <ListFilter className="h-4 w-4 text-sky-300" />
               <span>Filtro de tributo</span>
             </div>
-            <p className="text-xs text-slate-400">Apure CBS, IBS e Imposto Seletivo por periodo.</p>
+            <p className="text-xs text-slate-400">Apure tributos atuais, de transicao e da Reforma por periodo.</p>
           </div>
           <Select value={selectedTributo} onValueChange={setSelectedTributo}>
             <SelectTrigger className="w-full border-slate-700 bg-slate-900/80 text-slate-100 md:w-80">
@@ -196,29 +220,49 @@ export default function ReformaTributaria() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os tributos</SelectItem>
-              {tributosReforma.map((tributo) => (
+              {tributosDisponiveis.map((tributo) => (
                 <SelectItem key={tributo.codigo} value={tributo.codigo}>
                   {tributo.codigo} - {tributo.nome}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full gap-2 md:w-auto"
+            disabled={!hasEmitenteCnpj || backfillMutation.isPending}
+            onClick={() => backfillMutation.mutate()}
+          >
+            <RefreshCw className={`h-4 w-4 ${backfillMutation.isPending ? 'animate-spin' : ''}`} />
+            {backfillMutation.isPending ? 'Sincronizando...' : 'Sincronizar dados'}
+          </Button>
         </CardContent>
       </Card>
 
-      {(apuracaoQuery.isError || memoriaQuery.isError || tributosQuery.isError) && (
+      {backfillMutation.isSuccess && (
+        <Alert>
+          <AlertTitle>Dados sincronizados</AlertTitle>
+          <AlertDescription>
+            {backfillMutation.data.periodos_processados} periodo(s) recalculado(s) para {origemBackfill.toUpperCase()}.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {(apuracaoQuery.isError || memoriaQuery.isError || tributosQuery.isError || backfillMutation.isError) && (
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar dados da Reforma</AlertTitle>
           <AlertDescription>
             {(apuracaoQuery.error instanceof Error && apuracaoQuery.error.message)
               || (memoriaQuery.error instanceof Error && memoriaQuery.error.message)
               || (tributosQuery.error instanceof Error && tributosQuery.error.message)
+              || (backfillMutation.error instanceof Error && backfillMutation.error.message)
               || 'Nao foi possivel consultar a base tributaria.'}
           </AlertDescription>
         </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stat-card-grid">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} isLoading={apuracaoQuery.isLoading || memoriaQuery.isLoading} />
         ))}

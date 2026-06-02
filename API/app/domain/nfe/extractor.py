@@ -326,6 +326,20 @@ def _resolver_municipio_e_uf(codigo_ou_nome: str, uf_atual: str = "") -> tuple[s
         uf_padrao or uf_por_nome.get(nome_normalizado, ""),
     )
 
+def _extrair_municipio_uf_emitente(emit) -> tuple[str, str]:
+    ender_emit = emit.find("nfe:enderEmit", NS) if emit is not None else None
+    if ender_emit is None:
+        return "", ""
+
+    codigo_municipio = ender_emit.findtext("nfe:cMun", "", NS)
+    nome_municipio = ender_emit.findtext("nfe:xMun", "", NS)
+    uf_informada = ender_emit.findtext("nfe:UF", "", NS)
+
+    return _resolver_municipio_e_uf(
+        codigo_municipio or nome_municipio,
+        uf_informada,
+    )
+
 def _encontrar_textos_por_tag(root, nome_tag: str) -> list[str]:
     if root is None:
         return []
@@ -510,6 +524,17 @@ class NFeExtractor:
                 destinatario_uf = ""
                 logger.warning("XML sem destinatario identificado")
                 
+            cliente_nao_identificado = not destinatario_doc and not destinatario_nome
+
+            if (
+                modelo == "65"
+                and cliente_nao_identificado
+                and (not destinatario_cidade or not destinatario_uf)
+            ):
+                cidade_emitente, uf_emitente = _extrair_municipio_uf_emitente(emit)
+                destinatario_cidade = destinatario_cidade or cidade_emitente
+                destinatario_uf = destinatario_uf or uf_emitente
+
             if modelo == "65" and not destinatario_nome:
                 destinatario_nome = "Consumidor Final"
 

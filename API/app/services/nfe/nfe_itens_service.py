@@ -5,6 +5,7 @@ from decimal import Decimal
 import psycopg
 
 from app.domain.nfe.extractor import NotaExtraida
+from app.services.NCM.ibpt_sync_service import IBPTSyncService
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
 
@@ -41,6 +42,7 @@ class NFeItensService:
             "password": config["password"],
             "connect_timeout": 5,
         }
+        self._ncm_fallback_cache: set[str] = set()
 
     def registrar_itens(
         self,
@@ -211,6 +213,8 @@ class NFeItensService:
         periodo_mes: int,
         item,
     ) -> None:
+        ncm_codigo = self._garantir_ncm_catalogo(cur, item.ncm)
+
         cur.execute(
             """
             DELETE FROM public.itens_documentos_fiscais_tributos it
@@ -259,7 +263,7 @@ class NFeItensService:
                     %s,
                     %s,
                     %s,
-                    NULLIF(LEFT(regexp_replace(COALESCE(%s, ''), '\\D', '', 'g'), 8), '')::char(8),
+                    %s::char(8),
                     %s,
                     %s,
                     %s,
@@ -282,7 +286,7 @@ class NFeItensService:
                     periodo_mes,
                     item.numero_item,
                     item.codigo_produto,
-                    item.ncm,
+                    ncm_codigo,
                     item.cfop,
                     tributo.get("cst_codigo"),
                     tributo.get("classificacao_tributaria"),
@@ -293,6 +297,29 @@ class NFeItensService:
                     tributo.get("tributo_codigo"),
                 ),
             )
+
+    def _garantir_ncm_catalogo(self, cur, codigo_ncm: str | None) -> str | None:
+        codigo = "".join(ch for ch in str(codigo_ncm or "") if ch.isdigit())[:8]
+        if len(codigo) != 8:
+            return None
+
+        cur.execute("SELECT 1 FROM public.ncm_catalogo WHERE codigo = %s LIMIT 1", (codigo,))
+        if cur.fetchone():
+            return codigo
+
+        if codigo not in self._ncm_fallback_cache:
+            self._ncm_fallback_cache.add(codigo)
+            try:
+                IBPTSyncService().sincronizar(uf="SC", ncm=codigo)
+            except Exception as exc:
+                logger.warning("Fallback IBPT falhou para NCM %s: %s", codigo, exc)
+
+        cur.execute("SELECT 1 FROM public.ncm_catalogo WHERE codigo = %s LIMIT 1", (codigo,))
+        if cur.fetchone():
+            return codigo
+
+        logger.warning("NCM %s nao encontrado no catalogo; item sera gravado sem FK de NCM.", codigo)
+        return None
 
     def _registrar_documentos_reforma_agregados(self, cur, nota_ids: list[int]) -> None:
         codigos_reforma = ["CBS", "IBS", "IBS_UF", "IBS_MUN", "IS"]

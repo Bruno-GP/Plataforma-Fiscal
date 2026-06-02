@@ -5,10 +5,10 @@ from datetime import date, datetime
 from decimal import Decimal
 import logging
 
-import httpx
 import psycopg
 
-from app.services.db_schema_service import ensure_ncm_ibpt_tables
+from app.core.cache import ttl_cache
+from app.core.http_client import get_json
 from app.services.nfe.postres_config import carregar_config_postgres
 
 
@@ -31,6 +31,33 @@ class SyncUFResultado:
 
 
 class IBPTSyncService:
+    _required_columns_by_table = {
+        "ncm_catalogo": {
+            "codigo",
+            "descricao",
+            "codigo_formatado",
+            "vigencia",
+            "fonte_arquivo",
+            "criado_em",
+            "atualizado_em",
+        },
+        "ncm_tributacao": {
+            "id",
+            "ncm_codigo",
+            "uf",
+            "nacional_federal",
+            "importados_federal",
+            "estadual",
+            "municipal",
+            "vigencia_inicio",
+            "vigencia_fim",
+            "versao",
+            "fonte",
+            "criado_em",
+            "atualizado_em",
+        },
+    }
+
     def __init__(self) -> None:
         config = carregar_config_postgres()
         self.conn_params = {
@@ -42,6 +69,36 @@ class IBPTSyncService:
             "connect_timeout": 10,
             **({"sslmode": config["sslmode"]} if config.get("sslmode") else {}),
         }
+
+    def _validate_ibpt_schema(self, conn: psycopg.Connection) -> None:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT table_name, column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = ANY(%s)
+                """,
+                (list(self._required_columns_by_table),),
+            )
+            existing_columns: dict[str, set[str]] = {
+                table_name: set()
+                for table_name in self._required_columns_by_table
+            }
+            for table_name, column_name in cur.fetchall():
+                existing_columns[str(table_name)].add(str(column_name))
+
+        missing_parts = []
+        for table_name, required_columns in self._required_columns_by_table.items():
+            missing_columns = sorted(required_columns - existing_columns[table_name])
+            if missing_columns:
+                missing_parts.append(f"{table_name}: {', '.join(missing_columns)}")
+
+        if missing_parts:
+            raise RuntimeError(
+                "Schema IBPT/NCM incompleto. Execute as migrations Alembic. "
+                f"Colunas ausentes em public: {'; '.join(missing_parts)}."
+            )
 
     @staticmethod
     def _normalizar_ncm(valor: str | None) -> str:
@@ -74,10 +131,12 @@ class IBPTSyncService:
         return Decimal(str(value))
 
     def _buscar_todos_ncm_uf(self, uf: str) -> list[dict]:
-        with httpx.Client(timeout=60.0) as client:
-            response = client.get(f"{IBPT_BASE_URL}/api_ibpt_json.php", params={"uf": uf})
-            response.raise_for_status()
-            payload = response.json()
+        payload = get_json(
+            f"{IBPT_BASE_URL}/api_ibpt_json.php",
+            params={"uf": uf},
+            timeout_seconds=60.0,
+            service_name="IBPT",
+        )
 
         registros = payload.get("ncm", [])
         if not isinstance(registros, list):
@@ -85,13 +144,12 @@ class IBPTSyncService:
         return registros
 
     def _buscar_ncm_especifico(self, ncm: str, uf: str) -> list[dict]:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(
-                f"{IBPT_BASE_URL}/api_ibpt.php",
-                params={"codigo": ncm, "uf": uf},
-            )
-            response.raise_for_status()
-            payload = response.json()
+        payload = get_json(
+            f"{IBPT_BASE_URL}/api_ibpt.php",
+            params={"codigo": ncm, "uf": uf},
+            timeout_seconds=30.0,
+            service_name="IBPT",
+        )
 
         if isinstance(payload, dict) and payload.get("codigo"):
             return [payload]
@@ -235,12 +293,12 @@ class IBPTSyncService:
         return len(dados)
 
     def sincronizar(self, uf: str = "SC", todas_ufs: bool = False, ncm: str | None = None) -> list[SyncUFResultado]:
-        ensure_ncm_ibpt_tables()
-
         ufs = TODAS_UFS if todas_ufs else (str(uf or "SC").strip().upper(),)
         resultados: list[SyncUFResultado] = []
 
         with psycopg.connect(**self.conn_params) as conn:
+            self._validate_ibpt_schema(conn)
+
             for uf_atual in ufs:
                 if uf_atual not in TODAS_UFS:
                     raise ValueError(f"UF invalida para sincronizacao IBPT: {uf_atual}")
@@ -285,6 +343,7 @@ class IBPTSyncService:
 
         return resultados
 
+    @ttl_cache(ttl_seconds=30, maxsize=256)
     def obter_tributacao(self, codigo_ncm: str, uf: str) -> dict | None:
         codigo_normalizado = self._normalizar_ncm(codigo_ncm)
         uf_normalizada = str(uf or "").strip().upper()

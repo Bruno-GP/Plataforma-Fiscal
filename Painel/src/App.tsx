@@ -14,6 +14,7 @@ import Dashboard from "./pages/AnaliseVendas";
 import Clientes from "./pages/Clientes";
 import NotFound from "./pages/NotFound";
 import CadastroEmpresa from "./pages/CadastroEmpresa";
+import Configuracoes from "./pages/Configuracoes";
 import DetalhamentoCompras from "./pages/DetalhamentoCompras";
 import DetalhamentoVendas from "./pages/DetalhamentoVendas";
 import ImportacaoXML from "./pages/ImportacaoXML";
@@ -69,14 +70,14 @@ const App = () => (
                   </MainLayout>
                 }
               />
-              {/* <Route
+              <Route
                 path="/configuracoes"
                 element={
                   <MainLayout>
                     <Configuracoes />
                   </MainLayout>
                 }
-              /> */}
+              />
               <Route
                 path="/importacao-xml"
                 element={

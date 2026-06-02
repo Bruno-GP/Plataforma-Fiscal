@@ -1,8 +1,24 @@
 import psycopg
 from psycopg.rows import dict_row
 
+from app.core.cache import ttl_cache
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
+
+
+DEFAULT_TRIBUTOS: list[dict] = [
+  {"id": 7, "codigo": "CBS", "nome": "Contribuicao sobre Bens e Servicos", "esfera": "federal", "tipo": "reforma", "descricao": "Novo tributo federal da Reforma Tributaria do Consumo.", "ativo": True},
+  {"id": 8, "codigo": "IBS", "nome": "Imposto sobre Bens e Servicos", "esfera": "compartilhada", "tipo": "reforma", "descricao": "Novo tributo compartilhado entre estados, Distrito Federal e municipios.", "ativo": True},
+  {"id": 9, "codigo": "IBS_UF", "nome": "IBS Parcela Estadual", "esfera": "estadual", "tipo": "reforma", "descricao": "Componente estadual do IBS.", "ativo": True},
+  {"id": 10, "codigo": "IBS_MUN", "nome": "IBS Parcela Municipal", "esfera": "municipal", "tipo": "reforma", "descricao": "Componente municipal do IBS.", "ativo": True},
+  {"id": 11, "codigo": "IS", "nome": "Imposto Seletivo", "esfera": "federal", "tipo": "reforma", "descricao": "Imposto Seletivo incidente sobre bens e servicos especificos.", "ativo": True},
+  {"id": 1, "codigo": "ICMS", "nome": "Imposto sobre Circulacao de Mercadorias e Servicos", "esfera": "estadual", "tipo": "atual", "descricao": "Tributo estadual vigente antes da Reforma Tributaria do Consumo.", "ativo": True},
+  {"id": 2, "codigo": "ICMS_ST", "nome": "ICMS Substituicao Tributaria", "esfera": "estadual", "tipo": "atual", "descricao": "Modalidade de recolhimento por substituicao tributaria do ICMS.", "ativo": True},
+  {"id": 3, "codigo": "IPI", "nome": "Imposto sobre Produtos Industrializados", "esfera": "federal", "tipo": "atual", "descricao": "Tributo federal vigente antes da Reforma Tributaria do Consumo.", "ativo": True},
+  {"id": 4, "codigo": "PIS", "nome": "Programa de Integracao Social", "esfera": "federal", "tipo": "atual", "descricao": "Contribuicao federal a ser substituida/absorvida no contexto da CBS.", "ativo": True},
+  {"id": 5, "codigo": "COFINS", "nome": "Contribuicao para o Financiamento da Seguridade Social", "esfera": "federal", "tipo": "atual", "descricao": "Contribuicao federal a ser substituida/absorvida no contexto da CBS.", "ativo": True},
+  {"id": 6, "codigo": "ISS", "nome": "Imposto sobre Servicos", "esfera": "municipal", "tipo": "atual", "descricao": "Tributo municipal vigente antes da Reforma Tributaria do Consumo.", "ativo": True},
+]
 
 
 class ReformaTributariaConsultaService:
@@ -26,7 +42,11 @@ class ReformaTributariaConsultaService:
     if config.get("sslmode"):
       self.conn_params["sslmode"] = config["sslmode"]
 
+  @ttl_cache(ttl_seconds=300, maxsize=32)
   def listar_tributos(self, incluir_inativos: bool = False) -> list[dict]:
+    if not incluir_inativos:
+      return [dict(tributo) for tributo in DEFAULT_TRIBUTOS]
+
     filtros = []
     params: list[object] = []
 
@@ -283,6 +303,52 @@ class ReformaTributariaConsultaService:
       with conn.cursor() as cur:
         cur.execute(sql, params)
         return [dict(row) for row in cur.fetchall()]
+
+  def contar_memoria_calculo(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: int | None = None,
+    periodo_mes: int | None = None,
+    tributo_codigo: str | None = None,
+    documento_tributo_id: int | None = None,
+    item_tributo_id: int | None = None,
+  ) -> int:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    filtros = ["regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s"]
+    params: list[object] = [cnpj]
+
+    if periodo_ano is not None:
+      filtros.append("m.periodo_ano = %s")
+      params.append(periodo_ano)
+
+    if periodo_mes is not None:
+      filtros.append("m.periodo_mes = %s")
+      params.append(periodo_mes)
+
+    if tributo_codigo:
+      filtros.append("UPPER(t.codigo) = UPPER(%s)")
+      params.append(tributo_codigo)
+
+    if documento_tributo_id is not None:
+      filtros.append("m.documento_tributo_id = %s")
+      params.append(documento_tributo_id)
+
+    if item_tributo_id is not None:
+      filtros.append("m.item_tributo_id = %s")
+      params.append(item_tributo_id)
+
+    sql = f"""
+      SELECT COUNT(*)
+      FROM public.memoria_calculo_tributaria m
+      JOIN public.tributos t ON t.id = m.tributo_id
+      WHERE {' AND '.join(filtros)};
+    """
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        return int(row[0] if row else 0)
 
   @staticmethod
   def _normalizar_origem_documento(origem_documento: str) -> str:

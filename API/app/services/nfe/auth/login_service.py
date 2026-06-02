@@ -3,8 +3,10 @@ import hmac
 import logging
 import os
 import re
+import time
+from threading import Lock
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import psycopg
 
@@ -12,9 +14,9 @@ from app.core.audit import log_security_event
 from app.core.config import (
     get_login_lockout_minutes,
     get_login_max_failed_attempts,
+    get_login_success_cache_ttl_seconds,
     get_password_min_length,
 )
-from app.services.db_schema_service import ensure_empresas_tem_sped_column
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
 
@@ -33,8 +35,28 @@ class LoginResult:
 
 
 class LoginService:
+    _schema_lock = Lock()
+    _schema_ensured = False
+    _required_columns_by_table = {
+        "empresas": {"id", "cnpj", "nome", "tem_sped"},
+        "login": {
+            "id",
+            "empresa_id",
+            "cnpj",
+            "email",
+            "senha",
+            "criado_em",
+            "tentativas_falhas",
+            "bloqueado_ate",
+            "ultimo_login_em",
+        },
+    }
+    _auth_cache_lock = Lock()
+    _auth_refresh_lock = Lock()
+    _auth_cache: dict[str, tuple[float, LoginResult]] = {}
+    _auth_cache_maxsize = 128
+
     def __init__(self) -> None:
-        ensure_empresas_tem_sped_column()
         config = carregar_config_postgres()
 
         self.conn_params = {
@@ -57,27 +79,48 @@ class LoginService:
         if config.get("sslmode"):
             self.conn_params["sslmode"] = config["sslmode"]
 
-    def _ensure_login_security_columns(self, conn: psycopg.Connection) -> None:
+        self._ensure_base_schema_once()
+
+    def _ensure_base_schema_once(self) -> None:
+        if LoginService._schema_ensured:
+            return
+
+        with LoginService._schema_lock:
+            if LoginService._schema_ensured:
+                return
+            with psycopg.connect(**self.conn_params) as conn:
+                self._validate_base_schema(conn)
+            LoginService._schema_ensured = True
+
+    def _validate_base_schema(self, conn: psycopg.Connection) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                ALTER TABLE public.login
-                ADD COLUMN IF NOT EXISTS tentativas_falhas INTEGER NOT NULL DEFAULT 0
-                """
+                SELECT table_name, column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = ANY(%s)
+                """,
+                (list(self._required_columns_by_table),),
             )
-            cur.execute(
-                """
-                ALTER TABLE public.login
-                ADD COLUMN IF NOT EXISTS bloqueado_ate TIMESTAMPTZ
-                """
+            existing_columns: dict[str, set[str]] = {
+                table_name: set()
+                for table_name in self._required_columns_by_table
+            }
+            for table_name, column_name in cur.fetchall():
+                existing_columns[str(table_name)].add(str(column_name))
+
+        missing_parts = []
+        for table_name, required_columns in self._required_columns_by_table.items():
+            missing_columns = sorted(required_columns - existing_columns[table_name])
+            if missing_columns:
+                missing_parts.append(f"{table_name}: {', '.join(missing_columns)}")
+
+        if missing_parts:
+            raise RuntimeError(
+                "Schema de autenticacao incompleto. Execute as migrations Alembic. "
+                f"Colunas ausentes em public: {'; '.join(missing_parts)}."
             )
-            cur.execute(
-                """
-                ALTER TABLE public.login
-                ADD COLUMN IF NOT EXISTS ultimo_login_em TIMESTAMPTZ
-                """
-            )
-        conn.commit()
 
     def _validar_forca_senha(self, senha: str) -> None:
         min_length = get_password_min_length()
@@ -115,6 +158,41 @@ class LoginService:
             return False
         digest = self._hash_senha(senha, salt)
         return hmac.compare_digest(digest, digest_armazenado)
+
+    def _auth_cache_key(self, email: str, senha: str) -> str:
+        return hashlib.sha256(f"{email}\0{senha}".encode("utf-8")).hexdigest()
+
+    def _get_cached_auth(self, email: str, senha: str) -> LoginResult | None:
+        ttl_seconds = get_login_success_cache_ttl_seconds()
+        if ttl_seconds <= 0:
+            return None
+
+        key = self._auth_cache_key(email, senha)
+        now = time.monotonic()
+
+        with LoginService._auth_cache_lock:
+            cached = LoginService._auth_cache.get(key)
+            if not cached:
+                return None
+
+            expires_at, result = cached
+            if expires_at <= now:
+                LoginService._auth_cache.pop(key, None)
+                return None
+
+            return result
+
+    def _set_cached_auth(self, email: str, senha: str, result: LoginResult) -> None:
+        ttl_seconds = get_login_success_cache_ttl_seconds()
+        if ttl_seconds <= 0:
+            return
+
+        key = self._auth_cache_key(email, senha)
+        with LoginService._auth_cache_lock:
+            LoginService._auth_cache[key] = (time.monotonic() + ttl_seconds, result)
+            if len(LoginService._auth_cache) > LoginService._auth_cache_maxsize:
+                oldest_key = next(iter(LoginService._auth_cache))
+                LoginService._auth_cache.pop(oldest_key, None)
 
     def _nome_empresa_completo(self, nome: str | None) -> str:
         return nome.strip() if nome else ""
@@ -157,7 +235,23 @@ class LoginService:
 
         raise ValueError("Credenciais inválidas.")
 
-    def _resetar_falhas_login(self, conn: psycopg.Connection, login_id: int) -> None:
+    def _resetar_falhas_login(
+        self,
+        conn: psycopg.Connection,
+        login_id: int,
+        tentativas_falhas: int,
+        ultimo_login_em: datetime | None,
+    ) -> None:
+        if ultimo_login_em is not None and ultimo_login_em.tzinfo is None:
+            ultimo_login_em = ultimo_login_em.replace(tzinfo=timezone.utc)
+
+        atualizacao_recente = (
+            ultimo_login_em is not None
+            and ultimo_login_em > datetime.now(timezone.utc) - timedelta(minutes=1)
+        )
+        if tentativas_falhas == 0 and atualizacao_recente:
+            return
+
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -181,7 +275,6 @@ class LoginService:
         logger.debug("Iniciando registro de login para %s", email_normalizado)
 
         with psycopg.connect(**self.conn_params) as conn:
-            self._ensure_login_security_columns(conn)
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -275,8 +368,19 @@ class LoginService:
         email_normalizado = email.lower().strip()
         logger.debug("Iniciando autenticação para %s", email_normalizado)
 
+        cached = self._get_cached_auth(email_normalizado, senha)
+        if cached:
+            return cached
+
+        with LoginService._auth_refresh_lock:
+            cached = self._get_cached_auth(email_normalizado, senha)
+            if cached:
+                return cached
+
+            return self._autenticar_sem_cache(email_normalizado, senha)
+
+    def _autenticar_sem_cache(self, email_normalizado: str, senha: str) -> LoginResult:
         with psycopg.connect(**self.conn_params) as conn:
-            self._ensure_login_security_columns(conn)
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -286,6 +390,8 @@ class LoginService:
                            login.email,
                            login.senha,
                            login.bloqueado_ate,
+                           login.tentativas_falhas,
+                           login.ultimo_login_em,
                            empresas.nome,
                            COALESCE(empresas.tem_sped, false)
                     FROM public.login AS login
@@ -312,6 +418,8 @@ class LoginService:
                     email_db,
                     senha_armazenada,
                     bloqueado_ate,
+                    tentativas_falhas,
+                    ultimo_login_em,
                     empresa_nome,
                     tem_sped,
                 ) = login
@@ -334,7 +442,7 @@ class LoginService:
                 if not self._verificar_senha(senha, senha_armazenada):
                     self._registrar_falha_login(conn, login_id, email_db)
 
-            self._resetar_falhas_login(conn, login_id)
+            self._resetar_falhas_login(conn, login_id, tentativas_falhas or 0, ultimo_login_em)
             log_security_event(
                 "login_succeeded",
                 outcome="success",
@@ -344,7 +452,7 @@ class LoginService:
                 cnpj=cnpj,
             )
 
-            return LoginResult(
+            result = LoginResult(
                 login_id=login_id,
                 empresa_id=empresa_id,
                 cnpj=cnpj,
@@ -352,3 +460,5 @@ class LoginService:
                 empresa_nome=self._nome_empresa_completo(empresa_nome),
                 tem_sped=bool(tem_sped),
             )
+            self._set_cached_auth(email_normalizado, senha, result)
+            return result

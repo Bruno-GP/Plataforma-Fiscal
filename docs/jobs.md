@@ -25,6 +25,8 @@ O cliente deve consultar:
 - `GET /api/jobs`
 - `GET /api/jobs/metrics`
 
+Essas consultas exigem autenticacao. Listagens e metricas sao filtradas pelo CNPJ da sessao autenticada, usando o CNPJ gravado no payload do job. A consulta direta de um job de outra empresa retorna `404`.
+
 Enquanto o job estiver em fila ou execucao, a UI deve mostrar progresso por `total_itens`, `itens_processados`, `mensagem` e `status`.
 
 ## Tipos de job
@@ -62,7 +64,7 @@ Com Docker Compose, os servicos `celery-worker-default`, `celery-worker-nfe` e `
 
 ## Tabela de controle
 
-A tabela `processing_jobs` e criada automaticamente pelo `JobsRepository` se ainda nao existir. Campos principais:
+A tabela `processing_jobs` e criada pela migration inicial Alembic. O `JobsRepository` apenas valida a existencia da tabela, das colunas esperadas e da constraint de status antes do uso. Campos principais:
 
 - `id`
 - `tipo`

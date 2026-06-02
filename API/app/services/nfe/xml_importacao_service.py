@@ -18,6 +18,8 @@ class XMLImportacaoResultado:
 
 
 class XMLImportacaoService:
+  """Gerencia o staging de XMLs antes do processamento assíncrono de KPIs."""
+
   def __init__(self):
     self.config = carregar_config_postgres()
 
@@ -26,6 +28,8 @@ class XMLImportacaoService:
     arquivos: Iterable[tuple[str, bytes]],
     cnpj_empresa_origem: str,
   ) -> list[XMLImportacaoResultado]:
+    """Valida CNPJ/autorização e persiste XMLs únicos por hash no staging."""
+
     resultados: list[XMLImportacaoResultado] = []
     
     cnpj_empresa_origem_normalizado = self._normalizar_cnpj(cnpj_empresa_origem)
@@ -40,7 +44,7 @@ class XMLImportacaoService:
       user=self.config["user"],
       password=self.config["password"],
     ) as conn:
-      self._garantir_tabela(conn)
+      self._validar_tabela_staging(conn)
 
       for nome_arquivo, conteudo in arquivos:
         cnpj_emitente = self._extrair_cnpj_emitente(conteudo)
@@ -131,28 +135,45 @@ class XMLImportacaoService:
 
     return resultados
 
-  def _garantir_tabela(self, conn: psycopg.Connection) -> None:
+  def _validar_tabela_staging(self, conn: psycopg.Connection) -> None:
+    required_columns = {
+      "id",
+      "cnpj_emitente",
+      "nome_arquivo",
+      "hash_arquivo",
+      "tamanho_bytes",
+      "conteudo_xml",
+      "processado_em",
+      "criado_em",
+    }
+
     with conn.cursor() as cur:
+      cur.execute("SELECT to_regclass('public.notas_xml_importados')")
+      if cur.fetchone()[0] is None:
+        raise RuntimeError(
+          "Tabela public.notas_xml_importados nao encontrada. Execute as migrations Alembic antes de importar XML."
+        )
+
       cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS notas_xml_importados (
-          id BIGSERIAL PRIMARY KEY,
-          cnpj_emitente VARCHAR(20) NOT NULL,
-          nome_arquivo TEXT NOT NULL,
-          hash_arquivo VARCHAR(64) NOT NULL,
-          tamanho_bytes BIGINT,
-          conteudo_xml BYTEA,
-          processado_em TIMESTAMPTZ,
-          criado_em TIMESTAMPTZ DEFAULT NOW(),
-          UNIQUE (cnpj_emitente, hash_arquivo)
-        )
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'notas_xml_importados'
         """
       )
-      
-      cur.execute("ALTER TABLE notas_xml_importados ADD COLUMN IF NOT EXISTS conteudo_xml BYTEA")
-      cur.execute("ALTER TABLE notas_xml_importados ADD COLUMN IF NOT EXISTS processado_em TIMESTAMPTZ")
+      existing_columns = {row[0] for row in cur.fetchall()}
+
+    missing_columns = sorted(required_columns - existing_columns)
+    if missing_columns:
+      raise RuntimeError(
+        "Tabela public.notas_xml_importados incompleta. Execute as migrations Alembic. "
+        f"Colunas ausentes: {', '.join(missing_columns)}."
+      )
 
   def listar_xmls_importados_nao_processados(self, cnpj_emitente: str) -> list[tuple[int, str, bytes]]:
+    """Retorna XMLs pendentes em ordem estável para o worker processar em lote."""
+
     cnpj_emitente_normalizado = self._normalizar_cnpj(cnpj_emitente)
     if not cnpj_emitente_normalizado:
       return []
@@ -164,7 +185,7 @@ class XMLImportacaoService:
       user=self.config["user"],
       password=self.config["password"],
     ) as conn:
-      self._garantir_tabela(conn)
+      self._validar_tabela_staging(conn)
 
       with conn.cursor() as cur:
         cur.execute(
@@ -182,6 +203,8 @@ class XMLImportacaoService:
       return [(row[0], row[1], bytes(row[2]) if row[2] else b"") for row in rows]
 
   def marcar_como_processados(self, ids_xml: list[int]) -> None:
+    """Marca XMLs como processados somente após o job concluir a consolidação com sucesso."""
+
     if not ids_xml:
       return
 
@@ -215,7 +238,7 @@ class XMLImportacaoService:
       user=self.config["user"],
       password=self.config["password"],
     ) as conn:
-      self._garantir_tabela(conn)
+      self._validar_tabela_staging(conn)
 
       with conn.cursor() as cur:
         cur.execute(

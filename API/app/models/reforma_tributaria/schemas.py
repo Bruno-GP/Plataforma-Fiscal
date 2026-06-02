@@ -163,3 +163,30 @@ class ConsultaMemoriaCalculoTributariaResponse(BaseModel):
   limite: int
   offset: int
   resultados: list[MemoriaCalculoTributariaItem] = Field(default_factory=list)
+
+
+class BackfillReformaPeriodoItem(BaseModel):
+  origem: str
+  periodo_ano: int
+  periodo_mes: int
+  documentos: int = 0
+  xmls_importados_lidos: int = 0
+  xmls_periodo: int = 0
+  xmls_com_reforma: int = 0
+  notas_reforma_reconstruidas: int = 0
+  itens_reforma_xml: int = 0
+  tributos_reforma_inseridos: int = 0
+  documentos_tributos: int = 0
+  itens_tributos: int = 0
+  debitos: int = 0
+  creditos: int = 0
+  memorias: int = 0
+  apuracoes: int = 0
+
+
+class BackfillReformaTributariaResponse(BaseModel):
+  status: str
+  emitente_cnpj: str
+  origem: str
+  periodos_processados: int = 0
+  resultados: list[BackfillReformaPeriodoItem] = Field(default_factory=list)

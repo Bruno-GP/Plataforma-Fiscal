@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Link, Navigate, useLocation } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link, Navigate } from 'react-router-dom';
 
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,26 +16,14 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const { isAuthenticated, isReady, user } = useAuth();
-  const location = useLocation();
-  const [totalPendentes, setTotalPendentes] = useState(0);
+  const pendenciasQuery = useQuery({
+    queryKey: ['layout-pendencias-xml', user?.emitente_cnpj],
+    queryFn: () => consultarPendenciasXmlImportados(user?.emitente_cnpj ?? ''),
+    enabled: isAuthenticated && Boolean(user?.emitente_cnpj) && !user?.tem_sped,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    const carregarPendencias = async () => {
-      if (!user?.emitente_cnpj || user.tem_sped) {
-        setTotalPendentes(0);
-        return;
-      }
-
-      try {
-        const response = await consultarPendenciasXmlImportados(user.emitente_cnpj);
-        setTotalPendentes(response.total_pendentes);
-      } catch {
-        setTotalPendentes(0);
-      }
-    };
-
-    void carregarPendencias();
-  }, [location.pathname, user?.emitente_cnpj, user?.tem_sped]);
+  const totalPendentes = pendenciasQuery.data?.total_pendentes ?? 0;
 
   if (!isReady) {
     return null;

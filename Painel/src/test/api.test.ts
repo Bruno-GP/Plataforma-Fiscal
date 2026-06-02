@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clearAuthSession,
   readAuthSession,
+  resolveRawApiBaseUrl,
   saveAuthSession,
   type AuthSession,
 } from '@/services/api';
@@ -49,5 +50,44 @@ describe('auth session helpers', () => {
     saveAuthSession(makeSession(Date.now() - 1_000));
 
     expect(readAuthSession()).toBeNull();
+  });
+});
+
+describe('api base url configuration', () => {
+  it('usa localhost como fallback apenas em desenvolvimento', () => {
+    expect(resolveRawApiBaseUrl({ PROD: false })).toBe('http://localhost:8000');
+  });
+
+  it('exige VITE_API_URL em producao', () => {
+    expect(() => resolveRawApiBaseUrl({ PROD: true })).toThrow(
+      'VITE_API_URL deve apontar para a API publica',
+    );
+  });
+
+  it('rejeita localhost em producao', () => {
+    expect(() =>
+      resolveRawApiBaseUrl({
+        PROD: true,
+        VITE_API_URL: 'http://localhost:8000',
+      }),
+    ).toThrow('VITE_API_URL nao pode apontar para localhost');
+  });
+
+  it('rejeita URL sem protocolo', () => {
+    expect(() =>
+      resolveRawApiBaseUrl({
+        PROD: true,
+        VITE_API_URL: 'plataforma-fiscal.vercel.app',
+      }),
+    ).toThrow('VITE_API_URL deve ser uma URL absoluta');
+  });
+
+  it('aceita URL publica em producao', () => {
+    expect(
+      resolveRawApiBaseUrl({
+        PROD: true,
+        VITE_API_URL: 'https://api.plataforma-fiscal.com.br',
+      }),
+    ).toBe('https://api.plataforma-fiscal.com.br');
   });
 });

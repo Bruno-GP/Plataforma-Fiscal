@@ -127,6 +127,16 @@ class SpedImportacaoService:
     self._cache_municipios: dict[str, str | None] = {}
     self._municipios_por_codigo = self._carregar_municipios_locais()
 
+  def _conn_params(self) -> dict:
+    return {
+      "host": self.config["host"],
+      "port": self.config["port"],
+      "dbname": self.config["database"],
+      "user": self.config["user"],
+      "password": self.config["password"],
+      **({"sslmode": self.config["sslmode"]} if self.config.get("sslmode") else {}),
+    }
+
   def importar_arquivos(
     self,
     arquivos: Iterable[tuple[str, bytes]],
@@ -140,13 +150,7 @@ class SpedImportacaoService:
     if not cnpj_normalizado:
       raise ValueError("CNPJ de origem inválido.")
 
-    with psycopg.connect(
-      host=self.config["host"],
-      port=self.config["port"],
-      dbname=self.config["database"],
-      user=self.config["user"],
-      password=self.config["password"],
-    ) as conn:
+    with psycopg.connect(**self._conn_params()) as conn:
       self._validar_tabela_staging(conn)
 
       for nome_arquivo, conteudo in arquivos:
@@ -231,13 +235,7 @@ class SpedImportacaoService:
     if not cnpj_normalizado:
       return 0
 
-    with psycopg.connect(
-      host=self.config["host"],
-      port=self.config["port"],
-      dbname=self.config["database"],
-      user=self.config["user"],
-      password=self.config["password"],
-    ) as conn:
+    with psycopg.connect(**self._conn_params()) as conn:
       self._validar_tabela_staging(conn)
 
       with conn.cursor() as cur:
@@ -265,13 +263,7 @@ class SpedImportacaoService:
     total_linhas = 0
     ids_processados: list[int] = []
 
-    with psycopg.connect(
-      host=self.config["host"],
-      port=self.config["port"],
-      dbname=self.config["database"],
-      user=self.config["user"],
-      password=self.config["password"],
-    ) as conn:
+    with psycopg.connect(**self._conn_params()) as conn:
       self._validar_tabela_staging(conn)
       self._validar_tabelas_analiticas(conn)
 
@@ -315,13 +307,7 @@ class SpedImportacaoService:
     if not ids_sped:
       return
 
-    with psycopg.connect(
-      host=self.config["host"],
-      port=self.config["port"],
-      dbname=self.config["database"],
-      user=self.config["user"],
-      password=self.config["password"],
-    ) as conn:
+    with psycopg.connect(**self._conn_params()) as conn:
       with conn.cursor() as cur:
         cur.execute(
           """

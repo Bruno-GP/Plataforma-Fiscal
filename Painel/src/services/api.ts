@@ -1,4 +1,41 @@
-const RAW_API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+interface ApiEnvironment {
+  PROD: boolean;
+  VITE_API_URL?: string;
+}
+
+const DEFAULT_DEV_API_BASE_URL = 'http://localhost:8000';
+const LOCALHOST_API_URL_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i;
+const HTTP_API_URL_PATTERN = /^https?:\/\//i;
+
+export const resolveRawApiBaseUrl = (env: ApiEnvironment) => {
+  const configuredUrl = env.VITE_API_URL?.trim();
+
+  if (!configuredUrl) {
+    if (env.PROD) {
+      throw new Error(
+        'VITE_API_URL deve apontar para a API publica no build de producao.',
+      );
+    }
+
+    return DEFAULT_DEV_API_BASE_URL;
+  }
+
+  if (!HTTP_API_URL_PATTERN.test(configuredUrl)) {
+    throw new Error(
+      'VITE_API_URL deve ser uma URL absoluta iniciando com http:// ou https://.',
+    );
+  }
+
+  if (env.PROD && LOCALHOST_API_URL_PATTERN.test(configuredUrl)) {
+    throw new Error(
+      'VITE_API_URL nao pode apontar para localhost no build de producao.',
+    );
+  }
+
+  return configuredUrl;
+};
+
+const RAW_API_BASE_URL = resolveRawApiBaseUrl(import.meta.env);
 
 export const API_BASE_URL = RAW_API_BASE_URL.endsWith('/api')
   ? RAW_API_BASE_URL

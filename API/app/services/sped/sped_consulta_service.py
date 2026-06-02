@@ -200,6 +200,7 @@ class SpedConsultaService:
       "user": config["user"],
       "password": config["password"],
       "connect_timeout": 5,
+      **({"sslmode": config["sslmode"]} if config.get("sslmode") else {}),
     }
 
   def listar_kpis(

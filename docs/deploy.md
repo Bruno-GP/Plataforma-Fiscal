@@ -69,6 +69,65 @@ Painel:
 
 - `VITE_API_URL`.
 
+## Configuracao dev x producao
+
+Desenvolvimento local:
+
+```env
+# API
+APP_ENV=development
+CORS_ALLOW_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080
+CORS_ALLOW_ORIGIN_REGEX=https?://(localhost|127\.0\.0\.1)(:\d+)?$
+CORS_ALLOW_CREDENTIALS=true
+AUTH_COOKIE_SECURE=false
+AUTH_COOKIE_SAMESITE=lax
+
+# Painel
+VITE_API_URL=http://localhost:8000
+```
+
+Producao com Painel na Vercel e API em dominio proprio:
+
+```env
+# API
+APP_ENV=production
+CORS_ALLOW_ORIGINS=https://plataforma-fiscal.vercel.app
+CORS_ALLOW_ORIGIN_REGEX=
+CORS_ALLOW_CREDENTIALS=true
+AUTH_COOKIE_SECURE=true
+AUTH_COOKIE_SAMESITE=none
+
+# Painel
+VITE_API_URL=https://api.seu-dominio.com
+```
+
+Producao com PostgreSQL gerenciado:
+
+```env
+# Banco unico para NFe/XML, SPED, auth, jobs e referenciais
+DATABASE_URL=postgresql://usuario:senha@host-do-banco:5432/plataforma_fiscal?sslmode=require
+POSTGRES_DSN=postgresql://usuario:senha@host-do-banco:5432/plataforma_fiscal?sslmode=require
+POSTGRES_NFE_DSN=postgresql://usuario:senha@host-do-banco:5432/plataforma_fiscal?sslmode=require
+POSTGRES_SPED_DSN=postgresql://usuario:senha@host-do-banco:5432/plataforma_fiscal?sslmode=require
+
+# Alternativa quando o provedor entrega SSL separado da URL
+POSTGRES_SSLMODE=require
+POSTGRES_NFE_SSLMODE=require
+POSTGRES_SPED_SSLMODE=require
+```
+
+Se NFe/XML e SPED estiverem em bancos diferentes, mantenha `POSTGRES_NFE_DSN` e `POSTGRES_SPED_DSN`
+apontando para os respectivos bancos. `DATABASE_URL`/`POSTGRES_DSN` continuam sendo usados por Alembic,
+auth, jobs e servicos compartilhados, entao eles devem apontar para o banco que contem o schema principal.
+
+Se a API e o Painel ficarem no mesmo site registravel, por exemplo
+`https://app.seu-dominio.com` e `https://api.seu-dominio.com`, `AUTH_COOKIE_SAMESITE=lax`
+pode ser suficiente. Se a API ficar em outro site, como Render/Railway/Fly e o Painel em
+`vercel.app`, use `AUTH_COOKIE_SAMESITE=none` com `AUTH_COOKIE_SECURE=true`.
+
+Nunca publique o Painel com `VITE_API_URL=http://localhost:8000`: o navegador do usuario tentara chamar
+a propria maquina dele, nao a API de producao.
+
 ## Build do frontend
 
 ```bash
@@ -76,7 +135,8 @@ cd Painel
 npm run build
 ```
 
-O build gera `Painel/dist`.
+O build gera `Painel/dist`. Em build de producao, `VITE_API_URL` e obrigatoria e nao pode apontar para
+`localhost` ou `127.0.0.1`.
 
 ## Execucao da API em producao
 

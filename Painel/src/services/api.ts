@@ -56,6 +56,7 @@ export interface SessionUser {
 export interface AuthSession {
   user: SessionUser;
   expiresAt: number;
+  accessToken?: string;
 }
 
 export const readAuthSession = (): AuthSession | null => {
@@ -95,6 +96,11 @@ export const clearAuthSession = () => {
 
 export const apiFetch = (input: string, init: RequestInit = {}) => {
   const headers = new Headers(init.headers);
+  const session = readAuthSession();
+
+  if (session?.accessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${session.accessToken}`);
+  }
 
   return fetch(input, {
     ...init,

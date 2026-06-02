@@ -43,8 +43,13 @@ def _build_auth_payload(resultado) -> tuple[AuthenticatedUser, str, int]:
     return user, access_token, expires_in
 
 
-def _build_response_payload(user: AuthenticatedUser, expires_in: int, status_value: str) -> dict:
-    return {
+def _build_response_payload(
+    user: AuthenticatedUser,
+    expires_in: int,
+    status_value: str,
+    access_token: str | None = None,
+) -> dict:
+    payload = {
         "status": status_value,
         "login_id": user.login_id,
         "empresa_id": user.empresa_id,
@@ -54,6 +59,9 @@ def _build_response_payload(user: AuthenticatedUser, expires_in: int, status_val
         "tem_sped": user.tem_sped,
         "expires_in": expires_in,
     }
+    if access_token is not None:
+        payload["access_token"] = access_token
+    return payload
 
 
 @auth_router.post(
@@ -83,7 +91,7 @@ def registrar_login(request: LoginCadastroRequest, response: Response):
 
     user, access_token, expires_in = _build_auth_payload(resultado)
     set_auth_cookie(response, access_token, expires_in)
-    return LoginCadastroResponse(**_build_response_payload(user, expires_in, "ok"))
+    return LoginCadastroResponse(**_build_response_payload(user, expires_in, "ok", access_token))
 
 
 @auth_router.post("/entrar", response_model=LoginResponse)
@@ -106,7 +114,7 @@ def autenticar_login(request: LoginRequest, response: Response):
 
     user, access_token, expires_in = _build_auth_payload(resultado)
     set_auth_cookie(response, access_token, expires_in)
-    return LoginResponse(**_build_response_payload(user, expires_in, "ok"))
+    return LoginResponse(**_build_response_payload(user, expires_in, "ok", access_token))
 
 
 @auth_router.get("/sessao", response_model=SessaoResponse)

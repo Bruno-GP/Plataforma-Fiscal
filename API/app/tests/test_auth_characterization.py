@@ -65,6 +65,8 @@ def test_auth_registrar_preserva_status_cookie_e_payload(client, monkeypatch):
     assert payload["empresa_nome"] == "Empresa Teste"
     assert payload["tem_sped"] is False
     assert payload["expires_in"] > 0
+    assert isinstance(payload["access_token"], str)
+    assert payload["access_token"]
     assert "plataforma_fiscal_session=" in response.headers["set-cookie"]
     assert "HttpOnly" in response.headers["set-cookie"]
 
@@ -81,6 +83,8 @@ def test_auth_entrar_preserva_status_cookie_e_payload(client, monkeypatch):
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["email"] == "teste@example.com"
+    assert isinstance(payload["access_token"], str)
+    assert payload["access_token"]
     assert "plataforma_fiscal_session=" in response.headers["set-cookie"]
 
 

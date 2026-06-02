@@ -50,6 +50,7 @@ interface LoginResponse {
   empresa_nome: string;
   tem_sped?: boolean;
   expires_in: number;
+  access_token?: string;
 }
 
 interface ApiErrorDetail {
@@ -151,6 +152,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     saveAuthSession({
       user: nextUser,
       expiresAt: Date.now() + data.expires_in * 1000,
+      accessToken: data.access_token ?? readAuthSession()?.accessToken,
     });
   };
 

@@ -18,6 +18,7 @@ class LoginCadastroResponse(BaseModel):
     empresa_nome: str
     tem_sped: bool
     expires_in: int
+    access_token: str
 
 
 class LoginRequest(BaseModel):
@@ -34,6 +35,7 @@ class LoginResponse(BaseModel):
     empresa_nome: str
     tem_sped: bool
     expires_in: int
+    access_token: str
 
 
 class SessaoResponse(BaseModel):

@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  apiFetch,
   clearAuthSession,
   readAuthSession,
   resolveRawApiBaseUrl,
@@ -17,6 +18,7 @@ const makeSession = (expiresAt: number): AuthSession => ({
     tem_sped: false,
   },
   expiresAt,
+  accessToken: 'token-teste',
 });
 
 describe('auth session helpers', () => {
@@ -50,6 +52,18 @@ describe('auth session helpers', () => {
     saveAuthSession(makeSession(Date.now() - 1_000));
 
     expect(readAuthSession()).toBeNull();
+  });
+
+  it('envia Bearer token salvo como fallback de autenticacao', async () => {
+    saveAuthSession(makeSession(Date.now() + 60_000));
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiFetch('https://api.example.com/api/auth/sessao');
+
+    const [, requestInit] = fetchMock.mock.calls[0]!;
+    expect((requestInit?.headers as Headers).get('Authorization')).toBe('Bearer token-teste');
+    expect(requestInit?.credentials).toBe('include');
   });
 });
 

@@ -1,6 +1,6 @@
 import os
 
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 def _first_non_empty(*keys: str, default: str | None = None) -> str | None:
   for key in keys:
@@ -26,12 +26,15 @@ def _config_from_dsn(dsn: str | None) -> dict:
   if parsed.scheme not in {"postgres", "postgresql"}:
     return {}
 
+  query = parse_qs(parsed.query)
+
   return {
     "host": parsed.hostname,
     "port": parsed.port,
     "database": parsed.path[1:] if parsed.path else None,
     "user": unquote(parsed.username) if parsed.username else None,
     "password": unquote(parsed.password) if parsed.password else None,
+    "sslmode": query.get("sslmode", [None])[0],
   }
 
 def carregar_config_postgres_sped() -> dict:
@@ -70,5 +73,11 @@ def carregar_config_postgres_sped() -> dict:
       "POSTGRES_PASSWORD",
       "PGPASSWORD",
       default=dsn_config.get("password") or "postgres",
+    ),
+    "sslmode": _first_non_empty(
+      "POSTGRES_SPED_SSLMODE",
+      "POSTGRES_SSLMODE",
+      "PGSSLMODE",
+      default=dsn_config.get("sslmode"),
     ),
   }

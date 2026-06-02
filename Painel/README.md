@@ -66,6 +66,20 @@ Para producao, o projeto pode usar `Painel/.env.production`:
 VITE_API_URL=https://api-plataforma-fiscal.onrender.com
 ```
 
+Na Vercel, configure `VITE_API_URL` nas variaveis do projeto antes do build. Em producao, o Painel
+recusa `localhost` para evitar que um deploy publicado tente chamar `http://localhost:8000` no navegador
+do usuario. O valor deve ser uma URL absoluta, incluindo `https://`.
+
+No backend de producao, libere a origem exata do Painel:
+
+```env
+APP_ENV=production
+CORS_ALLOW_ORIGINS=https://plataforma-fiscal.vercel.app
+CORS_ALLOW_CREDENTIALS=true
+```
+
+Se a API estiver em outro site, use tambem `AUTH_COOKIE_SECURE=true` e `AUTH_COOKIE_SAMESITE=none`.
+
 Normalizacao automatica:
 
 - `http://localhost:8000` -> `http://localhost:8000/api`

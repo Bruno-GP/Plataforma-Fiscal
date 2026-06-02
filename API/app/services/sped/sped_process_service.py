@@ -12,18 +12,22 @@ from app.services.sped.postgres_config import carregar_config_postgres_sped
 class ProcessarSpedFiscalService:
   def __init__(self):
     self.config = carregar_config_postgres_sped()
+
+  def _conn_params(self) -> dict:
+    return {
+      "host": self.config["host"],
+      "port": self.config["port"],
+      "dbname": self.config["database"],
+      "user": self.config["user"],
+      "password": self.config["password"],
+      **({"sslmode": self.config["sslmode"]} if self.config.get("sslmode") else {}),
+    }
   
   def executar(self, request: ProcessarSpedFiscalRequest) -> ProcessarSpedFiscalResponse:
     config = self.config
 
     # Validação rápida da conexão do banco SPED antes do processamento completo.
-    with connect(
-      host=config["host"],
-      port=config["port"],
-      dbname=config["database"],
-      user=config["user"],
-      password=config["password"],
-    ) as conn:
+    with connect(**self._conn_params()) as conn:
       with conn.cursor() as cur:
         cur.execute("SELECT 1")
 

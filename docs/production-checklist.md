@@ -29,8 +29,14 @@
 - `AUTH_SECRET_KEY` forte e diferente do padrao.
 - HTTPS ativo.
 - Cookies seguros configurados.
-- CORS restrito ao dominio do painel.
+- CORS restrito ao dominio exato do painel, por exemplo `CORS_ALLOW_ORIGINS=https://plataforma-fiscal.vercel.app`.
+- `CORS_ALLOW_CREDENTIALS=true`, sem wildcard em `CORS_ALLOW_ORIGINS`.
+- `VITE_API_URL` do Painel apontando para a API publica, nunca para `localhost`.
+- Se API e Painel estiverem em sites diferentes, `AUTH_COOKIE_SAMESITE=none` e `AUTH_COOKIE_SECURE=true`.
 - Bancos NFe/XML e SPED criados e acessiveis.
+- `DATABASE_URL`/`POSTGRES_DSN` apontando para o banco principal de producao.
+- `POSTGRES_NFE_DSN` e `POSTGRES_SPED_DSN` definidos quando houver bancos separados.
+- `sslmode=require` no DSN ou `POSTGRES_SSLMODE=require` quando o provedor exigir SSL.
 - Migrations revisadas e aplicadas.
 - Backup feito e restore testado.
 - `npm run build` do Painel executado com sucesso.

@@ -10,12 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { API_BASE_URL } from '@/services/api';
 
 const BRAZIL_STATES_GEOJSON_URL =
   'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson';
 
 const IBGE_CITIES_GEOJSON_URL = (uf: string) =>
-  `${import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? 'http://localhost:8000'}/api/geo/municipios/${uf}`;
+  `${API_BASE_URL}/geo/municipios/${uf}`;
 
 const stateNameToUf: Record<string, string> = {
   acre: 'AC',

@@ -29,10 +29,29 @@ if config.config_file_name is not None:
 target_metadata = None
 
 
+def _first_non_empty(*keys: str) -> str | None:
+    for key in keys:
+        value = os.getenv(key)
+        if value is not None and value.strip():
+            return value.strip()
+    return None
+
+
 def _database_url() -> str:
-    url = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_DSN")
+    url = _first_non_empty(
+        "ALEMBIC_DATABASE_URL",
+        "DATABASE_URL",
+        "POSTGRES_DSN",
+        "POSTGRES_NFE_DSN",
+    )
     if url:
         return url
+
+    if os.getenv("APP_ENV", "").strip().lower() == "production":
+        raise RuntimeError(
+            "Defina ALEMBIC_DATABASE_URL, DATABASE_URL, POSTGRES_DSN ou "
+            "POSTGRES_NFE_DSN para executar migrations em producao."
+        )
 
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")

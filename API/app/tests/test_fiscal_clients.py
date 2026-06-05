@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.services.fiscal_clients import (
+from app.services.fiscal.fiscal_clients import (
     construir_filtros_clientes_nfe,
     construir_filtros_clientes_sped,
     construir_item_cliente_analise,

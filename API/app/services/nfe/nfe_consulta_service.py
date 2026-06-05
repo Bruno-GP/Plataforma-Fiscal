@@ -13,7 +13,7 @@ from app.models.nfe.schemas import (
 )
 from app.repositories.nfe.consulta_repository import NFeConsultaRepository
 from app.services.nfe.empresa_service import normalizar_cnpj
-from app.services.fiscal_analysis import (
+from app.services.fiscal.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
   obter_total_impostos_complementares_documentos,
@@ -21,16 +21,16 @@ from app.services.fiscal_analysis import (
   obter_total_tributos_reforma_documentos,
   obter_regiao_por_uf,
 )
-from app.services.fiscal_clients import (
+from app.services.fiscal.fiscal_clients import (
   construir_filtros_clientes_nfe,
   construir_ranking_clientes,
   construir_resposta_analise_clientes,
 )
-from app.services.fiscal_dimensions import (
+from app.services.fiscal.fiscal_dimensions import (
   construir_resposta_fiscal_cfop,
   construir_resposta_fiscal_ncm,
 )
-from app.services.fiscal_hierarchy import (
+from app.services.fiscal.fiscal_hierarchy import (
   calcular_percentual_imposto,
   construir_filtros_hierarquia_nfe,
   construir_item_cidade,
@@ -43,7 +43,7 @@ from app.services.fiscal_hierarchy import (
   normalizar_paginacao_hierarquia,
   resolver_nivel_hierarquia,
 )
-from app.services.fiscal_kpis import (
+from app.services.fiscal.fiscal_kpis import (
   construir_comparativo_kpis,
   construir_dashboard_vendas_response,
   construir_nfe_kpi_consulta_de_row,
@@ -56,14 +56,14 @@ from app.services.fiscal_kpis import (
   resolver_periodo_anterior_kpi,
   selecionar_resultados_dashboard,
 )
-from app.services.fiscal_purchases import (
+from app.services.fiscal.fiscal_purchases import (
   construir_filtros_compras_nfe,
   construir_params_com_limite_compras,
   construir_ranking_fornecedores_compras,
   construir_ranking_produtos_compras,
   construir_resposta_analise_compras,
 )
-from app.services.fiscal_sales import (
+from app.services.fiscal.fiscal_sales import (
   CFOPS_FATURAMENTO_VENDA,
   construir_params_com_limite,
   construir_ranking_cfops_vendas,

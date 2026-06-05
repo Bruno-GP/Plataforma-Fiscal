@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.services.fiscal_sales import (
+from app.services.fiscal.fiscal_sales import (
     construir_filtros_vendas_sped,
     construir_item_cfop_vendas,
     construir_params_com_limite,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import psycopg
 
-from app.services.fiscal_sales import obter_cfops_faturamento_venda
+from app.services.fiscal.fiscal_sales import obter_cfops_faturamento_venda
 
 
 class NFeRepository:

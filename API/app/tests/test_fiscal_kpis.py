@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.services.fiscal_kpis import (
+from app.services.fiscal.fiscal_kpis import (
     calcular_variacao_percentual,
     construir_comparativo_kpis,
     construir_dashboard_vendas_response,

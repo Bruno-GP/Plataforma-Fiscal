@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.services.fiscal_hierarchy import (
+from app.services.fiscal.fiscal_hierarchy import (
     calcular_imposto_por_percentual,
     calcular_percentual_imposto,
     construir_filtros_hierarquia_nfe,

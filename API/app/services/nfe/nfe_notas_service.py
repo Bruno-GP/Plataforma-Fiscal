@@ -6,7 +6,7 @@ from datetime import date
 import psycopg
 
 from app.domain.nfe.extractor import NotaExtraida, ItemNota
-from app.services.fiscal_sales import obter_cfops_faturamento_venda
+from app.services.fiscal.fiscal_sales import obter_cfops_faturamento_venda
 from app.repositories.nfe.nfe_repository import NFeRepository
 from app.services.nfe.postres_config import carregar_config_postgres
 from app.services.nfe.empresa_service import normalizar_cnpj

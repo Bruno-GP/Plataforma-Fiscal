@@ -10,7 +10,7 @@ from app.repositories.reforma_tributaria.xml_importado_repository import (
     remover_tributos_reforma_nota,
     tabela_xml_importados_existe,
 )
-from app.services.fiscal_analysis import (
+from app.services.fiscal.fiscal_analysis import (
     FiscalDimensionConfig,
     _adicionar_limite,
     _construir_case_categoria_fiscal,

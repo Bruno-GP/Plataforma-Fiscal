@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import HTTPException, status
 
 from app.api.shared.analytics import obter_periodo_anterior
-from app.services.fiscal_analysis import (
+from app.services.fiscal.fiscal_analysis import (
     obter_total_impostos_complementares_documentos,
     obter_total_tributos_reforma_documentos,
 )

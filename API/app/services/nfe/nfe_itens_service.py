@@ -5,6 +5,7 @@ from decimal import Decimal
 import psycopg
 
 from app.domain.nfe.extractor import NotaExtraida
+from app.repositories.nfe.itens_repository import NFeItensRepository
 from app.services.NCM.ibpt_sync_service import IBPTSyncService
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.nfe.postres_config import carregar_config_postgres
@@ -42,7 +43,16 @@ class NFeItensService:
             "password": config["password"],
             "connect_timeout": 5,
         }
+        self.itens_repository = NFeItensRepository(self.conn_params)
         self._ncm_fallback_cache: set[str] = set()
+
+    def _itens_repository(self) -> NFeItensRepository:
+        repository = getattr(self, "itens_repository", None)
+        if repository is None:
+            repository = NFeItensRepository(self.conn_params)
+            self.itens_repository = repository
+
+        return repository
 
     def registrar_itens(
         self,
@@ -56,83 +66,22 @@ class NFeItensService:
             logger.info("Nenhuma nota para registrar itens")
             return 0
 
-        sql_buscar_nota = """
-            SELECT
-                n.id,
-                p.empresa_id,
-                p.cnpj_emitente
-            FROM public.notas AS n
-            JOIN public.notas_processamentos AS p
-              ON p.id = n.processamento_id
-            WHERE n.numero_nf = %s
-              AND n.emitente_cnpj = %s
-              AND COALESCE(n.modelo, '') = COALESCE(%s, '')
-              AND n.data_emissao = %s
-            LIMIT 1;
-        """
-
-        sql_insert_item = """
-            WITH atualizacao AS (
-                UPDATE public.notas_itens
-                SET
-                    empresa_id = %s,
-                    cnpj = %s,
-                    descricao = %s,
-                    ncm = %s,
-                    cfop = %s,
-                    quantidade = %s,
-                    valor_unitario = %s,
-                    valor_total = %s
-                WHERE nota_id = %s
-                  AND item_numero = %s
-                  AND produto_codigo = %s
-                RETURNING id
-            ),
-            insercao AS (
-            INSERT INTO public.notas_itens (
-                nota_id,
-                empresa_id,
-                cnpj,
-                item_numero,
-                produto_codigo,
-                descricao,
-                ncm,
-                cfop,
-                quantidade,
-                valor_unitario,
-                valor_total
-            )
-            SELECT
-                %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, 
-                %s
-            WHERE NOT EXISTS (SELECT 1 FROM atualizacao)
-            RETURNING id
-            )
-            SELECT id FROM atualizacao
-            UNION ALL
-            SELECT id FROM insercao
-            LIMIT 1;
-        """
-
         try:
             #logger.debug("Abrindo conexão com PostgreSQL")
             #logger.debug("Conexão aberta com sucesso")
             with conn.cursor() as cur:
                 inseridos = 0
                 nota_ids_processadas: set[int] = set()
+                repository = self._itens_repository()
                 for nota in notas_list:
                     emitente_cnpj = normalizar_cnpj(nota.emitente_cnpj)
-                    cur.execute(
-                        sql_buscar_nota,
-                        (
-                            str(nota.numero_nf),
-                            emitente_cnpj,
-                            nota.modelo,
-                            nota.data_emissao,
-                        ),
+                    resultado = repository.obter_nota_para_registrar_itens(
+                        cur,
+                        str(nota.numero_nf),
+                        emitente_cnpj,
+                        nota.modelo,
+                        nota.data_emissao,
                     )
-                    resultado = cur.fetchone()
                     if not resultado:
                         logger.warning(
                             "Nota não encontrada para itens: %s/%s/%s",
@@ -150,35 +99,21 @@ class NFeItensService:
                         descricao = _limitar_texto(item.descricao, 255)
                         ncm = _limitar_texto(item.ncm, 20)
                         cfop = _limitar_texto(item.cfop, 10)
-                    
-                        cur.execute(
-                            sql_insert_item,
-                            (
-                                empresa_id,
-                                cnpj,
-                                descricao,
-                                ncm,
-                                cfop,
-                                item.quantidade,
-                                item.valor_unitario,
-                                item.valor_total,
-                                nota_id,
-                                item.numero_item,
-                                codigo_produto,
-                                nota_id,
-                                empresa_id,
-                                cnpj,
-                                item.numero_item,
-                                codigo_produto,
-                                descricao,
-                                ncm,
-                                cfop,
-                                item.quantidade,
-                                item.valor_unitario,
-                                item.valor_total,
-                            ),
+
+                        item_row = repository.upsert_item_nota(
+                            cur,
+                            nota_id=nota_id,
+                            empresa_id=empresa_id,
+                            cnpj=cnpj,
+                            item_numero=item.numero_item,
+                            produto_codigo=codigo_produto,
+                            descricao=descricao,
+                            ncm=ncm,
+                            cfop=cfop,
+                            quantidade=item.quantidade,
+                            valor_unitario=item.valor_unitario,
+                            valor_total=item.valor_total,
                         )
-                        item_row = cur.fetchone()
                         item_id = int(item_row[0]) if item_row else None
                         if item_id and getattr(item, "reforma_tributos", None):
                             self._registrar_tributos_reforma_item(
@@ -213,89 +148,27 @@ class NFeItensService:
         periodo_mes: int,
         item,
     ) -> None:
+        repository = self._itens_repository()
         ncm_codigo = self._garantir_ncm_catalogo(cur, item.ncm)
 
-        cur.execute(
-            """
-            DELETE FROM public.itens_documentos_fiscais_tributos it
-            USING public.tributos t
-            WHERE it.tributo_id = t.id
-              AND it.nota_item_id = %s
-              AND t.codigo = ANY(%s)
-            """,
-            (nota_item_id, ["CBS", "IBS", "IBS_UF", "IBS_MUN", "IS"]),
-        )
+        repository.remover_tributos_reforma_item(cur, nota_item_id)
 
         for tributo in item.reforma_tributos:
             valor_tributo = Decimal(tributo.get("valor_tributo") or 0)
             if valor_tributo == 0:
                 continue
 
-            cur.execute(
-                """
-                INSERT INTO public.itens_documentos_fiscais_tributos (
-                    nota_item_id,
-                    tributo_id,
-                    empresa_cnpj,
-                    periodo_ano,
-                    periodo_mes,
-                    numero_item,
-                    produto_codigo,
-                    ncm_codigo,
-                    cfop,
-                    cst_codigo,
-                    classificacao_tributaria,
-                    base_calculo,
-                    aliquota,
-                    valor_debito,
-                    valor_credito,
-                    valor_tributo,
-                    natureza,
-                    origem,
-                    status,
-                    observacoes
-                )
-                SELECT
-                    %s,
-                    t.id,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s::char(8),
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    0,
-                    %s,
-                    'debito',
-                    'xml',
-                    'ativo',
-                    'Tributo da Reforma Tributaria extraido do XML.'
-                FROM public.tributos t
-                WHERE t.codigo = %s
-                """,
-                (
-                    nota_item_id,
-                    empresa_cnpj,
-                    periodo_ano,
-                    periodo_mes,
-                    item.numero_item,
-                    item.codigo_produto,
-                    ncm_codigo,
-                    item.cfop,
-                    tributo.get("cst_codigo"),
-                    tributo.get("classificacao_tributaria"),
-                    tributo.get("base_calculo") or Decimal("0"),
-                    tributo.get("aliquota") or Decimal("0"),
-                    valor_tributo,
-                    valor_tributo,
-                    tributo.get("tributo_codigo"),
-                ),
+            repository.inserir_tributo_reforma_item(
+                cur,
+                nota_item_id=nota_item_id,
+                empresa_cnpj=empresa_cnpj,
+                periodo_ano=periodo_ano,
+                periodo_mes=periodo_mes,
+                numero_item=item.numero_item,
+                produto_codigo=item.codigo_produto,
+                ncm_codigo=ncm_codigo,
+                cfop=item.cfop,
+                tributo=tributo,
             )
 
     def _garantir_ncm_catalogo(self, cur, codigo_ncm: str | None) -> str | None:
@@ -303,8 +176,8 @@ class NFeItensService:
         if len(codigo) != 8:
             return None
 
-        cur.execute("SELECT 1 FROM public.ncm_catalogo WHERE codigo = %s LIMIT 1", (codigo,))
-        if cur.fetchone():
+        repository = self._itens_repository()
+        if repository.ncm_catalogo_existe(cur, codigo):
             return codigo
 
         if codigo not in self._ncm_fallback_cache:
@@ -314,104 +187,16 @@ class NFeItensService:
             except Exception as exc:
                 logger.warning("Fallback IBPT falhou para NCM %s: %s", codigo, exc)
 
-        cur.execute("SELECT 1 FROM public.ncm_catalogo WHERE codigo = %s LIMIT 1", (codigo,))
-        if cur.fetchone():
+        if repository.ncm_catalogo_existe(cur, codigo):
             return codigo
 
         logger.warning("NCM %s nao encontrado no catalogo; item sera gravado sem FK de NCM.", codigo)
         return None
 
     def _registrar_documentos_reforma_agregados(self, cur, nota_ids: list[int]) -> None:
-        codigos_reforma = ["CBS", "IBS", "IBS_UF", "IBS_MUN", "IS"]
-
-        cur.execute(
-            """
-            DELETE FROM public.documentos_fiscais_tributos dt
-            USING public.tributos t
-            WHERE dt.tributo_id = t.id
-              AND dt.nota_id = ANY(%s)
-              AND t.codigo = ANY(%s)
-            """,
-            (nota_ids, codigos_reforma),
-        )
-
-        cur.execute(
-            """
-            WITH agregados AS (
-                SELECT
-                    i.nota_id,
-                    it.tributo_id,
-                    it.empresa_cnpj,
-                    it.periodo_ano,
-                    it.periodo_mes,
-                    SUM(COALESCE(it.base_calculo, 0)) AS base_calculo,
-                    SUM(COALESCE(it.valor_debito, 0)) AS valor_debito,
-                    SUM(COALESCE(it.valor_credito, 0)) AS valor_credito,
-                    SUM(COALESCE(it.valor_tributo, 0)) AS valor_tributo
-                FROM public.itens_documentos_fiscais_tributos it
-                JOIN public.notas_itens i ON i.id = it.nota_item_id
-                JOIN public.tributos t ON t.id = it.tributo_id
-                WHERE i.nota_id = ANY(%s)
-                  AND t.codigo = ANY(%s)
-                GROUP BY 1, 2, 3, 4, 5
-            ),
-            documentos AS (
-                INSERT INTO public.documentos_fiscais_tributos (
-                    nota_id,
-                    tributo_id,
-                    empresa_cnpj,
-                    periodo_ano,
-                    periodo_mes,
-                    modelo_documento,
-                    chave_acesso,
-                    tipo_operacao,
-                    data_emissao,
-                    base_calculo,
-                    valor_debito,
-                    valor_credito,
-                    valor_tributo,
-                    natureza,
-                    origem,
-                    status,
-                    observacoes
-                )
-                SELECT
-                    a.nota_id,
-                    a.tributo_id,
-                    a.empresa_cnpj,
-                    a.periodo_ano,
-                    a.periodo_mes,
-                    n.modelo,
-                    n.numero_nf::varchar,
-                    CASE
-                      WHEN EXISTS (
-                        SELECT 1 FROM public.notas_itens ni
-                        WHERE ni.nota_id = n.id
-                          AND LEFT(regexp_replace(COALESCE(ni.cfop, ''), '\\D', '', 'g'), 1) IN ('1','2','3')
-                      ) THEN 'entrada'
-                      ELSE 'saida'
-                    END,
-                    n.data_emissao,
-                    a.base_calculo,
-                    a.valor_debito,
-                    a.valor_credito,
-                    a.valor_tributo,
-                    'debito',
-                    'xml',
-                    'ativo',
-                    'Tributo da Reforma Tributaria extraido do XML.'
-                FROM agregados a
-                JOIN public.notas n ON n.id = a.nota_id
-                WHERE COALESCE(a.valor_tributo, 0) <> 0
-                RETURNING id, nota_id, tributo_id
-            )
-            UPDATE public.itens_documentos_fiscais_tributos it
-            SET documento_tributo_id = d.id
-            FROM documentos d
-            JOIN public.notas_itens ni ON ni.nota_id = d.nota_id
-            WHERE it.nota_item_id = ni.id
-              AND it.tributo_id = d.tributo_id
-              AND ni.nota_id = ANY(%s)
-            """,
-            (nota_ids, codigos_reforma, nota_ids),
+        repository = self._itens_repository()
+        repository.registrar_documentos_reforma_agregados(
+            cur,
+            nota_ids,
+            ["CBS", "IBS", "IBS_UF", "IBS_MUN", "IS"],
         )

@@ -7,6 +7,7 @@ import psycopg
 
 from app.domain.nfe.extractor import NotaExtraida, ItemNota
 from app.services.fiscal_sales import obter_cfops_faturamento_venda
+from app.repositories.nfe.nfe_repository import NFeRepository
 from app.services.nfe.postres_config import carregar_config_postgres
 from app.services.nfe.empresa_service import normalizar_cnpj
 
@@ -28,6 +29,14 @@ class NFeNotasService:
             "password": config["password"],
             "connect_timeout": 5,
         }
+        self._nfe_repository = NFeRepository()
+
+    def _obter_repositorio(self) -> NFeRepository:
+        repo = getattr(self, "_nfe_repository", None)
+        if repo is None:
+            repo = NFeRepository()
+            self._nfe_repository = repo
+        return repo
         
     def _normalizar_cfop(self, cfop: Optional[str]) -> str:
         if not cfop:
@@ -35,19 +44,7 @@ class NFeNotasService:
         return "".join(ch for ch in cfop if ch.isdigit())
 
     def obter_cfops_venda(self, conn) -> set[str]:
-        sql = """
-            SELECT c.codigo
-            FROM public.notas_cfops AS c
-            WHERE LEFT(
-                    regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g'),
-                    1
-                  ) IN ('5','6','7')
-              AND COALESCE(c.descricao, '') ILIKE 'venda%%';
-        """
-
-        with conn.cursor() as cur:
-            cur.execute(sql)
-            rows = cur.fetchall()
+        rows = self._obter_repositorio().obter_cfops_venda(conn)
 
         return {
             self._normalizar_cfop(row[0])
@@ -99,61 +96,12 @@ class NFeNotasService:
             logger.warning("Nenhuma nota para registrar")
             return 0
 
-        sql = """
-            WITH atualizacao AS (
-                UPDATE public.notas
-                SET processamento_id = %s,
-                    natureza_operacao = %s,
-                    destinatario_documento = %s,
-                    destinatario_nome = %s,
-                    destinatario_cidade = %s,
-                    destinatario_uf = %s,
-                    valor_produtos = %s,
-                    valor_desconto = %s,
-                    valor_frete = %s,
-                    valor_icms = %s,
-                    valor_ipi = %s,
-                    valor_pis = %s,
-                    valor_cofins = %s,
-                    valor_total_nf = %s
-                WHERE numero_nf = %s
-                  AND emitente_cnpj = %s
-                  AND COALESCE(modelo, '') = COALESCE(%s, '')
-                  AND data_emissao = %s
-                RETURNING id
-            )
-            INSERT INTO public.notas (
-                processamento_id,
-                numero_nf,
-                emitente_cnpj,
-                modelo,
-                data_emissao,
-                natureza_operacao,
-                destinatario_documento,
-                destinatario_nome,
-                destinatario_cidade,
-                destinatario_uf,
-                valor_produtos,
-                valor_desconto,
-                valor_frete,
-                valor_icms,
-                valor_ipi,
-                valor_pis,
-                valor_cofins,
-                valor_total_nf
-            ) SELECT
-                %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s,
-                %s, %s, %s,
-                %s, %s, %s, %s, %s
-            WHERE NOT EXISTS (SELECT 1 FROM atualizacao);
-        """
-
         total = 0
         notas_list = list(notas)
         batch_size = 500
 
         with conn.cursor() as cur:
+            repository = self._obter_repositorio()
             for start in range(0, len(notas_list), batch_size):
                 chunk = notas_list[start:start + batch_size]
                 valores = []
@@ -198,9 +146,9 @@ class NFeNotasService:
                         nota.valor_cofins,
                         nota.valor_total_nf,
                     ))
-                    
+
                 try:
-                    cur.executemany(sql, valores)
+                    repository.registrar_notas(cur, valores)
                 except psycopg.Error:
                     logger.exception(
                         "Erro ao registrar notas em lote %s-%s.",
@@ -230,62 +178,23 @@ class NFeNotasService:
         if not cnpj_normalizado:
             return []
 
-        sql_notas = """
-            SELECT
-                id,
-                numero_nf,
-                emitente_cnpj,
-                modelo,
-                data_emissao,
-                natureza_operacao,
-                destinatario_documento,
-                destinatario_nome,
-                destinatario_cidade,
-                destinatario_uf,
-                valor_total_nf,
-                valor_icms,
-                valor_ipi,
-                valor_pis,
-                valor_cofins,
-                valor_produtos,
-                valor_desconto,
-                valor_frete
-            FROM public.notas
-            WHERE emitente_cnpj = %s
-              AND EXTRACT(YEAR FROM data_emissao) = %s
-              AND EXTRACT(MONTH FROM data_emissao) = %s
-            ORDER BY data_emissao, numero_nf;
-        """
+        repository = self._obter_repositorio()
+        notas_rows = repository.listar_notas_periodo_para_kpi(
+            conn,
+            cnpj_normalizado,
+            periodo_ano,
+            periodo_mes,
+        )
 
-        sql_itens = """
-            SELECT
-                id,
-                nota_id,
-                item_numero,
-                produto_codigo,
-                descricao,
-                ncm,
-                cfop,
-                quantidade,
-                valor_unitario,
-                valor_total
-            FROM public.notas_itens
-            WHERE cnpj = %s
-              AND nota_id = ANY(%s)
-            ORDER BY nota_id, item_numero;
-        """
+        if not notas_rows:
+            return []
 
-        with conn.cursor() as cur:
-            cur.execute(sql_notas, (cnpj_normalizado, periodo_ano, periodo_mes))
-            notas_rows = cur.fetchall()
-
-            if not notas_rows:
-                return []
-
-            nota_ids = [row[0] for row in notas_rows]
-
-            cur.execute(sql_itens, (cnpj_normalizado, nota_ids))
-            itens_rows = cur.fetchall()
+        nota_ids = [row[0] for row in notas_rows]
+        itens_rows = repository.listar_itens_por_nota_ids_para_kpi(
+            conn,
+            cnpj_normalizado,
+            nota_ids,
+        )
 
         return self._montar_notas_extraidas(
             notas_rows=notas_rows,
@@ -305,93 +214,21 @@ class NFeNotasService:
         if not cnpj_normalizado:
             return []
 
-        filtros = ["EXTRACT(YEAR FROM n.data_emissao) = %s"]
-        parametros: list[object] = [periodo_ano]
+        repository = self._obter_repositorio()
+        notas_rows = repository.listar_notas_periodo_para_operacao(
+            conn,
+            cnpj_normalizado,
+            periodo_ano,
+            periodo_mes,
+            tipo_operacao,
+            obter_cfops_faturamento_venda() if tipo_operacao == "vendas" else None,
+        )
 
-        if periodo_mes is not None:
-            filtros.append("EXTRACT(MONTH FROM n.data_emissao) = %s")
-            parametros.append(periodo_mes)
+        if not notas_rows:
+            return []
 
-        if tipo_operacao == "compras":
-            filtros.extend([
-                "("
-                "regexp_replace(COALESCE(n.destinatario_documento, ''), '\\D', '', 'g') = %s "
-                "OR regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s"
-                ")",
-                "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('1','2','3')",
-            ])
-            parametros.extend([cnpj_normalizado, cnpj_normalizado])
-        elif tipo_operacao == "vendas":
-            filtros.extend([
-                "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
-                "regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)",
-            ])
-            parametros.extend([cnpj_normalizado, obter_cfops_faturamento_venda()])
-        else:
-            filtros.append(
-                "("
-                "regexp_replace(COALESCE(n.destinatario_documento, ''), '\\D', '', 'g') = %s "
-                "OR regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s"
-                ")"
-            )
-            parametros.extend([cnpj_normalizado, cnpj_normalizado])
-
-        where_clause = " AND ".join(filtros)
-
-        sql_notas = f"""
-            SELECT DISTINCT
-                n.id,
-                n.numero_nf,
-                n.emitente_cnpj,
-                n.modelo,
-                n.data_emissao,
-                n.natureza_operacao,
-                n.destinatario_documento,
-                n.destinatario_nome,
-                n.destinatario_cidade,
-                n.destinatario_uf,
-                n.valor_total_nf,
-                n.valor_icms,
-                n.valor_ipi,
-                n.valor_pis,
-                n.valor_cofins,
-                n.valor_produtos,
-                n.valor_desconto,
-                n.valor_frete
-            FROM public.notas AS n
-            JOIN public.notas_itens AS i
-              ON i.nota_id = n.id
-            WHERE {where_clause}
-            ORDER BY n.data_emissao, n.numero_nf;
-        """
-
-        sql_itens = """
-            SELECT
-                id,
-                nota_id,
-                item_numero,
-                produto_codigo,
-                descricao,
-                ncm,
-                cfop,
-                quantidade,
-                valor_unitario,
-                valor_total
-            FROM public.notas_itens
-            WHERE nota_id = ANY(%s)
-            ORDER BY nota_id, item_numero;
-        """
-
-        with conn.cursor() as cur:
-            cur.execute(sql_notas, parametros)
-            notas_rows = cur.fetchall()
-
-            if not notas_rows:
-                return []
-
-            nota_ids = [row[0] for row in notas_rows]
-            cur.execute(sql_itens, (nota_ids,))
-            itens_rows = cur.fetchall()
+        nota_ids = [row[0] for row in notas_rows]
+        itens_rows = repository.listar_itens_por_nota_ids_para_operacao(conn, nota_ids)
 
         return self._montar_notas_extraidas(
             notas_rows=notas_rows,
@@ -462,29 +299,7 @@ class NFeNotasService:
         if not item_ids:
             return {}
 
-        sql = """
-            SELECT
-                it.nota_item_id,
-                t.codigo,
-                t.nome,
-                it.base_calculo,
-                it.aliquota,
-                it.valor_debito,
-                it.valor_credito,
-                it.valor_tributo,
-                it.natureza,
-                it.origem,
-                it.status
-            FROM public.itens_documentos_fiscais_tributos AS it
-            JOIN public.tributos AS t
-              ON t.id = it.tributo_id
-            WHERE it.nota_item_id = ANY(%s)
-            ORDER BY it.nota_item_id, t.codigo;
-        """
-
-        with conn.cursor() as cur:
-            cur.execute(sql, (item_ids,))
-            rows = cur.fetchall()
+        rows = self._obter_repositorio().listar_tributos_itens(conn, item_ids)
 
         tributos_por_item: dict[int, list[dict]] = {}
         for row in rows:
@@ -507,44 +322,15 @@ class NFeNotasService:
     
     def remover_notas_sem_cfop_venda(self, conn, processamento_id: int) -> int:
         logger.warning(
-            "🧹 Removendo notas sem CFOP de venda para o processamento %s",
+            "Removendo notas sem CFOP de venda para o processamento %s",
             processamento_id,
         )
 
-        sql = """
-            DELETE FROM public.notas AS n
-            WHERE n.processamento_id = %s
-              AND COALESCE(n.modelo, '') <> 'NFSE'
-              AND NOT EXISTS (
-                SELECT 1
-                FROM public.notas_itens AS i
-                LEFT JOIN public.notas_cfops AS c
-                  ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
-                     = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
-                WHERE i.nota_id = n.id
-                  AND (
-                        (
-                          LEFT(
-                            regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g'),
-                            1
-                          ) IN ('5','6','7')
-                          AND COALESCE(c.descricao, '') ILIKE '%%venda%%'
-                        )
-                        OR LEFT(
-                          regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'),
-                          1
-                        ) IN ('5','6','7')
-                      )
-              );
-        """
+        removidas = self._obter_repositorio().remover_notas_sem_cfop_venda(conn, processamento_id)
 
-        with conn.cursor() as cur:
-            cur.execute(sql, (processamento_id,))
-            removidas = cur.rowcount
-
-        logger.warning("🧹 Notas removidas: %s", removidas)
+        logger.warning("Notas removidas: %s", removidas)
         return removidas
-    
+
     def separar_notas_por_modelo(
         self,
         notas: Iterable[NotaExtraida],

@@ -167,6 +167,30 @@ def test_nfe_consulta_monta_filtros_vendas_itens_exige_cnpj_valido():
         service._montar_filtros_vendas_itens("00000000000000")
 
 
+def test_nfe_consulta_monta_filtros_kpis_preserva_alias_e_periodo():
+    service = _nfe_consulta_service()
+
+    where_clause, params = service._montar_filtros_kpis(
+        emitente_cnpj="12.345.678/0001-90",
+        periodo_ano=2025,
+        periodo_mes=3,
+    )
+
+    assert "regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s" in where_clause
+    assert "k.periodo_ano = %s" in where_clause
+    assert "k.periodo_mes = %s" in where_clause
+    assert params == ["12345678000190", 2025, 3]
+
+
+def test_nfe_consulta_monta_filtros_kpis_sem_filtro_retorna_where_vazio():
+    service = _nfe_consulta_service()
+
+    where_clause, params = service._montar_filtros_kpis()
+
+    assert where_clause == ""
+    assert params == []
+
+
 def test_nfe_notas_normaliza_cfop_e_filtra_por_tabela_de_referencia(monkeypatch):
     service = _nfe_notas_service()
     monkeypatch.setattr(service, "obter_cfops_venda", lambda conn: {"5102"})

@@ -1,20 +1,21 @@
 # API Plataforma Fiscal
 
-Backend em FastAPI responsavel por autenticacao, importacao fiscal, processamento e consultas analiticas.
+Backend em FastAPI responsavel por autenticacao, importacao fiscal, jobs assincronos, consultas analiticas, NCM/IBPT e Reforma Tributaria.
 
 ## Atualizacao da documentacao
 
 ### O que foi atualizado
 
-- A lista de endpoints e modulos foi revisada para refletir a API atualmente exposta em `/api`.
+- A lista de endpoints e modulos foi revisada para refletir a API atualmente exposta em `/api/auth`, `/api/nfe`, `/api/sped`, `/api/jobs`, `/api/geo`, `/api/ncm` e `/api/reforma-tributaria`.
 - A secao de regras de negocio agora considera o fluxo separado entre XML/NFe e SPED.
-- A documentacao de ambiente foi ajustada para incluir CORS, Redis/Celery, banco dedicado para SPED e configuracao opcional de OpenAI.
+- A documentacao de ambiente foi ajustada para incluir CORS, Redis/Celery, banco dedicado para SPED, OpenAI opcional e a divisao entre scripts SQL legados e migrations Alembic.
 
 ### O que foi adicionado
 
 - Modulo `/api/ncm` com sincronizacao IBPT e consulta tributaria por NCM/UF.
 - Modulo `/api/jobs` para acompanhamento de processamentos assincronos.
 - Modulo `/api/reforma-tributaria` com tributos, apuracao, documentos, itens e memoria de calculo.
+- Migration de performance `008_add_dashboard_performance_indexes.sql` para consultas de dashboard em `documentos_fiscais_tributos`.
 - Referencia ao material operacional em `API/docs/ibpt-cron.md`.
 - Registro das migracoes e scripts SQL em `API/app/alembic/`, `API/app/alembic.ini` e `API/SQL/`.
 - Registro de que o startup nao executa DDL e de que o schema deve ser aplicado via Alembic antes da API.
@@ -277,7 +278,7 @@ Implementacao atual:
 
 ## Arquivos e dados auxiliares
 
-- Scripts SQL: `API/app/file/sql/`
+- Scripts SQL legados: `API/SQL/Tables/` e `API/SQL/Insert/`
 - Prompt templates: `API/app/services/AI/Agents/`
 - GeoJSON local: `API/app/services/Municipios/`
 - Catalogo NCM e arquivos IBPT: `API/app/services/NCM/`
@@ -289,10 +290,11 @@ Implementacao atual:
 ## Banco de dados
 
 - O ambiente Docker executa Alembic e depois `reference-seed` antes de subir API e workers.
-- A estrutura SQL esta distribuida entre `app/file/sql/`, `app/models/`, `alembic/` e `SQL/`.
+- A estrutura SQL esta distribuida entre `API/SQL/Tables/`, `API/SQL/Insert/`, `API/SQL/migrations/`, `API/app/alembic/` e `API/app/models/`.
 - Ha suporte para separacao entre base NFe e base SPED.
 - No startup, a aplicacao nao executa DDL. `ENABLE_STARTUP_SCHEMA_ENSURE=true` foi descontinuado e falha cedo orientando aplicar Alembic.
 - As migracoes da Reforma Tributaria estao em `004_add_reforma_tributaria_base.sql`, `005_add_reforma_tributaria_documentos_itens.sql` e `006_add_reforma_tributaria_creditos_debitos_memoria.sql`.
+- O indice de dashboard em `008_add_dashboard_performance_indexes.sql` e aplicado pela migration Alembic `20260511_0003_dashboard_performance_indexes.py`.
 - O detalhamento de ordem, riscos e checklist esta em [../docs/database.md](../docs/database.md) e [../docs/migrations.md](../docs/migrations.md).
 
 ## Seguranca operacional

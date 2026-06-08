@@ -4,11 +4,12 @@ Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estru
 
 ## Arquivos de referencia no codigo
 
-- `API/app/file/sql/schema_tables.sql`
-- `API/app/file/sql/ncm_catalogo.sql`
-- `API/app/file/sql/ncm_tributacao.sql`
-- `API/app/file/sql/municipios_catalogo.sql`
-- `API/SQL/migrations/001_add_tem_sped.sql` ate `API/SQL/migrations/007_add_sped_processing_columns.sql`
+- `API/SQL/Tables/FISCAL Schema Tables.sql`
+- `API/SQL/Insert/ncm_catalogo.sql`
+- `API/SQL/Insert/ncm_tributacao.sql`
+- `API/SQL/Insert/municipios_catalogo.sql`
+- `API/SQL/migrations/001_add_tem_sped.sql` ate `API/SQL/migrations/008_add_dashboard_performance_indexes.sql`
+- `API/app/alembic/versions/20260511_0003_dashboard_performance_indexes.py`
 - `API/app/services/db_schema_service.py`
 - `API/app/services/nfe/xml_importacao_service.py`
 - `API/app/services/sped/sped_importacao_service.py`
@@ -24,11 +25,11 @@ Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estru
 
 | Local | Uso atual |
 | --- | --- |
-| `API/app/file/sql/schema_tables.sql` | Schema base do fluxo NFe/XML. |
-| `API/app/file/sql/ncm_catalogo.sql` | Estrutura auxiliar de catalogo NCM. |
-| `API/app/file/sql/ncm_tributacao.sql` | Estrutura auxiliar de aliquotas IBPT por NCM/UF. |
-| `API/app/file/sql/municipios_catalogo.sql` | Catalogo de municipios usado por consultas geograficas e fiscais. |
-| `API/app/models/nfe/Tables/FISCAL Schema Tables.sql` | Schema historico do modulo fiscal/NFe. Validar antes de reaplicar. |
+| `API/SQL/Tables/FISCAL Schema Tables.sql` | Schema historico do fluxo NFe/XML. Validar antes de reaplicar. |
+| `API/SQL/Insert/ncm_catalogo.sql` | Estrutura auxiliar de catalogo NCM. |
+| `API/SQL/Insert/ncm_tributacao.sql` | Estrutura auxiliar de aliquotas IBPT por NCM/UF. |
+| `API/SQL/Insert/municipios_catalogo.sql` | Catalogo de municipios usado por consultas geograficas e fiscais. |
+| `API/app/alembic/versions/20260511_0003_dashboard_performance_indexes.py` | Wrapper Alembic para a migration de indices de dashboard. |
 | `API/SQL/migrations/*.sql` | Evolucoes manuais numeradas legadas. |
 | `API/app/alembic/` | Caminho operacional recomendado para novas migrations versionadas. |
 | `API/app/services/db_schema_service.py` | Helpers legados de DDL. Nao sao chamados no startup da API; manter apenas como referencia ate remocao planejada. |
@@ -49,7 +50,7 @@ Use `alembic -c API/app/alembic.ini upgrade head` antes de iniciar API, workers 
 
 ### Criadas por scripts SQL
 
-`API/app/file/sql/schema_tables.sql`:
+`API/SQL/Tables/FISCAL Schema Tables.sql`:
 
 - `empresas`
 - `sped_importacoes`
@@ -67,9 +68,9 @@ Use `alembic -c API/app/alembic.ini upgrade head` antes de iniciar API, workers 
 
 Scripts auxiliares:
 
-- `municipios_catalogo` em `API/app/file/sql/municipios_catalogo.sql`
-- `ncm_catalogo` em `API/app/file/sql/ncm_catalogo.sql`
-- `ncm_tributacao` em `API/app/file/sql/ncm_tributacao.sql`
+- `municipios_catalogo` em `API/SQL/Insert/municipios_catalogo.sql`
+- `ncm_catalogo` em `API/SQL/Insert/ncm_catalogo.sql`
+- `ncm_tributacao` em `API/SQL/Insert/ncm_tributacao.sql`
 
 ### Criadas ou alteradas por migrations manuais
 
@@ -80,7 +81,9 @@ Scripts auxiliares:
 - `005_add_reforma_tributaria_documentos_itens.sql`: cria `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`.
 - `006_add_reforma_tributaria_creditos_debitos_memoria.sql`: cria `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`.
 - `007_add_sped_processing_columns.sql`: altera `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`.
+- `008_add_dashboard_performance_indexes.sql`: cria indices de dashboard em `documentos_fiscais_tributos`.
 - Alembic `20260515_0004`: adiciona `tentativas_falhas`, `bloqueado_ate` e `ultimo_login_em` em `public.login`.
+- Alembic `20260511_0003`: aplica a migration `008_add_dashboard_performance_indexes.sql`.
 
 ### Criadas no startup
 
@@ -92,7 +95,7 @@ Nenhuma. O caminho operacional e Alembic.
 - `sped_importados`: criada pela migration inicial Alembic; `SpedImportacaoService` apenas valida se a tabela e as colunas esperadas existem antes do uso.
 - `processing_jobs`: criada pela migration inicial Alembic; `JobsRepository` apenas valida se a tabela, colunas e constraint de status existem antes do uso.
 - `empresas.tem_sped`: criada pela migration inicial Alembic; `CompanyProfileService` apenas valida se a coluna existe antes do uso.
-- `ncm_catalogo` e `ncm_tributacao`: criadas pela migration inicial Alembic; `IBPTSyncService` apenas valida as tabelas antes de sincronizar dados.
+- `ncm_catalogo` e `ncm_tributacao`: carregadas pelos scripts SQL de referencia e validadas pelo `IBPTSyncService` antes de sincronizar dados.
 - `login`: criada pela migration inicial Alembic e complementada pela migration `20260515_0004`; `LoginService` apenas valida as colunas de autenticacao antes do uso.
 - `sped_empresas`, `sped_participantes`, `sped_produtos`, `sped_documentos_fiscais`, `sped_documento_itens`, `sped_kpis_fiscal`, `sped_apuracao_icms`: criadas pela migration inicial Alembic; `SpedImportacaoService` valida tabelas, colunas e constraints antes de processar importacoes.
 - `public.sped_kpis_fiscal`: `SpedConsultaService` apenas valida se a tabela e as colunas esperadas existem antes de listar KPIs.
@@ -105,7 +108,7 @@ As tabelas de staging, jobs, autenticacao, IBPT e analiticas SPED dependem de Al
 - Banco principal criado e com tabelas base de NFe/XML.
 - Banco SPED criado quando houver empresas `tem_sped=true`.
 - `public.empresas` existe com `tem_sped`.
-- Migrations `001` a `007` avaliadas e aplicadas na ordem adequada.
+- Migrations `001` a `008` avaliadas e aplicadas na ordem adequada.
 - Tabelas de staging (`notas_xml_importados`, `sped_importados`), controle de jobs (`processing_jobs`) e colunas de seguranca de login criadas por Alembic.
 - Tabelas da Reforma Tributaria existentes: `tributos`, `apuracao_tributaria`, `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`, `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`.
 - Catalogos NCM/IBPT e municipios criados por Alembic e carregados quando as telas dependentes forem usadas.

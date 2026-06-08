@@ -1,0 +1,3 @@
+from app.repositories.sped.sped_repository import SpedRepository
+from app.repositories.sped.sped_importacao_repository import SpedImportacaoRepository
+

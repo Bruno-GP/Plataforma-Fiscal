@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.services.fiscal_dimensions import (
+from app.services.fiscal.fiscal_dimensions import (
     construir_resposta_fiscal_cfop,
     construir_resposta_fiscal_ncm,
     construir_top_cfops,

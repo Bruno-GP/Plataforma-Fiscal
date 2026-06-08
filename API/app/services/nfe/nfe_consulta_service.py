@@ -1,7 +1,6 @@
 import logging
 from typing import List, Optional
 from decimal import Decimal
-
 import psycopg
 from fastapi import HTTPException, status
 
@@ -12,8 +11,9 @@ from app.models.nfe.schemas import (
   NFeKPI,
   NFeKPIConsulta,
 )
+from app.repositories.nfe.consulta_repository import NFeConsultaRepository
 from app.services.nfe.empresa_service import normalizar_cnpj
-from app.services.fiscal_analysis import (
+from app.services.fiscal.fiscal_analysis import (
   FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
   obter_total_impostos_complementares_documentos,
@@ -21,17 +21,16 @@ from app.services.fiscal_analysis import (
   obter_total_tributos_reforma_documentos,
   obter_regiao_por_uf,
 )
-from app.services.fiscal_clients import (
+from app.services.fiscal.fiscal_clients import (
   construir_filtros_clientes_nfe,
-  construir_params_ranking_clientes,
   construir_ranking_clientes,
   construir_resposta_analise_clientes,
 )
-from app.services.fiscal_dimensions import (
+from app.services.fiscal.fiscal_dimensions import (
   construir_resposta_fiscal_cfop,
   construir_resposta_fiscal_ncm,
 )
-from app.services.fiscal_hierarchy import (
+from app.services.fiscal.fiscal_hierarchy import (
   calcular_percentual_imposto,
   construir_filtros_hierarquia_nfe,
   construir_item_cidade,
@@ -44,7 +43,7 @@ from app.services.fiscal_hierarchy import (
   normalizar_paginacao_hierarquia,
   resolver_nivel_hierarquia,
 )
-from app.services.fiscal_kpis import (
+from app.services.fiscal.fiscal_kpis import (
   construir_comparativo_kpis,
   construir_dashboard_vendas_response,
   construir_nfe_kpi_consulta_de_row,
@@ -57,14 +56,14 @@ from app.services.fiscal_kpis import (
   resolver_periodo_anterior_kpi,
   selecionar_resultados_dashboard,
 )
-from app.services.fiscal_purchases import (
+from app.services.fiscal.fiscal_purchases import (
   construir_filtros_compras_nfe,
   construir_params_com_limite_compras,
   construir_ranking_fornecedores_compras,
   construir_ranking_produtos_compras,
   construir_resposta_analise_compras,
 )
-from app.services.fiscal_sales import (
+from app.services.fiscal.fiscal_sales import (
   CFOPS_FATURAMENTO_VENDA,
   construir_params_com_limite,
   construir_ranking_cfops_vendas,
@@ -142,6 +141,15 @@ class NFeConsultaService:
       "password": config["password"],
       "connect_timeout": 5,
     }
+    self.consulta_repository = NFeConsultaRepository(self.conn_params)
+
+  def _consulta_repository(self) -> NFeConsultaRepository:
+    repository = getattr(self, "consulta_repository", None)
+    if repository is None:
+      repository = NFeConsultaRepository(self.conn_params)
+      self.consulta_repository = repository
+
+    return repository
     
   def _normalizar_cnpj_filtro(
     self,
@@ -160,6 +168,20 @@ class NFeConsultaService:
 
     return cnpj  
 
+  def _obter_cnpj_filtrado_obrigatorio(
+    self,
+    emitente_cnpj: Optional[str],
+    mensagem_erro: str = "Informe um emitente_cnpj vÃ¡lido.",
+  ) -> str:
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+    if not cnpj_filtrado:
+      raise ValueError(mensagem_erro)
+
+    return cnpj_filtrado
+
   def obter_cnpj_por_email(
     self,
     email: Optional[str],
@@ -171,22 +193,11 @@ class NFeConsultaService:
     if not email_normalizado:
       return None
 
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(
-          """
-          SELECT cnpj
-          FROM public.login
-          WHERE email = %s;
-          """,
-          (email_normalizado,),
-        )
-        row = cur.fetchone()
-
-    if not row or not row[0]:
+    cnpj_row = self._consulta_repository().obter_cnpj_por_email(email_normalizado)
+    if not cnpj_row:
       return None
 
-    cnpj = normalizar_cnpj(row[0])
+    cnpj = normalizar_cnpj(cnpj_row)
     if not cnpj or set(cnpj) == {"0"}:
       return None
 
@@ -235,6 +246,72 @@ class NFeConsultaService:
 
     return " AND ".join(filtros_vendas_docs), parametros
 
+  def _montar_filtros_kpis(
+    self,
+    emitente_cnpj: Optional[str] = None,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+  ) -> tuple[str, list[object]]:
+    filtros: list[str] = []
+    parametros: list[object] = []
+
+    cnpj_filtrado = self._normalizar_cnpj_filtro(
+      emitente_cnpj,
+      permitir_zerado=False,
+    )
+
+    if cnpj_filtrado:
+      filtros.append("regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s")
+      parametros.append(cnpj_filtrado)
+
+    if periodo_ano:
+      filtros.append("k.periodo_ano = %s")
+      parametros.append(periodo_ano)
+
+    if periodo_mes:
+      filtros.append("k.periodo_mes = %s")
+      parametros.append(periodo_mes)
+
+    where_clause = " AND ".join(filtros)
+    return (f"WHERE {where_clause}" if where_clause else ""), parametros
+
+  def _obter_totais_tributos_analise(
+    self,
+    cnpj_filtrado: str,
+    periodo_ano: Optional[int],
+    periodo_mes: Optional[int],
+    tipo_operacao: str,
+  ) -> tuple[Decimal, Decimal]:
+    total_impostos_complementares = obter_total_impostos_complementares_documentos(
+      self.conn_params,
+      "nfe",
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      tipo_operacao,
+    )
+    total_tributos_reforma = obter_total_tributos_reforma_documentos(
+      self.conn_params,
+      "nfe",
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      tipo_operacao,
+    )
+
+    return total_impostos_complementares, total_tributos_reforma
+
+  def _construir_ranking_regioes_vendas(
+    self,
+    rows,
+    limite: Optional[int],
+  ) -> list[dict]:
+    return construir_ranking_regioes_vendas(
+      rows,
+      obter_regiao_por_uf,
+      limite,
+    )
+
   def obter_total_vendido_bruto(
     self,
     emitente_cnpj: Optional[str],
@@ -247,21 +324,7 @@ class NFeConsultaService:
       periodo_mes=periodo_mes,
     )
 
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(
-          f"""
-          SELECT COALESCE(SUM(i.valor_total), 0) AS total_vendido
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          """,
-          parametros,
-        )
-        row = cur.fetchone()
-
-    return row[0] if row else Decimal("0.00")
+    return self._consulta_repository().obter_total_vendas_itens(where_clause, parametros)
 
   def listar_totais_vendas_mensais_bruto(
     self,
@@ -273,23 +336,10 @@ class NFeConsultaService:
       periodo_ano=periodo_ano,
     )
 
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(
-          f"""
-          SELECT
-            EXTRACT(MONTH FROM n.data_emissao)::int AS periodo_mes,
-            COALESCE(SUM(i.valor_total), 0) AS total_vendido
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 1
-          """,
-          parametros,
-        )
-        rows = cur.fetchall()
+    rows = self._consulta_repository().listar_totais_vendas_mensais(
+      where_clause,
+      parametros,
+    )
 
     return {
       int(periodo_mes): valor_total or Decimal("0.00")
@@ -314,25 +364,11 @@ class NFeConsultaService:
     anos = sorted({ano for ano, _mes in periodos})
     totais = {periodo: Decimal("0.00") for periodo in periodos}
 
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(
-          """
-          SELECT
-            EXTRACT(YEAR FROM n.data_emissao)::int AS periodo_ano,
-            EXTRACT(MONTH FROM n.data_emissao)::int AS periodo_mes,
-            COALESCE(SUM(i.valor_total), 0) AS total_vendido
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s
-            AND regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)
-            AND EXTRACT(YEAR FROM n.data_emissao)::int = ANY(%s)
-          GROUP BY 1, 2
-          """,
-          (cnpj_filtrado, obter_cfops_faturamento_venda(), anos),
-        )
-        rows = cur.fetchall()
+    rows = self._consulta_repository().listar_totais_vendas_por_periodo(
+      cnpj_emitente=cnpj_filtrado,
+      cfops_faturamento=obter_cfops_faturamento_venda(),
+      anos=anos,
+    )
 
     for ano, mes, valor_total in rows:
       chave_mensal = (int(ano), int(mes))
@@ -431,105 +467,31 @@ class NFeConsultaService:
     )
     
   def _filtro_vendas(self) -> str:
-    return """
-      EXISTS (
-        SELECT 1
-        FROM public.notas AS n
-        JOIN public.notas_itens AS i
-          ON i.nota_id = n.id
-        JOIN public.notas_cfops AS c
-          ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
-             = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
-        WHERE n.processamento_id = k.processamento_id
-          AND LEFT(
-                regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g'),
-                1
-              ) IN ('5','6','7')
-          AND COALESCE(c.descricao, '') ILIKE 'venda%%'
-        LIMIT 1
-      )
-    """
+    return self._consulta_repository().filtro_vendas_kpis()
 
   def obter_ultimo_periodo(
     self,
     emitente_cnpj: Optional[str] = None,
   ) -> tuple[int, int]:
-    filtros = []
-    parametros: List[object] = []
-    
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
-    )
-
-    if cnpj_filtrado:
-      filtros.append(
-        "regexp_replace(emitente_cnpj, '\\\\D', '', 'g') = %s"
-      )
-      parametros.append(cnpj_filtrado)
-
-    where_clause = ""
-    if filtros:
-      where_clause = "WHERE " + " AND ".join(filtros)
-
-    sql = f"""
-      SELECT
-        periodo_ano,
-        periodo_mes
-      FROM public.notas_kpis AS k
-      {where_clause}
-      ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
-      LIMIT 1;
-    """
-
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(sql, parametros)
-        row = cur.fetchone()
+    where_clause, parametros = self._montar_filtros_kpis(emitente_cnpj=emitente_cnpj)
+    row = self._consulta_repository().obter_ultimo_periodo(where_clause, parametros)
 
     if not row:
       raise ValueError("Nenhum processamento encontrado para o emitente.")
 
-    return row[0], row[1]
+    return row
 
   def obter_periodos_disponiveis(
     self,
     emitente_cnpj: Optional[str] = None,
     limite: int = 2,
   ) -> List[tuple[int, int]]:
-    filtros = []
-    parametros: List[object] = []
-
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
-    )
-    
-    if cnpj_filtrado:
-      filtros.append(
-        "regexp_replace(emitente_cnpj, '\\\\D', '', 'g') = %s"
-      )
-      parametros.append(cnpj_filtrado)
-
-    where_clause = ""
-    if filtros:
-      where_clause = "WHERE " + " AND ".join(filtros)
-
-    sql = f"""
-      SELECT
-        periodo_ano,
-        periodo_mes
-      FROM public.notas_kpis AS k
-      {where_clause}
-      ORDER BY periodo_ano DESC, periodo_mes DESC, id DESC
-      LIMIT %s;
-    """
+    where_clause, parametros = self._montar_filtros_kpis(emitente_cnpj=emitente_cnpj)
     parametros.append(limite)
-
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(sql, parametros)
-        rows = cur.fetchall()
+    rows = self._consulta_repository().listar_periodos_disponiveis(
+      where_clause,
+      parametros,
+    )
 
     return [(row[0], row[1]) for row in rows]
 
@@ -539,53 +501,17 @@ class NFeConsultaService:
     periodo_mes: int,
     emitente_cnpj: Optional[str] = None,
   ) -> Optional[NFeKPI]:
-    filtros = ["k.periodo_ano = %s", "k.periodo_mes = %s"]
-    parametros: List[object] = [periodo_ano, periodo_mes]
-
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
       permitir_zerado=False,
     )
-    
-    if cnpj_filtrado:
-      filtros.append(
-        "regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s"
-      )
-      parametros.append(cnpj_filtrado)
 
-    where_clause = " AND ".join(filtros)
-    if where_clause:
-      where_clause = f"WHERE {where_clause}"
-
-    sql_kpis = f"""
-      SELECT
-        k.emitente_cnpj,
-        k.id,
-        k.processamento_id,
-        k.total_vendas,
-        k.quantidade_notas,
-        k.ticket_medio,
-        k.maior_nota,
-        k.menor_nota,
-        k.total_icms,
-        k.total_ipi,
-        k.total_pis,
-        k.total_cofins,
-        k.top_clientes,
-        k.top_produtos,
-        k.top_cidades
-      FROM public.notas_kpis AS k
-      LEFT JOIN public.notas_processamentos AS p
-        ON p.id = k.processamento_id
-      {where_clause}
-      ORDER BY k.periodo_ano DESC, k.periodo_mes DESC, k.id DESC
-      LIMIT 1;
-    """
-
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(sql_kpis, parametros)
-        row = cur.fetchone()
+    where_clause, parametros = self._montar_filtros_kpis(
+      emitente_cnpj=cnpj_filtrado,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
+    row = self._consulta_repository().buscar_kpi_periodo(where_clause, parametros)
 
     if not row:
       return None
@@ -625,73 +551,20 @@ class NFeConsultaService:
     offset: int = 0,
   ) -> List[NFeKPIConsulta]:
 
-    filtros = []
-    parametros = []
-
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
+    where_clause, parametros = self._montar_filtros_kpis(
+      emitente_cnpj=emitente_cnpj,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
     )
-    
-    if cnpj_filtrado:
-      filtros.append(
-        "regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s"
-      )
-      parametros.append(cnpj_filtrado)
 
-    if periodo_ano:
-      filtros.append("k.periodo_ano = %s")
-      parametros.append(periodo_ano)
-
-    if periodo_mes:
-      filtros.append("k.periodo_mes = %s")
-      parametros.append(periodo_mes)
-
-    where_clause = " AND ".join(filtros)
-    if where_clause:
-      where_clause = f"WHERE {where_clause}"
-
-    sql_kpis = f"""
-      SELECT
-        k.periodo_ano,
-        k.periodo_mes,
-        k.emitente_cnpj,
-        k.id,
-        k.processamento_id,
-        k.total_vendas,
-        k.quantidade_notas,
-        k.ticket_medio,
-        k.maior_nota,
-        k.menor_nota,
-        k.total_icms,
-        k.total_ipi,
-        k.total_pis,
-        k.total_cofins,
-        k.top_clientes,
-        k.top_produtos,
-        k.top_cidades
-      FROM public.notas_kpis AS k
-      {where_clause}
-      ORDER BY
-        k.emitente_cnpj,
-        k.periodo_ano DESC,
-        k.periodo_mes DESC,
-        k.id DESC
-      LIMIT %s OFFSET %s;
-    """
     parametros.extend([limite, offset])
 
     try:
-      #logger.debug("Abrindo conexão com PostgreSQL")
-      with psycopg.connect(**self.conn_params) as conn:
-        #logger.debug("Conexão aberta com sucesso")
-        with conn.cursor() as cur:
-          logger.debug("Consultando KPIs")
-          cur.execute(sql_kpis, parametros)
-          kpis_rows = cur.fetchall()
+      logger.debug("Consultando KPIs")
+      kpis_rows = self._consulta_repository().listar_kpis(where_clause, parametros)
 
-          if not kpis_rows:
-            return []
+      if not kpis_rows:
+        return []
 
       resultados = []
       for row in kpis_rows:
@@ -723,104 +596,38 @@ class NFeConsultaService:
       periodo_mes,
     )
 
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(
-          f"""
-          SELECT COALESCE(SUM(i.valor_total), 0) AS total_comprado
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          """,
-          parametros,
-        )
-        total_comprado_row = cur.fetchone()
-        total_comprado = total_comprado_row[0] if total_comprado_row else Decimal("0.00")
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(n.emitente_cnpj), ''), 'Fornecedor não identificado') AS fornecedor,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COUNT(DISTINCT n.id) AS quantidade_documentos
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 2 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite_compras(parametros, limite),
-        )
-        top_fornecedores_valor = construir_ranking_fornecedores_compras(cur.fetchall())
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(n.emitente_cnpj), ''), 'Fornecedor não identificado') AS fornecedor,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COUNT(DISTINCT n.id) AS quantidade_documentos
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 3 DESC, 2 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite_compras(parametros, limite),
-        )
-        top_fornecedores_quantidade = construir_ranking_fornecedores_compras(cur.fetchall())
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto não identificado') AS produto,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COALESCE(SUM(i.quantidade), 0) AS quantidade_total
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 2 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite_compras(parametros, limite),
-        )
-        top_produtos_valor = construir_ranking_produtos_compras(cur.fetchall())
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto não identificado') AS produto,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COALESCE(SUM(i.quantidade), 0) AS quantidade_total
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 3 DESC, 2 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite_compras(parametros, limite),
-        )
-        top_produtos_quantidade = construir_ranking_produtos_compras(cur.fetchall())
-
-    total_impostos_complementares = obter_total_impostos_complementares_documentos(
-      self.conn_params,
-      "nfe",
-      cnpj_filtrado,
-      periodo_ano,
-      periodo_mes,
-      "entrada",
+    repository = self._consulta_repository()
+    parametros_com_limite = construir_params_com_limite_compras(parametros, limite)
+    total_comprado = repository.obter_total_itens(
+      where_clause,
+      parametros,
+      "total_comprado",
     )
-    total_tributos_reforma = obter_total_tributos_reforma_documentos(
-      self.conn_params,
-      "nfe",
+    top_fornecedores_valor = construir_ranking_fornecedores_compras(
+      repository.listar_fornecedores_compras_por_valor(
+        where_clause,
+        parametros_com_limite,
+      )
+    )
+    top_fornecedores_quantidade = construir_ranking_fornecedores_compras(
+      repository.listar_fornecedores_compras_por_quantidade(
+        where_clause,
+        parametros_com_limite,
+      )
+    )
+    top_produtos_valor = construir_ranking_produtos_compras(
+      repository.listar_produtos_compras_por_valor(
+        where_clause,
+        parametros_com_limite,
+      )
+    )
+    top_produtos_quantidade = construir_ranking_produtos_compras(
+      repository.listar_produtos_compras_por_quantidade(
+        where_clause,
+        parametros_com_limite,
+      )
+    )
+    total_impostos_complementares, total_tributos_reforma = self._obter_totais_tributos_analise(
       cnpj_filtrado,
       periodo_ano,
       periodo_mes,
@@ -860,165 +667,58 @@ class NFeConsultaService:
       periodo_mes=periodo_mes,
     )
 
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(
-          f"""
-          SELECT COALESCE(SUM(i.valor_total), 0) AS total_vendido
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          """,
-          parametros,
-        )
-        total_vendido_row = cur.fetchone()
-        total_vendido = total_vendido_row[0] if total_vendido_row else Decimal("0.00")
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado') AS cliente,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COUNT(DISTINCT n.id) AS quantidade_documentos
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 2 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite(parametros, limite),
-        )
-        top_clientes_valor = construir_ranking_clientes_vendas(cur.fetchall())
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado') AS cliente,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COUNT(DISTINCT n.id) AS quantidade_documentos
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 3 DESC, 2 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite(parametros, limite),
-        )
-        top_clientes_quantidade = construir_ranking_clientes_vendas(cur.fetchall())
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto não identificado') AS produto,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COALESCE(SUM(i.quantidade), 0) AS quantidade_total
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 2 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite(parametros, limite),
-        )
-        top_produtos_valor = construir_ranking_produtos_vendas(cur.fetchall())
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto não identificado') AS produto,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COALESCE(SUM(i.quantidade), 0) AS quantidade_total
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 3 DESC, 2 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite(parametros, limite),
-        )
-        top_produtos_quantidade = construir_ranking_produtos_vendas(cur.fetchall())
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), ''), '0000') AS cfop,
-            COALESCE(NULLIF(TRIM(c.descricao), ''), 'CFOP sem descrição') AS descricao,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          LEFT JOIN public.notas_cfops AS c
-            ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
-               = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
-          WHERE {where_clause}
-          GROUP BY 1, 2
-          ORDER BY 3 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite(parametros, limite),
-        )
-        top_cfops_valor = construir_ranking_cfops_vendas(cur.fetchall(), total_vendido)
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nÃ£o identificada') AS cidade,
-            COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COUNT(DISTINCT n.id) AS quantidade_documentos
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1, 2
-          ORDER BY 3 DESC, 1 ASC
-          LIMIT %s
-          """,
-          construir_params_com_limite(parametros, limite),
-        )
-        top_cidades_valor = construir_ranking_cidades_vendas(cur.fetchall())
-
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
-            COALESCE(SUM(i.valor_total), 0) AS valor_total,
-            COUNT(DISTINCT n.id) AS quantidade_documentos
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          GROUP BY 1
-          ORDER BY 2 DESC, 1 ASC
-          """,
-          parametros,
-        )
-        top_regioes_valor = construir_ranking_regioes_vendas(
-          cur.fetchall(),
-          obter_regiao_por_uf,
-          limite,
-        )
-
-    total_impostos_complementares = obter_total_impostos_complementares_documentos(
-      self.conn_params,
-      "nfe",
-      cnpj_filtrado,
-      periodo_ano,
-      periodo_mes,
-      "saida",
+    repository = self._consulta_repository()
+    parametros_com_limite = construir_params_com_limite(parametros, limite)
+    total_vendido = repository.obter_total_itens(
+      where_clause,
+      parametros,
+      "total_vendido",
     )
-    total_tributos_reforma = obter_total_tributos_reforma_documentos(
-      self.conn_params,
-      "nfe",
+    top_clientes_valor = construir_ranking_clientes_vendas(
+      repository.listar_clientes_vendas_por_valor(
+        where_clause,
+        parametros_com_limite,
+      )
+    )
+    top_clientes_quantidade = construir_ranking_clientes_vendas(
+      repository.listar_clientes_vendas_por_quantidade(
+        where_clause,
+        parametros_com_limite,
+      )
+    )
+    top_produtos_valor = construir_ranking_produtos_vendas(
+      repository.listar_produtos_vendas_por_valor(
+        where_clause,
+        parametros_com_limite,
+      )
+    )
+    top_produtos_quantidade = construir_ranking_produtos_vendas(
+      repository.listar_produtos_vendas_por_quantidade(
+        where_clause,
+        parametros_com_limite,
+      )
+    )
+    top_cfops_valor = construir_ranking_cfops_vendas(
+      repository.listar_cfops_vendas(
+        where_clause,
+        parametros_com_limite,
+      ),
+      total_vendido,
+    )
+    top_cidades_valor = construir_ranking_cidades_vendas(
+      repository.listar_cidades_vendas(
+        where_clause,
+        parametros_com_limite,
+      )
+    )
+    top_regioes_valor = self._construir_ranking_regioes_vendas(
+      repository.listar_regioes_vendas(
+        where_clause,
+        parametros,
+      ),
+      limite,
+    )
+    total_impostos_complementares, total_tributos_reforma = self._obter_totais_tributos_analise(
       cnpj_filtrado,
       periodo_ano,
       periodo_mes,
@@ -1175,129 +875,19 @@ class NFeConsultaService:
       offset_consulta,
     )
 
-    base_cte = f"""
-      WITH tributos_item AS (
-        SELECT
-          nota_item_id,
-          COALESCE(
-            NULLIF(SUM(valor_tributo), 0),
-            SUM(valor_debito) - SUM(valor_credito),
-            0
-          ) AS imposto_valor
-        FROM public.itens_documentos_fiscais_tributos
-        WHERE nota_item_id IS NOT NULL
-        GROUP BY nota_item_id
-      ),
-      itens_filtrados AS (
-        SELECT
-          n.id AS documento_id,
-          i.id AS item_id,
-          COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), 'Sem UF') AS estado,
-          COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nao identificada') AS cidade,
-          COALESCE(NULLIF(TRIM(i.produto_codigo), ''), 'SEM-CODIGO') AS produto_codigo,
-          COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto sem descricao') AS produto_descricao,
-          regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g') AS ncm_codigo,
-          COALESCE(i.valor_total, 0) AS faturamento,
-          (
-            COALESCE(n.valor_icms, 0)
-            + COALESCE(n.valor_ipi, 0)
-            + COALESCE(n.valor_pis, 0)
-            + COALESCE(n.valor_cofins, 0)
-          ) AS imposto_total_nota
-        FROM public.notas AS n
-        JOIN public.notas_itens AS i
-          ON i.nota_id = n.id
-        WHERE {where_clause}
-      ),
-      notas_rateio AS (
-        SELECT
-          documento_id,
-          COALESCE(SUM(faturamento), 0) AS faturamento_total_nota,
-          MAX(imposto_total_nota) AS imposto_total_nota
-        FROM itens_filtrados
-        GROUP BY documento_id
-      ),
-      base AS (
-        SELECT
-          itens.documento_id,
-          itens.estado,
-          itens.cidade,
-          COALESCE(NULLIF(itens.ncm_codigo, ''), '00000000') AS ncm,
-          COALESCE(NULLIF(TRIM(nc.descricao), ''), 'NCM sem descricao') AS descricao_ncm,
-          itens.produto_codigo,
-          itens.produto_descricao,
-          itens.faturamento,
-          COALESCE(
-            tributos.imposto_valor,
-            CASE
-              WHEN COALESCE(rateio.faturamento_total_nota, 0) > 0 THEN
-                (itens.faturamento / rateio.faturamento_total_nota) * rateio.imposto_total_nota
-              ELSE 0::numeric
-            END
-          ) AS imposto_valor
-        FROM itens_filtrados AS itens
-        JOIN notas_rateio AS rateio
-          ON rateio.documento_id = itens.documento_id
-        LEFT JOIN tributos_item AS tributos
-          ON tributos.nota_item_id = itens.item_id
-        LEFT JOIN public.ncm_catalogo AS nc
-          ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
-             = COALESCE(NULLIF(itens.ncm_codigo, ''), '00000000')
-      )
-    """
+    repository = self._consulta_repository()
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
-        cur.execute("DROP TABLE IF EXISTS tmp_nfe_fiscal_hierarquia_base")
-        cur.execute(
-          f"""
-          CREATE TEMP TABLE tmp_nfe_fiscal_hierarquia_base ON COMMIT DROP AS
-          {base_cte}
-          SELECT *
-          FROM base
-          """,
-          tuple(parametros),
-        )
-        cur.execute("ANALYZE tmp_nfe_fiscal_hierarquia_base")
-
-        cur.execute(
-          """
-          SELECT
-            COALESCE(SUM(faturamento), 0) AS total_faturamento,
-            COALESCE(SUM(imposto_valor), 0) AS total_impostos,
-            COUNT(DISTINCT documento_id) AS quantidade_documentos,
-            COUNT(DISTINCT estado) AS total_estados,
-            COUNT(DISTINCT CONCAT(cidade, '::', estado)) AS total_cidades,
-            COUNT(DISTINCT ncm) AS total_ncms,
-            COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) AS total_produtos
-          FROM tmp_nfe_fiscal_hierarquia_base
-          """,
-        )
-        resumo_row = cur.fetchone()
+        repository.criar_tmp_fiscal_hierarquia_base(cur, where_clause, parametros)
+        resumo_row = repository.obter_resumo_fiscal_hierarquia(cur)
 
         total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
         total_impostos = resumo_row[1] if resumo_row else Decimal("0.00")
         percentual_total = calcular_percentual_imposto(total_impostos, total_faturamento)
         hierarquia: list[dict] = []
         if modo_legado_hierarquia_completa:
-          cur.execute(
-            """
-            SELECT
-              estado,
-              cidade,
-              ncm,
-              descricao_ncm,
-              produto_codigo,
-              produto_descricao,
-              COALESCE(SUM(faturamento), 0) AS faturamento,
-              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-            FROM tmp_nfe_fiscal_hierarquia_base
-            GROUP BY 1, 2, 3, 4, 5, 6
-            ORDER BY 1 ASC, 2 ASC, 7 DESC, 5 ASC
-            LIMIT %s
-            """,
-            (limite_consulta,),
-          )
+          rows_hierarquia = repository.listar_hierarquia_fiscal_completa(cur, limite_consulta)
           hierarquia = [
             construir_item_hierarquia_completa(
               uf_item,
@@ -1309,7 +899,7 @@ class NFeConsultaService:
               faturamento,
               imposto_valor,
             )
-            for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor in cur.fetchall()
+            for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor in rows_hierarquia
           ]
         nivel_resolvido = resolver_nivel_hierarquia(nivel_atual, estado, cidade, ncm)
         itens_nivel_atual: list[dict] = []
@@ -1320,69 +910,24 @@ class NFeConsultaService:
         total_registros_nivel = 0
 
         if nivel_resolvido == "estado":
-          cur.execute("SELECT COUNT(DISTINCT estado) FROM tmp_nfe_fiscal_hierarquia_base")
-          total_registros_nivel = (cur.fetchone() or [0])[0] or 0
-          cur.execute(
-            """
-            SELECT
-              estado,
-              COALESCE(SUM(faturamento), 0) AS faturamento,
-              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-            FROM tmp_nfe_fiscal_hierarquia_base
-            GROUP BY 1
-            ORDER BY 2 DESC, 1 ASC
-            LIMIT %s
-            OFFSET %s
-            """,
-            (limite_consulta, offset_consulta),
-          )
+          total_registros_nivel = repository.contar_estados_fiscal_hierarquia(cur)
+          rows_estado = repository.listar_estados_fiscal_hierarquia(cur, limite_consulta, offset_consulta)
           por_estado = [
             construir_item_estado(uf_item, faturamento, imposto_valor)
-            for uf_item, faturamento, imposto_valor in cur.fetchall()
+            for uf_item, faturamento, imposto_valor in rows_estado
           ]
           itens_nivel_atual = por_estado
         elif nivel_resolvido == "cidade":
-          cur.execute("SELECT COUNT(DISTINCT CONCAT(cidade, '::', estado)) FROM tmp_nfe_fiscal_hierarquia_base")
-          total_registros_nivel = (cur.fetchone() or [0])[0] or 0
-          cur.execute(
-            """
-            SELECT
-              cidade,
-              estado,
-              COALESCE(SUM(faturamento), 0) AS faturamento,
-              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-            FROM tmp_nfe_fiscal_hierarquia_base
-            GROUP BY 1, 2
-            ORDER BY 3 DESC, 1 ASC, 2 ASC
-            LIMIT %s
-            OFFSET %s
-            """,
-            (limite_consulta, offset_consulta),
-          )
+          total_registros_nivel = repository.contar_cidades_fiscal_hierarquia(cur)
+          rows_cidade = repository.listar_cidades_fiscal_hierarquia(cur, limite_consulta, offset_consulta)
           por_cidade = [
             construir_item_cidade(cidade_item, uf_item, faturamento, imposto_valor)
-            for cidade_item, uf_item, faturamento, imposto_valor in cur.fetchall()
+            for cidade_item, uf_item, faturamento, imposto_valor in rows_cidade
           ]
           itens_nivel_atual = por_cidade
         elif nivel_resolvido == "ncm":
-          cur.execute("SELECT COUNT(DISTINCT ncm) FROM tmp_nfe_fiscal_hierarquia_base")
-          total_registros_nivel = (cur.fetchone() or [0])[0] or 0
-          cur.execute(
-            """
-            SELECT
-              ncm,
-              descricao_ncm,
-              COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) AS quantidade_produtos,
-              COALESCE(SUM(faturamento), 0) AS faturamento,
-              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-            FROM tmp_nfe_fiscal_hierarquia_base
-            GROUP BY 1, 2
-            ORDER BY 4 DESC, 1 ASC
-            LIMIT %s
-            OFFSET %s
-            """,
-            (limite_consulta, offset_consulta),
-          )
+          total_registros_nivel = repository.contar_ncms_fiscal_hierarquia(cur)
+          rows_ncm = repository.listar_ncms_fiscal_hierarquia(cur, limite_consulta, offset_consulta)
           por_ncm = [
             construir_item_ncm(
               ncm_item,
@@ -1391,30 +936,15 @@ class NFeConsultaService:
               faturamento,
               imposto_valor,
             )
-            for ncm_item, descricao_item, quantidade_produtos, faturamento, imposto_valor in cur.fetchall()
+            for ncm_item, descricao_item, quantidade_produtos, faturamento, imposto_valor in rows_ncm
           ]
           itens_nivel_atual = por_ncm
         else:
-          cur.execute("SELECT COUNT(DISTINCT CONCAT(produto_codigo, '::', produto_descricao)) FROM tmp_nfe_fiscal_hierarquia_base")
-          total_registros_nivel = (cur.fetchone() or [0])[0] or 0
-          cur.execute(
-            """
-            SELECT
-              produto_codigo,
-              produto_descricao,
-              COALESCE(SUM(faturamento), 0) AS faturamento,
-              COALESCE(SUM(imposto_valor), 0) AS imposto_valor
-            FROM tmp_nfe_fiscal_hierarquia_base
-            GROUP BY 1, 2
-            ORDER BY 3 DESC, 1 ASC, 2 ASC
-            LIMIT %s
-            OFFSET %s
-            """,
-            (limite_consulta, offset_consulta),
-          )
+          total_registros_nivel = repository.contar_produtos_fiscal_hierarquia(cur)
+          rows_produto = repository.listar_produtos_fiscal_hierarquia(cur, limite_consulta, offset_consulta)
           por_produto = [
             construir_item_produto(codigo_item, produto_item, faturamento, imposto_valor)
-            for codigo_item, produto_item, faturamento, imposto_valor in cur.fetchall()
+            for codigo_item, produto_item, faturamento, imposto_valor in rows_produto
           ]
           itens_nivel_atual = por_produto
 
@@ -1468,89 +998,26 @@ class NFeConsultaService:
       periodo_mes,
     )
 
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        cur.execute(
-          f"""
-          SELECT
-            COALESCE(SUM(i.valor_total), 0) AS total_vendido,
-            COUNT(DISTINCT COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado')) AS total_clientes
-          FROM public.notas AS n
-          JOIN public.notas_itens AS i
-            ON i.nota_id = n.id
-          WHERE {where_clause}
-          """,
-          parametros,
-        )
-        totais_row = cur.fetchone()
-        total_vendido = totais_row[0] if totais_row else Decimal("0.00")
-        total_clientes = totais_row[1] if totais_row else 0
-
-        cur.execute(
-          f"""
-          SELECT
-            cliente,
-            valor_total,
-            quantidade_documentos,
-            ticket_medio,
-            CASE
-              WHEN %s = 0 THEN 0
-              ELSE ROUND((valor_total * 100.0) / %s, 2)
-            END AS percentual_participacao
-          FROM (
-            SELECT
-              COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado') AS cliente,
-              COALESCE(SUM(i.valor_total), 0) AS valor_total,
-              COUNT(DISTINCT n.id) AS quantidade_documentos,
-              CASE
-                WHEN COUNT(DISTINCT n.id) = 0 THEN 0
-                ELSE COALESCE(SUM(i.valor_total), 0) / COUNT(DISTINCT n.id)
-              END AS ticket_medio
-            FROM public.notas AS n
-            JOIN public.notas_itens AS i
-              ON i.nota_id = n.id
-            WHERE {where_clause}
-            GROUP BY 1
-          ) base
-          ORDER BY valor_total DESC, cliente ASC
-          LIMIT %s
-          """,
-          construir_params_ranking_clientes(total_vendido, parametros, limite),
-        )
-        top_clientes_valor = construir_ranking_clientes(cur.fetchall())
-
-        cur.execute(
-          f"""
-          SELECT
-            cliente,
-            valor_total,
-            quantidade_documentos,
-            ticket_medio,
-            CASE
-              WHEN %s = 0 THEN 0
-              ELSE ROUND((valor_total * 100.0) / %s, 2)
-            END AS percentual_participacao
-          FROM (
-            SELECT
-              COALESCE(NULLIF(TRIM(n.destinatario_nome), ''), 'Cliente não identificado') AS cliente,
-              COALESCE(SUM(i.valor_total), 0) AS valor_total,
-              COUNT(DISTINCT n.id) AS quantidade_documentos,
-              CASE
-                WHEN COUNT(DISTINCT n.id) = 0 THEN 0
-                ELSE COALESCE(SUM(i.valor_total), 0) / COUNT(DISTINCT n.id)
-              END AS ticket_medio
-            FROM public.notas AS n
-            JOIN public.notas_itens AS i
-              ON i.nota_id = n.id
-            WHERE {where_clause}
-            GROUP BY 1
-          ) base
-          ORDER BY quantidade_documentos DESC, valor_total DESC, cliente ASC
-          LIMIT %s
-          """,
-          construir_params_ranking_clientes(total_vendido, parametros, limite),
-        )
-        top_clientes_quantidade = construir_ranking_clientes(cur.fetchall())
+    total_vendido, total_clientes = self._consulta_repository().obter_totais_clientes(
+      where_clause,
+      parametros,
+    )
+    top_clientes_valor = construir_ranking_clientes(
+      self._consulta_repository().listar_clientes_por_valor(
+        where_clause,
+        parametros,
+        total_vendido,
+        limite,
+      )
+    )
+    top_clientes_quantidade = construir_ranking_clientes(
+      self._consulta_repository().listar_clientes_por_quantidade(
+        where_clause,
+        parametros,
+        total_vendido,
+        limite,
+      )
+    )
 
     return construir_resposta_analise_clientes(
       cnpj_filtrado,

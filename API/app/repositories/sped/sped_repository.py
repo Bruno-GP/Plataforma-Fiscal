@@ -5,6 +5,7 @@ from typing import Optional
 
 import psycopg
 
+from app.domain.nfe.normalization import normalizar_nome_produto
 from app.services.fiscal.fiscal_clients import construir_ranking_clientes
 from app.services.fiscal.fiscal_purchases import construir_ranking_fornecedores_compras
 from app.services.fiscal.fiscal_sales import (
@@ -72,19 +73,41 @@ class SpedRepository:
     except psycopg.errors.UndefinedTable:
       return []
 
-  def _safe_top_produto_query(self, sql: str, params: tuple[object, ...]) -> list[dict]:
+  def _safe_top_produto_query(
+    self,
+    sql: str,
+    params: tuple[object, ...],
+    sort_by: str = "valor_total",
+  ) -> list[dict]:
     try:
       with psycopg.connect(**self.conn_params) as conn:
         with conn.cursor() as cur:
           cur.execute(sql, params)
-          return [
-            {
-              "produto": produto,
-              "valor_total": valor_total or Decimal("0.00"),
-              "quantidade_total": quantidade_total or Decimal("0.00"),
-            }
-            for produto, valor_total, quantidade_total in cur.fetchall()
-          ]
+          agregados: dict[str, dict[str, Decimal]] = {}
+          for produto, valor_total, quantidade_total in cur.fetchall():
+            nome = normalizar_nome_produto(produto) or "Produto não identificado"
+            item = agregados.setdefault(
+              nome,
+              {
+                "produto": nome,
+                "valor_total": Decimal("0.00"),
+                "quantidade_total": Decimal("0.00"),
+              },
+            )
+            item["valor_total"] += Decimal(valor_total or 0)
+            item["quantidade_total"] += Decimal(quantidade_total or 0)
+
+          chave_principal = "quantidade_total" if sort_by == "quantidade_total" else "valor_total"
+          chave_secundaria = "valor_total" if chave_principal == "quantidade_total" else "quantidade_total"
+
+          return sorted(
+            agregados.values(),
+            key=lambda item: (
+              -item[chave_principal],
+              -item[chave_secundaria],
+              item["produto"],
+            ),
+          )
     except psycopg.errors.UndefinedTable:
       return []
 
@@ -381,6 +404,7 @@ class SpedRepository:
       LIMIT %s
       """,
       limite_params,
+      sort_by="valor_total",
     )
 
     top_produtos_quantidade = self._safe_top_produto_query(
@@ -397,6 +421,7 @@ class SpedRepository:
       LIMIT %s
       """,
       limite_params,
+      sort_by="quantidade_total",
     )
 
     return {
@@ -467,6 +492,7 @@ class SpedRepository:
       LIMIT %s
       """,
       limite_params,
+      sort_by="valor_total",
     )
 
     top_produtos_quantidade = self._safe_top_produto_query(
@@ -483,6 +509,7 @@ class SpedRepository:
       LIMIT %s
       """,
       limite_params,
+      sort_by="quantidade_total",
     )
 
     with psycopg.connect(**self.conn_params) as conn:

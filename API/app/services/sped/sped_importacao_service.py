@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Iterable
 
 from app.domain.sped.reader import resumir_registros_sped_bytes
+from app.domain.nfe.normalization import normalizar_nome_produto
 from app.repositories.sped.sped_importacao_repository import SpedImportacaoRepository
 from app.services.reforma_tributaria.reforma_tributaria_sync_service import ReformaTributariaSyncService
 
@@ -215,7 +216,9 @@ class SpedImportacaoService:
         codigo_item = (partes[2] if len(partes) > 2 else "").strip()
         if not codigo_item:
           continue
-        descricao = (partes[3] if len(partes) > 3 else "").strip() or "Produto não identificado"
+        descricao = normalizar_nome_produto(
+          (partes[3] if len(partes) > 3 else "").strip()
+        ) or "Produto não identificado"
         unidade = (partes[6] if len(partes) > 6 else "").strip() or None
         tipo_item = (partes[7] if len(partes) > 7 else "").strip() or None
         ncm = (partes[8] if len(partes) > 8 else "").strip() or None

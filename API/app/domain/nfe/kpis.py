@@ -7,7 +7,7 @@ from psycopg.types.json import Json
 
 from app.domain.nfe.extractor import NotaExtraida
 from app.domain.nfe.normalization import (
-    normalizar_descricao_produto,
+    normalizar_nome_produto,
     normalizar_nome_cliente,
 )
 from app.models.nfe.schemas import KPIsRelatorio
@@ -86,7 +86,7 @@ class KPICalculator:
         produtos = defaultdict(Decimal)
         for n in notas:
             for item in n.itens:
-                produto = normalizar_descricao_produto(item.descricao) or "Produto nÃ£o identificado"
+                produto = normalizar_nome_produto(item.descricao) or "Produto nÃ£o identificado"
                 produtos[produto] += item.valor_total
 
         cidades = defaultdict(Decimal)

@@ -10,6 +10,7 @@ const sessionResponse = {
   email: "teste@empresa.com",
   empresa_nome: "Empresa Teste",
   tem_sped: false,
+  tem_xml_importado_valido: false,
   expires_in: 3600,
 };
 

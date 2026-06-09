@@ -1,5 +1,8 @@
 import { defineConfig } from "vitest/config";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [],
@@ -26,6 +29,6 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: { "@": path.resolve(currentDir, "./src") },
   },
 });

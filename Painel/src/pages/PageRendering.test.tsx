@@ -20,6 +20,7 @@ const mockUser = {
   email: "teste@empresa.com",
   emitente_cnpj: "12345678000199",
   tem_sped: false,
+  tem_xml_importado_valido: true,
 };
 
 const loginMock = vi.fn();

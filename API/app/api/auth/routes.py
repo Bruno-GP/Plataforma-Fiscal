@@ -20,6 +20,7 @@ from app.models.nfe.auth.schemas import (
     SessaoResponse,
 )
 from app.services.nfe.auth.login_service import LoginService
+from app.services.nfe.xml_importacao_service import XMLImportacaoService
 
 router = APIRouter()
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -43,11 +44,16 @@ def _build_auth_payload(resultado) -> tuple[AuthenticatedUser, str, int]:
     return user, access_token, expires_in
 
 
+def _obter_tem_xml_importado_valido(cnpj: str) -> bool:
+    return XMLImportacaoService().empresa_tem_xml_importado_valido(cnpj)
+
+
 def _build_response_payload(
     user: AuthenticatedUser,
     expires_in: int,
     status_value: str,
     access_token: str | None = None,
+    tem_xml_importado_valido: bool = False,
 ) -> dict:
     payload = {
         "status": status_value,
@@ -57,6 +63,7 @@ def _build_response_payload(
         "email": user.email,
         "empresa_nome": user.empresa_nome,
         "tem_sped": user.tem_sped,
+        "tem_xml_importado_valido": tem_xml_importado_valido,
         "expires_in": expires_in,
     }
     if access_token is not None:
@@ -93,7 +100,15 @@ def registrar_login(request: LoginCadastroRequest, response: Response):
 
     user, access_token, expires_in = _build_auth_payload(resultado)
     set_auth_cookie(response, access_token, expires_in)
-    return LoginCadastroResponse(**_build_response_payload(user, expires_in, "ok", access_token))
+    return LoginCadastroResponse(
+        **_build_response_payload(
+            user,
+            expires_in,
+            "ok",
+            access_token,
+            tem_xml_importado_valido=_obter_tem_xml_importado_valido(user.cnpj),
+        )
+    )
 
 
 @auth_router.post("/entrar", response_model=LoginResponse)
@@ -116,12 +131,27 @@ def autenticar_login(request: LoginRequest, response: Response):
 
     user, access_token, expires_in = _build_auth_payload(resultado)
     set_auth_cookie(response, access_token, expires_in)
-    return LoginResponse(**_build_response_payload(user, expires_in, "ok", access_token))
+    return LoginResponse(
+        **_build_response_payload(
+            user,
+            expires_in,
+            "ok",
+            access_token,
+            tem_xml_importado_valido=_obter_tem_xml_importado_valido(user.cnpj),
+        )
+    )
 
 
 @auth_router.get("/sessao", response_model=SessaoResponse)
 def obter_sessao_atual(current_user: AuthenticatedUser = Depends(get_current_user)):
-    return SessaoResponse(**_build_response_payload(current_user, get_session_expires_in(), "ok"))
+    return SessaoResponse(
+        **_build_response_payload(
+            current_user,
+            get_session_expires_in(),
+            "ok",
+            tem_xml_importado_valido=_obter_tem_xml_importado_valido(current_user.cnpj),
+        )
+    )
 
 
 @auth_router.post("/sair", status_code=status.HTTP_204_NO_CONTENT)

@@ -28,7 +28,7 @@ export default function Login() {
           title: 'Login realizado!',
           description: 'Bem-vindo ao painel de gestao.',
         });
-        navigate('/analise-vendas');
+        navigate(result.redirectTo ?? '/dashboard');
         return;
       }
 

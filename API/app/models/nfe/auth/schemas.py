@@ -19,6 +19,7 @@ class LoginCadastroResponse(BaseModel):
     email: str
     empresa_nome: str
     tem_sped: bool
+    tem_xml_importado_valido: bool
     expires_in: int
     access_token: str
 
@@ -36,6 +37,7 @@ class LoginResponse(BaseModel):
     email: str
     empresa_nome: str
     tem_sped: bool
+    tem_xml_importado_valido: bool
     expires_in: int
     access_token: str
 
@@ -48,4 +50,5 @@ class SessaoResponse(BaseModel):
     email: str
     empresa_nome: str
     tem_sped: bool
+    tem_xml_importado_valido: bool
     expires_in: int

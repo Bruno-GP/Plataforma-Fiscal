@@ -30,7 +30,7 @@ vi.mock("@/hooks/use-toast", () => ({
 
 describe("Login", () => {
   it("envia credenciais e navega para a analise de vendas quando o login tem sucesso", async () => {
-    loginMock.mockResolvedValueOnce({ ok: true });
+    loginMock.mockResolvedValueOnce({ ok: true, redirectTo: "/dashboard" });
 
     renderWithProviders(<Login />, { route: "/login" });
 
@@ -41,7 +41,7 @@ describe("Login", () => {
     await waitFor(() => {
       expect(loginMock).toHaveBeenCalledWith("teste@empresa.com", "SenhaForte123!");
     });
-    expect(navigateMock).toHaveBeenCalledWith("/analise-vendas");
+    expect(navigateMock).toHaveBeenCalledWith("/dashboard");
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Login realizado!",

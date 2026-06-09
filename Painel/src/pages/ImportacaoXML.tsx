@@ -44,7 +44,7 @@ export default function ImportacaoXML() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
 
   const {
     selectedFiles,
@@ -252,9 +252,9 @@ export default function ImportacaoXML() {
       });
 
       await invalidateFiscalProcessingCache(queryClient, 'nfe');
-
+      await refreshSession();
       await carregarPendenciasXml();
-      navigate('/analise-vendas');
+      navigate('/dashboard');
     } finally {
       stopProcessingAnimation();
       setIsProcessing(false);

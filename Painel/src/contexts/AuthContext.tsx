@@ -7,6 +7,7 @@ import {
   saveAuthSession,
   type SessionUser,
 } from '@/services/api';
+import { getDefaultWorkspaceRoute } from '@/utils/workspaceAccess';
 
 interface User {
   id: string;
@@ -15,6 +16,7 @@ interface User {
   emitente_cnpj: string;
   avatar?: string;
   tem_sped?: boolean;
+  tem_xml_importado_valido?: boolean;
 }
 
 interface StoredUserLegacy {
@@ -25,11 +27,13 @@ interface StoredUserLegacy {
   cnpj?: string;
   avatar?: string;
   tem_sped?: boolean;
+  tem_xml_importado_valido?: boolean;
 }
 
 interface AuthResult {
   ok: boolean;
   message?: string;
+  redirectTo?: string;
 }
 
 interface AuthContextType {
@@ -37,6 +41,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isReady: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
+  refreshSession: () => Promise<void>;
   register: (
     empresaNome: string,
     email: string,
@@ -58,6 +63,7 @@ interface LoginResponse {
   email: string;
   empresa_nome: string;
   tem_sped?: boolean;
+  tem_xml_importado_valido?: boolean;
   expires_in: number;
   access_token?: string;
 }
@@ -129,6 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       emitente_cnpj: emitenteCnpj,
       avatar: parsed.avatar,
       tem_sped: Boolean(parsed.tem_sped),
+      tem_xml_importado_valido: Boolean(parsed.tem_xml_importado_valido),
     };
   });
 
@@ -155,6 +162,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       emitente_cnpj: normalizeSessionCnpj(data.cnpj),
       avatar: undefined,
       tem_sped: Boolean(data.tem_sped),
+      tem_xml_importado_valido: Boolean(data.tem_xml_importado_valido),
     };
 
     setUser(nextUser);
@@ -165,22 +173,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const syncSessionFromServer = async (clearOnFailure: boolean) => {
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/auth/sessao`);
+      if (!response.ok) {
+        if (clearOnFailure) {
+          setUser(null);
+        }
+        return;
+      }
+
+      const data = (await response.json()) as LoginResponse;
+      persistAuthenticatedUser(data, data.email);
+    } catch {
+      if (clearOnFailure) {
+        setUser(null);
+      }
+    }
+  };
+
   useEffect(() => {
     const hydrateSession = async () => {
-      try {
-        const response = await apiFetch(`${API_BASE_URL}/auth/sessao`);
-        if (!response.ok) {
-          setUser(null);
-          return;
-        }
-
-        const data = (await response.json()) as LoginResponse;
-        persistAuthenticatedUser(data, data.email);
-      } catch {
-        setUser(null);
-      } finally {
-        setIsReady(true);
-      }
+      await syncSessionFromServer(true);
+      setIsReady(true);
     };
 
     void hydrateSession();
@@ -212,7 +227,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const data = (await response.json()) as LoginResponse;
     persistAuthenticatedUser(data, email);
-    return { ok: true };
+    return {
+      ok: true,
+      redirectTo: getDefaultWorkspaceRoute({
+        tem_sped: Boolean(data.tem_sped),
+        tem_xml_importado_valido: Boolean(data.tem_xml_importado_valido),
+      }),
+    };
+  };
+
+  const refreshSession = async () => {
+    await syncSessionFromServer(false);
   };
 
   const register = async (
@@ -289,6 +314,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isAuthenticated: !!user,
         isReady,
         login,
+        refreshSession,
         register,
         logout,
       }}

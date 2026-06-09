@@ -11,6 +11,7 @@ class FakeLoginResult:
     email: str = "teste@example.com"
     empresa_nome: str = "Empresa Teste"
     tem_sped: bool = False
+    tem_xml_importado_valido: bool = False
 
 
 class FakeLoginService:
@@ -20,6 +21,7 @@ class FakeLoginService:
             email=kwargs["email"],
             empresa_nome=kwargs["empresa_nome"],
             tem_sped=kwargs["tem_sped"],
+            tem_xml_importado_valido=False,
         )
 
     def autenticar(self, **kwargs):
@@ -64,6 +66,7 @@ def test_auth_registrar_preserva_status_cookie_e_payload(client, monkeypatch):
     assert payload["email"] == "teste@example.com"
     assert payload["empresa_nome"] == "Empresa Teste"
     assert payload["tem_sped"] is False
+    assert payload["tem_xml_importado_valido"] is False
     assert payload["expires_in"] > 0
     assert isinstance(payload["access_token"], str)
     assert payload["access_token"]
@@ -83,6 +86,7 @@ def test_auth_entrar_preserva_status_cookie_e_payload(client, monkeypatch):
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["email"] == "teste@example.com"
+    assert payload["tem_xml_importado_valido"] is False
     assert isinstance(payload["access_token"], str)
     assert payload["access_token"]
     assert "plataforma_fiscal_session=" in response.headers["set-cookie"]
@@ -133,5 +137,6 @@ def test_auth_sessao_e_logout_preservam_contratos(client):
     assert sessao.status_code == 200
     assert sessao.json()["status"] == "ok"
     assert sessao.json()["cnpj"] == "12345678000190"
+    assert sessao.json()["tem_xml_importado_valido"] is False
     assert logout.status_code == 204
     assert "plataforma_fiscal_session=" in logout.headers["set-cookie"]

@@ -51,6 +51,7 @@ export interface SessionUser {
   emitente_cnpj: string;
   avatar?: string;
   tem_sped?: boolean;
+  tem_xml_importado_valido?: boolean;
 }
 
 export interface AuthSession {

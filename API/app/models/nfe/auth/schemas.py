@@ -7,6 +7,8 @@ class LoginCadastroRequest(BaseModel):
     senha: str = Field(..., min_length=12, description="Senha de acesso")
     cnpj: str = Field(..., description="CNPJ vinculado ao cadastro da empresa")
     tem_sped: bool = Field(default=False, description="Define se empresa usa SPED Fiscal")
+    estado: str | None = Field(default=None, description="UF da empresa para fallback de NFCe")
+    cidade: str | None = Field(default=None, description="Cidade da empresa para fallback de NFCe")
 
 
 class LoginCadastroResponse(BaseModel):

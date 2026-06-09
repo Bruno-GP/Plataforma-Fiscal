@@ -235,7 +235,7 @@ def test_api_startup_does_not_mutate_database_schema():
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 
-    assert revision == "20260515_0004"
+    assert revision == "20260608_0006"
 
 
 def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):
@@ -298,6 +298,20 @@ def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):
     assert login_columns["tentativas_falhas"] == ("integer", "NO")
     assert login_columns["bloqueado_ate"] == ("timestamp with time zone", "YES")
     assert login_columns["ultimo_login_em"] == ("timestamp with time zone", "YES")
+
+    empresa_columns = {
+        row[0]: (row[1], row[2])
+        for row in fetch_all(
+            migrated_db,
+            """
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'empresas'
+            """,
+        )
+    }
+    assert empresa_columns["estado"] == ("character", "YES")
+    assert empresa_columns["cidade"] == ("character varying", "YES")
 
     constraints = {
         row[0]

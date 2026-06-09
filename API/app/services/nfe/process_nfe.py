@@ -19,6 +19,7 @@ from app.domain.nfe.extractor import NFeExtractor
 from app.domain.nfe.consolidator import NFeConsolidator
 from app.domain.nfe.kpis import KPICalculator
 from app.services.nfe.empresa_service import EmpresaService, normalizar_cnpj
+from app.services.company_profile_service import CompanyProfileService
 from app.services.nfe.nfe_notas_service import NFeNotasService
 from app.services.nfe.nfe_itens_service import NFeItensService
 from app.services.nfe.nfe_process_service import NFeProcessamentosService
@@ -27,6 +28,32 @@ from app.services.reforma_tributaria.reforma_tributaria_sync_service import Refo
 logger = logging.getLogger("ProcessarNFeService")
 
 class ProcessarNFeService:
+    def _aplicar_fallback_localidade_empresa(
+        self,
+        notas,
+        estado_empresa: str | None,
+        cidade_empresa: str | None,
+    ) -> None:
+        estado_normalizado = (estado_empresa or "").strip()
+        cidade_normalizada = (cidade_empresa or "").strip()
+
+        if not estado_normalizado and not cidade_normalizada:
+            return
+
+        for nota in notas:
+            if str(nota.modelo or "").strip() != "65":
+                continue
+
+            cidade_atual = (nota.destinatario_cidade or "").strip()
+            uf_atual = (nota.destinatario_uf or "").strip()
+            if cidade_atual and uf_atual:
+                continue
+
+            if cidade_normalizada:
+                nota.destinatario_cidade = cidade_normalizada
+            if estado_normalizado:
+                nota.destinatario_uf = estado_normalizado
+
     def _registrar_progresso(self, percentual: int) -> None:
         percentual_normalizado = max(0, min(100, percentual))
         ultimo_percentual = getattr(self, "_ultimo_progresso", 0)
@@ -191,6 +218,13 @@ class ProcessarNFeService:
 
             nome_emitente = next(iter(nomes_emitente))
             self._registrar_progresso(40)
+
+            empresa_profile = CompanyProfileService().obter_empresa(cnpj_emitente)
+            self._aplicar_fallback_localidade_empresa(
+                notas,
+                empresa_profile.get("estado") if empresa_profile else None,
+                empresa_profile.get("cidade") if empresa_profile else None,
+            )
 
             # 6️⃣ Consolidar notas e itens
             consolidacao = NFeConsolidator().consolidar(notas)

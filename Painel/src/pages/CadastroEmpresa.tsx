@@ -14,6 +14,8 @@ export default function CadastroEmpresaInterno() {
   const [password, setPassword] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [temSped, setTemSped] = useState(false);
+  const [estado, setEstado] = useState('');
+  const [cidade, setCidade] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const { toast } = useToast();
@@ -24,7 +26,7 @@ export default function CadastroEmpresaInterno() {
     setIsLoading(true);
 
     try {
-      const result = await register(empresaNome, email, password, cnpj, temSped, false);
+      const result = await register(empresaNome, email, password, cnpj, temSped, false, estado, cidade);
 
       if (result.ok) {
         toast({
@@ -85,6 +87,29 @@ export default function CadastroEmpresaInterno() {
                 maxLength={18}
                 required
               />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="estado">UF da empresa</Label>
+                <Input
+                  id="estado"
+                  type="text"
+                  placeholder="SP"
+                  value={estado}
+                  onChange={(e) => setEstado(e.target.value.toUpperCase())}
+                  maxLength={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cidade">Cidade da empresa</Label>
+                <Input
+                  id="cidade"
+                  type="text"
+                  placeholder="São Paulo"
+                  value={cidade}
+                  onChange={(e) => setCidade(e.target.value)}
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="temSped">Origem fiscal</Label>

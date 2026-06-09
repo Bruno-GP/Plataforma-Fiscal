@@ -77,6 +77,8 @@ def registrar_login(request: LoginCadastroRequest, response: Response):
             senha=request.senha,
             cnpj=request.cnpj,
             tem_sped=request.tem_sped,
+            estado=request.estado,
+            cidade=request.cidade,
         )
     except ValueError as exc:
         raise HTTPException(

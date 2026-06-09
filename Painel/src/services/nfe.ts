@@ -23,6 +23,7 @@ export interface NfeRankingItem {
   cliente?: string;
   produto?: string;
   cidade?: string;
+  uf?: string;
   valor_total?: number | string;
   percentual?: number | string;
 }
@@ -554,7 +555,7 @@ export interface DashboardVendasResumo {
   ticket_medio: number | string;
   top_clientes: Array<{ cliente?: string; valor_total?: number | string }>;
   top_produtos: Array<{ produto?: string; valor_total?: number | string }>;
-  top_cidades: Array<{ cidade?: string; valor_total?: number | string }>;
+  top_cidades: Array<{ cidade?: string; uf?: string; valor_total?: number | string }>;
 }
 
 export interface DashboardVendasResponse {

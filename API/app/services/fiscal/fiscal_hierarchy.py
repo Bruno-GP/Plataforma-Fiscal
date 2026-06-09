@@ -6,6 +6,14 @@ def _normalizar_ncm_filtro(valor: str) -> str:
   return "".join(ch for ch in valor if ch.isdigit())
 
 
+def _expressao_estado_nfe() -> str:
+  return "COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), NULLIF(TRIM(e.estado), ''), 'Sem UF')"
+
+
+def _expressao_cidade_nfe() -> str:
+  return "COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), NULLIF(TRIM(e.cidade), ''), 'Cidade nao identificada')"
+
+
 def construir_filtros_hierarquia_nfe(
   emitente_cnpj: str,
   periodo_ano: Optional[int] = None,
@@ -30,11 +38,11 @@ def construir_filtros_hierarquia_nfe(
     parametros.append(periodo_mes)
 
   if estado and estado.strip():
-    filtros.append("UPPER(COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), 'Sem UF')) = %s")
+    filtros.append(f"UPPER({_expressao_estado_nfe()}) = %s")
     parametros.append(estado.strip().upper())
 
   if cidade and cidade.strip():
-    filtros.append("UPPER(COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nao identificada')) = %s")
+    filtros.append(f"UPPER({_expressao_cidade_nfe()}) = %s")
     parametros.append(cidade.strip().upper())
 
   if ncm and ncm.strip():

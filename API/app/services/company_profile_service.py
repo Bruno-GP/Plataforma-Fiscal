@@ -5,7 +5,7 @@ from app.services.nfe.postres_config import carregar_config_postgres, opcoes_con
 
 
 class CompanyProfileService:
-  _required_empresas_columns = {"id", "cnpj", "nome", "tem_sped"}
+  _required_empresas_columns = {"id", "cnpj", "nome", "tem_sped", "estado", "cidade"}
 
   def __init__(self) -> None:
     config = carregar_config_postgres()
@@ -65,3 +65,33 @@ class CompanyProfileService:
       return False
 
     return bool(row[0])
+
+  def obter_empresa(self, cnpj: str) -> dict | None:
+    cnpj_normalizado = normalizar_cnpj(cnpj)
+    if not cnpj_normalizado:
+      return None
+
+    with self._connect() as conn:
+      with conn.cursor() as cur:
+        cur.execute(
+          """
+          SELECT id, cnpj, nome, tem_sped, estado, cidade
+          FROM public.empresas
+          WHERE regexp_replace(cnpj, '\\D', '', 'g') = %s
+          LIMIT 1;
+          """,
+          (cnpj_normalizado,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+      return None
+
+    return {
+      "id": row[0],
+      "cnpj": row[1],
+      "nome": row[2],
+      "tem_sped": bool(row[3]),
+      "estado": (row[4] or "").strip() if row[4] else "",
+      "cidade": (row[5] or "").strip() if row[5] else "",
+    }

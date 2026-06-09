@@ -24,6 +24,11 @@ logger = logging.getLogger("LoginService")
 logger.setLevel(logging.INFO)
 
 
+def _normalizar_localidade(valor: str | None) -> str | None:
+    texto = (valor or "").strip()
+    return texto or None
+
+
 @dataclass
 class LoginResult:
     login_id: int
@@ -38,7 +43,7 @@ class LoginService:
     _schema_lock = Lock()
     _schema_ensured = False
     _required_columns_by_table = {
-        "empresas": {"id", "cnpj", "nome", "tem_sped"},
+        "empresas": {"id", "cnpj", "nome", "tem_sped", "estado", "cidade"},
         "login": {
             "id",
             "empresa_id",
@@ -265,9 +270,20 @@ class LoginService:
             )
         conn.commit()
 
-    def registrar(self, empresa_nome: str, email: str, senha: str, cnpj: str, tem_sped: bool = False) -> LoginResult:
+    def registrar(
+        self,
+        empresa_nome: str,
+        email: str,
+        senha: str,
+        cnpj: str,
+        tem_sped: bool = False,
+        estado: str | None = None,
+        cidade: str | None = None,
+    ) -> LoginResult:
         cnpj_normalizado = normalizar_cnpj(cnpj)
         empresa_nome_normalizado = empresa_nome.strip()
+        estado_normalizado = _normalizar_localidade(estado)
+        cidade_normalizada = _normalizar_localidade(cidade)
         if len(empresa_nome_normalizado) < 2:
             raise ValueError("Informe um nome de empresa válido.")
         self._validar_forca_senha(senha)
@@ -278,7 +294,7 @@ class LoginService:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, cnpj, nome
+                    SELECT id, cnpj, nome, estado, cidade
                     FROM public.empresas
                     WHERE cnpj = %s;
                     """,
@@ -293,11 +309,17 @@ class LoginService:
                     )
                     cur.execute(
                         """
-                        INSERT INTO public.empresas (cnpj, nome, tem_sped)
-                        VALUES (%s, %s, %s)
-                        RETURNING id, cnpj, nome;
+                        INSERT INTO public.empresas (cnpj, nome, tem_sped, estado, cidade)
+                        VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id, cnpj, nome, estado, cidade;
                         """,
-                        (cnpj_normalizado, empresa_nome_normalizado, tem_sped),
+                        (
+                            cnpj_normalizado,
+                            empresa_nome_normalizado,
+                            tem_sped,
+                            estado_normalizado,
+                            cidade_normalizada,
+                        ),
                     )
                     empresa = cur.fetchone()
                 else:
@@ -305,10 +327,18 @@ class LoginService:
                         """
                         UPDATE public.empresas
                         SET nome = %s,
-                            tem_sped = %s
+                            tem_sped = %s,
+                            estado = COALESCE(%s, estado),
+                            cidade = COALESCE(%s, cidade)
                         WHERE id = %s;
                         """,
-                        (empresa_nome_normalizado, tem_sped, empresa[0]),
+                        (
+                            empresa_nome_normalizado,
+                            tem_sped,
+                            estado_normalizado,
+                            cidade_normalizada,
+                            empresa[0],
+                        ),
                     )
 
                 cur.execute(

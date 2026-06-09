@@ -15,6 +15,11 @@ logger.disabled = True
 def normalizar_cnpj(cnpj: str) -> str:
     return "".join(filter(str.isdigit, cnpj))
 
+
+def _normalizar_localidade(valor: str | None) -> str | None:
+    texto = (valor or "").strip()
+    return texto or None
+
 # =========================
 # SERVICE
 # =========================
@@ -34,10 +39,18 @@ class EmpresaService:
             "connect_timeout": 5,
         }
 
-    def obter_ou_criar(self, cnpj_emitente: str, nome_emitente: str) -> int:
+    def obter_ou_criar(
+        self,
+        cnpj_emitente: str,
+        nome_emitente: str,
+        estado: str | None = None,
+        cidade: str | None = None,
+    ) -> int:
         logger.debug("Iniciando obter_ou_criar")
 
         cnpj = normalizar_cnpj(cnpj_emitente)
+        estado_normalizado = _normalizar_localidade(estado)
+        cidade_normalizada = _normalizar_localidade(cidade)
         #logger.debug(f"CNPJ recebido: {cnpj_emitente}")
         #logger.debug(f"CNPJ normalizado: {cnpj}")
         #logger.debug(f"Nome emitente: {nome_emitente}")
@@ -51,10 +64,13 @@ class EmpresaService:
                     #logger.debug("Cursor criado")
 
                     sql_insert = """
-                        INSERT INTO public.empresas (cnpj, nome)
-                        VALUES (%s, %s)
+                        INSERT INTO public.empresas (cnpj, nome, estado, cidade)
+                        VALUES (%s, %s, %s, %s)
                         ON CONFLICT (cnpj)
-                        DO UPDATE SET nome = EXCLUDED.nome
+                        DO UPDATE SET
+                            nome = EXCLUDED.nome,
+                            estado = COALESCE(EXCLUDED.estado, public.empresas.estado),
+                            cidade = COALESCE(EXCLUDED.cidade, public.empresas.cidade)
                         RETURNING id;
                     """
 
@@ -62,7 +78,7 @@ class EmpresaService:
                     #logger.debug(f"SQL: {sql_insert.strip()}")
                     #logger.debug(f"Params: {(cnpj, nome_emitente)}")
 
-                    cur.execute(sql_insert, (cnpj, nome_emitente))
+                    cur.execute(sql_insert, (cnpj, nome_emitente, estado_normalizado, cidade_normalizada))
 
                     #logger.debug("SQL executado, buscando RETURNING id")
                     row = cur.fetchone()

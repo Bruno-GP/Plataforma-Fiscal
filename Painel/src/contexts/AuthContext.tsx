@@ -37,7 +37,16 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isReady: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
-  register: (empresaNome: string, email: string, password: string, cnpj: string, temSped: boolean, autoLogin?: boolean) => Promise<AuthResult>;
+  register: (
+    empresaNome: string,
+    email: string,
+    password: string,
+    cnpj: string,
+    temSped: boolean,
+    autoLogin?: boolean,
+    estado?: string,
+    cidade?: string,
+  ) => Promise<AuthResult>;
   logout: () => void;
 }
 
@@ -213,6 +222,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     cnpj: string,
     temSped: boolean,
     autoLogin = true,
+    estado?: string,
+    cidade?: string,
   ): Promise<AuthResult> => {
     const empresaNomeNormalizado = empresaNome.trim();
     const emailNormalizado = email.trim();
@@ -237,14 +248,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        empresa_nome: empresaNomeNormalizado,
-        email: emailNormalizado,
-        senha: senhaInformada,
-        cnpj: cnpjNormalizado,
-        tem_sped: temSped,
-      }),
-    });
+        body: JSON.stringify({
+          empresa_nome: empresaNomeNormalizado,
+          email: emailNormalizado,
+          senha: senhaInformada,
+          cnpj: cnpjNormalizado,
+          tem_sped: temSped,
+          estado: estado?.trim() || undefined,
+          cidade: cidade?.trim() || undefined,
+        }),
+      });
 
     if (!response.ok) {
       const errorData = (await response.json().catch(() => null)) as ApiErrorDetail | null;

@@ -131,6 +131,15 @@ const extractCityName = (cityLabel?: string) => {
     .trim();
 };
 
+const resolveCityUf = (cityLabel?: string, uf?: string | null) => {
+  const ufNormalizada = (uf ?? '').trim().toUpperCase();
+  if (ufNormalizada && ufToRegion[ufNormalizada]) {
+    return ufNormalizada;
+  }
+
+  return extractUfFromCity(cityLabel);
+};
+
 type GeoJsonFeature = {
   type: 'Feature';
   properties: {
@@ -189,6 +198,7 @@ interface TopCityItem {
   value: string;
   rawValue: number;
   percent: number | null;
+  uf?: string | null;
 }
 
 interface TopRegionItem {
@@ -227,7 +237,7 @@ export function SalesRegionCityMap({
   });
 
   const topCidades = useMemo(
-    () => topCidadesItems.map((item) => ({ cidade: item.title, valor_total: item.rawValue })),
+    () => topCidadesItems.map((item) => ({ cidade: item.title, uf: item.uf, valor_total: item.rawValue })),
     [topCidadesItems],
   );
 
@@ -243,7 +253,7 @@ export function SalesRegionCityMap({
     ]);
 
     topCidades.forEach((cidade) => {
-      const uf = extractUfFromCity(cidade.cidade);
+      const uf = resolveCityUf(cidade.cidade, cidade.uf);
       const regiao = uf ? ufToRegion[uf] : 'Não identificado';
       regiaoMap.set(regiao, (regiaoMap.get(regiao) ?? 0) + cidade.valor_total);
     });
@@ -322,7 +332,7 @@ export function SalesRegionCityMap({
     const salesByState = new Map<string, number>();
 
     topCidades.forEach((cidade) => {
-      const uf = extractUfFromCity(cidade.cidade);
+      const uf = resolveCityUf(cidade.cidade, cidade.uf);
       if (!uf) return;
       salesByState.set(uf, (salesByState.get(uf) ?? 0) + cidade.valor_total);
     });
@@ -528,7 +538,7 @@ export function SalesRegionCityMap({
     const agrupado = new Map<string, { key: string; nome: string; valor: number; percentual: number }[]>();
 
     topCidadesItems.forEach((cidade) => {
-      const uf = extractUfFromCity(cidade.title);
+      const uf = resolveCityUf(cidade.title, cidade.uf);
       if (!uf) return;
 
       const cidades = agrupado.get(uf) ?? [];
@@ -563,7 +573,7 @@ export function SalesRegionCityMap({
 
     const topCitySalesByName = new Map<string, number>();
     topCidadesItems.forEach((cidade) => {
-      const ufCidade = extractUfFromCity(cidade.title);
+      const ufCidade = resolveCityUf(cidade.title, cidade.uf);
       if (!ufCidade || ufCidade !== estadoFocoCidade) return;
 
       topCitySalesByName.set(normalizeLabel(extractCityName(cidade.title)), cidade.rawValue);
@@ -620,7 +630,7 @@ export function SalesRegionCityMap({
 
   const topCidadesDoEstadoSelecionado = useMemo(
     () => topCidadesItems
-      .filter((item) => extractUfFromCity(item.title) === estadoFocoCidade)
+      .filter((item) => resolveCityUf(item.title, item.uf) === estadoFocoCidade)
       .sort((a, b) => b.rawValue - a.rawValue),
     [estadoFocoCidade, topCidadesItems],
   );
@@ -678,7 +688,7 @@ export function SalesRegionCityMap({
     const totalRegioes = topRegioesItems.reduce((acc, item) => acc + item.rawValue, 0);
 
     const cidadesSemUf = topCidadesItems
-      .filter((item) => !extractUfFromCity(item.title))
+      .filter((item) => !resolveCityUf(item.title, item.uf))
       .map((item) => ({
         key: item.key,
         title: item.title,

@@ -6,6 +6,16 @@ from typing import Optional
 import psycopg
 
 
+NFE_EMPRESA_JOIN = """
+  LEFT JOIN public.empresas AS e
+    ON regexp_replace(COALESCE(e.cnpj, ''), '\\D', '', 'g')
+       = regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')
+"""
+
+NFE_ESTADO_EXPR = "COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), NULLIF(TRIM(e.estado), ''), 'Sem UF')"
+NFE_CIDADE_EXPR = "COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), NULLIF(TRIM(e.cidade), ''), 'Cidade nao identificada')"
+
+
 class NFeConsultaRepository:
   """Consultas de leitura usadas pelo service analitico de NFe."""
 
@@ -256,13 +266,14 @@ class NFeConsultaRepository:
         cur.execute(
           f"""
           SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nÃƒÂ£o identificada') AS cidade,
-            COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
+            {NFE_CIDADE_EXPR} AS cidade,
+            {NFE_ESTADO_EXPR} AS uf,
             COALESCE(SUM(i.valor_total), 0) AS valor_total,
             COUNT(DISTINCT n.id) AS quantidade_documentos
           FROM public.notas AS n
           JOIN public.notas_itens AS i
             ON i.nota_id = n.id
+          {NFE_EMPRESA_JOIN}
           WHERE {where_clause}
           GROUP BY 1, 2
           ORDER BY 3 DESC, 1 ASC
@@ -282,12 +293,13 @@ class NFeConsultaRepository:
         cur.execute(
           f"""
           SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
+            {NFE_ESTADO_EXPR} AS uf,
             COALESCE(SUM(i.valor_total), 0) AS valor_total,
             COUNT(DISTINCT n.id) AS quantidade_documentos
           FROM public.notas AS n
           JOIN public.notas_itens AS i
             ON i.nota_id = n.id
+          {NFE_EMPRESA_JOIN}
           WHERE {where_clause}
           GROUP BY 1
           ORDER BY 2 DESC, 1 ASC
@@ -322,8 +334,8 @@ class NFeConsultaRepository:
         SELECT
           n.id AS documento_id,
           i.id AS item_id,
-          COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), 'Sem UF') AS estado,
-          COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nao identificada') AS cidade,
+          {NFE_ESTADO_EXPR} AS estado,
+          {NFE_CIDADE_EXPR} AS cidade,
           COALESCE(NULLIF(TRIM(i.produto_codigo), ''), 'SEM-CODIGO') AS produto_codigo,
           COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto sem descricao') AS produto_descricao,
           regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g') AS ncm_codigo,
@@ -337,6 +349,7 @@ class NFeConsultaRepository:
         FROM public.notas AS n
         JOIN public.notas_itens AS i
           ON i.nota_id = n.id
+        {NFE_EMPRESA_JOIN}
         WHERE {where_clause}
       ),
       notas_rateio AS (

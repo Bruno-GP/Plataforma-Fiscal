@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.municipios.routes import router as municipios_router
 from app.api.auth.routes import router as auth_router
 from app.api.geo.routes import router as geo_router
 from app.api.jobs.routes import router as jobs_router
@@ -13,6 +14,7 @@ router = APIRouter()
 router.include_router(nfe_router)
 router.include_router(jobs_router)
 router.include_router(auth_router)
+router.include_router(municipios_router)
 router.include_router(sped_router)
 router.include_router(geo_router)
 router.include_router(ncm_router)

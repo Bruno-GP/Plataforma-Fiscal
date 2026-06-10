@@ -5,7 +5,7 @@ from app.services.nfe.postres_config import carregar_config_postgres, opcoes_con
 
 
 class CompanyProfileService:
-  _required_empresas_columns = {"id", "cnpj", "nome", "tem_sped", "estado", "cidade"}
+  _required_empresas_columns = {"id", "cnpj", "nome", "tem_sped", "estado", "cidade", "municipio_id", "codigo_ibge"}
 
   def __init__(self) -> None:
     config = carregar_config_postgres()
@@ -75,7 +75,7 @@ class CompanyProfileService:
       with conn.cursor() as cur:
         cur.execute(
           """
-          SELECT id, cnpj, nome, tem_sped, estado, cidade
+          SELECT id, cnpj, nome, tem_sped, estado, cidade, municipio_id, codigo_ibge
           FROM public.empresas
           WHERE regexp_replace(cnpj, '\\D', '', 'g') = %s
           LIMIT 1;
@@ -94,4 +94,6 @@ class CompanyProfileService:
       "tem_sped": bool(row[3]),
       "estado": (row[4] or "").strip() if row[4] else "",
       "cidade": (row[5] or "").strip() if row[5] else "",
+      "municipio_id": (row[6] or "").strip() if row[6] else "",
+      "codigo_ibge": (row[7] or "").strip() if row[7] else "",
     }

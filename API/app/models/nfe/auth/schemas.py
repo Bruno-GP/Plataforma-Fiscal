@@ -9,6 +9,8 @@ class LoginCadastroRequest(BaseModel):
     tem_sped: bool = Field(default=False, description="Define se empresa usa SPED Fiscal")
     estado: str | None = Field(default=None, description="UF da empresa para fallback de NFCe")
     cidade: str | None = Field(default=None, description="Cidade da empresa para fallback de NFCe")
+    municipio_id: str | None = Field(default=None, description="Identificador do municipio no catalogo local")
+    codigo_ibge: str | None = Field(default=None, description="Codigo IBGE do municipio no catalogo local")
 
 
 class LoginCadastroResponse(BaseModel):

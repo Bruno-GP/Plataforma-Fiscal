@@ -130,6 +130,21 @@ def test_auth_database_error_vira_503(client, monkeypatch):
     assert "indispon" in login.json()["detail"]
 
 
+def test_auth_registrar_rejeita_uf_invalida_antes_de_salvar(client, monkeypatch):
+    monkeypatch.setattr("app.api.auth.routes.get_login_service", lambda: FakeLoginService())
+
+    response = client.post(
+        "/api/auth/registrar",
+        json={
+            **_cadastro_payload(),
+            "estado": "S",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "UF informada" in response.json()["detail"]
+
+
 def test_auth_sessao_e_logout_preservam_contratos(client):
     sessao = client.get("/api/auth/sessao")
     logout = client.post("/api/auth/sair")

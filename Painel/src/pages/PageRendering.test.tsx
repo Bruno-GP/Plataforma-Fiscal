@@ -334,6 +334,25 @@ vi.mock("@/services/nfe", async () => {
   };
 });
 
+vi.mock("@/services/municipios", () => ({
+  fetchUfsCatalogo: vi.fn(() =>
+    Promise.resolve([
+      { uf: "SP", label: "SP", quantidade_municipios: 645 },
+      { uf: "RJ", label: "RJ", quantidade_municipios: 92 },
+    ]),
+  ),
+  fetchMunicipiosPorUf: vi.fn((uf: string) =>
+    Promise.resolve(
+      uf === "SP"
+        ? [
+            { municipio_id: "3550308", codigo_ibge: "3550308", nome: "Sao Paulo", uf: "SP" },
+            { municipio_id: "3549904", codigo_ibge: "3549904", nome: "Santos", uf: "SP" },
+          ]
+        : [],
+    ),
+  ),
+}));
+
 vi.mock("@/services/sped", () => ({
   fetchSpedKpis: vi.fn(() => Promise.resolve(kpisResponse)),
   fetchSpedDashboardCompras: vi.fn(() => Promise.resolve(dashboardComprasResponse)),
@@ -519,6 +538,8 @@ describe("renderizacao por pagina do frontend", () => {
     expect(screen.getByLabelText(/cnpj/i)).toBeRequired();
     expect(screen.getByLabelText(/email do login/i)).toBeRequired();
     expect(screen.getByLabelText(/senha/i)).toBeRequired();
+    expect(screen.getByRole("button", { name: /uf da empresa/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cidade da empresa/i })).toBeDisabled();
   });
 
   it("mantem a suite estavel esperando queries assíncronas terminarem", async () => {

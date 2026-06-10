@@ -43,7 +43,7 @@ class LoginService:
     _schema_lock = Lock()
     _schema_ensured = False
     _required_columns_by_table = {
-        "empresas": {"id", "cnpj", "nome", "tem_sped", "estado", "cidade"},
+        "empresas": {"id", "cnpj", "nome", "tem_sped", "estado", "cidade", "municipio_id", "codigo_ibge"},
         "login": {
             "id",
             "empresa_id",

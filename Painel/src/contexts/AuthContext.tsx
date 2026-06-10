@@ -51,6 +51,8 @@ interface AuthContextType {
     autoLogin?: boolean,
     estado?: string,
     cidade?: string,
+    municipioId?: string,
+    codigoIbge?: string,
   ) => Promise<AuthResult>;
   logout: () => void;
 }
@@ -249,6 +251,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     autoLogin = true,
     estado?: string,
     cidade?: string,
+    municipioId?: string,
+    codigoIbge?: string,
   ): Promise<AuthResult> => {
     const empresaNomeNormalizado = empresaNome.trim();
     const emailNormalizado = email.trim();
@@ -281,6 +285,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           tem_sped: temSped,
           estado: estado?.trim() || undefined,
           cidade: cidade?.trim() || undefined,
+          municipio_id: municipioId?.trim() || undefined,
+          codigo_ibge: codigoIbge?.trim() || undefined,
         }),
       });
 

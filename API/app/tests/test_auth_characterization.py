@@ -27,6 +27,9 @@ class FakeLoginService:
     def autenticar(self, **kwargs):
         return FakeLoginResult(email=kwargs["email"])
 
+    def atualizar_senha(self, **kwargs):
+        return None
+
 
 class FailingValueLoginService(FakeLoginService):
     def registrar(self, **kwargs):
@@ -35,6 +38,9 @@ class FailingValueLoginService(FakeLoginService):
     def autenticar(self, **kwargs):
         raise ValueError("credenciais invalidas")
 
+    def atualizar_senha(self, **kwargs):
+        raise ValueError("senha invalida")
+
 
 class FailingDatabaseLoginService(FakeLoginService):
     def registrar(self, **kwargs):
@@ -42,6 +48,20 @@ class FailingDatabaseLoginService(FakeLoginService):
 
     def autenticar(self, **kwargs):
         raise psycopg.OperationalError("database down")
+
+    def atualizar_senha(self, **kwargs):
+        raise psycopg.OperationalError("database down")
+
+
+class FakeCompanyProfileService:
+    def obter_empresa(self, cnpj):
+        return {
+            "id": 1,
+            "cnpj": cnpj,
+            "nome": "Empresa Teste",
+            "estado": "SP",
+            "cidade": "Sao Paulo",
+        }
 
 
 def _cadastro_payload():
@@ -155,3 +175,54 @@ def test_auth_sessao_e_logout_preservam_contratos(client):
     assert sessao.json()["tem_xml_importado_valido"] is False
     assert logout.status_code == 204
     assert "plataforma_fiscal_session=" in logout.headers["set-cookie"]
+
+
+def test_auth_perfil_retorna_dados_da_empresa_da_sessao(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.auth.routes.get_company_profile_service",
+        lambda: FakeCompanyProfileService(),
+    )
+
+    response = client.get("/api/auth/perfil")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["cnpj"] == "12345678000190"
+    assert payload["empresa_nome"] == "Empresa Teste"
+    assert payload["estado"] == "SP"
+    assert payload["cidade"] == "Sao Paulo"
+
+
+def test_auth_senha_atualiza_somente_a_senha_do_usuario_logado(client, monkeypatch):
+    chamadas = []
+
+    class RecordingLoginService(FakeLoginService):
+        def atualizar_senha(self, **kwargs):
+            chamadas.append(kwargs)
+
+    monkeypatch.setattr("app.api.auth.routes.get_login_service", lambda: RecordingLoginService())
+
+    response = client.patch("/api/auth/senha", json={"nova_senha": "SenhaNova@123"})
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Senha atualizada com sucesso."
+    assert chamadas == [{"login_id": 1, "nova_senha": "SenhaNova@123"}]
+
+
+def test_auth_senha_rejeita_senha_em_branco(client, monkeypatch):
+    monkeypatch.setattr("app.api.auth.routes.get_login_service", lambda: FailingValueLoginService())
+
+    response = client.patch("/api/auth/senha", json={"nova_senha": "   "})
+
+    assert response.status_code == 400
+    assert "senha" in response.json()["detail"].lower()
+
+
+def test_auth_senha_database_error_vira_503(client, monkeypatch):
+    monkeypatch.setattr("app.api.auth.routes.get_login_service", lambda: FailingDatabaseLoginService())
+
+    response = client.patch("/api/auth/senha", json={"nova_senha": "SenhaNova@123"})
+
+    assert response.status_code == 503
+    assert "indispon" in response.json()["detail"].lower()

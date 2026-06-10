@@ -13,12 +13,16 @@ from app.core.security import (
     set_auth_cookie,
 )
 from app.models.nfe.auth.schemas import (
+    CompanyProfileResponse,
     LoginCadastroRequest,
     LoginCadastroResponse,
     LoginRequest,
     LoginResponse,
+    UpdatePasswordRequest,
+    UpdatePasswordResponse,
     SessaoResponse,
 )
+from app.services.company_profile_service import CompanyProfileService
 from app.services.Municipios.municipios_catalog_service import MunicipiosCatalogService
 from app.services.nfe.auth.login_service import LoginService
 from app.services.nfe.empresa_service import EmpresaService
@@ -31,6 +35,11 @@ auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 @lru_cache(maxsize=1)
 def get_login_service() -> LoginService:
     return LoginService()
+
+
+@lru_cache(maxsize=1)
+def get_company_profile_service() -> CompanyProfileService:
+    return CompanyProfileService()
 
 
 def _build_auth_payload(resultado) -> tuple[AuthenticatedUser, str, int]:
@@ -197,6 +206,53 @@ def obter_sessao_atual(current_user: AuthenticatedUser = Depends(get_current_use
             "ok",
             tem_xml_importado_valido=_obter_tem_xml_importado_valido(current_user.cnpj),
         )
+    )
+
+
+@auth_router.get("/perfil", response_model=CompanyProfileResponse)
+def obter_perfil_empresa(current_user: AuthenticatedUser = Depends(get_current_user)):
+    perfil = get_company_profile_service().obter_empresa(current_user.cnpj)
+    if not perfil:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nao foi possivel localizar os dados da empresa da sessao atual.",
+        )
+
+    return CompanyProfileResponse(
+        status="ok",
+        login_id=current_user.login_id,
+        empresa_id=current_user.empresa_id,
+        cnpj=perfil.get("cnpj", current_user.cnpj),
+        empresa_nome=perfil.get("nome") or current_user.empresa_nome,
+        estado=perfil.get("estado") or "",
+        cidade=perfil.get("cidade") or "",
+    )
+
+
+@auth_router.patch("/senha", response_model=UpdatePasswordResponse)
+def atualizar_senha(
+    request: UpdatePasswordRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    try:
+        get_login_service().atualizar_senha(
+            login_id=current_user.login_id,
+            nova_senha=request.nova_senha,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except psycopg.OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servico de autenticacao indisponivel no momento.",
+        ) from exc
+
+    return UpdatePasswordResponse(
+        status="ok",
+        message="Senha atualizada com sucesso.",
     )
 
 

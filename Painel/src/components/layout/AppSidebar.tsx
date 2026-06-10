@@ -89,12 +89,12 @@ const createNavigationGroups = (temSped?: boolean): NavigationGroup[] => {
         { label: 'Relatorios IA', path: '/relatorios-ia', icon: Sparkles },
       ],
     },
-    // {
-    //   label: 'Configuracoes',
-    //   items: [
-    //     { label: 'Configuracoes', path: '/configuracoes', icon: Settings },
-    //   ],
-    // },
+    {
+      label: 'Configuracoes',
+      items: [
+        { label: 'Configuracoes', path: '/configuracoes', icon: Settings },
+      ],
+    },
   ];
 };
 

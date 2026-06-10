@@ -54,3 +54,22 @@ class SessaoResponse(BaseModel):
     tem_sped: bool
     tem_xml_importado_valido: bool
     expires_in: int
+
+
+class CompanyProfileResponse(BaseModel):
+    status: str
+    login_id: int
+    empresa_id: int
+    cnpj: str
+    empresa_nome: str
+    estado: str = ""
+    cidade: str = ""
+
+
+class UpdatePasswordRequest(BaseModel):
+    nova_senha: str = Field(..., min_length=1, description="Nova senha do usuario logado")
+
+
+class UpdatePasswordResponse(BaseModel):
+    status: str
+    message: str

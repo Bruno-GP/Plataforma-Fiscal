@@ -149,6 +149,11 @@ class LoginService:
         )
         return digest.hex()
 
+    def _gerar_senha_armazenada(self, senha: str) -> str:
+        salt = os.urandom(16)
+        senha_hash = self._hash_senha(senha, salt)
+        return f"{salt.hex()}:{senha_hash}"
+
     def _verificar_senha(self, senha: str, senha_armazenada: str) -> bool:
         if not senha_armazenada:
             return False
@@ -356,9 +361,7 @@ class LoginService:
                     )
                     raise ValueError("E-mail já cadastrado.")
 
-                salt = os.urandom(16)
-                senha_hash = self._hash_senha(senha, salt)
-                senha_armazenada = f"{salt.hex()}:{senha_hash}"
+                senha_armazenada = self._gerar_senha_armazenada(senha)
 
                 cur.execute(
                     """
@@ -392,6 +395,41 @@ class LoginService:
             email=email_normalizado,
             empresa_nome=self._nome_empresa_completo(empresa[2]),
             tem_sped=tem_sped,
+        )
+
+    def atualizar_senha(self, login_id: int, nova_senha: str) -> None:
+        senha_normalizada = nova_senha or ""
+        if not senha_normalizada.strip():
+            raise ValueError("Informe uma nova senha valida.")
+
+        self._validar_forca_senha(senha_normalizada)
+        senha_armazenada = self._gerar_senha_armazenada(senha_normalizada)
+
+        with psycopg.connect(**self.conn_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.login
+                    SET senha = %s
+                    WHERE id = %s
+                    RETURNING id, email, empresa_id, cnpj;
+                    """,
+                    (senha_armazenada, login_id),
+                )
+                row = cur.fetchone()
+            conn.commit()
+
+        if not row:
+            raise ValueError("Usuario nao encontrado para atualizacao de senha.")
+
+        log_security_event(
+            "password_updated",
+            outcome="success",
+            login_id=login_id,
+            email=row[1],
+            empresa_id=row[2],
+            cnpj=row[3],
+            reason="self_service_update",
         )
 
     def autenticar(self, email: str, senha: str) -> LoginResult:

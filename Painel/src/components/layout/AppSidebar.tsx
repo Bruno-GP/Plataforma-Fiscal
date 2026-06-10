@@ -64,7 +64,7 @@ const createNavigationGroups = (temSped?: boolean): NavigationGroup[] => {
       label: 'Fiscal',
       items: [
         { label: 'Analise Fiscal', path: '/analise-fiscal-cfop', icon: FileText },
-        { label: 'Reforma Tributaria', path: '/reforma-tributaria', icon: Scale },
+        // { label: 'Reforma Tributaria', path: '/reforma-tributaria', icon: Scale },
       ],
     },
     {

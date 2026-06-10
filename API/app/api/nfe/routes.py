@@ -1,5 +1,7 @@
 import psycopg
 from functools import lru_cache
+import logging
+from time import perf_counter
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File
 
@@ -39,6 +41,7 @@ from app.models.nfe.schemas import (
 )
 
 router = APIRouter()
+logger = logging.getLogger("api.nfe.routes")
 
 # Sub-roteador de NFe/NFCe. Centraliza upload, processamento e consultas analíticas.
 
@@ -371,8 +374,10 @@ def consultar_dashboard_compras_nfe(
   limite: int = Query(default=5, ge=1, le=20),
 ):
   service = get_nfe_consulta_service()
+  inicio_rota = perf_counter()
 
   try:
+    inicio_service = perf_counter()
     dashboard = montar_dashboard_compras(
       consulta_service=service,
       emitente_cnpj=emitente_resolvido,
@@ -381,11 +386,25 @@ def consultar_dashboard_compras_nfe(
       periodo_mes=periodo_mes,
       limite=limite,
     )
+    tempo_service = perf_counter() - inicio_service
   except ValueError as exc:
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail=str(exc),
     ) from exc
+
+  tempo_total = perf_counter() - inicio_rota
+  logger.info(
+    "Dashboard compras NFe concluido emitente_cnpj=%s periodo_ano=%s periodo_mes=%s limite=%s tempo_service=%.3fs tempo_total=%.3fs serie_mensal=%s anos_disponiveis=%s",
+    emitente_resolvido,
+    periodo_ano,
+    periodo_mes,
+    limite,
+    tempo_service,
+    tempo_total,
+    len(dashboard.get("serie_mensal", [])),
+    len(dashboard.get("anos_disponiveis", [])),
+  )
 
   return DashboardComprasResponse(**dashboard)
 

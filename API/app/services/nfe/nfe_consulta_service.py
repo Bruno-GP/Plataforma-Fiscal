@@ -1,4 +1,5 @@
 import logging
+from time import perf_counter
 from typing import List, Optional
 from decimal import Decimal
 import psycopg
@@ -560,8 +561,26 @@ class NFeConsultaService:
     parametros.extend([limite, offset])
 
     try:
-      logger.debug("Consultando KPIs")
+      inicio = perf_counter()
+      logger.debug(
+        "Consultando KPIs emitente_cnpj=%s periodo_ano=%s periodo_mes=%s limite=%s offset=%s",
+        emitente_cnpj,
+        periodo_ano,
+        periodo_mes,
+        limite,
+        offset,
+      )
       kpis_rows = self._consulta_repository().listar_kpis(where_clause, parametros)
+      logger.info(
+        "KPIs consultados emitente_cnpj=%s periodo_ano=%s periodo_mes=%s limite=%s offset=%s linhas=%s tempo=%.3fs",
+        emitente_cnpj,
+        periodo_ano,
+        periodo_mes,
+        limite,
+        offset,
+        len(kpis_rows),
+        perf_counter() - inicio,
+      )
 
       if not kpis_rows:
         return []
@@ -583,6 +602,7 @@ class NFeConsultaService:
     periodo_mes: Optional[int] = None,
     limite: int = 5,
   ) -> dict:
+    inicio_total = perf_counter()
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
       permitir_zerado=False,
@@ -632,6 +652,19 @@ class NFeConsultaService:
       periodo_ano,
       periodo_mes,
       "entrada",
+    )
+    logger.info(
+      "Analise compras montada emitente_cnpj=%s periodo_ano=%s periodo_mes=%s limite=%s tempo=%.3fs total_comprado=%s fornecedores_valor=%s fornecedores_qtd=%s produtos_valor=%s produtos_qtd=%s",
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+      limite,
+      perf_counter() - inicio_total,
+      total_comprado,
+      len(top_fornecedores_valor),
+      len(top_fornecedores_quantidade),
+      len(top_produtos_valor),
+      len(top_produtos_quantidade),
     )
 
     return construir_resposta_analise_compras(

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
 from decimal import Decimal
 from typing import Optional
 
 import psycopg
 
 
+logger = logging.getLogger("repositories.nfe.consulta")
 NFE_EMPRESA_JOIN = """
   LEFT JOIN public.empresas AS e
     ON regexp_replace(COALESCE(e.cnpj, ''), '\\D', '', 'g')
@@ -25,6 +28,7 @@ class NFeConsultaRepository:
   def obter_cnpj_por_email(self, email: str) -> Optional[str]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           """
           SELECT cnpj
@@ -48,6 +52,7 @@ class NFeConsultaRepository:
   ) -> Decimal:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT COALESCE(SUM(i.valor_total), 0) AS {alias_total}
@@ -59,6 +64,13 @@ class NFeConsultaRepository:
           parametros,
         )
         row = cur.fetchone()
+        logger.info(
+          "SQL obter_total_itens alias=%s linha=%s tempo=%.3fs parametros=%s",
+          alias_total,
+          1 if row else 0,
+          perf_counter() - inicio,
+          parametros,
+        )
 
     return row[0] if row else Decimal("0.00")
 
@@ -92,6 +104,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -108,7 +121,15 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_fornecedores_compras order_by=%s linhas=%s tempo=%.3fs parametros=%s",
+          order_by,
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_produtos_compras_por_valor(
     self,
@@ -162,6 +183,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -178,7 +200,15 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_produtos order_by=%s linhas=%s tempo=%.3fs parametros=%s",
+          order_by,
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_produtos_vendas_por_valor(
     self,
@@ -210,6 +240,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -226,7 +257,14 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_produtos_compras linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_cfops_vendas(
     self,
@@ -235,6 +273,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -254,7 +293,14 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_cfops_vendas linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_cidades_vendas(
     self,
@@ -263,6 +309,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -281,7 +328,14 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_cidades_vendas linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_regioes_vendas(
     self,
@@ -290,6 +344,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -306,7 +361,14 @@ class NFeConsultaRepository:
           """,
           parametros,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_regioes_vendas linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros,
+        )
+        return rows
 
   def criar_tmp_fiscal_hierarquia_base(
     self,
@@ -697,8 +759,16 @@ class NFeConsultaRepository:
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(sql_kpis, parametros)
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_kpis linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros,
+        )
+        return rows
 
   def obter_totais_clientes(
     self,

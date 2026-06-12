@@ -1,11 +1,35 @@
 -- Protecao contra exclusao destrutiva em tabelas criticas.
--- Bloqueia TRUNCATE e DELETE nas tabelas listadas abaixo.
+-- DELETE continua bloqueado para todos.
+-- TRUNCATE somente para usuarios que tenham o role fiscal_admin no PostgreSQL.
 
 CREATE OR REPLACE FUNCTION public.fn_bloquear_truncate_delete_tabela_critica()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
+DECLARE
+    v_e_admin boolean := false;
 BEGIN
+    IF TG_OP = 'TRUNCATE' THEN
+        v_e_admin := CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM pg_roles
+                WHERE rolname = 'fiscal_admin'
+            ) THEN pg_has_role(current_user, 'fiscal_admin', 'MEMBER')
+            ELSE false
+        END
+        OR EXISTS (
+            SELECT 1
+            FROM pg_roles
+            WHERE rolname = current_user
+              AND rolsuper
+        );
+
+        IF v_e_admin THEN
+            RETURN NULL;
+        END IF;
+    END IF;
+
     RAISE EXCEPTION 'truncate ou delete não autorizado para a tabela %', TG_TABLE_NAME;
 END;
 $$;

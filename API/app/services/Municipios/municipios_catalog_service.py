@@ -183,12 +183,25 @@ class MunicipiosCatalogService:
     municipio_id: str | None = None,
     codigo_ibge: str | None = None,
   ) -> dict[str, str] | None:
+    uf_normalizada = MunicipiosCatalogService.normalizar_uf(uf)
+    nome_normalizado = MunicipiosCatalogService.normalizar_chave(nome or "")
     candidato_codigo = MunicipiosCatalogService.normalizar_codigo_ibge(municipio_id or codigo_ibge)
-    if candidato_codigo:
-      return MunicipiosCatalogService.obter_municipio_por_codigo(candidato_codigo)
 
-    if MunicipiosCatalogService.normalizar_uf(uf) and nome:
-      return MunicipiosCatalogService.obter_municipio_por_uf_e_nome(uf, nome)
+    if candidato_codigo:
+      municipio = MunicipiosCatalogService.obter_municipio_por_codigo(candidato_codigo)
+      if not municipio:
+        return None
+
+      if uf_normalizada and MunicipiosCatalogService.normalizar_uf(municipio["uf"]) != uf_normalizada:
+        return None
+
+      if nome_normalizado and MunicipiosCatalogService.normalizar_chave(municipio["nome"]) != nome_normalizado:
+        return None
+
+      return municipio
+
+    if uf_normalizada and nome_normalizado:
+      return MunicipiosCatalogService.obter_municipio_por_uf_e_nome(uf_normalizada, nome_normalizado)
 
     return None
 

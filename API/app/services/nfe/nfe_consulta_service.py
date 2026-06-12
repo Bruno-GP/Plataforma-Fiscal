@@ -76,6 +76,7 @@ from app.services.fiscal.fiscal_sales import (
   obter_cfops_faturamento_venda,
 )
 from app.services.nfe.postres_config import carregar_config_postgres
+from app.services.shared.email_validation import normalizar_email
 
 logger = logging.getLogger("NFeConsultaService")
 
@@ -190,7 +191,7 @@ class NFeConsultaService:
     if not email:
       return None
 
-    email_normalizado = email.strip().lower()
+    email_normalizado = normalizar_email(email)
     if not email_normalizado:
       return None
 

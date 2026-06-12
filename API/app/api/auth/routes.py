@@ -64,7 +64,7 @@ def _validar_localidade_cadastro(
     cidade: str | None,
     municipio_id: str | None = None,
     codigo_ibge: str | None = None,
-) -> None:
+) -> dict[str, str]:
     estado_bruto = (estado or "").strip()
     uf_normalizada = MunicipiosCatalogService.normalizar_uf(estado)
     cidade_normalizada = (cidade or "").strip()
@@ -75,19 +75,25 @@ def _validar_localidade_cadastro(
         codigo_ibge=codigo_ibge,
     )
 
-    if estado_bruto and not uf_normalizada:
+    if not estado_bruto:
+        raise ValueError("Informe uma UF valida para a empresa.")
+
+    if not uf_normalizada:
         raise ValueError("UF informada precisa ter duas letras e existir no catalogo de municipios.")
 
-    if cidade_normalizada and not uf_normalizada:
-        raise ValueError("Informe uma UF valida antes da cidade.")
+    if not cidade_normalizada:
+        raise ValueError("Informe uma cidade valida para a empresa.")
 
-    if cidade_normalizada and not municipio_catalogo:
-        raise ValueError("UF e cidade informadas precisam existir no catalogo de municipios.")
+    if not municipio_id or not str(municipio_id).strip():
+        raise ValueError("Informe o municipio_id vinculado a cidade selecionada.")
 
-    if uf_normalizada and not cidade_normalizada:
-        ufs_disponiveis = MunicipiosCatalogService.listar_ufs(busca=uf_normalizada)
-        if not ufs_disponiveis:
-            raise ValueError("UF informada precisa existir no catalogo de municipios.")
+    if not codigo_ibge or not str(codigo_ibge).strip():
+        raise ValueError("Informe o codigo_ibge vinculado a cidade selecionada.")
+
+    if not municipio_catalogo:
+        raise ValueError("UF, cidade, municipio_id e codigo_ibge precisam existir no catalogo de municipios.")
+
+    return municipio_catalogo
 
 
 def _build_response_payload(
@@ -120,7 +126,7 @@ def _build_response_payload(
 )
 def registrar_login(request: LoginCadastroRequest, response: Response):
     try:
-        _validar_localidade_cadastro(
+        municipio_catalogo = _validar_localidade_cadastro(
             request.estado,
             request.cidade,
             request.municipio_id,
@@ -132,15 +138,17 @@ def registrar_login(request: LoginCadastroRequest, response: Response):
             senha=request.senha,
             cnpj=request.cnpj,
             tem_sped=request.tem_sped,
-            estado=request.estado,
-            cidade=request.cidade,
+            estado=municipio_catalogo["uf"],
+            cidade=municipio_catalogo["nome"],
+            municipio_id=municipio_catalogo["municipio_id"],
+            codigo_ibge=municipio_catalogo["codigo_ibge"],
         )
         EmpresaService().atualizar_localidade(
             cnpj_emitente=resultado.cnpj,
-            estado=request.estado,
-            cidade=request.cidade,
-            municipio_id=request.municipio_id,
-            codigo_ibge=request.codigo_ibge,
+            estado=municipio_catalogo["uf"],
+            cidade=municipio_catalogo["nome"],
+            municipio_id=municipio_catalogo["municipio_id"],
+            codigo_ibge=municipio_catalogo["codigo_ibge"],
         )
     except ValueError as exc:
         raise HTTPException(
@@ -226,6 +234,8 @@ def obter_perfil_empresa(current_user: AuthenticatedUser = Depends(get_current_u
         empresa_nome=perfil.get("nome") or current_user.empresa_nome,
         estado=perfil.get("estado") or "",
         cidade=perfil.get("cidade") or "",
+        municipio_id=perfil.get("municipio_id") or "",
+        codigo_ibge=perfil.get("codigo_ibge") or "",
     )
 
 

@@ -18,6 +18,7 @@ from app.core.config import (
     get_password_min_length,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
+from app.services.shared.email_validation import normalizar_email, validar_email_existe_dns
 from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("LoginService")
@@ -284,22 +285,27 @@ class LoginService:
         tem_sped: bool = False,
         estado: str | None = None,
         cidade: str | None = None,
+        municipio_id: str | None = None,
+        codigo_ibge: str | None = None,
     ) -> LoginResult:
         cnpj_normalizado = normalizar_cnpj(cnpj)
         empresa_nome_normalizado = empresa_nome.strip()
         estado_normalizado = _normalizar_localidade(estado)
         cidade_normalizada = _normalizar_localidade(cidade)
+        municipio_id_normalizado = _normalizar_localidade(municipio_id)
+        codigo_ibge_normalizado = _normalizar_localidade(codigo_ibge)
         if len(empresa_nome_normalizado) < 2:
             raise ValueError("Informe um nome de empresa válido.")
         self._validar_forca_senha(senha)
-        email_normalizado = email.lower().strip()
+        email_normalizado = normalizar_email(email)
+        validar_email_existe_dns(email_normalizado)
         logger.debug("Iniciando registro de login para %s", email_normalizado)
 
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, cnpj, nome, estado, cidade
+                    SELECT id, cnpj, nome, estado, cidade, municipio_id, codigo_ibge
                     FROM public.empresas
                     WHERE cnpj = %s;
                     """,
@@ -314,9 +320,9 @@ class LoginService:
                     )
                     cur.execute(
                         """
-                        INSERT INTO public.empresas (cnpj, nome, tem_sped, estado, cidade)
-                        VALUES (%s, %s, %s, %s, %s)
-                        RETURNING id, cnpj, nome, estado, cidade;
+                        INSERT INTO public.empresas (cnpj, nome, tem_sped, estado, cidade, municipio_id, codigo_ibge)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id, cnpj, nome, estado, cidade, municipio_id, codigo_ibge;
                         """,
                         (
                             cnpj_normalizado,
@@ -324,6 +330,8 @@ class LoginService:
                             tem_sped,
                             estado_normalizado,
                             cidade_normalizada,
+                            municipio_id_normalizado,
+                            codigo_ibge_normalizado,
                         ),
                     )
                     empresa = cur.fetchone()
@@ -334,7 +342,9 @@ class LoginService:
                         SET nome = %s,
                             tem_sped = %s,
                             estado = COALESCE(%s, estado),
-                            cidade = COALESCE(%s, cidade)
+                            cidade = COALESCE(%s, cidade),
+                            municipio_id = COALESCE(%s, municipio_id),
+                            codigo_ibge = COALESCE(%s, codigo_ibge)
                         WHERE id = %s;
                         """,
                         (
@@ -342,6 +352,8 @@ class LoginService:
                             tem_sped,
                             estado_normalizado,
                             cidade_normalizada,
+                            municipio_id_normalizado,
+                            codigo_ibge_normalizado,
                             empresa[0],
                         ),
                     )
@@ -433,7 +445,7 @@ class LoginService:
         )
 
     def autenticar(self, email: str, senha: str) -> LoginResult:
-        email_normalizado = email.lower().strip()
+        email_normalizado = normalizar_email(email)
         logger.debug("Iniciando autenticação para %s", email_normalizado)
 
         cached = self._get_cached_auth(email_normalizado, senha)

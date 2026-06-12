@@ -29,6 +29,8 @@ export interface PerfilEmpresaConfiguracoes {
   empresa_nome: string;
   estado: string;
   cidade: string;
+  municipio_id: string;
+  codigo_ibge: string;
 }
 
 export interface AtualizarSenhaResponse {

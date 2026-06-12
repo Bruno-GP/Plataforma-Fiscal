@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 
 import AnaliseCompras from "@/pages/AnaliseCompras";
 import AnaliseFiscalCfop from "@/pages/AnaliseFiscalCfop";
@@ -540,6 +541,38 @@ describe("renderizacao por pagina do frontend", () => {
     expect(screen.getByLabelText(/senha/i)).toBeRequired();
     expect(screen.getByRole("button", { name: /uf da empresa/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /cidade da empresa/i })).toBeDisabled();
+  });
+
+  it("envia o payload de cadastro com UF e cidade vinculadas ao catalogo", async () => {
+    registerMock.mockResolvedValueOnce({ ok: true });
+    const user = userEvent.setup();
+    renderWithProviders(<CadastroEmpresa />, { route: "/interno/cadastro-empresa" });
+
+    await user.type(screen.getByLabelText(/nome da empresa/i), "Empresa Teste");
+    await user.type(screen.getByLabelText(/^cnpj$/i), "12345678000190");
+    await user.type(screen.getByLabelText(/email do login/i), "teste@empresa.com");
+    await user.type(screen.getByLabelText(/^senha$/i), "Senha@123456");
+
+    await user.click(screen.getByRole("button", { name: /uf da empresa/i }));
+    await user.click(await screen.findByText("SP"));
+
+    await user.click(screen.getByRole("button", { name: /cidade da empresa/i }));
+    await user.click(await screen.findByText("Sao Paulo"));
+
+    await user.click(screen.getByRole("button", { name: /cadastrar empresa/i }));
+
+    expect(registerMock).toHaveBeenCalledWith(
+      "Empresa Teste",
+      "teste@empresa.com",
+      "Senha@123456",
+      "12345678000190",
+      false,
+      false,
+      "SP",
+      "Sao Paulo",
+      "3550308",
+      "3550308",
+    );
   });
 
   it("mantem a suite estavel esperando queries assíncronas terminarem", async () => {

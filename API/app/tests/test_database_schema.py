@@ -235,7 +235,7 @@ def test_api_startup_does_not_mutate_database_schema():
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 
-    assert revision == "20260608_0006"
+    assert revision == "20260612_0008"
 
 
 def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):
@@ -310,8 +310,10 @@ def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):
             """,
         )
     }
-    assert empresa_columns["estado"] == ("character", "YES")
-    assert empresa_columns["cidade"] == ("character varying", "YES")
+    assert empresa_columns["estado"] == ("character", "NO")
+    assert empresa_columns["cidade"] == ("character varying", "NO")
+    assert empresa_columns["municipio_id"] == ("character", "NO")
+    assert empresa_columns["codigo_ibge"] == ("character", "NO")
 
     constraints = {
         row[0]
@@ -351,6 +353,14 @@ def test_required_fields_status_lists_and_non_negative_financial_values(migrated
         migrated_db,
         "INSERT INTO empresas (cnpj, nome) VALUES (%s, NULL);",
         ("11222333000144",),
+    )
+    assert_insert_rejected(
+        migrated_db,
+        """
+        INSERT INTO empresas (cnpj, nome, estado, cidade, municipio_id, codigo_ibge)
+        VALUES (%s, %s, %s, %s, %s, %s);
+        """,
+        ("11222333000144", "Empresa Ficticia", "SP", "Sao Paulo", "3550308", "3550308"),
     )
     assert_insert_rejected(
         migrated_db,
@@ -404,8 +414,12 @@ def test_fiscal_document_business_rules_are_enforced_by_schema(migrated_db):
     )[0]
     empresa_id = fetch_one(
         migrated_db,
-        "INSERT INTO empresas (cnpj, nome) VALUES (%s, %s) RETURNING id;",
-        ("11222333000144", "Empresa Ficticia Teste"),
+        """
+        INSERT INTO empresas (cnpj, nome, estado, cidade, municipio_id, codigo_ibge)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id;
+        """,
+        ("11222333000144", "Empresa Ficticia Teste", "SP", "Sao Paulo", "3550308", "3550308"),
     )[0]
     processamento_id = fetch_one(
         migrated_db,
@@ -452,8 +466,12 @@ def test_fiscal_document_business_rules_are_enforced_by_schema(migrated_db):
 def test_critical_listing_period_filter_and_financial_totalization_queries(migrated_db):
     empresa_id = fetch_one(
         migrated_db,
-        "INSERT INTO empresas (cnpj, nome) VALUES (%s, %s) RETURNING id;",
-        ("55666777000188", "Fornecedor e Cliente Ficticio"),
+        """
+        INSERT INTO empresas (cnpj, nome, estado, cidade, municipio_id, codigo_ibge)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id;
+        """,
+        ("55666777000188", "Fornecedor e Cliente Ficticio", "SP", "Sao Paulo", "3550308", "3550308"),
     )[0]
     processamento_id = fetch_one(
         migrated_db,

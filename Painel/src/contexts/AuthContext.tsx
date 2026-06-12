@@ -272,6 +272,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, message: 'Informe um CNPJ válido com 14 dígitos.' };
     }
 
+    const ufNormalizada = estado?.trim().toUpperCase() ?? '';
+    const cidadeNormalizada = cidade?.trim() ?? '';
+    const municipioIdNormalizado = municipioId?.trim() ?? '';
+    const codigoIbgeNormalizado = codigoIbge?.trim() ?? '';
+
+    if (!ufNormalizada) {
+      return { ok: false, message: 'Selecione uma UF válida para a empresa.' };
+    }
+
+    if (!cidadeNormalizada) {
+      return { ok: false, message: 'Selecione uma cidade válida para a empresa.' };
+    }
+
+    if (!municipioIdNormalizado) {
+      return { ok: false, message: 'Selecione uma cidade vinculada ao catálogo de municípios.' };
+    }
+
+    if (!codigoIbgeNormalizado) {
+      return { ok: false, message: 'Selecione uma cidade vinculada ao código IBGE do catálogo.' };
+    }
+
     const response = await apiFetch(`${API_BASE_URL}/auth/registrar`, {
       method: 'POST',
       headers: {
@@ -283,10 +304,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           senha: senhaInformada,
           cnpj: cnpjNormalizado,
           tem_sped: temSped,
-          estado: estado?.trim() || undefined,
-          cidade: cidade?.trim() || undefined,
-          municipio_id: municipioId?.trim() || undefined,
-          codigo_ibge: codigoIbge?.trim() || undefined,
+          estado: ufNormalizada,
+          cidade: cidadeNormalizada,
+          municipio_id: municipioIdNormalizado,
+          codigo_ibge: codigoIbgeNormalizado,
         }),
       });
 

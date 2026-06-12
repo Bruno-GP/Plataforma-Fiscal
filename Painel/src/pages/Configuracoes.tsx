@@ -4,6 +4,7 @@ import { Building2, CheckCircle2, CircleAlert, EyeOff, LockKeyhole, MapPin, Shie
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -94,6 +95,14 @@ export default function Configuracoes() {
   const cnpj = formatCnpj(profileQuery.data?.cnpj || user?.emitente_cnpj || '');
   const estado = profileQuery.data?.estado || 'Nao informado';
   const cidade = profileQuery.data?.cidade || 'Nao informada';
+  const municipioId = profileQuery.data?.municipio_id || 'Nao informado';
+  const codigoIbge = profileQuery.data?.codigo_ibge || 'Nao informado';
+  const localidadeIncompleta = !profileQuery.isLoading && !profileQuery.isError && (
+    !profileQuery.data?.estado ||
+    !profileQuery.data?.cidade ||
+    !profileQuery.data?.municipio_id ||
+    !profileQuery.data?.codigo_ibge
+  );
 
   const handlePasswordSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -187,6 +196,18 @@ export default function Configuracoes() {
                   <ReadOnlyField id="estado" label="Estado / UF" value={estado} />
                   <ReadOnlyField id="cidade" label="Cidade" value={cidade} />
                 </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <ReadOnlyField id="municipio-id" label="Municipio ID" value={municipioId} />
+                  <ReadOnlyField id="codigo-ibge" label="Codigo IBGE" value={codigoIbge} />
+                </div>
+                {localidadeIncompleta ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      A localidade desta empresa esta incompleta. UF, cidade, municipio_id e codigo IBGE precisam
+                      estar preenchidos para liberar as consultas fiscais mais complexas.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
                 <div className="rounded-xl border border-slate-800/70 bg-slate-900/60 p-4 text-sm text-slate-300">
                   <div className="flex items-center gap-2 font-medium text-slate-100">
                     <MapPin className="h-4 w-4 text-sky-300" />

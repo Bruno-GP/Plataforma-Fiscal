@@ -1,6 +1,7 @@
 import { useDeferredValue, useState } from 'react';
 import { Check, ChevronDown, Loader2 } from 'lucide-react';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -14,12 +15,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { fetchMunicipiosPorUf, fetchUfsCatalogo, type MunicipioCatalogoItem, type UFCatalogoItem } from '@/services/municipios';
+import {
+  fetchMunicipiosPorUf,
+  fetchUfsCatalogo,
+  type MunicipioCatalogoItem,
+  type UFCatalogoItem,
+} from '@/services/municipios';
 
 type CatalogoItem = UFCatalogoItem | MunicipioCatalogoItem;
 
@@ -144,6 +150,7 @@ export default function CadastroEmpresaInterno() {
   const [cidadeSearch, setCidadeSearch] = useState('');
   const [selectedUf, setSelectedUf] = useState<UFCatalogoItem | null>(null);
   const [selectedCidade, setSelectedCidade] = useState<MunicipioCatalogoItem | null>(null);
+  const [formError, setFormError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const { toast } = useToast();
@@ -165,6 +172,23 @@ export default function CadastroEmpresaInterno() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!selectedUf?.uf) {
+      setFormError('Selecione uma UF antes de cadastrar a empresa.');
+      return;
+    }
+
+    if (!selectedCidade) {
+      setFormError('Selecione uma cidade vinculada ao catalogo de municipios.');
+      return;
+    }
+
+    if (!selectedCidade.municipio_id || !selectedCidade.codigo_ibge) {
+      setFormError('A cidade selecionada precisa ter municipio_id e codigo_ibge validos.');
+      return;
+    }
+
+    setFormError('');
     setIsLoading(true);
 
     try {
@@ -175,10 +199,10 @@ export default function CadastroEmpresaInterno() {
         cnpj,
         temSped,
         false,
-        selectedUf?.uf,
-        selectedCidade?.nome,
-        selectedCidade?.municipio_id,
-        selectedCidade?.codigo_ibge,
+        selectedUf.uf,
+        selectedCidade.nome,
+        selectedCidade.municipio_id,
+        selectedCidade.codigo_ibge,
       );
 
       if (result.ok) {
@@ -190,17 +214,21 @@ export default function CadastroEmpresaInterno() {
         return;
       }
 
+      const errorMessage = result.message ?? 'Nao foi possivel cadastrar.';
       toast({
         variant: 'destructive',
         title: 'Erro no cadastro',
-        description: result.message ?? 'Não foi possível cadastrar.',
+        description: errorMessage,
       });
+      setFormError(errorMessage);
     } catch {
+      const errorMessage = 'Ocorreu um erro ao cadastrar empresa e login.';
       toast({
         variant: 'destructive',
         title: 'Erro',
-        description: 'Ocorreu um erro ao cadastrar empresa e login.',
+        description: errorMessage,
       });
+      setFormError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -256,11 +284,12 @@ export default function CadastroEmpresaInterno() {
                   setUfSearch('');
                   setSelectedCidade(null);
                   setCidadeSearch('');
+                  setFormError('');
                 }}
                 items={(ufsQuery.data ?? []) as CatalogoItem[]}
                 isLoading={ufsQuery.isLoading}
                 itemLabel={(item) => (item as UFCatalogoItem).uf}
-                itemDescription={(item) => `${(item as UFCatalogoItem).quantidade_municipios} municípios`}
+                itemDescription={(item) => `${(item as UFCatalogoItem).quantidade_municipios} municipios`}
               />
               <CatalogoCombobox
                 label="Cidade da empresa"
@@ -271,7 +300,7 @@ export default function CadastroEmpresaInterno() {
                     ? cidadesQuery.isLoading
                       ? 'Carregando...'
                       : 'Nenhuma cidade encontrada.'
-                    : 'Selecione uma UF válida para listar cidades.'
+                    : 'Selecione uma UF valida para listar cidades.'
                 }
                 disabled={!selectedUf}
                 selectedLabel={selectedCidade?.nome ?? ''}
@@ -281,6 +310,7 @@ export default function CadastroEmpresaInterno() {
                   const cidadeItem = item as MunicipioCatalogoItem;
                   setSelectedCidade(cidadeItem);
                   setCidadeSearch('');
+                  setFormError('');
                 }}
                 items={(cidadesQuery.data ?? []) as CatalogoItem[]}
                 isLoading={cidadesQuery.isLoading}
@@ -288,6 +318,11 @@ export default function CadastroEmpresaInterno() {
                 itemDescription={(item) => `${(item as MunicipioCatalogoItem).uf} • ${(item as MunicipioCatalogoItem).codigo_ibge}`}
               />
             </div>
+            {formError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{formError}</AlertDescription>
+              </Alert>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="temSped">Origem fiscal</Label>
               <select
@@ -316,7 +351,7 @@ export default function CadastroEmpresaInterno() {
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="********"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 minLength={12}

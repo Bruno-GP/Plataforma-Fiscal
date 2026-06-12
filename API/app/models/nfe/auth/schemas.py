@@ -64,6 +64,8 @@ class CompanyProfileResponse(BaseModel):
     empresa_nome: str
     estado: str = ""
     cidade: str = ""
+    municipio_id: str = ""
+    codigo_ibge: str = ""
 
 
 class UpdatePasswordRequest(BaseModel):

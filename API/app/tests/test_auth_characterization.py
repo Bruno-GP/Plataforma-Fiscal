@@ -61,6 +61,8 @@ class FakeCompanyProfileService:
             "nome": "Empresa Teste",
             "estado": "SP",
             "cidade": "Sao Paulo",
+            "municipio_id": "3550308",
+            "codigo_ibge": "3550308",
         }
 
 
@@ -71,11 +73,28 @@ def _cadastro_payload():
         "senha": "Senha@123456",
         "cnpj": "12345678000190",
         "tem_sped": False,
+        "estado": "SP",
+        "cidade": "Sao Paulo",
+        "municipio_id": "3550308",
+        "codigo_ibge": "3550308",
     }
 
 
 def test_auth_registrar_preserva_status_cookie_e_payload(client, monkeypatch):
     monkeypatch.setattr("app.api.auth.routes.get_login_service", lambda: FakeLoginService())
+    monkeypatch.setattr(
+        "app.api.auth.routes.MunicipiosCatalogService.resolver_municipio",
+        lambda **kwargs: {
+            "municipio_id": "3550308",
+            "codigo_ibge": "3550308",
+            "nome": "Sao Paulo",
+            "uf": "SP",
+        },
+    )
+    monkeypatch.setattr(
+        "app.api.auth.routes.EmpresaService",
+        lambda: type("FakeEmpresaService", (), {"atualizar_localidade": lambda self, **kwargs: None})(),
+    )
 
     response = client.post("/api/auth/registrar", json=_cadastro_payload())
 
@@ -114,6 +133,19 @@ def test_auth_entrar_preserva_status_cookie_e_payload(client, monkeypatch):
 
 def test_auth_registrar_value_error_vira_400(client, monkeypatch):
     monkeypatch.setattr("app.api.auth.routes.get_login_service", lambda: FailingValueLoginService())
+    monkeypatch.setattr(
+        "app.api.auth.routes.MunicipiosCatalogService.resolver_municipio",
+        lambda **kwargs: {
+            "municipio_id": "3550308",
+            "codigo_ibge": "3550308",
+            "nome": "Sao Paulo",
+            "uf": "SP",
+        },
+    )
+    monkeypatch.setattr(
+        "app.api.auth.routes.EmpresaService",
+        lambda: type("FakeEmpresaService", (), {"atualizar_localidade": lambda self, **kwargs: None})(),
+    )
 
     response = client.post("/api/auth/registrar", json=_cadastro_payload())
 
@@ -135,6 +167,19 @@ def test_auth_entrar_value_error_vira_401(client, monkeypatch):
 
 def test_auth_database_error_vira_503(client, monkeypatch):
     monkeypatch.setattr("app.api.auth.routes.get_login_service", lambda: FailingDatabaseLoginService())
+    monkeypatch.setattr(
+        "app.api.auth.routes.MunicipiosCatalogService.resolver_municipio",
+        lambda **kwargs: {
+            "municipio_id": "3550308",
+            "codigo_ibge": "3550308",
+            "nome": "Sao Paulo",
+            "uf": "SP",
+        },
+    )
+    monkeypatch.setattr(
+        "app.api.auth.routes.EmpresaService",
+        lambda: type("FakeEmpresaService", (), {"atualizar_localidade": lambda self, **kwargs: None})(),
+    )
 
     cadastro = client.post("/api/auth/registrar", json=_cadastro_payload())
     login = client.post(
@@ -152,6 +197,14 @@ def test_auth_database_error_vira_503(client, monkeypatch):
 
 def test_auth_registrar_rejeita_uf_invalida_antes_de_salvar(client, monkeypatch):
     monkeypatch.setattr("app.api.auth.routes.get_login_service", lambda: FakeLoginService())
+    monkeypatch.setattr(
+        "app.api.auth.routes.EmpresaService",
+        lambda: type("FakeEmpresaService", (), {"atualizar_localidade": lambda self, **kwargs: None})(),
+    )
+    monkeypatch.setattr(
+        "app.api.auth.routes.MunicipiosCatalogService.resolver_municipio",
+        lambda **kwargs: None,
+    )
 
     response = client.post(
         "/api/auth/registrar",
@@ -163,6 +216,29 @@ def test_auth_registrar_rejeita_uf_invalida_antes_de_salvar(client, monkeypatch)
 
     assert response.status_code == 400
     assert "UF informada" in response.json()["detail"]
+
+
+def test_auth_registrar_rejeita_cidade_ausente(client, monkeypatch):
+    monkeypatch.setattr("app.api.auth.routes.get_login_service", lambda: FakeLoginService())
+    monkeypatch.setattr(
+        "app.api.auth.routes.EmpresaService",
+        lambda: type("FakeEmpresaService", (), {"atualizar_localidade": lambda self, **kwargs: None})(),
+    )
+    monkeypatch.setattr(
+        "app.api.auth.routes.MunicipiosCatalogService.resolver_municipio",
+        lambda **kwargs: None,
+    )
+
+    response = client.post(
+        "/api/auth/registrar",
+        json={
+            **_cadastro_payload(),
+            "cidade": None,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "cidade" in response.json()["detail"].lower()
 
 
 def test_auth_sessao_e_logout_preservam_contratos(client):

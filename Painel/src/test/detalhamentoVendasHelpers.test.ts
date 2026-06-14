@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSpedFiscalNcmHierarchy,
   filterSpedHierarchyRows,
-} from '@/pages/components/detalhamentoVendasHelpers';
+} from '@/pages/components/Detalhamento/detalhamentoVendasHelpers';
 
 describe('detalhamentoVendasHelpers SPED', () => {
   const rows = [

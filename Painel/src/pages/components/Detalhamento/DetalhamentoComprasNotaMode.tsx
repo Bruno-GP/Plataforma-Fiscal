@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { getNcmDescription, hierarchyLabelClass } from '@/pages/components/detalhamentoVendasHelpers';
+import { getNcmDescription, hierarchyLabelClass } from '@/pages/components/Detalhamento/detalhamentoVendasHelpers';
 import type { NfeNotaDetalhada } from '@/services/nfe';
 import { parseDecimal } from '@/services/nfe';
 import { formatCurrency } from '@/services/utils';

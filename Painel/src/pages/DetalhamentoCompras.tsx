@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Header } from '@/pages/components/Header';
-import { DetalhamentoComprasNotaMode } from '@/pages/components/DetalhamentoComprasNotaMode';
+import { DetalhamentoComprasNotaMode } from '@/pages/components/Detalhamento/DetalhamentoComprasNotaMode';
 import { RankingPanelGroup } from '@/pages/components/RankingPanelGroup';
 import { StatCard } from '@/pages/components/StatCard';
 import { useAuth } from '@/contexts/AuthContext';

@@ -1,6 +1,6 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { hierarchyLabelClass } from '@/pages/components/detalhamentoVendasHelpers';
+import { hierarchyLabelClass } from '@/pages/components/Detalhamento/detalhamentoVendasHelpers';
 import { formatCurrency } from '@/services/utils';
 
 export type FiscalProductSummary = {

@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import type { DetailMode } from '@/pages/components/detalhamentoVendasHelpers';
+import type { DetailMode } from '@/pages/components/Detalhamento/detalhamentoVendasHelpers';
 
 const modeButtonBaseClass =
   'h-auto justify-start rounded-md border px-4 py-3 text-left transition-colors';

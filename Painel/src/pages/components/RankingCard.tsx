@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { AbcAnalysisReport } from '@/pages/components/abcAnalysisReport';
+import { AbcAnalysisReport } from '@/pages/components/Analysis/abcAnalysisReport';
 import { calculateAbcCurve } from '@/services/analysisABC';
 
 interface RankingItem {

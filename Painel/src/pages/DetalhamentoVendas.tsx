@@ -13,12 +13,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFiscalYears } from '@/hooks/useFiscalYears';
 import {
   DetalhamentoFiscalHierarquiaMode,
-} from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
-import { DetalhamentoVendasDashboardMode } from '@/pages/components/DetalhamentoVendasDashboardMode';
-import { DetalhamentoVendasFiscalMode } from '@/pages/components/DetalhamentoVendasFiscalMode';
-import { DetalhamentoVendasModeSelector } from '@/pages/components/DetalhamentoVendasModeSelector';
-import { DetalhamentoVendasNotaMode } from '@/pages/components/DetalhamentoVendasNotaMode';
-import { DetalhamentoVendasRegiaoMode } from '@/pages/components/DetalhamentoVendasRegiaoMode';
+} from '@/pages/components/Detalhamento/DetalhamentoFiscalHierarquiaMode';
+import { DetalhamentoVendasDashboardMode } from '@/pages/components/Detalhamento/DetalhamentoVendasDashboardMode';
+import { DetalhamentoVendasFiscalMode } from '@/pages/components/Detalhamento/DetalhamentoVendasFiscalMode';
+import { DetalhamentoVendasModeSelector } from '@/pages/components/Detalhamento/DetalhamentoVendasModeSelector';
+import { DetalhamentoVendasNotaMode } from '@/pages/components/Detalhamento/DetalhamentoVendasNotaMode';
+import { DetalhamentoVendasRegiaoMode } from '@/pages/components/Detalhamento/DetalhamentoVendasRegiaoMode';
 import {
   buildSpedFiscalNcmHierarchy,
   buildSpedFiscalHierarchyState,
@@ -27,7 +27,7 @@ import {
   filterSpedHierarchyRows,
   filterNotasBySearch,
   filterRegionHierarchyBySearch,
-} from '@/pages/components/detalhamentoVendasHelpers';
+} from '@/pages/components/Detalhamento/detalhamentoVendasHelpers';
 import { Header } from '@/pages/components/Header';
 import { StatCard } from '@/pages/components/StatCard';
 

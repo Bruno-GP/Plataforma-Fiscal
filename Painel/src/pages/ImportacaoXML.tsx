@@ -8,11 +8,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useImportFileQueue } from '@/hooks/useImportFileQueue';
 import { useProcessingJobFlow } from '@/hooks/useProcessingJobFlow';
-import { ImportacaoXmlActions } from '@/pages/components/ImportacaoXmlActions';
-import { ImportacaoXmlFileSelection } from '@/pages/components/ImportacaoXmlFileSelection';
-import { ImportacaoXmlOperationFeedback } from '@/pages/components/ImportacaoXmlOperationFeedback';
-import { ImportacaoXmlPendingNotice } from '@/pages/components/ImportacaoXmlPendingNotice';
-import { ImportacaoXmlResultsPanel } from '@/pages/components/ImportacaoXmlResultsPanel';
+import { ImportacaoXmlActions } from '@/pages/components/ImportacaoXml/ImportacaoXmlActions';
+import { ImportacaoXmlFileSelection } from '@/pages/components/ImportacaoXml/ImportacaoXmlFileSelection';
+import { ImportacaoXmlOperationFeedback } from '@/pages/components/ImportacaoXml/ImportacaoXmlOperationFeedback';
+import { ImportacaoXmlPendingNotice } from '@/pages/components/ImportacaoXml/ImportacaoXmlPendingNotice';
+import { ImportacaoXmlResultsPanel } from '@/pages/components/ImportacaoXml/ImportacaoXmlResultsPanel';
 import type { ProcessingJobResponse } from '@/services/jobs';
 import { saveFiscalOperation } from '@/services/operations';
 import {

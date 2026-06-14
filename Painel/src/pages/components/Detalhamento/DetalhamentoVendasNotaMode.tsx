@@ -5,7 +5,7 @@ import {
   getNcmDescription,
   getRegionByUf,
   hierarchyLabelClass,
-} from '@/pages/components/detalhamentoVendasHelpers';
+} from '@/pages/components/Detalhamento/detalhamentoVendasHelpers';
 import type { NfeNotaDetalhada } from '@/services/nfe';
 import { parseDecimal } from '@/services/nfe';
 import { formatCurrency } from '@/services/utils';

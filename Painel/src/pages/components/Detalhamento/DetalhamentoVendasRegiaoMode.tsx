@@ -4,7 +4,7 @@ import {
   getRegionByUf,
   hierarchyLabelClass,
   type RegionState,
-} from '@/pages/components/detalhamentoVendasHelpers';
+} from '@/pages/components/Detalhamento/detalhamentoVendasHelpers';
 import { formatCurrency } from '@/services/utils';
 
 type Props = {

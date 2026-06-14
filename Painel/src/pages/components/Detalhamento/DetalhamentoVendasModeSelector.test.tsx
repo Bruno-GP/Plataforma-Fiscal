@@ -1,7 +1,7 @@
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { DetalhamentoVendasModeSelector } from "@/pages/components/DetalhamentoVendasModeSelector";
+import { DetalhamentoVendasModeSelector } from "@/pages/components/Detalhamento/DetalhamentoVendasModeSelector";
 import { renderWithProviders, screen } from "@/test/utils/render";
 
 describe("DetalhamentoVendasModeSelector", () => {

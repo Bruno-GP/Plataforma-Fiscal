@@ -14,7 +14,7 @@ import { monthLabels } from '@/utils/formatters';
 
 export default function Dashboard({
   title = 'Vendas',
-  subtitle = 'VisÃ£o geral do seu negÃ³cio',
+  subtitle = 'Visão geral do seu negóio',
 }: AnaliseVendasPageProps) {
   const {
     selectedMonth,

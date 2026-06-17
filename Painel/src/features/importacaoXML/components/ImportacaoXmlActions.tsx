@@ -2,32 +2,8 @@ import { Loader2, Upload, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
-interface ImportacaoXmlActionsProps {
-  isImporting: boolean;
-  isProcessing: boolean;
-  onCancel: () => void;
-  onClear: () => void;
-  onStart: () => void;
-  selectedCount: number;
-}
-
-export const getXmlImportPrimaryActionLabel = ({
-  isImporting,
-  isProcessing,
-}: {
-  isImporting: boolean;
-  isProcessing: boolean;
-}) => {
-  if (isImporting) {
-    return 'Importando...';
-  }
-
-  if (isProcessing) {
-    return 'Processando...';
-  }
-
-  return 'Importar e processar';
-};
+import { getXmlImportPrimaryActionLabel } from '../helpers/importacaoXmlView';
+import type { ImportacaoXmlActionsProps } from '../types';
 
 export function ImportacaoXmlActions({
   isImporting,
@@ -42,11 +18,7 @@ export function ImportacaoXmlActions({
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
-      <Button
-        variant="outline"
-        onClick={onClear}
-        disabled={!hasSelectedFiles || isBusy}
-      >
+      <Button variant="outline" onClick={onClear} disabled={!hasSelectedFiles || isBusy}>
         <X className="mr-2 h-4 w-4" />
         Limpar lista
       </Button>

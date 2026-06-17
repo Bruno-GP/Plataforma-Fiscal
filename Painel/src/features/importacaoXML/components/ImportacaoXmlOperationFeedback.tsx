@@ -1,28 +1,7 @@
 import { Progress } from '@/components/ui/progress';
-import type { ProcessingJobResponse } from '@/services/jobs';
-import type { XmlImportOperationStage } from '@/utils/xmlImportProgress';
 
-export const getXmlImportOperationTitle = (stage: XmlImportOperationStage) => {
-  switch (stage) {
-    case 'processing':
-      return 'Processando';
-    case 'completed':
-      return 'Processamento terminado';
-    case 'cancelled':
-      return 'Operação cancelada';
-    case 'error':
-      return 'Falha no processamento';
-    default:
-      return 'Início do processamento';
-  }
-};
-
-interface ImportacaoXmlOperationFeedbackProps {
-  currentJob: ProcessingJobResponse | null;
-  progress: number;
-  progressLabel: string;
-  stage: XmlImportOperationStage;
-}
+import { getXmlImportOperationTitle } from '../helpers/importacaoXmlView';
+import type { ImportacaoXmlOperationFeedbackProps } from '../types';
 
 export function ImportacaoXmlOperationFeedback({
   currentJob,

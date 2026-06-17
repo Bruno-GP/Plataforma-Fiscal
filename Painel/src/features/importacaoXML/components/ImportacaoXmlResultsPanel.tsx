@@ -1,24 +1,7 @@
-import type { ImportacaoXmlArquivoResultado } from '@/services/nfe';
+import { getXmlImportResultSummary } from '../helpers/importacaoXmlView';
+import type { ImportacaoXmlResultsPanelProps } from '../types';
 
-export const getXmlImportResultSummary = (
-  results: ImportacaoXmlArquivoResultado[],
-  importedCount: number,
-) => ({
-  evaluated: Math.max(importedCount, results.length),
-  imported: results.filter((item) => item.status === 'importado').length,
-  duplicated: results.filter((item) => item.status === 'duplicado').length,
-  errors: results.filter((item) => item.status === 'erro').length,
-});
-
-interface ImportacaoXmlResultsPanelProps {
-  importedCount: number;
-  results: ImportacaoXmlArquivoResultado[];
-}
-
-export function ImportacaoXmlResultsPanel({
-  importedCount,
-  results,
-}: ImportacaoXmlResultsPanelProps) {
+export function ImportacaoXmlResultsPanel({ importedCount, results }: ImportacaoXmlResultsPanelProps) {
   if (!results.length) {
     return null;
   }

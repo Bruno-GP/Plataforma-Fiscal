@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { getXmlImportPrimaryActionLabel } from '@/pages/components/ImportacaoXml/ImportacaoXmlActions';
-import { getXmlFileSelectionSummary } from '@/pages/components/ImportacaoXml/ImportacaoXmlFileSelection';
-import { getXmlImportOperationTitle } from '@/pages/components/ImportacaoXml/ImportacaoXmlOperationFeedback';
-import { getXmlPendingNoticeMessage } from '@/pages/components/ImportacaoXml/ImportacaoXmlPendingNotice';
-import { getXmlImportResultSummary } from '@/pages/components/ImportacaoXml/ImportacaoXmlResultsPanel';
+import {
+  getXmlFileSelectionSummary,
+  getXmlImportOperationTitle,
+  getXmlImportPrimaryActionLabel,
+  getXmlImportResultSummary,
+  getXmlPendingNoticeMessage,
+} from '@/features/importacaoXML/helpers/importacaoXmlView';
 import type { ImportacaoXmlArquivoResultado } from '@/services/nfe';
 
 describe('ImportacaoXML component helpers', () => {

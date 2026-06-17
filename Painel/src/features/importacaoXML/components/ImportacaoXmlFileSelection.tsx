@@ -2,26 +2,9 @@ import { FileText, FileUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { ImportFileItem } from '@/hooks/useImportFileQueue';
 
-interface ImportacaoXmlFileSelectionProps {
-  addFiles: (files: FileList | null) => void;
-  formatFileSize: (size: number) => string;
-  isDisabled: boolean;
-  maxFiles: number;
-  selectedFiles: ImportFileItem[];
-  totalSize: number;
-}
-
-export const getXmlFileSelectionSummary = ({
-  maxFiles,
-  selectedCount,
-  totalSizeLabel,
-}: {
-  maxFiles: number;
-  selectedCount: number;
-  totalSizeLabel: string;
-}) => `${selectedCount}/${maxFiles} arquivo(s) • ${totalSizeLabel}`;
+import { getXmlFileSelectionSummary } from '../helpers/importacaoXmlView';
+import type { ImportacaoXmlFileSelectionProps } from '../types';
 
 export function ImportacaoXmlFileSelection({
   addFiles,
@@ -47,12 +30,7 @@ export function ImportacaoXmlFileSelection({
             event.currentTarget.value = '';
           }}
         />
-        <Button
-          asChild
-          variant="secondary"
-          size="lg"
-          disabled={isDisabled || hasReachedLimit}
-        >
+        <Button asChild variant="secondary" size="lg" disabled={isDisabled || hasReachedLimit}>
           <label htmlFor="xml-files" className="cursor-pointer">
             <FileUp className="mr-2 h-4 w-4" />
             Importar arquivos XMLs

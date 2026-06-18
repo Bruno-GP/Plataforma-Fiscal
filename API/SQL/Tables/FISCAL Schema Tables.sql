@@ -7,7 +7,9 @@ CREATE DATABASE Fiscal;
 CREATE TABLE IF NOT EXISTS empresas (
     id       BIGSERIAL PRIMARY KEY,
     cnpj     VARCHAR(20) NOT NULL UNIQUE,
-    nome     VARCHAR(255) NOT NULL
+    nome     VARCHAR(255) NOT NULL,
+    estado   CHAR(2),
+    cidade   VARCHAR(120)
 );
 
 CREATE TABLE IF NOT EXISTS Notas_processamentos (

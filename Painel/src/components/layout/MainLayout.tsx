@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { consultarPendenciasXmlImportados } from '@/services/nfe';
+import { isXmlOnboardingLocked } from '@/utils/workspaceAccess';
 
 import { AppHeader } from './AppHeader';
 import { AppSidebar } from './AppSidebar';
@@ -16,6 +17,8 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const { isAuthenticated, isReady, user } = useAuth();
+  const location = useLocation();
+  const xmlOnboardingLocked = isXmlOnboardingLocked(user);
   const pendenciasQuery = useQuery({
     queryKey: ['layout-pendencias-xml', user?.emitente_cnpj],
     queryFn: () => consultarPendenciasXmlImportados(user?.emitente_cnpj ?? ''),
@@ -31,6 +34,10 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (xmlOnboardingLocked && location.pathname !== '/importacao-xml') {
+    return <Navigate to="/importacao-xml" replace />;
   }
 
   return (

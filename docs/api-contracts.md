@@ -51,13 +51,30 @@ Base local: `http://localhost:8000`. Prefixo: `/api`. Endpoints fiscais exigem a
 - Retorna dados da sessao atual e `expires_in`.
 - Erros comuns: `401` token ausente, invalido ou expirado.
 
+### `GET /api/auth/perfil`
+
+- Autenticacao: obrigatoria.
+- Retorna os dados cadastrais da empresa da sessao atual, usados pela tela de configuracoes.
+- Campos retornados: `status`, `login_id`, `empresa_id`, `cnpj`, `empresa_nome`, `estado`, `cidade`, `municipio_id`, `codigo_ibge`.
+- Erros comuns: `401` sem autenticacao, `404` quando o perfil da empresa nao e localizado.
+
+### `PATCH /api/auth/senha`
+
+- Autenticacao: obrigatoria.
+- Body obrigatorio: `nova_senha`.
+- Atualiza somente a senha do usuario logado.
+- Response: `status`, `message`.
+- Erros comuns: `400` senha vazia ou invalida, `503` indisponibilidade do servico de autenticacao.
+
 ### `POST /api/auth/sair`
 
 - Autenticacao: nao depende de body.
 - Response: `204 No Content`.
 - Observacao: remove cookie de sessao; o painel tambem limpa `localStorage`.
 
-Schema real de auth (`LoginCadastroResponse`, `LoginResponse`, `SessaoResponse`):
+Schema real de auth (`LoginCadastroResponse`, `LoginResponse`, `SessaoResponse`, `CompanyProfileResponse`, `UpdatePasswordResponse`):
+
+Exemplo de resposta de `POST /api/auth/entrar` ou `GET /api/auth/sessao`:
 
 ```json
 {
@@ -69,6 +86,31 @@ Schema real de auth (`LoginCadastroResponse`, `LoginResponse`, `SessaoResponse`)
   "empresa_nome": "Empresa Exemplo",
   "tem_sped": false,
   "expires_in": 28800
+}
+```
+
+Exemplo de resposta de `GET /api/auth/perfil`:
+
+```json
+{
+  "status": "ok",
+  "login_id": 1,
+  "empresa_id": 1,
+  "cnpj": "12345678000199",
+  "empresa_nome": "Empresa Exemplo",
+  "estado": "SP",
+  "cidade": "Sao Paulo",
+  "municipio_id": "3550308",
+  "codigo_ibge": "3550308"
+}
+```
+
+Exemplo de resposta de `PATCH /api/auth/senha`:
+
+```json
+{
+  "status": "ok",
+  "message": "Senha atualizada com sucesso."
 }
 ```
 

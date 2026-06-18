@@ -66,6 +66,12 @@ export function buildRankingItems(
       value: formatValue(valorTotal),
       rawValue: valorTotal,
       percent: percentual,
+      ...(titleField === 'cidade_uf'
+        ? {
+            cidade: item['cidade'] ?? undefined,
+            uf: item['uf'] ?? undefined,
+          }
+        : {}),
     };
   });
 }

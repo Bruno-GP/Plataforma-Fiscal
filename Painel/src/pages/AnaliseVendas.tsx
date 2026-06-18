@@ -1,5 +1,3 @@
-import { useMemo, useState } from 'react';
-import { Scale, TrendingDown, TrendingUp, Users, Percent } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -10,185 +8,32 @@ import { StatCard } from './components/StatCard';
 import { SalesRegionCityMap } from './components/SalesRegionCityMap';
 import { EvolucaoChart } from './components/EvolucaoChart';
 
-import { useAuth } from '@/contexts/AuthContext';
-import { usePeriodFilter } from '@/hooks/usePeriodFilter';
-import { useDashboardVendasQueries } from '@/hooks/useDashboardQueries';
-import { useFiscalYearList } from '@/hooks/useFiscalYears';
-import {
-  formatCurrency,
-  formatPercent,
-  hasValidEmitenteCnpj,
-  monthLabels,
-  parseDecimal,
-  safePercentage,
-  calculateChange,
-} from '@/utils/formatters';
-import { buildRankingItems } from '@/utils/rankingUtils';
-
-interface DashboardProps {
-  title?: string;
-  subtitle?: string;
-}
+import { useAnaliseVendasPageData } from '@/features/analiseVendas/hooks/useAnaliseVendasPageData';
+import type { AnaliseVendasPageProps } from '@/features/analiseVendas/types';
+import { monthLabels } from '@/utils/formatters';
 
 export default function Dashboard({
   title = 'Vendas',
-  subtitle = 'Visão geral do seu negócio',
-}: DashboardProps) {
-  const { user } = useAuth();
-  const emitenteCnpj = user?.emitente_cnpj;
-  const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-
+  subtitle = 'Visão geral do seu negóio',
+}: AnaliseVendasPageProps) {
   const {
     selectedMonth,
     setSelectedMonth,
     selectedYear,
     setSelectedYear,
-    monthNumber,
-    year,
-    faturamentoPeriodo,
-  } = usePeriodFilter();
-
-  const { dashboardQuery, mapQuery } = useDashboardVendasQueries({
-    emitenteCnpj,
-    email: user?.email,
-    temSped: user?.tem_sped,
-    year,
-    selectedMonth,
-    monthNumber,
-    hasEmitenteCnpj,
-  });
-
-  const { availableYears } = useFiscalYearList({
-    years: dashboardQuery.data?.anos_disponiveis,
-    selectedYear,
-    setSelectedYear,
-    fallbackYear: year,
-  });
-
-  const currentData = dashboardQuery.data?.resumo_atual;
-  const previousData = dashboardQuery.data?.resumo_anterior;
-  const totalFaturamento = parseDecimal(currentData?.total_vendido ?? 0);
-
-  const totalSalesChange = calculateChange(totalFaturamento, previousData?.total_vendido ?? 0);
-  const ticketChange = calculateChange(currentData?.ticket_medio ?? 0, previousData?.ticket_medio ?? 0);
-  const totalTaxesChange = calculateChange(currentData?.total_impostos ?? 0, previousData?.total_impostos ?? 0);
-  const reformaTaxes = parseDecimal(currentData?.total_tributos_reforma ?? 0);
-  const previousReformaTaxes = parseDecimal(previousData?.total_tributos_reforma ?? 0);
-
-  const stats = [
-    {
-      title: `Faturamento Mensal${faturamentoPeriodo ? ` (Período ${faturamentoPeriodo})` : ''}`,
-      value: formatCurrency(totalFaturamento),
-      description: formatPercent(totalSalesChange),
-      icon: TrendingUp,
-      trend: totalSalesChange >= 0 ? 'up' : 'down',
-      accentClass: 'border-l-sky-500',
-    },
-    {
-      title: 'Comparativo anual',
-      value: formatPercent(totalSalesChange),
-      description: selectedMonth === 'all'
-        ? `vs. mesmo período de ${year - 1}`
-        : 'vs. período anterior',
-      icon: totalSalesChange >= 0 ? TrendingUp : TrendingDown,
-      trend: totalSalesChange >= 0 ? 'up' : 'down',
-      accentClass: 'border-l-emerald-500',
-      appendPreviousMonthLabel: false,
-    },
-    {
-      title: 'Ticket Médio',
-      value: formatCurrency(parseDecimal(currentData?.ticket_medio ?? 0)),
-      description: formatPercent(ticketChange),
-      icon: Users,
-      trend: ticketChange >= 0 ? 'up' : 'down',
-      accentClass: 'border-l-amber-400',
-    },
-    {
-      title: 'Impostos sobre vendas',
-      value: formatCurrency(parseDecimal(currentData?.total_impostos ?? 0)),
-      description: formatPercent(totalTaxesChange),
-      icon: Percent,
-      trend: totalTaxesChange >= 0 ? 'up' : 'down',
-      accentClass: 'border-l-violet-500',
-    },
-    {
-      title: 'Reforma Tributaria',
-      value: formatCurrency(reformaTaxes),
-      description: reformaTaxes > 0 ? 'IBS, CBS e IS no periodo' : 'Sem IBS/CBS/IS apurados',
-      icon: Scale,
-      trend: reformaTaxes >= previousReformaTaxes ? 'up' : 'down',
-      accentClass: 'border-l-cyan-500',
-    },
-  ];
-
-  const salesEvolutionData = useMemo(() => {
-    const serie = dashboardQuery.data?.serie_mensal ?? [];
-    const itens = selectedMonth === 'all'
-      ? serie
-      : serie.filter((item: any) => item.periodo_mes === monthNumber);
-
-    return itens.map((item: any) => ({
-      month: monthLabels[item.periodo_mes - 1] ?? `Mês ${item.periodo_mes}`,
-      faturamento: parseDecimal(item.total_vendido ?? 0),
-    }));
-  }, [dashboardQuery.data?.serie_mensal, monthNumber, selectedMonth]);
-
-  const selectedMonthLabel = selectedMonth === 'all' ? null : monthLabels[monthNumber - 1];
-  const chartMessage = dashboardQuery.isLoading
-    ? 'Carregando dados...'
-    : dashboardQuery.isError
-      ? 'Não foi possível carregar o gráfico.'
-      : selectedMonthLabel
-        ? `Nenhum dado disponível para ${selectedMonthLabel} de ${selectedYear}.`
-        : `Nenhum dado disponível para ${selectedYear}.`;
-  const hasChartData = salesEvolutionData.length > 0;
-
-  const resolvePercentual = (valorTotal?: number | string) => safePercentage(valorTotal || 0, totalFaturamento);
-
-  const topClientesBase = mapQuery.data?.top_clientes_valor?.length
-    ? mapQuery.data.top_clientes_valor
-    : currentData?.top_clientes ?? [];
-
-  const topClientesItems = buildRankingItems(
-    topClientesBase,
-    'cliente',
-    'Cliente não identificado',
-    resolvePercentual
-  );
-
-  const topProdutosBase = mapQuery.data?.top_produtos_valor?.length
-    ? mapQuery.data.top_produtos_valor
-    : currentData?.top_produtos ?? [];
-
-  const topProdutosItems = buildRankingItems(
-    topProdutosBase,
-    'produto',
-    'Produto não identificado',
-    resolvePercentual
-  );
-
-  const topCidadesBase = mapQuery.data?.top_cidades_valor?.length
-    ? mapQuery.data.top_cidades_valor
-    : currentData?.top_cidades ?? [];
-
-  const topCidadesItems = buildRankingItems(
-    topCidadesBase,
-    'cidade_uf',
-    'Cidade não identificada',
-    resolvePercentual
-  );
-
-  const mapTopCidadesItems = buildRankingItems(
-    mapQuery.data?.top_cidades_valor ?? [],
-    'cidade_uf',
-    'Cidade não identificada',
-    resolvePercentual
-  );
-
-  const mapTopRegioesItems = (mapQuery.data?.top_regioes_valor ?? []).map((regiao: any) => ({
-    regiao: regiao.regiao,
-    rawValue: parseDecimal(regiao.valor_total ?? 0),
-  }));
+    availableYears,
+    stats,
+    salesEvolutionData,
+    hasChartData,
+    chartMessage,
+    selectedMonthLabel,
+    dashboardQuery,
+    totalFaturamento,
+    rankings,
+    mapTopCidadesItems,
+    mapTopRegioesItems,
+    formatCurrency,
+  } = useAnaliseVendasPageData();
 
   return (
     <div className="space-y-6 py-6">
@@ -205,7 +50,7 @@ export default function Dashboard({
 
       <div className="flex justify-end">
         <Button asChild variant="outline" className="h-10">
-          <Link to="/detalhamento-vendas">Abrir detalhamento analítico</Link>
+          <Link to="/detalhamento-vendas">Abrir detalhamento analí­tico</Link>
         </Button>
       </div>
 
@@ -213,7 +58,7 @@ export default function Dashboard({
         <Alert variant="destructive">
           <AlertTitle>Erro ao carregar indicadores</AlertTitle>
           <AlertDescription>
-            {dashboardQuery.error instanceof Error ? dashboardQuery.error.message : 'Não foi possível buscar KPIs.'}
+            {dashboardQuery.error instanceof Error ? dashboardQuery.error.message : 'NÃ£o foi possÃ­vel buscar KPIs.'}
           </AlertDescription>
         </Alert>
       )}
@@ -225,11 +70,7 @@ export default function Dashboard({
       </div>
 
       <RankingPanelGroup
-        rankings={[
-          { title: "Top Clientes", description: "Clientes com maior faturamento", items: topClientesItems, emptyMessage: "Nenhum cliente registrado." },
-          { title: "Top Produtos", description: "Itens com maior faturamento", items: topProdutosItems, emptyMessage: "Nenhum produto registrado." },
-          { title: "Top Cidades", description: "Cidades com maior faturamento", items: topCidadesItems, emptyMessage: "Nenhuma cidade registrada." },
-        ]}
+        rankings={rankings}
         isLoading={dashboardQuery.isLoading}
         totalValue={formatCurrency(totalFaturamento)}
       />
@@ -246,7 +87,7 @@ export default function Dashboard({
       />
 
       <SalesRegionCityMap
-        topCidadesItems={mapTopCidadesItems.length ? mapTopCidadesItems : topCidadesItems}
+        topCidadesItems={mapTopCidadesItems}
         topRegioesItems={mapTopRegioesItems}
         totalFaturamento={totalFaturamento}
         formatCurrency={formatCurrency}

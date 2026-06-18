@@ -1,9 +1,22 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
 from decimal import Decimal
 from typing import Optional
 
 import psycopg
+
+
+logger = logging.getLogger("repositories.nfe.consulta")
+NFE_EMPRESA_JOIN = """
+  LEFT JOIN public.empresas AS e
+    ON regexp_replace(COALESCE(e.cnpj, ''), '\\D', '', 'g')
+       = regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')
+"""
+
+NFE_ESTADO_EXPR = "COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), NULLIF(TRIM(e.estado), ''), 'Sem UF')"
+NFE_CIDADE_EXPR = "COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), NULLIF(TRIM(e.cidade), ''), 'Cidade nao identificada')"
 
 
 class NFeConsultaRepository:
@@ -15,6 +28,7 @@ class NFeConsultaRepository:
   def obter_cnpj_por_email(self, email: str) -> Optional[str]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           """
           SELECT cnpj
@@ -38,6 +52,7 @@ class NFeConsultaRepository:
   ) -> Decimal:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT COALESCE(SUM(i.valor_total), 0) AS {alias_total}
@@ -49,6 +64,13 @@ class NFeConsultaRepository:
           parametros,
         )
         row = cur.fetchone()
+        logger.info(
+          "SQL obter_total_itens alias=%s linha=%s tempo=%.3fs parametros=%s",
+          alias_total,
+          1 if row else 0,
+          perf_counter() - inicio,
+          parametros,
+        )
 
     return row[0] if row else Decimal("0.00")
 
@@ -82,6 +104,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -98,7 +121,15 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_fornecedores_compras order_by=%s linhas=%s tempo=%.3fs parametros=%s",
+          order_by,
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_produtos_compras_por_valor(
     self,
@@ -152,6 +183,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -168,7 +200,15 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_produtos order_by=%s linhas=%s tempo=%.3fs parametros=%s",
+          order_by,
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_produtos_vendas_por_valor(
     self,
@@ -200,6 +240,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -216,7 +257,14 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_produtos_compras linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_cfops_vendas(
     self,
@@ -225,6 +273,7 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -244,7 +293,14 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_cfops_vendas linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_cidades_vendas(
     self,
@@ -253,16 +309,18 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nÃƒÂ£o identificada') AS cidade,
-            COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
+            {NFE_CIDADE_EXPR} AS cidade,
+            {NFE_ESTADO_EXPR} AS uf,
             COALESCE(SUM(i.valor_total), 0) AS valor_total,
             COUNT(DISTINCT n.id) AS quantidade_documentos
           FROM public.notas AS n
           JOIN public.notas_itens AS i
             ON i.nota_id = n.id
+          {NFE_EMPRESA_JOIN}
           WHERE {where_clause}
           GROUP BY 1, 2
           ORDER BY 3 DESC, 1 ASC
@@ -270,7 +328,14 @@ class NFeConsultaRepository:
           """,
           parametros_com_limite,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_cidades_vendas linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros_com_limite,
+        )
+        return rows
 
   def listar_regioes_vendas(
     self,
@@ -279,22 +344,31 @@ class NFeConsultaRepository:
   ) -> list[tuple]:
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
-            COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), '') AS uf,
+            {NFE_ESTADO_EXPR} AS uf,
             COALESCE(SUM(i.valor_total), 0) AS valor_total,
             COUNT(DISTINCT n.id) AS quantidade_documentos
           FROM public.notas AS n
           JOIN public.notas_itens AS i
             ON i.nota_id = n.id
+          {NFE_EMPRESA_JOIN}
           WHERE {where_clause}
           GROUP BY 1
           ORDER BY 2 DESC, 1 ASC
           """,
           parametros,
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_regioes_vendas linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros,
+        )
+        return rows
 
   def criar_tmp_fiscal_hierarquia_base(
     self,
@@ -322,8 +396,8 @@ class NFeConsultaRepository:
         SELECT
           n.id AS documento_id,
           i.id AS item_id,
-          COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), 'Sem UF') AS estado,
-          COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), 'Cidade nao identificada') AS cidade,
+          {NFE_ESTADO_EXPR} AS estado,
+          {NFE_CIDADE_EXPR} AS cidade,
           COALESCE(NULLIF(TRIM(i.produto_codigo), ''), 'SEM-CODIGO') AS produto_codigo,
           COALESCE(NULLIF(TRIM(i.descricao), ''), 'Produto sem descricao') AS produto_descricao,
           regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g') AS ncm_codigo,
@@ -337,6 +411,7 @@ class NFeConsultaRepository:
         FROM public.notas AS n
         JOIN public.notas_itens AS i
           ON i.nota_id = n.id
+        {NFE_EMPRESA_JOIN}
         WHERE {where_clause}
       ),
       notas_rateio AS (
@@ -684,8 +759,16 @@ class NFeConsultaRepository:
 
     with psycopg.connect(**self.conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(sql_kpis, parametros)
-        return cur.fetchall()
+        rows = cur.fetchall()
+        logger.info(
+          "SQL listar_kpis linhas=%s tempo=%.3fs parametros=%s",
+          len(rows),
+          perf_counter() - inicio,
+          parametros,
+        )
+        return rows
 
   def obter_totais_clientes(
     self,

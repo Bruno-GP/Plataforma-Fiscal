@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import { isXmlOnboardingLocked } from '@/utils/workspaceAccess';
 
 type NavigationItem = {
   label: string;
@@ -56,14 +57,14 @@ const createNavigationGroups = (temSped?: boolean): NavigationGroup[] => {
     {
       label: 'Visao Geral',
       items: [
-        { label: 'Dashboard', path: '/analise-vendas', icon: BarChart3 },
+        { label: 'Dashboard', path: '/dashboard', icon: BarChart3, activePaths: ['/analise-vendas'] },
       ],
     },
     {
       label: 'Fiscal',
       items: [
         { label: 'Analise Fiscal', path: '/analise-fiscal-cfop', icon: FileText },
-        { label: 'Reforma Tributaria', path: '/reforma-tributaria', icon: Scale },
+        // { label: 'Reforma Tributaria', path: '/reforma-tributaria', icon: Scale },
       ],
     },
     {
@@ -88,14 +89,21 @@ const createNavigationGroups = (temSped?: boolean): NavigationGroup[] => {
         { label: 'Relatorios IA', path: '/relatorios-ia', icon: Sparkles },
       ],
     },
-    // {
-    //   label: 'Configuracoes',
-    //   items: [
-    //     { label: 'Configuracoes', path: '/configuracoes', icon: Settings },
-    //   ],
-    // },
+    {
+      label: 'Configuracoes',
+      items: [
+        { label: 'Configuracoes', path: '/configuracoes', icon: Settings },
+      ],
+    },
   ];
 };
+
+const createLockedNavigationGroups = (): NavigationGroup[] => [
+  {
+    label: 'Importacoes',
+    items: [{ label: 'Importar XML', path: '/importacao-xml', icon: FileUp }],
+  },
+];
 
 const isItemActive = (pathname: string, item: NavigationItem) =>
   pathname === item.path || item.activePaths?.some((activePath) => pathname === activePath);
@@ -106,7 +114,8 @@ export function AppSidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
   const { user, logout } = useAuth();
   const companyName = user?.name?.trim() || 'Accounting Corp';
-  const navigationGroups = createNavigationGroups(user?.tem_sped);
+  const xmlOnboardingLocked = isXmlOnboardingLocked(user);
+  const navigationGroups = xmlOnboardingLocked ? createLockedNavigationGroups() : createNavigationGroups(user?.tem_sped);
 
   const handleLogout = () => {
     logout();

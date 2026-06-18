@@ -13,7 +13,7 @@ import { useFiscalYears } from '@/hooks/useFiscalYears';
 import { Header } from '@/pages/components/Header';
 import {
   DetalhamentoFiscalHierarquiaMode,
-} from '@/pages/components/DetalhamentoFiscalHierarquiaMode';
+} from '@/pages/components/Detalhamento/DetalhamentoFiscalHierarquiaMode';
 import { StatCard } from '@/pages/components/StatCard';
 import type {
   AnaliseFiscalCfopResponse as AnaliseFiscalCfopNfeResponse,

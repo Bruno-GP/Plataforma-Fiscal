@@ -18,10 +18,16 @@ from app.core.config import (
     get_password_min_length,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
+from app.services.shared.email_validation import normalizar_email, validar_email_existe_dns
 from app.services.nfe.postres_config import carregar_config_postgres
 
 logger = logging.getLogger("LoginService")
 logger.setLevel(logging.INFO)
+
+
+def _normalizar_localidade(valor: str | None) -> str | None:
+    texto = (valor or "").strip()
+    return texto or None
 
 
 @dataclass
@@ -38,7 +44,7 @@ class LoginService:
     _schema_lock = Lock()
     _schema_ensured = False
     _required_columns_by_table = {
-        "empresas": {"id", "cnpj", "nome", "tem_sped"},
+        "empresas": {"id", "cnpj", "nome", "tem_sped", "estado", "cidade", "municipio_id", "codigo_ibge"},
         "login": {
             "id",
             "empresa_id",
@@ -143,6 +149,11 @@ class LoginService:
             120_000,
         )
         return digest.hex()
+
+    def _gerar_senha_armazenada(self, senha: str) -> str:
+        salt = os.urandom(16)
+        senha_hash = self._hash_senha(senha, salt)
+        return f"{salt.hex()}:{senha_hash}"
 
     def _verificar_senha(self, senha: str, senha_armazenada: str) -> bool:
         if not senha_armazenada:
@@ -265,20 +276,36 @@ class LoginService:
             )
         conn.commit()
 
-    def registrar(self, empresa_nome: str, email: str, senha: str, cnpj: str, tem_sped: bool = False) -> LoginResult:
+    def registrar(
+        self,
+        empresa_nome: str,
+        email: str,
+        senha: str,
+        cnpj: str,
+        tem_sped: bool = False,
+        estado: str | None = None,
+        cidade: str | None = None,
+        municipio_id: str | None = None,
+        codigo_ibge: str | None = None,
+    ) -> LoginResult:
         cnpj_normalizado = normalizar_cnpj(cnpj)
         empresa_nome_normalizado = empresa_nome.strip()
+        estado_normalizado = _normalizar_localidade(estado)
+        cidade_normalizada = _normalizar_localidade(cidade)
+        municipio_id_normalizado = _normalizar_localidade(municipio_id)
+        codigo_ibge_normalizado = _normalizar_localidade(codigo_ibge)
         if len(empresa_nome_normalizado) < 2:
             raise ValueError("Informe um nome de empresa válido.")
         self._validar_forca_senha(senha)
-        email_normalizado = email.lower().strip()
+        email_normalizado = normalizar_email(email)
+        validar_email_existe_dns(email_normalizado)
         logger.debug("Iniciando registro de login para %s", email_normalizado)
 
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, cnpj, nome
+                    SELECT id, cnpj, nome, estado, cidade, municipio_id, codigo_ibge
                     FROM public.empresas
                     WHERE cnpj = %s;
                     """,
@@ -293,11 +320,19 @@ class LoginService:
                     )
                     cur.execute(
                         """
-                        INSERT INTO public.empresas (cnpj, nome, tem_sped)
-                        VALUES (%s, %s, %s)
-                        RETURNING id, cnpj, nome;
+                        INSERT INTO public.empresas (cnpj, nome, tem_sped, estado, cidade, municipio_id, codigo_ibge)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id, cnpj, nome, estado, cidade, municipio_id, codigo_ibge;
                         """,
-                        (cnpj_normalizado, empresa_nome_normalizado, tem_sped),
+                        (
+                            cnpj_normalizado,
+                            empresa_nome_normalizado,
+                            tem_sped,
+                            estado_normalizado,
+                            cidade_normalizada,
+                            municipio_id_normalizado,
+                            codigo_ibge_normalizado,
+                        ),
                     )
                     empresa = cur.fetchone()
                 else:
@@ -305,10 +340,22 @@ class LoginService:
                         """
                         UPDATE public.empresas
                         SET nome = %s,
-                            tem_sped = %s
+                            tem_sped = %s,
+                            estado = COALESCE(%s, estado),
+                            cidade = COALESCE(%s, cidade),
+                            municipio_id = COALESCE(%s, municipio_id),
+                            codigo_ibge = COALESCE(%s, codigo_ibge)
                         WHERE id = %s;
                         """,
-                        (empresa_nome_normalizado, tem_sped, empresa[0]),
+                        (
+                            empresa_nome_normalizado,
+                            tem_sped,
+                            estado_normalizado,
+                            cidade_normalizada,
+                            municipio_id_normalizado,
+                            codigo_ibge_normalizado,
+                            empresa[0],
+                        ),
                     )
 
                 cur.execute(
@@ -326,9 +373,7 @@ class LoginService:
                     )
                     raise ValueError("E-mail já cadastrado.")
 
-                salt = os.urandom(16)
-                senha_hash = self._hash_senha(senha, salt)
-                senha_armazenada = f"{salt.hex()}:{senha_hash}"
+                senha_armazenada = self._gerar_senha_armazenada(senha)
 
                 cur.execute(
                     """
@@ -364,8 +409,43 @@ class LoginService:
             tem_sped=tem_sped,
         )
 
+    def atualizar_senha(self, login_id: int, nova_senha: str) -> None:
+        senha_normalizada = nova_senha or ""
+        if not senha_normalizada.strip():
+            raise ValueError("Informe uma nova senha valida.")
+
+        self._validar_forca_senha(senha_normalizada)
+        senha_armazenada = self._gerar_senha_armazenada(senha_normalizada)
+
+        with psycopg.connect(**self.conn_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.login
+                    SET senha = %s
+                    WHERE id = %s
+                    RETURNING id, email, empresa_id, cnpj;
+                    """,
+                    (senha_armazenada, login_id),
+                )
+                row = cur.fetchone()
+            conn.commit()
+
+        if not row:
+            raise ValueError("Usuario nao encontrado para atualizacao de senha.")
+
+        log_security_event(
+            "password_updated",
+            outcome="success",
+            login_id=login_id,
+            email=row[1],
+            empresa_id=row[2],
+            cnpj=row[3],
+            reason="self_service_update",
+        )
+
     def autenticar(self, email: str, senha: str) -> LoginResult:
-        email_normalizado = email.lower().strip()
+        email_normalizado = normalizar_email(email)
         logger.debug("Iniciando autenticação para %s", email_normalizado)
 
         cached = self._get_cached_auth(email_normalizado, senha)

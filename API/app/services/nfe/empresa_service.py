@@ -1,6 +1,8 @@
-import psycopg
 import logging
 
+import psycopg
+
+from app.services.Municipios.municipios_catalog_service import MunicipiosCatalogService
 from app.services.nfe.postres_config import carregar_config_postgres
 
 # =========================
@@ -15,6 +17,17 @@ logger.disabled = True
 def normalizar_cnpj(cnpj: str) -> str:
     return "".join(filter(str.isdigit, cnpj))
 
+
+def _normalizar_localidade(valor: str | None) -> str | None:
+    texto = (valor or "").strip()
+    return texto or None
+
+
+def _normalizar_codigo_municipio(valor: str | None) -> str | None:
+    codigo = MunicipiosCatalogService.normalizar_codigo_ibge(valor)
+    return codigo or None
+
+
 # =========================
 # SERVICE
 # =========================
@@ -23,8 +36,6 @@ class EmpresaService:
         logger.debug("Inicializando EmpresaService")
 
         config = carregar_config_postgres()
-        #logger.debug(f"Config PostgreSQL carregada: {config}")
-
         self.conn_params = {
             "host": config["host"],
             "port": config["port"],
@@ -34,56 +45,98 @@ class EmpresaService:
             "connect_timeout": 5,
         }
 
-    def obter_ou_criar(self, cnpj_emitente: str, nome_emitente: str) -> int:
+    def _resolver_localidade(
+        self,
+        estado: str | None = None,
+        cidade: str | None = None,
+        municipio_id: str | None = None,
+        codigo_ibge: str | None = None,
+    ) -> tuple[str | None, str | None, str | None, str | None]:
+        estado_normalizado = MunicipiosCatalogService.normalizar_uf(estado) or _normalizar_localidade(estado)
+        cidade_normalizada = _normalizar_localidade(cidade)
+        municipio_id_normalizado = _normalizar_codigo_municipio(municipio_id)
+        codigo_ibge_normalizado = _normalizar_codigo_municipio(codigo_ibge)
+
+        municipio_catalogo = MunicipiosCatalogService.resolver_municipio(
+            uf=estado_normalizado,
+            nome=cidade_normalizada,
+            municipio_id=municipio_id_normalizado,
+            codigo_ibge=codigo_ibge_normalizado,
+        )
+
+        if municipio_catalogo:
+            estado_normalizado = municipio_catalogo["uf"]
+            cidade_normalizada = municipio_catalogo["nome"]
+            municipio_id_normalizado = municipio_catalogo["municipio_id"]
+            codigo_ibge_normalizado = municipio_catalogo["codigo_ibge"]
+
+        return (
+            estado_normalizado,
+            cidade_normalizada,
+            municipio_id_normalizado,
+            codigo_ibge_normalizado,
+        )
+
+    def obter_ou_criar(
+        self,
+        cnpj_emitente: str,
+        nome_emitente: str,
+        estado: str | None = None,
+        cidade: str | None = None,
+        municipio_id: str | None = None,
+        codigo_ibge: str | None = None,
+    ) -> int:
         logger.debug("Iniciando obter_ou_criar")
 
         cnpj = normalizar_cnpj(cnpj_emitente)
-        #logger.debug(f"CNPJ recebido: {cnpj_emitente}")
-        #logger.debug(f"CNPJ normalizado: {cnpj}")
-        #logger.debug(f"Nome emitente: {nome_emitente}")
+        (
+            estado_normalizado,
+            cidade_normalizada,
+            municipio_id_normalizado,
+            codigo_ibge_normalizado,
+        ) = self._resolver_localidade(estado, cidade, municipio_id, codigo_ibge)
 
         try:
-            #logger.debug("Abrindo conexão com PostgreSQL")
             with psycopg.connect(**self.conn_params) as conn:
-                #logger.debug("Conexão aberta com sucesso")
-
                 with conn.cursor() as cur:
-                    #logger.debug("Cursor criado")
-
                     sql_insert = """
-                        INSERT INTO public.empresas (cnpj, nome)
-                        VALUES (%s, %s)
+                        INSERT INTO public.empresas (cnpj, nome, estado, cidade, municipio_id, codigo_ibge)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         ON CONFLICT (cnpj)
-                        DO UPDATE SET nome = EXCLUDED.nome
+                        DO UPDATE SET
+                            nome = EXCLUDED.nome,
+                            estado = COALESCE(EXCLUDED.estado, public.empresas.estado),
+                            cidade = COALESCE(EXCLUDED.cidade, public.empresas.cidade),
+                            municipio_id = COALESCE(EXCLUDED.municipio_id, public.empresas.municipio_id),
+                            codigo_ibge = COALESCE(EXCLUDED.codigo_ibge, public.empresas.codigo_ibge)
                         RETURNING id;
                     """
 
-                    logger.debug("Executando SQL INSERT/UPDATE")
-                    #logger.debug(f"SQL: {sql_insert.strip()}")
-                    #logger.debug(f"Params: {(cnpj, nome_emitente)}")
+                    cur.execute(
+                        sql_insert,
+                        (
+                            cnpj,
+                            nome_emitente,
+                            estado_normalizado,
+                            cidade_normalizada,
+                            municipio_id_normalizado,
+                            codigo_ibge_normalizado,
+                        ),
+                    )
 
-                    cur.execute(sql_insert, (cnpj, nome_emitente))
-
-                    #logger.debug("SQL executado, buscando RETURNING id")
                     row = cur.fetchone()
-                    #logger.debug(f"Resultado RETURNING: {row}")
-
                     if row:
-                        #logger.info(f"Empresa obtida/criada com ID={row[0]}")
                         return row[0]
 
-                    #logger.warning("RETURNING não retornou ID, executando SELECT fallback")
-
-                    sql_select = """
+                    cur.execute(
+                        """
                         SELECT id
                         FROM public.empresas
                         WHERE cnpj = %s;
-                    """
-
-                    #logger.debug(f"SQL fallback: {sql_select.strip()}")
-                    cur.execute(sql_select, (cnpj,))
+                        """,
+                        (cnpj,),
+                    )
                     row = cur.fetchone()
-                    #logger.debug(f"Resultado SELECT fallback: {row}")
 
                     if not row:
                         logger.error("Empresa não encontrada nem após fallback")
@@ -91,9 +144,48 @@ class EmpresaService:
                             f"Falha crítica ao obter ou criar empresa. CNPJ={cnpj}"
                         )
 
-                    logger.info(f"Empresa encontrada via fallback ID={row[0]}")
                     return row[0]
 
-        except Exception as exc:
+        except Exception:
             logger.exception("ERRO AO OBTER OU CRIAR EMPRESA")
             raise
+
+    def atualizar_localidade(
+        self,
+        cnpj_emitente: str,
+        estado: str | None = None,
+        cidade: str | None = None,
+        municipio_id: str | None = None,
+        codigo_ibge: str | None = None,
+    ) -> None:
+        cnpj = normalizar_cnpj(cnpj_emitente)
+        (
+            estado_normalizado,
+            cidade_normalizada,
+            municipio_id_normalizado,
+            codigo_ibge_normalizado,
+        ) = self._resolver_localidade(estado, cidade, municipio_id, codigo_ibge)
+
+        if not (estado_normalizado or cidade_normalizada or municipio_id_normalizado or codigo_ibge_normalizado):
+            return
+
+        with psycopg.connect(**self.conn_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.empresas
+                    SET estado = COALESCE(%s, estado),
+                        cidade = COALESCE(%s, cidade),
+                        municipio_id = COALESCE(%s, municipio_id),
+                        codigo_ibge = COALESCE(%s, codigo_ibge)
+                    WHERE regexp_replace(cnpj, '\\D', '', 'g') = %s;
+                    """,
+                    (
+                        estado_normalizado,
+                        cidade_normalizada,
+                        municipio_id_normalizado,
+                        codigo_ibge_normalizado,
+                        cnpj,
+                    ),
+                )
+            conn.commit()

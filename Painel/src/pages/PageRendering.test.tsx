@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 
 import AnaliseCompras from "@/pages/AnaliseCompras";
 import AnaliseFiscalCfop from "@/pages/AnaliseFiscalCfop";
@@ -20,6 +21,7 @@ const mockUser = {
   email: "teste@empresa.com",
   emitente_cnpj: "12345678000199",
   tem_sped: false,
+  tem_xml_importado_valido: true,
 };
 
 const loginMock = vi.fn();
@@ -333,6 +335,25 @@ vi.mock("@/services/nfe", async () => {
   };
 });
 
+vi.mock("@/services/municipios", () => ({
+  fetchUfsCatalogo: vi.fn(() =>
+    Promise.resolve([
+      { uf: "SP", label: "SP", quantidade_municipios: 645 },
+      { uf: "RJ", label: "RJ", quantidade_municipios: 92 },
+    ]),
+  ),
+  fetchMunicipiosPorUf: vi.fn((uf: string) =>
+    Promise.resolve(
+      uf === "SP"
+        ? [
+            { municipio_id: "3550308", codigo_ibge: "3550308", nome: "Sao Paulo", uf: "SP" },
+            { municipio_id: "3549904", codigo_ibge: "3549904", nome: "Santos", uf: "SP" },
+          ]
+        : [],
+    ),
+  ),
+}));
+
 vi.mock("@/services/sped", () => ({
   fetchSpedKpis: vi.fn(() => Promise.resolve(kpisResponse)),
   fetchSpedDashboardCompras: vi.fn(() => Promise.resolve(dashboardComprasResponse)),
@@ -518,6 +539,40 @@ describe("renderizacao por pagina do frontend", () => {
     expect(screen.getByLabelText(/cnpj/i)).toBeRequired();
     expect(screen.getByLabelText(/email do login/i)).toBeRequired();
     expect(screen.getByLabelText(/senha/i)).toBeRequired();
+    expect(screen.getByRole("button", { name: /uf da empresa/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cidade da empresa/i })).toBeDisabled();
+  });
+
+  it("envia o payload de cadastro com UF e cidade vinculadas ao catalogo", async () => {
+    registerMock.mockResolvedValueOnce({ ok: true });
+    const user = userEvent.setup();
+    renderWithProviders(<CadastroEmpresa />, { route: "/interno/cadastro-empresa" });
+
+    await user.type(screen.getByLabelText(/nome da empresa/i), "Empresa Teste");
+    await user.type(screen.getByLabelText(/^cnpj$/i), "12345678000190");
+    await user.type(screen.getByLabelText(/email do login/i), "teste@empresa.com");
+    await user.type(screen.getByLabelText(/^senha$/i), "Senha@123456");
+
+    await user.click(screen.getByRole("button", { name: /uf da empresa/i }));
+    await user.click(await screen.findByText("SP"));
+
+    await user.click(screen.getByRole("button", { name: /cidade da empresa/i }));
+    await user.click(await screen.findByText("Sao Paulo"));
+
+    await user.click(screen.getByRole("button", { name: /cadastrar empresa/i }));
+
+    expect(registerMock).toHaveBeenCalledWith(
+      "Empresa Teste",
+      "teste@empresa.com",
+      "Senha@123456",
+      "12345678000190",
+      false,
+      false,
+      "SP",
+      "Sao Paulo",
+      "3550308",
+      "3550308",
+    );
   });
 
   it("mantem a suite estavel esperando queries assíncronas terminarem", async () => {

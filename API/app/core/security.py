@@ -16,6 +16,7 @@ from app.core.config import (
     get_session_cookie_secure,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
+from app.services.shared.email_validation import normalizar_email
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -91,7 +92,7 @@ def decode_access_token(token: str) -> AuthenticatedUser:
         login_id=int(payload["sub"]),
         empresa_id=int(payload["empresa_id"]),
         cnpj=normalizar_cnpj(str(payload["cnpj"])),
-        email=str(payload["email"]).strip().lower(),
+        email=normalizar_email(str(payload["email"])),
         empresa_nome=str(payload.get("empresa_nome", "")).strip(),
         tem_sped=bool(payload.get("tem_sped", False)),
     )
@@ -147,8 +148,8 @@ def require_company_scope(
                 detail="Você não tem acesso a esta empresa.",
             )
 
-    email_param = request.query_params.get("email")
-    if email_param and email_param.strip().lower() != current_user.email:
+    email_param = normalizar_email(request.query_params.get("email"))
+    if email_param and email_param != current_user.email:
         log_security_event(
             "access_denied",
             outcome="rejected",

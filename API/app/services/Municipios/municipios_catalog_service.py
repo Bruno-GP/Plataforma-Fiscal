@@ -11,6 +11,36 @@ from app.services.nfe.postres_config import carregar_config_postgres
 
 
 class MunicipiosCatalogService:
+  _UF_ORDEM = (
+    "AC",
+    "AL",
+    "AP",
+    "AM",
+    "BA",
+    "CE",
+    "DF",
+    "ES",
+    "GO",
+    "MA",
+    "MT",
+    "MS",
+    "MG",
+    "PA",
+    "PB",
+    "PR",
+    "PE",
+    "PI",
+    "RJ",
+    "RN",
+    "RS",
+    "RO",
+    "RR",
+    "SC",
+    "SP",
+    "SE",
+    "TO",
+  )
+
   @staticmethod
   def normalizar_chave(valor: str) -> str:
     texto = " ".join((valor or "").strip().upper().split())
@@ -26,6 +56,154 @@ class MunicipiosCatalogService:
     if mapas[0]:
       return mapas
     return MunicipiosCatalogService._load_from_local_geojson()
+
+  @staticmethod
+  def normalizar_uf(valor: str | None) -> str:
+    texto = "".join((valor or "").strip().upper().split())
+    return texto if len(texto) == 2 and texto.isalpha() else ""
+
+  @staticmethod
+  def normalizar_codigo_ibge(valor: str | None) -> str:
+    return "".join(ch for ch in str(valor or "") if ch.isdigit())
+
+  @staticmethod
+  def listar_ufs(busca: str | None = None) -> list[dict[str, object]]:
+    municipios_por_codigo, _, _ = MunicipiosCatalogService.carregar_mapas()
+    termo = MunicipiosCatalogService.normalizar_chave(busca or "")
+    contagem_por_uf: dict[str, int] = {}
+
+    for _, uf in municipios_por_codigo.values():
+      uf_normalizada = MunicipiosCatalogService.normalizar_uf(uf)
+      if not uf_normalizada:
+        continue
+      contagem_por_uf[uf_normalizada] = contagem_por_uf.get(uf_normalizada, 0) + 1
+
+    ufs = [
+      {
+        "uf": uf,
+        "label": uf,
+        "quantidade_municipios": contagem_por_uf.get(uf, 0),
+      }
+      for uf in MunicipiosCatalogService._UF_ORDEM
+      if uf in contagem_por_uf
+    ]
+
+    if termo:
+      ufs = [
+        item
+        for item in ufs
+        if termo in MunicipiosCatalogService.normalizar_chave(str(item["uf"]))
+      ]
+
+    return ufs
+
+  @staticmethod
+  def listar_municipios_por_uf(
+    uf: str | None,
+    busca: str | None = None,
+    limite: int | None = None,
+  ) -> list[dict[str, str]]:
+    uf_normalizada = MunicipiosCatalogService.normalizar_uf(uf)
+    if not uf_normalizada:
+      return []
+
+    municipios_por_codigo, _, _ = MunicipiosCatalogService.carregar_mapas()
+    termo = MunicipiosCatalogService.normalizar_chave(busca or "")
+
+    municipios = [
+      {
+        "municipio_id": codigo_ibge,
+        "codigo_ibge": codigo_ibge,
+        "nome": nome,
+        "uf": uf_registro,
+      }
+      for codigo_ibge, (nome, uf_registro) in municipios_por_codigo.items()
+      if MunicipiosCatalogService.normalizar_uf(uf_registro) == uf_normalizada
+    ]
+
+    if termo:
+      municipios = [
+        municipio
+        for municipio in municipios
+        if termo in MunicipiosCatalogService.normalizar_chave(municipio["nome"])
+      ]
+
+    municipios.sort(key=lambda item: item["nome"].casefold())
+
+    if limite is not None and limite > 0:
+      municipios = municipios[:limite]
+
+    return municipios
+
+  @staticmethod
+  def obter_municipio_por_codigo(codigo_ibge: str | None) -> dict[str, str] | None:
+    codigo_normalizado = MunicipiosCatalogService.normalizar_codigo_ibge(codigo_ibge)
+    if not codigo_normalizado:
+      return None
+
+    municipios_por_codigo, _, _ = MunicipiosCatalogService.carregar_mapas()
+    municipio = municipios_por_codigo.get(codigo_normalizado)
+    if not municipio:
+      return None
+
+    nome, uf = municipio
+    return {
+      "municipio_id": codigo_normalizado,
+      "codigo_ibge": codigo_normalizado,
+      "nome": nome,
+      "uf": uf,
+    }
+
+  @staticmethod
+  def obter_municipio_por_uf_e_nome(uf: str | None, nome: str | None) -> dict[str, str] | None:
+    uf_normalizada = MunicipiosCatalogService.normalizar_uf(uf)
+    nome_normalizado = MunicipiosCatalogService.normalizar_chave(nome or "")
+    if not uf_normalizada or not nome_normalizado:
+      return None
+
+    municipios_por_codigo, _, _ = MunicipiosCatalogService.carregar_mapas()
+    for codigo_ibge, (nome_registro, uf_registro) in municipios_por_codigo.items():
+      if MunicipiosCatalogService.normalizar_uf(uf_registro) != uf_normalizada:
+        continue
+      if MunicipiosCatalogService.normalizar_chave(nome_registro) != nome_normalizado:
+        continue
+      return {
+        "municipio_id": codigo_ibge,
+        "codigo_ibge": codigo_ibge,
+        "nome": nome_registro,
+        "uf": uf_registro,
+      }
+
+    return None
+
+  @staticmethod
+  def resolver_municipio(
+    uf: str | None = None,
+    nome: str | None = None,
+    municipio_id: str | None = None,
+    codigo_ibge: str | None = None,
+  ) -> dict[str, str] | None:
+    uf_normalizada = MunicipiosCatalogService.normalizar_uf(uf)
+    nome_normalizado = MunicipiosCatalogService.normalizar_chave(nome or "")
+    candidato_codigo = MunicipiosCatalogService.normalizar_codigo_ibge(municipio_id or codigo_ibge)
+
+    if candidato_codigo:
+      municipio = MunicipiosCatalogService.obter_municipio_por_codigo(candidato_codigo)
+      if not municipio:
+        return None
+
+      if uf_normalizada and MunicipiosCatalogService.normalizar_uf(municipio["uf"]) != uf_normalizada:
+        return None
+
+      if nome_normalizado and MunicipiosCatalogService.normalizar_chave(municipio["nome"]) != nome_normalizado:
+        return None
+
+      return municipio
+
+    if uf_normalizada and nome_normalizado:
+      return MunicipiosCatalogService.obter_municipio_por_uf_e_nome(uf_normalizada, nome_normalizado)
+
+    return None
 
   @staticmethod
   def _load_from_db() -> tuple[dict[str, tuple[str, str]], dict[str, str], dict[str, str]]:

@@ -7,6 +7,7 @@ import {
   saveAuthSession,
   type SessionUser,
 } from '@/services/api';
+import { getDefaultWorkspaceRoute } from '@/utils/workspaceAccess';
 
 interface User {
   id: string;
@@ -15,6 +16,7 @@ interface User {
   emitente_cnpj: string;
   avatar?: string;
   tem_sped?: boolean;
+  tem_xml_importado_valido?: boolean;
 }
 
 interface StoredUserLegacy {
@@ -25,11 +27,13 @@ interface StoredUserLegacy {
   cnpj?: string;
   avatar?: string;
   tem_sped?: boolean;
+  tem_xml_importado_valido?: boolean;
 }
 
 interface AuthResult {
   ok: boolean;
   message?: string;
+  redirectTo?: string;
 }
 
 interface AuthContextType {
@@ -37,7 +41,19 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isReady: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
-  register: (empresaNome: string, email: string, password: string, cnpj: string, temSped: boolean, autoLogin?: boolean) => Promise<AuthResult>;
+  refreshSession: () => Promise<void>;
+  register: (
+    empresaNome: string,
+    email: string,
+    password: string,
+    cnpj: string,
+    temSped: boolean,
+    autoLogin?: boolean,
+    estado?: string,
+    cidade?: string,
+    municipioId?: string,
+    codigoIbge?: string,
+  ) => Promise<AuthResult>;
   logout: () => void;
 }
 
@@ -49,6 +65,7 @@ interface LoginResponse {
   email: string;
   empresa_nome: string;
   tem_sped?: boolean;
+  tem_xml_importado_valido?: boolean;
   expires_in: number;
   access_token?: string;
 }
@@ -120,6 +137,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       emitente_cnpj: emitenteCnpj,
       avatar: parsed.avatar,
       tem_sped: Boolean(parsed.tem_sped),
+      tem_xml_importado_valido: Boolean(parsed.tem_xml_importado_valido),
     };
   });
 
@@ -146,6 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       emitente_cnpj: normalizeSessionCnpj(data.cnpj),
       avatar: undefined,
       tem_sped: Boolean(data.tem_sped),
+      tem_xml_importado_valido: Boolean(data.tem_xml_importado_valido),
     };
 
     setUser(nextUser);
@@ -156,22 +175,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const syncSessionFromServer = async (clearOnFailure: boolean) => {
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/auth/sessao`);
+      if (!response.ok) {
+        if (clearOnFailure) {
+          setUser(null);
+        }
+        return;
+      }
+
+      const data = (await response.json()) as LoginResponse;
+      persistAuthenticatedUser(data, data.email);
+    } catch {
+      if (clearOnFailure) {
+        setUser(null);
+      }
+    }
+  };
+
   useEffect(() => {
     const hydrateSession = async () => {
-      try {
-        const response = await apiFetch(`${API_BASE_URL}/auth/sessao`);
-        if (!response.ok) {
-          setUser(null);
-          return;
-        }
-
-        const data = (await response.json()) as LoginResponse;
-        persistAuthenticatedUser(data, data.email);
-      } catch {
-        setUser(null);
-      } finally {
-        setIsReady(true);
-      }
+      await syncSessionFromServer(true);
+      setIsReady(true);
     };
 
     void hydrateSession();
@@ -203,7 +229,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const data = (await response.json()) as LoginResponse;
     persistAuthenticatedUser(data, email);
-    return { ok: true };
+    return {
+      ok: true,
+      redirectTo: getDefaultWorkspaceRoute({
+        tem_sped: Boolean(data.tem_sped),
+        tem_xml_importado_valido: Boolean(data.tem_xml_importado_valido),
+      }),
+    };
+  };
+
+  const refreshSession = async () => {
+    await syncSessionFromServer(false);
   };
 
   const register = async (
@@ -213,6 +249,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     cnpj: string,
     temSped: boolean,
     autoLogin = true,
+    estado?: string,
+    cidade?: string,
+    municipioId?: string,
+    codigoIbge?: string,
   ): Promise<AuthResult> => {
     const empresaNomeNormalizado = empresaNome.trim();
     const emailNormalizado = email.trim();
@@ -232,19 +272,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, message: 'Informe um CNPJ válido com 14 dígitos.' };
     }
 
+    const ufNormalizada = estado?.trim().toUpperCase() ?? '';
+    const cidadeNormalizada = cidade?.trim() ?? '';
+    const municipioIdNormalizado = municipioId?.trim() ?? '';
+    const codigoIbgeNormalizado = codigoIbge?.trim() ?? '';
+
+    if (!ufNormalizada) {
+      return { ok: false, message: 'Selecione uma UF válida para a empresa.' };
+    }
+
+    if (!cidadeNormalizada) {
+      return { ok: false, message: 'Selecione uma cidade válida para a empresa.' };
+    }
+
+    if (!municipioIdNormalizado) {
+      return { ok: false, message: 'Selecione uma cidade vinculada ao catálogo de municípios.' };
+    }
+
+    if (!codigoIbgeNormalizado) {
+      return { ok: false, message: 'Selecione uma cidade vinculada ao código IBGE do catálogo.' };
+    }
+
     const response = await apiFetch(`${API_BASE_URL}/auth/registrar`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        empresa_nome: empresaNomeNormalizado,
-        email: emailNormalizado,
-        senha: senhaInformada,
-        cnpj: cnpjNormalizado,
-        tem_sped: temSped,
-      }),
-    });
+        body: JSON.stringify({
+          empresa_nome: empresaNomeNormalizado,
+          email: emailNormalizado,
+          senha: senhaInformada,
+          cnpj: cnpjNormalizado,
+          tem_sped: temSped,
+          estado: ufNormalizada,
+          cidade: cidadeNormalizada,
+          municipio_id: municipioIdNormalizado,
+          codigo_ibge: codigoIbgeNormalizado,
+        }),
+      });
 
     if (!response.ok) {
       const errorData = (await response.json().catch(() => null)) as ApiErrorDetail | null;
@@ -276,6 +341,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isAuthenticated: !!user,
         isReady,
         login,
+        refreshSession,
         register,
         logout,
       }}

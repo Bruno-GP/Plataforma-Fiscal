@@ -23,6 +23,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 - `API/SQL/migrations/005_add_reforma_tributaria_documentos_itens.sql`
 - `API/SQL/migrations/006_add_reforma_tributaria_creditos_debitos_memoria.sql`
 - `API/SQL/migrations/007_add_sped_processing_columns.sql`
+- `API/SQL/migrations/008_add_dashboard_performance_indexes.sql`
 - `API/app/services/db_schema_service.py`
 - `API/app/services/company_profile_service.py`
 - `API/app/services/NCM/ibpt_sync_service.py`
@@ -42,6 +43,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 | 5 | `005_add_reforma_tributaria_documentos_itens.sql` | Tributos vinculados a documentos e itens fiscais. |
 | 6 | `006_add_reforma_tributaria_creditos_debitos_memoria.sql` | Creditos, debitos e memoria de calculo. |
 | 7 | `007_add_sped_processing_columns.sql` | Colunas auxiliares do processamento SPED. |
+| 8 | `008_add_dashboard_performance_indexes.sql` | Indices de dashboard para `documentos_fiscais_tributos`. |
 
 ## Como aplicar hoje
 
@@ -58,6 +60,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 - O startup nao executa DDL. `ENABLE_STARTUP_SCHEMA_ENSURE=true` foi descontinuado e falha cedo com orientacao para aplicar Alembic.
 - `notas_xml_importados`, `sped_importados` e `processing_jobs` estao na migration inicial.
 - As colunas de seguranca de `public.login` (`tentativas_falhas`, `bloqueado_ate`, `ultimo_login_em`) estao na revision Alembic `20260515_0004`.
+- `008_add_dashboard_performance_indexes.sql` foi aplicada pela revision Alembic `20260511_0003`.
 - Services de importacao XML/SPED validam as tabelas de staging antes do uso, mas nao criam/alteram essas tabelas em runtime.
 - `CompanyProfileService` valida `public.empresas.tem_sped` antes do uso, mas nao cria/altera `public.empresas` em runtime.
 - `IBPTSyncService` valida `ncm_catalogo` e `ncm_tributacao` antes da sincronizacao, mas nao cria/altera essas tabelas em runtime.
@@ -74,7 +77,7 @@ Em Docker Compose, o servico `migration` roda `upgrade head` antes da API e dos 
 | --- | --- |
 | Script SQL base | `empresas`, `sped_importacoes`, `participantes`, `produtos`, `documentos_fiscais`, `documento_itens`, `tributos_itens`, `resumo_cfop_cst`, `apuracao_icms`, `apuracao_ipi`, `inventario`, `ajustes_fiscais`, `kpis_sped_fiscal`. |
 | Script SQL auxiliar | `municipios_catalogo`, `ncm_catalogo`, `ncm_tributacao`. |
-| Migration manual/Alembic | `tem_sped` em `empresas`, `ncm_tributacao`, indices fiscais, `tributos`, `regras_tributarias`, `regras_tributarias_vigencias`, `aliquotas_tributarias`, `apuracao_tributaria`, `ajustes_tributarios`, `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`, `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`, colunas SPED de processamento, colunas de seguranca de `login`. |
+| Migration manual/Alembic | `tem_sped` em `empresas`, `ncm_tributacao`, indices fiscais, `documentos_fiscais_tributos` de dashboard, `tributos`, `regras_tributarias`, `regras_tributarias_vigencias`, `aliquotas_tributarias`, `apuracao_tributaria`, `ajustes_tributarios`, `documentos_fiscais_tributos`, `itens_documentos_fiscais_tributos`, `creditos_tributarios`, `debitos_tributarios`, `memoria_calculo_tributaria`, colunas SPED de processamento, colunas de seguranca de `login`. |
 | Startup | Nenhuma estrutura. A API exige schema aplicado previamente por Alembic. |
 | Service sob demanda | Nenhuma estrutura operacional recomendada. Services validam schema e falham cedo quando Alembic nao foi aplicado. |
 

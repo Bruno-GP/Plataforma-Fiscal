@@ -49,6 +49,7 @@ from app.services.fiscal.fiscal_sales import (
   construir_resposta_analise_vendas,
 )
 from app.services.nfe.empresa_service import normalizar_cnpj
+from app.domain.nfe.normalization import normalizar_nome_produto
 from app.services.sped.postgres_config import carregar_config_postgres_sped
 from app.repositories.sped.sped_repository import SpedRepository
 
@@ -677,7 +678,7 @@ class SpedConsultaService:
             ncm_item,
             descricao_item,
             codigo_item,
-            produto_item,
+            normalizar_nome_produto(produto_item),
             faturamento_item,
             imposto_valor,
             normalizar_cidade=_normalizar_nome_cidade,
@@ -739,7 +740,12 @@ class SpedConsultaService:
         if not usar_impostos_complementares:
           imposto_valor = calcular_imposto_por_percentual(faturamento_item, percentual_total)
         por_produto.append(
-          construir_item_produto(codigo_item, produto_item, faturamento_item, imposto_valor)
+          construir_item_produto(
+            codigo_item,
+            normalizar_nome_produto(produto_item),
+            faturamento_item,
+            imposto_valor,
+          )
         )
       itens_nivel_atual = por_produto
 

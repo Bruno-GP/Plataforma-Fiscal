@@ -24,6 +24,7 @@ import AnaliseFiscalCfop from "./pages/AnaliseFiscalCfop";
 import Inconsistencias from "./pages/Inconsistencias";
 import RelatoriosIA from "./pages/RelatoriosIA";
 import ReformaTributaria from "./pages/ReformaTributaria";
+import { getDefaultWorkspaceRoute } from "@/utils/workspaceAccess";
 
 // QueryClient centraliza cache e invalidação de chamadas HTTP da aplicação.
 const queryClient = new QueryClient();
@@ -44,6 +45,12 @@ const ImportacaoFiscalRoute = ({ tipo }: { tipo: 'xml' | 'sped' }) => {
 
 const AnaliseComprasRoute = () => <AnaliseCompras />;
 
+const HomeRoute = () => {
+  const { user } = useAuth();
+
+  return <Navigate to={getDefaultWorkspaceRoute(user)} replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -62,8 +69,9 @@ const App = () => (
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/interno/cadastro-empresa" element={<CadastroEmpresa />} />
+              <Route path="/analise-vendas" element={<Navigate to="/dashboard" replace />} />
               <Route
-                path="/analise-vendas"
+                path="/dashboard"
                 element={
                   <MainLayout>
                     <Dashboard />
@@ -167,7 +175,7 @@ const App = () => (
                   </MainLayout>
                 }
               /> */}
-              <Route path="/" element={<Navigate to="/analise-vendas" replace />} />
+              <Route path="/" element={<HomeRoute />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -21,7 +21,9 @@ def upgrade() -> None:
             id BIGSERIAL PRIMARY KEY,
             cnpj VARCHAR(20) NOT NULL UNIQUE,
             nome VARCHAR(255) NOT NULL,
-            tem_sped BOOLEAN NOT NULL DEFAULT FALSE
+            tem_sped BOOLEAN NOT NULL DEFAULT FALSE,
+            estado CHAR(2),
+            cidade VARCHAR(120)
         );
 
         CREATE TABLE IF NOT EXISTS notas_processamentos (

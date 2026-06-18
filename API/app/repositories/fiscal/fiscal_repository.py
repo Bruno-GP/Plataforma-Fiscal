@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
 import psycopg
+
+
+logger = logging.getLogger("repositories.fiscal")
 
 
 @dataclass(frozen=True)
@@ -108,6 +113,7 @@ class FiscalRepository:
     try:
       with psycopg.connect(**conn_params) as conn:
         with conn.cursor() as cur:
+          inicio = perf_counter()
           cur.execute(
             f"""
             SELECT COALESCE(
@@ -127,6 +133,13 @@ class FiscalRepository:
             parametros,
           )
           row = cur.fetchone()
+          logger.info(
+            "SQL total_impostos_complementares_documentos origem=%s linhas=%s tempo=%.3fs parametros=%s",
+            origem_documento,
+            1 if row else 0,
+            perf_counter() - inicio,
+            parametros,
+          )
     except psycopg.errors.UndefinedTable:
       return Decimal("0.00")
 
@@ -188,6 +201,7 @@ class FiscalRepository:
     try:
       with psycopg.connect(**conn_params) as conn:
         with conn.cursor() as cur:
+          inicio = perf_counter()
           cur.execute(
             f"""
             SELECT
@@ -224,6 +238,13 @@ class FiscalRepository:
             [codigos_tributos_reforma, *parametros],
           )
           rows = cur.fetchall()
+          logger.info(
+            "SQL totais_tributos_documentos_por_periodo origem=%s linhas=%s tempo=%.3fs parametros=%s",
+            origem_documento,
+            len(rows),
+            perf_counter() - inicio,
+            [codigos_tributos_reforma, *parametros],
+          )
     except psycopg.errors.UndefinedTable:
       return totais
 
@@ -268,6 +289,7 @@ class FiscalRepository:
 
     with psycopg.connect(**conn_params) as conn:
       with conn.cursor() as cur:
+        inicio = perf_counter()
         cur.execute(
           f"""
           SELECT
@@ -280,10 +302,17 @@ class FiscalRepository:
           parametros,
         )
         resumo_row = cur.fetchone()
+        logger.info(
+          "SQL analise_fiscal_por_dimensao_resumo linhas=%s tempo=%.3fs parametros=%s",
+          1 if resumo_row else 0,
+          perf_counter() - inicio,
+          parametros,
+        )
         total_movimentado = resumo_row[0] if resumo_row else Decimal("0.00")
         quantidade_documentos = resumo_row[1] if resumo_row else 0
         quantidade_dimensoes = resumo_row[2] if resumo_row else 0
 
+        inicio = perf_counter()
         categorias_sql, categorias_params = self._adicionar_limite(
           f"""
           SELECT
@@ -300,6 +329,13 @@ class FiscalRepository:
           limite,
         )
         cur.execute(categorias_sql, categorias_params)
+        top_categorias_rows = cur.fetchall()
+        logger.info(
+          "SQL analise_fiscal_por_dimensao_categorias linhas=%s tempo=%.3fs parametros=%s",
+          len(top_categorias_rows),
+          perf_counter() - inicio,
+          categorias_params,
+        )
         top_categorias = [
           {
             "categoria": categoria,
@@ -311,9 +347,10 @@ class FiscalRepository:
             ),
             "quantidade_documentos": quantidade_docs or 0,
           }
-          for categoria, valor_total, quantidade_docs in cur.fetchall()
+          for categoria, valor_total, quantidade_docs in top_categorias_rows
         ]
 
+        inicio = perf_counter()
         dimensoes_sql, dimensoes_params = self._adicionar_limite(
           f"""
           SELECT
@@ -330,6 +367,13 @@ class FiscalRepository:
           limite,
         )
         cur.execute(dimensoes_sql, dimensoes_params)
+        top_dimensoes_rows = cur.fetchall()
+        logger.info(
+          "SQL analise_fiscal_por_dimensao_dimensoes linhas=%s tempo=%.3fs parametros=%s",
+          len(top_dimensoes_rows),
+          perf_counter() - inicio,
+          dimensoes_params,
+        )
         top_dimensoes = [
           {
             "codigo": codigo,
@@ -341,7 +385,7 @@ class FiscalRepository:
               else Decimal("0.00")
             ),
           }
-          for codigo, descricao, valor_total in cur.fetchall()
+          for codigo, descricao, valor_total in top_dimensoes_rows
         ]
 
     return {

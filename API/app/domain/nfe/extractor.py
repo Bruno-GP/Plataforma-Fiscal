@@ -6,7 +6,7 @@ import logging
 import unicodedata
 
 from app.domain.nfe.normalization import (
-    normalizar_descricao_produto,
+    normalizar_nome_produto,
     normalizar_nome_cliente,
 )
 from app.domain.nfe.xml_models import XmlNFe
@@ -410,7 +410,7 @@ def _extrair_nfse(xml_nfe: XmlNFe) -> NotaExtraida | None:
             or _encontrar_texto_xml(tomador, "CPF")
         )
 
-    descricao_servico = normalizar_descricao_produto(
+    descricao_servico = normalizar_nome_produto(
         _extrair_descricao_servico(_encontrar_texto_xml(root, "Discriminacao"))
     )
 
@@ -559,7 +559,7 @@ class NFeExtractor:
                     ItemNota(
                         numero_item=int(det.attrib.get("nItem", "0")),
                         codigo_produto=prod.findtext("nfe:cProd", "", NS),
-                        descricao=normalizar_descricao_produto(
+                        descricao=normalizar_nome_produto(
                             prod.findtext("nfe:xProd", "", NS)
                         ),
                         ncm=prod.findtext("nfe:NCM", "", NS),

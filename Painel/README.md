@@ -1,6 +1,6 @@
 # Painel Plataforma Fiscal
 
-Frontend em React + Vite para operacao da plataforma fiscal, com autenticacao, importacoes, dashboards analiticos, configuracoes locais e central de relatorios.
+Frontend em React + Vite para operacao da plataforma fiscal, com autenticacao, importacoes, dashboards analiticos, configuracoes de conta e central de relatorios.
 
 ## Atualizacao da documentacao
 
@@ -9,7 +9,7 @@ Frontend em React + Vite para operacao da plataforma fiscal, com autenticacao, i
 - A lista de rotas foi revisada para refletir o roteador principal configurado em `src/App.tsx`.
 - As secoes de comportamento agora descrevem o fluxo real de XML, SPED, analise fiscal e inconsistencias.
 - O texto sobre recursos auxiliares foi ajustado para diferenciar o que esta ativo do que continua apenas implementado no codigo.
-- `Configuracoes` continua ativa no roteador principal; `Atualizacoes` permanece comentada.
+- `Configuracoes` continua ativa no roteador principal e expõe consulta de perfil da empresa e troca de senha; `Atualizacoes` permanece comentada.
 
 ### O que foi adicionado
 
@@ -22,7 +22,7 @@ Frontend em React + Vite para operacao da plataforma fiscal, com autenticacao, i
 ### O que foi tirado
 
 - A pagina `Atualizacoes` continua implementada, mas fora do roteador principal.
-- `Configuracoes` esta ativa no roteador principal, mas ainda nao persiste alteracoes no backend.
+- `Configuracoes` esta ativa no roteador principal e usa a API para consulta do perfil da empresa e atualizacao de senha.
 - O chat deixou de ser apresentado como funcionalidade do painel e passou a ser tratado como recurso desabilitado.
 - A documentacao antiga resumia a navegacao a dashboards principais; agora ela mostra tambem telas operacionais e de suporte ao processo fiscal.
 
@@ -143,7 +143,7 @@ Essa pagina existe no codigo, mas hoje esta comentada em `src/App.tsx`.
 | Relatorios IA | Dependente de configuracao | Exige IA habilitada na API. |
 | Inconsistencias | Ativa | Usa pendencias da API e historico local. |
 | Atualizacoes | Implementada, fora do fluxo | Rota comentada no `App.tsx`. |
-| Configuracoes | Ativa | Tela local sem persistencia no backend. |
+| Configuracoes | Ativa | Consulta o perfil da empresa e permite alterar a senha do usuario logado. |
 | Chat | Desabilitado | Componentes existem, mas o widget nao esta ativo no layout. |
 
 ## Comportamento da aplicacao
@@ -157,7 +157,7 @@ Essa pagina existe no codigo, mas hoje esta comentada em `src/App.tsx`.
 - Processamento de importados via jobs assincronos, com acompanhamento por status/progresso na API
 - Historico local das ultimas operacoes fiscais utilizado pela central de inconsistencias
 - Consulta da Reforma Tributaria habilitada para usuarios com `emitente_cnpj` valido
-- Tela de configuracoes ativa no roteador principal, com ajustes locais de perfil, notificacoes, seguranca e aparencia
+- Tela de configuracoes ativa no roteador principal, com consulta do perfil da empresa, alerta de localidade incompleta e troca de senha do usuario autenticado
 
 Risco conhecido: `localStorage` pode ser lido em caso de XSS. O token sensivel deve permanecer no cookie HttpOnly emitido pela API; os dados locais devem ser tratados como conveniencia de UI, nao como fronteira de seguranca.
 
@@ -240,8 +240,10 @@ Risco conhecido: `localStorage` pode ser lido em caso de XSS. O token sensivel d
 ### Configuracoes
 
 - Tela ativa no roteador principal.
-- Ajustes locais de perfil, notificacoes, seguranca e aparencia.
-- Alteracoes ainda nao sao persistidas no backend.
+- Exibe CNPJ, nome da empresa, UF e cidade em modo somente leitura.
+- Mostra alerta quando a localidade da empresa esta incompleta.
+- Permite apenas a redefinicao da senha do usuario autenticado.
+- Os dados de `municipio_id` e `codigo_ibge` continuam sendo carregados pela API para validacao interna, mas nao sao exibidos na interface.
 
 ## Integracao com a API
 
@@ -252,6 +254,8 @@ Contratos completos com parametros, exemplos e erros comuns estao em [../docs/ap
 - `POST /api/auth/entrar`
 - `POST /api/auth/registrar`
 - `GET /api/auth/sessao`
+- `GET /api/auth/perfil`
+- `PATCH /api/auth/senha`
 - `POST /api/auth/sair`
 
 ### NFe

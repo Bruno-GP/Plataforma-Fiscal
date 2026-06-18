@@ -183,6 +183,8 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `POST /api/auth/registrar`
 - `POST /api/auth/entrar`
 - `GET /api/auth/sessao`
+- `GET /api/auth/perfil`
+- `PATCH /api/auth/senha`
 - `POST /api/auth/sair`
 
 ### NFe

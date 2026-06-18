@@ -55,10 +55,10 @@ export function CompanyDataCard({ empresa, profileQuery }: CompanyDataCardProps)
               <ReadOnlyField id="estado" label="Estado / UF" value={empresa.estado} />
               <ReadOnlyField id="cidade" label="Cidade" value={empresa.cidade} />
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            {/* <div className="grid gap-4 md:grid-cols-2">
               <ReadOnlyField id="municipio-id" label="Municipio ID" value={empresa.municipioId} />
               <ReadOnlyField id="codigo-ibge" label="Codigo IBGE" value={empresa.codigoIbge} />
-            </div>
+            </div> */}
             {empresa.localidadeIncompleta ? (
               <Alert variant="destructive">
                 <AlertDescription>

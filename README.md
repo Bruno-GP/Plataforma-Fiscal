@@ -3,7 +3,7 @@
 Repositorio com duas aplicacoes que operam em conjunto:
 
 - `API/`: backend em FastAPI para autenticacao, importacao fiscal, processamento e consultas analiticas.
-- `Painel/`: frontend em React + Vite para operacao diaria, importacoes, dashboards e relatorios.
+- `Painel/`: frontend em React + Vite para operacao diaria, importacoes, dashboards, relatorios e configuracoes de conta.
 
 Cada modulo possui seu proprio guia e a documentacao operacional fica em `docs/`:
 
@@ -188,6 +188,7 @@ O frontend normaliza a URL automaticamente:
 - Dashboard de clientes
 - Central de inconsistencias com historico local de operacoes
 - Central de relatorios com IA e exportacao para PDF
+- Configuracoes de conta com consulta de perfil da empresa e troca de senha
 
 ## Status das funcionalidades
 
@@ -204,7 +205,7 @@ O frontend normaliza a URL automaticamente:
 | Relatorios IA | Dependente de configuracao | Exige `OPENAI_API_KEY`; apoio analitico, nao parecer fiscal. |
 | Inconsistencias | Ativa | Combina pendencias da API e historico local. |
 | Atualizacoes | Implementada, fora do fluxo | Rota comentada no roteador principal. |
-| Configuracoes | Ativa | Rota ativa no roteador principal; funciona como tela local, sem persistencia no backend. |
+| Configuracoes | Ativa | Consulta o perfil da empresa e permite alterar a senha do usuario logado. |
 | Chat | Desabilitado | Componentes existem, sem integracao ativa com API. |
 
 ## Observacoes importantes
@@ -214,7 +215,7 @@ O frontend normaliza a URL automaticamente:
 - O projeto usa Alembic no ambiente Docker e mantem guias operacionais em [Migrations](docs/migrations.md).
 - Dados fiscais e relatorios IA exigem validacao humana antes de uso oficial.
 - O painel possui pagina de `Atualizacoes` implementada, mas ela permanece comentada no roteador principal.
-- `Configuracoes` esta ativa no roteador principal, mas ainda funciona como tela local sem persistencia no backend.
+- `Configuracoes` esta ativa no roteador principal, exibe os dados cadastrais da empresa em modo somente leitura e permite atualizar a senha do usuario autenticado.
 - O chat do frontend existe como componente/contexto local, porem esta desabilitado no layout e hoje nao conversa com a API.
 
 ## Requisitos

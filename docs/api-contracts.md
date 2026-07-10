@@ -21,22 +21,22 @@ Base local: `http://localhost:8000`. Prefixo: `/api`. Endpoints fiscais exigem a
 ### `POST /api/auth/registrar`
 
 - Autenticacao: nao exige sessao previa.
-- Body obrigatorio: `empresa_nome`, `email`, `senha`, `cnpj`.
+- Body obrigatorio: `empresa_nome`, `email`, `senha`, `cnpj`, `estado`, `cidade`, `municipio_id`, `codigo_ibge`.
 - Body opcional: `tem_sped` (padrao `false`).
 - Request:
 
 ```json
-{ "empresa_nome": "Empresa Exemplo", "email": "user@example.com", "senha": "Senha@123456", "cnpj": "12345678000199", "tem_sped": false }
+{ "empresa_nome": "Empresa Exemplo", "email": "user@example.com", "senha": "Senha@123456", "cnpj": "12345678000199", "tem_sped": false, "estado": "SP", "cidade": "Sao Paulo", "municipio_id": "3550308", "codigo_ibge": "3550308" }
 ```
 
 - Response:
 
 ```json
-{ "status": "cadastrado", "login_id": 1, "empresa_id": 1, "cnpj": "12345678000199", "email": "user@example.com", "empresa_nome": "Empresa Exemplo", "tem_sped": false, "expires_in": 28800 }
+{ "status": "ok", "login_id": 1, "empresa_id": 1, "cnpj": "12345678000199", "email": "user@example.com", "empresa_nome": "Empresa Exemplo", "tem_sped": false, "tem_xml_importado_valido": false, "expires_in": 28800, "access_token": "eyJ..." }
 ```
 
 - Erros comuns: `400` dados invalidos/duplicados, `422` schema invalido.
-- Observacao: define o perfil operacional XML ou SPED da empresa.
+- Observacao: define o perfil operacional XML ou SPED da empresa. Os campos de localidade sao obrigatorios na validacao da rota mesmo sendo opcionais no schema Pydantic.
 
 ### `POST /api/auth/entrar`
 
@@ -74,7 +74,7 @@ Base local: `http://localhost:8000`. Prefixo: `/api`. Endpoints fiscais exigem a
 
 Schema real de auth (`LoginCadastroResponse`, `LoginResponse`, `SessaoResponse`, `CompanyProfileResponse`, `UpdatePasswordResponse`):
 
-Exemplo de resposta de `POST /api/auth/entrar` ou `GET /api/auth/sessao`:
+Exemplo de resposta de `POST /api/auth/entrar`:
 
 ```json
 {
@@ -85,6 +85,24 @@ Exemplo de resposta de `POST /api/auth/entrar` ou `GET /api/auth/sessao`:
   "email": "user@example.com",
   "empresa_nome": "Empresa Exemplo",
   "tem_sped": false,
+  "tem_xml_importado_valido": false,
+  "expires_in": 28800,
+  "access_token": "eyJ..."
+}
+```
+
+Exemplo de resposta de `GET /api/auth/sessao` (sem `access_token`, que nao e renovado nesta rota):
+
+```json
+{
+  "status": "ok",
+  "login_id": 1,
+  "empresa_id": 1,
+  "cnpj": "12345678000199",
+  "email": "user@example.com",
+  "empresa_nome": "Empresa Exemplo",
+  "tem_sped": false,
+  "tem_xml_importado_valido": false,
   "expires_in": 28800
 }
 ```

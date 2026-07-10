@@ -26,6 +26,7 @@ Cada modulo possui seu proprio guia e a documentacao operacional fica em `docs/`
 - [Deploy](docs/deploy.md)
 - [Checklist de producao](docs/production-checklist.md)
 - [Auditoria operacional](docs/auditoria-operacional.md)
+- [Frontend — arquitetura e padrões](docs/frontend.md)
 
 ## Leitura recomendada
 

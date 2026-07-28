@@ -42,17 +42,6 @@ class CentroCusto(ContaAzulBaseModel):
     ativo: Optional[bool] = None
 
 
-class ItemFiscal(ContaAzulBaseModel):
-    """Item de linha de uma venda. Vem de um endpoint separado
-    (GET /v1/venda/{id_venda}/itens), nao do resultado de busca de vendas."""
-
-    id: Optional[str] = None
-    descricao: Optional[str] = None
-    quantidade: Optional[float] = None
-    valor: Optional[float] = None
-    custo: Optional[float] = None
-
-
 class Venda(ContaAzulBaseModel):
     id: str
     numero: Optional[int] = None

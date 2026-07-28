@@ -69,6 +69,16 @@ def _detalhar_vendas(client: ContaAzulClient, vendas: list) -> list:
     return detalhadas
 
 
+def _listar_vendedores_tolerante(client: ContaAzulClient) -> list:
+    """Vendedores e um extra no sync; se falhar, loga aviso e segue sem eles
+    em vez de abortar o resto da sincronizacao."""
+    try:
+        return client.listar_vendedores()
+    except ApiError as exc:
+        logger.warning("Falha ao listar vendedores (status %s), seguindo sem eles: %s", exc.status_code, exc.payload)
+        return []
+
+
 @app.command()
 def auth(
     manual: bool = typer.Option(
@@ -117,7 +127,7 @@ def sync(
             "pessoas": _coletar_todas_paginas(lambda p: client.listar_pessoas(p)),
             "categorias": _coletar_todas_paginas(lambda p: client.listar_categorias(p)),
             "centros_custo": _coletar_todas_paginas(lambda p: client.listar_centro_de_custo(p)),
-            "vendedores": client.listar_vendedores(),
+            "vendedores": _listar_vendedores_tolerante(client),
             "contas_receber": _coletar_todas_paginas(lambda p: client.listar_contas_a_receber(inicio, fim, p)),
             "contas_pagar": _coletar_todas_paginas(lambda p: client.listar_contas_a_pagar(inicio, fim, p)),
         }

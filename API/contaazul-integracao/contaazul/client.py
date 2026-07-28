@@ -248,6 +248,8 @@ class ContaAzulClient:
 
     def listar_vendedores(self) -> list[Vendedor]:
         payload = self._request_json(ENDPOINTS["vendedores"], {})
+        if not isinstance(payload, list):
+            raise ApiError(200, f"Esperado array de vendedores, recebido: {payload!r}")
         return [Vendedor(**item, raw=item) for item in payload]
 
     def obter_itens_venda(
@@ -257,6 +259,8 @@ class ContaAzulClient:
             f"/v1/venda/{id_venda}/itens",
             {PAGE_PARAM: pagina, PAGE_SIZE_PARAM: tamanho_pagina},
         )
+        if not isinstance(payload, dict):
+            raise ApiError(200, f"Esperado objeto de itens de venda, recebido: {payload!r}")
         itens = [ItemVenda(**item, raw=item) for item in payload.get("itens", [])]
         totais_raw = payload.get("totais") or {}
         totais = TotaisItensVenda(**totais_raw, raw=totais_raw)

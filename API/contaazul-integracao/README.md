@@ -33,7 +33,7 @@ Envelope de paginação: a maioria usa `{"itens": [...]}`, mas `/v1/pessoas` e
 já trata os dois.
 
 Itens de linha de uma venda (produto/quantidade/valor) **não vêm** no resultado de busca —
-é um endpoint separado (`GET /v1/venda/{id_venda}/itens`), ainda não implementado aqui.
+é um endpoint separado (`GET /v1/venda/{id_venda}/itens`), veja o comando `itens-venda` abaixo.
 
 Todos os modelos em `contaazul/models.py` guardam o payload original em `raw`, então nenhum
 campo é perdido mesmo que um nome específico não esteja mapeado no schema Pydantic.
@@ -89,7 +89,7 @@ python main.py sync --inicio 2026-01-01 --fim 2026-01-31
 ```
 
 Gera em `output/`: `vendas.json`, `pessoas.json`, `categorias.json`, `centros_custo.json`,
-`contas_receber.json`, `contas_pagar.json`.
+`vendedores.json`, `contas_receber.json`, `contas_pagar.json`.
 
 Comandos adicionais:
 

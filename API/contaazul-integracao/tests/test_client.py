@@ -182,6 +182,28 @@ def test_listar_vendedores_aceita_array_bruto():
 
 
 @respx.mock
+def test_listar_vendedores_payload_em_formato_inesperado_levanta_api_error():
+    respx.get(f"{BASE_URL}{ENDPOINTS['vendedores']}").mock(
+        return_value=httpx.Response(200, json={"itens": [{"id": "vend1", "nome": "João"}]})
+    )
+    client = ContaAzulClient(auth=StubAuth())
+
+    with pytest.raises(ApiError):
+        client.listar_vendedores()
+
+
+@respx.mock
+def test_obter_itens_venda_payload_em_formato_inesperado_levanta_api_error():
+    respx.get(f"{BASE_URL}/v1/venda/venda-123/itens").mock(
+        return_value=httpx.Response(200, json=[{"id": "i1", "nome": "Produto 1"}])
+    )
+    client = ContaAzulClient(auth=StubAuth())
+
+    with pytest.raises(ApiError):
+        client.obter_itens_venda("venda-123")
+
+
+@respx.mock
 def test_obter_itens_venda_retorna_itens_e_totais():
     payload = {
         "itens": [

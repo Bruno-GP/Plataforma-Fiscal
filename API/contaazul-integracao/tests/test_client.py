@@ -164,6 +164,23 @@ def test_listar_produtos_so_envia_filtros_informados():
     assert "status" not in sent_params
 
 
+@respx.mock
+def test_listar_vendedores_aceita_array_bruto():
+    payload = [
+        {"id": "vend1", "nome": "João da Silva", "id_legado": 123456},
+        {"id": "vend2", "nome": "Maria Souza"},
+    ]
+    respx.get(f"{BASE_URL}{ENDPOINTS['vendedores']}").mock(return_value=httpx.Response(200, json=payload))
+    client = ContaAzulClient(auth=StubAuth())
+
+    vendedores = client.listar_vendedores()
+
+    assert len(vendedores) == 2
+    assert vendedores[0].nome == "João da Silva"
+    assert vendedores[0].id_legado == 123456
+    assert vendedores[1].id_legado is None
+
+
 # ---------- ContaAzulAuth ----------
 
 

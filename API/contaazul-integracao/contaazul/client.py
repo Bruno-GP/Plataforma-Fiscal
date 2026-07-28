@@ -31,6 +31,7 @@ from .models import (
     Produto,
     Venda,
     VendaDetalhada,
+    Vendedor,
 )
 
 logger = logging.getLogger("contaazul.client")
@@ -45,6 +46,7 @@ ENDPOINTS = {
     "contas_receber": "/v1/financeiro/eventos-financeiros/contas-a-receber/buscar",
     "contas_pagar": "/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar",
     "produtos": "/v1/produto/busca",
+    "vendedores": "/v1/venda/vendedores",
 }
 
 PAGE_PARAM = "pagina"
@@ -241,3 +243,7 @@ class ContaAzulClient:
         params.update({k: v for k, v in opcionais.items() if v is not None})
         items = self._get("produtos", params)
         return [Produto(**item, raw=item) for item in items]
+
+    def listar_vendedores(self) -> list[Vendedor]:
+        payload = self._request_json(ENDPOINTS["vendedores"], {})
+        return [Vendedor(**item, raw=item) for item in payload]

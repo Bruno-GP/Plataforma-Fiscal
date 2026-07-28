@@ -118,3 +118,11 @@ class Produto(ContaAzulBaseModel):
     valor_venda: Optional[float] = None
     custo_medio: Optional[float] = None
     filhos: Optional[list[dict]] = None
+
+
+class Vendedor(ContaAzulBaseModel):
+    """GET /v1/venda/vendedores. Resposta e array bruto, sem paginacao."""
+
+    id: str
+    nome: str
+    id_legado: Optional[int] = None

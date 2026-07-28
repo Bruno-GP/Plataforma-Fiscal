@@ -11,3 +11,4 @@ k6-tests/data/users.local.json
 k6-tests/data/users.*.json
 !k6-tests/data/users.example.json
 k6-tests/results/
+.worktrees

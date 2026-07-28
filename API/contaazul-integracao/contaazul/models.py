@@ -101,3 +101,20 @@ class ContaPagar(ContaAzulBaseModel):
     fornecedor: Optional[dict] = None
     categorias: Optional[list] = None
     centros_custo: Optional[list] = None
+
+
+class Produto(ContaAzulBaseModel):
+    """GET /v1/produto/busca. Sem campo fiscal (NCM/CEST/origem) — a API real
+    nao expoe isso. Sem GET /v1/produto/{id} tambem — so ha listagem por filtro."""
+
+    id: str
+    id_legado: Optional[int] = None
+    nome: str
+    codigo_sku: Optional[str] = None
+    codigo_ean: Optional[str] = None
+    tipo: Optional[str] = None
+    status: Optional[str] = None
+    estoque: Optional[float] = None
+    valor_venda: Optional[float] = None
+    custo_medio: Optional[float] = None
+    filhos: Optional[list[dict]] = None

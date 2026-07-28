@@ -28,6 +28,7 @@ from .models import (
     Cliente,
     ContaPagar,
     ContaReceber,
+    Produto,
     Venda,
     VendaDetalhada,
 )
@@ -43,6 +44,7 @@ ENDPOINTS = {
     "centros_custo": "/v1/centro-de-custo",
     "contas_receber": "/v1/financeiro/eventos-financeiros/contas-a-receber/buscar",
     "contas_pagar": "/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar",
+    "produtos": "/v1/produto/busca",
 }
 
 PAGE_PARAM = "pagina"
@@ -215,3 +217,27 @@ class ContaAzulClient:
             },
         )
         return [ContaPagar(**item, raw=item) for item in items]
+
+    def listar_produtos(
+        self,
+        pagina: int = 1,
+        tamanho_pagina: int = DEFAULT_PAGE_SIZE,
+        busca: Optional[str] = None,
+        status: Optional[str] = None,
+        campo_ordenacao: Optional[str] = None,
+        direcao_ordenacao: Optional[str] = None,
+        inicio: Optional[float] = None,
+        fim: Optional[float] = None,
+    ) -> list[Produto]:
+        params = {PAGE_PARAM: pagina, PAGE_SIZE_PARAM: tamanho_pagina}
+        opcionais = {
+            "busca": busca,
+            "status": status,
+            "campo_ordenacao": campo_ordenacao,
+            "direcao_ordenacao": direcao_ordenacao,
+            "inicio": inicio,
+            "fim": fim,
+        }
+        params.update({k: v for k, v in opcionais.items() if v is not None})
+        items = self._get("produtos", params)
+        return [Produto(**item, raw=item) for item in items]

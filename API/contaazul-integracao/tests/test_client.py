@@ -118,6 +118,52 @@ def test_token_rejeitado_levanta_auth_error():
         client.listar_pessoas(pagina=1)
 
 
+@respx.mock
+def test_listar_produtos_normaliza_campos():
+    payload = {
+        "itens": [
+            {
+                "id": "p1",
+                "id_legado": 12345,
+                "nome": "Produto Exemplo",
+                "codigo_sku": "SKU123",
+                "codigo_ean": "1234567890123",
+                "tipo": "PRODUTO",
+                "status": "ATIVO",
+                "estoque": 50,
+                "valor_venda": 99.99,
+                "custo_medio": 50,
+            }
+        ],
+        "itens_totais": 1,
+    }
+    respx.get(f"{BASE_URL}{ENDPOINTS['produtos']}").mock(return_value=httpx.Response(200, json=payload))
+    client = ContaAzulClient(auth=StubAuth())
+
+    produtos = client.listar_produtos(pagina=1, busca="Exemplo", status="ATIVO")
+
+    assert len(produtos) == 1
+    assert produtos[0].id == "p1"
+    assert produtos[0].nome == "Produto Exemplo"
+    assert produtos[0].valor_venda == 99.99
+    assert produtos[0].raw["codigo_ean"] == "1234567890123"
+
+
+@respx.mock
+def test_listar_produtos_so_envia_filtros_informados():
+    route = respx.get(f"{BASE_URL}{ENDPOINTS['produtos']}").mock(
+        return_value=httpx.Response(200, json={"itens": []})
+    )
+    client = ContaAzulClient(auth=StubAuth())
+
+    client.listar_produtos(pagina=2)
+
+    sent_params = dict(route.calls[0].request.url.params)
+    assert sent_params["pagina"] == "2"
+    assert "busca" not in sent_params
+    assert "status" not in sent_params
+
+
 # ---------- ContaAzulAuth ----------
 
 

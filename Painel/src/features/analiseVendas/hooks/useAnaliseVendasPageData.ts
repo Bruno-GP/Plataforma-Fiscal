@@ -35,7 +35,7 @@ export function useAnaliseVendasPageData() {
   const { dashboardQuery, mapQuery } = useDashboardVendasQueries({
     emitenteCnpj,
     email: user?.email,
-    temSped: user?.tem_sped,
+    temSped: user,
     year,
     selectedMonth,
     monthNumber,

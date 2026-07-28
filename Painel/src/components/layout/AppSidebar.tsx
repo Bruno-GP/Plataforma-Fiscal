@@ -35,6 +35,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { isXmlOnboardingLocked } from '@/utils/workspaceAccess';
+import type { SessionUser } from '@/services/api';
 
 type NavigationItem = {
   label: string;
@@ -48,10 +49,12 @@ type NavigationGroup = {
   items: NavigationItem[];
 };
 
-const createNavigationGroups = (temSped?: boolean): NavigationGroup[] => {
-  const importItem: NavigationItem = temSped
-    ? { label: 'Importar SPED', path: '/importacao-sped', icon: FileDigit }
-    : { label: 'Importar XML', path: '/importacao-xml', icon: FileUp };
+const createNavigationGroups = (user?: Pick<SessionUser, 'tem_sped' | 'tem_conta_azul'> | null): NavigationGroup[] => {
+  const importItem: NavigationItem = user?.tem_conta_azul
+    ? { label: 'Conta Azul', path: '/configuracoes', icon: FileUp }
+    : user?.tem_sped
+      ? { label: 'Importar SPED', path: '/importacao-sped', icon: FileDigit }
+      : { label: 'Importar XML', path: '/importacao-xml', icon: FileUp };
 
   return [
     {
@@ -115,7 +118,7 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const companyName = user?.name?.trim() || 'Accounting Corp';
   const xmlOnboardingLocked = isXmlOnboardingLocked(user);
-  const navigationGroups = xmlOnboardingLocked ? createLockedNavigationGroups() : createNavigationGroups(user?.tem_sped);
+  const navigationGroups = xmlOnboardingLocked ? createLockedNavigationGroups() : createNavigationGroups(user);
 
   const handleLogout = () => {
     logout();

@@ -1,12 +1,13 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { SessionUser } from '@/services/api';
 import { createFiscalSourceApi } from '@/services/fiscalSource';
 import { createFiscalPeriod, createFiscalQueryKey } from '@/utils/fiscalPeriod';
 
 interface DashboardQueryParams {
   emitenteCnpj?: string;
   email?: string;
-  temSped?: boolean;
+  temSped?: boolean | Pick<SessionUser, 'tem_sped' | 'tem_conta_azul' | 'tem_xml'> | null;
   year: number;
   selectedMonth: string;
   monthNumber: number;

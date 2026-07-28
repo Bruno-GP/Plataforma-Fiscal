@@ -38,7 +38,7 @@ export default function AnaliseFiscalCfop() {
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const fiscalApi = createFiscalSourceApi(user?.tem_sped);
+  const fiscalApi = createFiscalSourceApi(user);
   const fiscalPeriod = useMemo(
     () => createFiscalPeriod(selectedYear, selectedMonth),
     [selectedMonth, selectedYear],

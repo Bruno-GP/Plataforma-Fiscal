@@ -22,6 +22,8 @@ def upgrade() -> None:
             cnpj VARCHAR(20) NOT NULL UNIQUE,
             nome VARCHAR(255) NOT NULL,
             tem_sped BOOLEAN NOT NULL DEFAULT FALSE,
+            tem_conta_azul BOOLEAN NOT NULL DEFAULT FALSE,
+            tem_xml BOOLEAN NOT NULL DEFAULT FALSE,
             estado CHAR(2),
             cidade VARCHAR(120)
         );
@@ -309,6 +311,10 @@ def upgrade() -> None:
 
         ALTER TABLE IF EXISTS empresas
             ADD COLUMN IF NOT EXISTS tem_sped BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE IF EXISTS empresas
+            ADD COLUMN IF NOT EXISTS tem_conta_azul BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE IF EXISTS empresas
+            ADD COLUMN IF NOT EXISTS tem_xml BOOLEAN NOT NULL DEFAULT FALSE;
 
         ALTER TABLE IF EXISTS sped_participantes
             ADD COLUMN IF NOT EXISTS municipio_nome VARCHAR(120),

@@ -7,13 +7,14 @@ import { useToast } from '@/hooks/use-toast';
 import { fetchMunicipiosPorUf, fetchUfsCatalogo, type MunicipioCatalogoItem, type UFCatalogoItem } from '@/services/municipios';
 
 import { validateCatalogSelection } from '../validations/catalogSelection';
+import type { OrigemFiscal } from '../types';
 
 export function useCadastroEmpresaPageData() {
   const [empresaNome, setEmpresaNome] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [cnpj, setCnpj] = useState('');
-  const [temSped, setTemSped] = useState(false);
+  const [origemFiscal, setOrigemFiscal] = useState<OrigemFiscal>('xml');
   const [ufSearch, setUfSearch] = useState('');
   const [cidadeSearch, setCidadeSearch] = useState('');
   const [selectedUf, setSelectedUf] = useState<UFCatalogoItem | null>(null);
@@ -71,7 +72,7 @@ export function useCadastroEmpresaPageData() {
         email,
         password,
         cnpj,
-        temSped,
+        origemFiscal,
         false,
         catalogSelection.selectedUf.uf,
         catalogSelection.selectedCidade.nome,
@@ -117,8 +118,8 @@ export function useCadastroEmpresaPageData() {
     setPassword,
     cnpj,
     setCnpj,
-    temSped,
-    setTemSped,
+    origemFiscal,
+    setOrigemFiscal,
     ufSearch,
     setUfSearch,
     cidadeSearch,

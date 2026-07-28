@@ -16,6 +16,8 @@ interface User {
   emitente_cnpj: string;
   avatar?: string;
   tem_sped?: boolean;
+  tem_conta_azul?: boolean;
+  tem_xml?: boolean;
   tem_xml_importado_valido?: boolean;
 }
 
@@ -27,6 +29,8 @@ interface StoredUserLegacy {
   cnpj?: string;
   avatar?: string;
   tem_sped?: boolean;
+  tem_conta_azul?: boolean;
+  tem_xml?: boolean;
   tem_xml_importado_valido?: boolean;
 }
 
@@ -47,7 +51,7 @@ interface AuthContextType {
     email: string,
     password: string,
     cnpj: string,
-    temSped: boolean,
+    origemFiscal: 'xml' | 'sped' | 'conta_azul',
     autoLogin?: boolean,
     estado?: string,
     cidade?: string,
@@ -65,6 +69,8 @@ interface LoginResponse {
   email: string;
   empresa_nome: string;
   tem_sped?: boolean;
+  tem_conta_azul?: boolean;
+  tem_xml?: boolean;
   tem_xml_importado_valido?: boolean;
   expires_in: number;
   access_token?: string;
@@ -137,6 +143,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       emitente_cnpj: emitenteCnpj,
       avatar: parsed.avatar,
       tem_sped: Boolean(parsed.tem_sped),
+      tem_conta_azul: Boolean(parsed.tem_conta_azul),
+      tem_xml: Boolean(parsed.tem_xml),
       tem_xml_importado_valido: Boolean(parsed.tem_xml_importado_valido),
     };
   });
@@ -164,6 +172,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       emitente_cnpj: normalizeSessionCnpj(data.cnpj),
       avatar: undefined,
       tem_sped: Boolean(data.tem_sped),
+      tem_conta_azul: Boolean(data.tem_conta_azul),
+      tem_xml: Boolean(data.tem_xml),
       tem_xml_importado_valido: Boolean(data.tem_xml_importado_valido),
     };
 
@@ -233,6 +243,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       ok: true,
       redirectTo: getDefaultWorkspaceRoute({
         tem_sped: Boolean(data.tem_sped),
+        tem_conta_azul: Boolean(data.tem_conta_azul),
+        tem_xml: Boolean(data.tem_xml),
         tem_xml_importado_valido: Boolean(data.tem_xml_importado_valido),
       }),
     };
@@ -247,7 +259,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     email: string,
     password: string,
     cnpj: string,
-    temSped: boolean,
+    origemFiscal: 'xml' | 'sped' | 'conta_azul',
     autoLogin = true,
     estado?: string,
     cidade?: string,
@@ -298,12 +310,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       headers: {
         'Content-Type': 'application/json',
       },
-        body: JSON.stringify({
+      body: JSON.stringify({
           empresa_nome: empresaNomeNormalizado,
           email: emailNormalizado,
           senha: senhaInformada,
           cnpj: cnpjNormalizado,
-          tem_sped: temSped,
+          tem_sped: origemFiscal === 'sped',
+          tem_conta_azul: origemFiscal === 'conta_azul',
+          tem_xml: origemFiscal === 'xml',
           estado: ufNormalizada,
           cidade: cidadeNormalizada,
           municipio_id: municipioIdNormalizado,

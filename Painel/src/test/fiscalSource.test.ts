@@ -18,6 +18,12 @@ import {
   fetchSpedDashboardVendas,
   fetchSpedKpis,
 } from '@/services/sped';
+import {
+  fetchContaAzulAnaliseClientes,
+  fetchContaAzulAnaliseCompras,
+  fetchContaAzulDashboardVendas,
+  fetchContaAzulKpis,
+} from '@/services/contaAzul';
 
 vi.mock('@/services/nfe', () => ({
   fetchNfeAnaliseClientes: vi.fn(() => Promise.resolve({ source: 'nfe-clientes' })),
@@ -41,13 +47,26 @@ vi.mock('@/services/sped', () => ({
   fetchSpedKpis: vi.fn(() => Promise.resolve({ source: 'sped-kpis' })),
 }));
 
+vi.mock('@/services/contaAzul', () => ({
+  fetchContaAzulAnaliseClientes: vi.fn(() => Promise.resolve({ source: 'conta-azul-clientes' })),
+  fetchContaAzulAnaliseCompras: vi.fn(() => Promise.resolve({ source: 'conta-azul-compras' })),
+  fetchContaAzulAnaliseFiscalCfop: vi.fn(() => Promise.resolve({ source: 'conta-azul-cfop' })),
+  fetchContaAzulAnaliseFiscalHierarquica: vi.fn(() => Promise.resolve({ source: 'conta-azul-hierarquia' })),
+  fetchContaAzulAnaliseVendas: vi.fn(() => Promise.resolve({ source: 'conta-azul-vendas' })),
+  fetchContaAzulDashboardCompras: vi.fn(() => Promise.resolve({ source: 'conta-azul-dashboard-compras' })),
+  fetchContaAzulDashboardVendas: vi.fn(() => Promise.resolve({ source: 'conta-azul-dashboard-vendas' })),
+  fetchContaAzulKpis: vi.fn(() => Promise.resolve({ source: 'conta-azul-kpis' })),
+}));
+
 describe('fiscalSource helpers', () => {
   it('resolve metadados da fonte fiscal', () => {
     expect(getFiscalSource(false)).toBe('nfe');
     expect(getFiscalSource(true)).toBe('sped');
+    expect(getFiscalSource({ tem_sped: false, tem_conta_azul: true, tem_xml: false })).toBe('conta_azul');
     expect(getFiscalSourceKey(true)).toBe('sped');
     expect(getFiscalSourceLabel(false)).toBe('XML / NFe');
     expect(getFiscalSourceLabel(true)).toBe('SPED Fiscal');
+    expect(getFiscalSourceLabel({ tem_sped: false, tem_conta_azul: true, tem_xml: false })).toBe('Conta Azul');
   });
 
   it('roteia chamadas para APIs NFe quando temSped e falso', async () => {
@@ -92,6 +111,28 @@ describe('fiscalSource helpers', () => {
       sourceKey: 'sped',
       sourceLabel: 'SPED Fiscal',
       isSped: true,
+    });
+  });
+
+  it('roteia chamadas para APIs Conta Azul quando a empresa usa Conta Azul', async () => {
+    const fiscalApi = createFiscalSourceApi({ tem_sped: false, tem_conta_azul: true, tem_xml: false });
+    const params = { emitente_cnpj: '12345678000199' };
+    const options = { signal: new AbortController().signal };
+
+    await fiscalApi.kpis(params);
+    await fiscalApi.dashboardVendas(params, options);
+    await fiscalApi.analiseCompras(params, options);
+    await fiscalApi.analiseClientes(params, options);
+
+    expect(fetchContaAzulKpis).toHaveBeenCalledWith(params);
+    expect(fetchContaAzulDashboardVendas).toHaveBeenCalledWith(params, options);
+    expect(fetchContaAzulAnaliseCompras).toHaveBeenCalledWith(params, options);
+    expect(fetchContaAzulAnaliseClientes).toHaveBeenCalledWith(params, options);
+    expect(fiscalApi).toMatchObject({
+      source: 'conta_azul',
+      sourceKey: 'conta_azul',
+      sourceLabel: 'Conta Azul',
+      isSped: false,
     });
   });
 });

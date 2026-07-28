@@ -102,7 +102,7 @@ export function useDetalhamentoVendas(): UseDetalhamentoVendasResult {
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
   const isSped = Boolean(user?.tem_sped);
-  const fiscalApi = createFiscalSourceApi(user?.tem_sped);
+  const fiscalApi = createFiscalSourceApi(user);
 
   const { selectedMonth, setSelectedMonth, selectedYear, setSelectedYear, monthNumber, year: yearNumber } = usePeriodFilter();
   const fiscalPeriod = useMemo(
@@ -127,7 +127,7 @@ export function useDetalhamentoVendas(): UseDetalhamentoVendasResult {
   const { dashboardQuery, mapQuery } = useDashboardVendasQueries({
     emitenteCnpj,
     email: user?.email,
-    temSped: user?.tem_sped,
+    temSped: user,
     year: yearNumber,
     selectedMonth: dashboardSelectedMonth,
     monthNumber,

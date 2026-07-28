@@ -2,6 +2,8 @@ import type { ChangeEvent } from 'react';
 
 import type { MunicipioCatalogoItem, UFCatalogoItem } from '@/services/municipios';
 
+export type OrigemFiscal = 'xml' | 'sped' | 'conta_azul';
+
 export interface CatalogoComboboxProps<TItem> {
   label: string;
   placeholder: string;

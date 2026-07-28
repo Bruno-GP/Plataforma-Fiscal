@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import base64
+import hashlib
+import hmac
+import json
 
-import jwt
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -22,6 +25,14 @@ from app.services.shared.email_validation import normalizar_email
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+class ExpiredSignatureError(ValueError):
+    pass
+
+
+class InvalidTokenError(ValueError):
+    pass
+
+
 @dataclass(frozen=True)
 class AuthenticatedUser:
     login_id: int
@@ -30,6 +41,61 @@ class AuthenticatedUser:
     email: str
     empresa_nome: str
     tem_sped: bool
+    tem_conta_azul: bool
+    tem_xml: bool
+
+
+def _base64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _base64url_decode(data: str) -> bytes:
+    padded = data + "=" * (-len(data) % 4)
+
+    try:
+        return base64.urlsafe_b64decode(padded.encode("ascii"))
+    except (ValueError, UnicodeEncodeError) as exc:
+        raise InvalidTokenError("Token JWT inválido.") from exc
+
+
+def _encode_jwt(header: dict, payload: dict, secret: str) -> str:
+    header_segment = _base64url_encode(json.dumps(header, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+    payload_segment = _base64url_encode(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+    signing_input = f"{header_segment}.{payload_segment}".encode("ascii")
+    signature = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    return f"{header_segment}.{payload_segment}.{_base64url_encode(signature)}"
+
+
+def _decode_jwt(token: str, secret: str) -> dict:
+    try:
+        header_segment, payload_segment, signature_segment = token.split(".")
+    except ValueError as exc:
+        raise InvalidTokenError("Token JWT inválido.") from exc
+
+    signing_input = f"{header_segment}.{payload_segment}".encode("ascii")
+    expected_signature = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    provided_signature = _base64url_decode(signature_segment)
+
+    if not hmac.compare_digest(expected_signature, provided_signature):
+        raise InvalidTokenError("Assinatura JWT inválida.")
+
+    try:
+        header = json.loads(_base64url_decode(header_segment).decode("utf-8"))
+        payload = json.loads(_base64url_decode(payload_segment).decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise InvalidTokenError("Token JWT inválido.") from exc
+
+    if header.get("alg") != "HS256":
+        raise InvalidTokenError("Algoritmo JWT não suportado.")
+
+    expires_at = payload.get("exp")
+    if not isinstance(expires_at, int):
+        raise InvalidTokenError("Token JWT sem expiração válida.")
+
+    if datetime.now(timezone.utc).timestamp() >= expires_at:
+        raise ExpiredSignatureError("Sessão expirada.")
+
+    return payload
 
 
 def create_access_token(user: AuthenticatedUser) -> tuple[str, int]:
@@ -41,9 +107,12 @@ def create_access_token(user: AuthenticatedUser) -> tuple[str, int]:
         "email": user.email,
         "empresa_nome": user.empresa_nome,
         "tem_sped": user.tem_sped,
-        "exp": datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+        "tem_conta_azul": user.tem_conta_azul,
+        "tem_xml": user.tem_xml,
+        "exp": int((datetime.now(timezone.utc) + timedelta(seconds=expires_in)).timestamp()),
     }
-    token = jwt.encode(payload, get_auth_secret_key(), algorithm="HS256")
+    header = {"alg": "HS256", "typ": "JWT"}
+    token = _encode_jwt(header, payload, get_auth_secret_key())
     return token, expires_in
 
 
@@ -76,13 +145,13 @@ def clear_auth_cookie(response: Response) -> None:
 
 def decode_access_token(token: str) -> AuthenticatedUser:
     try:
-        payload = jwt.decode(token, get_auth_secret_key(), algorithms=["HS256"])
-    except jwt.ExpiredSignatureError as exc:
+        payload = _decode_jwt(token, get_auth_secret_key())
+    except ExpiredSignatureError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sessão expirada. Faça login novamente.",
         ) from exc
-    except jwt.InvalidTokenError as exc:
+    except InvalidTokenError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de acesso inválido.",
@@ -95,6 +164,8 @@ def decode_access_token(token: str) -> AuthenticatedUser:
         email=normalizar_email(str(payload["email"])),
         empresa_nome=str(payload.get("empresa_nome", "")).strip(),
         tem_sped=bool(payload.get("tem_sped", False)),
+        tem_conta_azul=bool(payload.get("tem_conta_azul", False)),
+        tem_xml=bool(payload.get("tem_xml", False)),
     )
 
 

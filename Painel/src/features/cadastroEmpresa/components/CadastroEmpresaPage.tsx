@@ -20,8 +20,8 @@ export function CadastroEmpresaPage() {
     setPassword,
     cnpj,
     setCnpj,
-    temSped,
-    setTemSped,
+    origemFiscal,
+    setOrigemFiscal,
     ufSearch,
     setUfSearch,
     cidadeSearch,
@@ -107,11 +107,12 @@ export function CadastroEmpresaPage() {
               <select
                 id="temSped"
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={temSped ? 'sped' : 'xml'}
-                onChange={(e) => setTemSped(e.target.value === 'sped')}
+                value={origemFiscal}
+                onChange={(e) => setOrigemFiscal(e.target.value as 'xml' | 'sped' | 'conta_azul')}
               >
                 <option value="xml">Empresa usa XML</option>
                 <option value="sped">Empresa usa SPED Fiscal</option>
+                <option value="conta_azul">Empresa usa Conta Azul</option>
               </select>
             </div>
             <TextInputField

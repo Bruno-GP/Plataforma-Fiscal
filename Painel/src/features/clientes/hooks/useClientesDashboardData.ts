@@ -22,7 +22,7 @@ export function useClientesDashboardData() {
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState('all');
   const { user } = useAuth();
-  const fiscalApi = createFiscalSourceApi(user?.tem_sped);
+  const fiscalApi = createFiscalSourceApi(user);
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);

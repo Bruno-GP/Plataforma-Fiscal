@@ -32,7 +32,7 @@ export function useReformaTributariaPageData() {
     [selectedMonth, selectedYear],
   );
   const tributoCodigo = selectedTributo === 'todos' ? undefined : selectedTributo;
-  const origemBackfill = user?.tem_sped ? 'sped' : 'nfe';
+  const origemBackfill: 'nfe' | 'sped' = user?.tem_sped ? 'sped' : 'nfe';
 
   const tributosQuery = useQuery({
     queryKey: ['reforma-tributaria-tributos'],

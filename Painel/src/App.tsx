@@ -32,8 +32,16 @@ const queryClient = new QueryClient();
 const ImportacaoFiscalRoute = ({ tipo }: { tipo: 'xml' | 'sped' }) => {
   const { user } = useAuth();
 
+  if (tipo === 'xml' && user?.tem_conta_azul) {
+    return <Navigate to="/configuracoes" replace />;
+  }
+
   if (tipo === 'xml' && user?.tem_sped) {
     return <Navigate to="/importacao-sped" replace />;
+  }
+
+  if (tipo === 'sped' && user?.tem_conta_azul) {
+    return <Navigate to="/configuracoes" replace />;
   }
 
   if (tipo === 'sped' && !user?.tem_sped) {

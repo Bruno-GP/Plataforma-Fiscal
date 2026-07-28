@@ -38,13 +38,26 @@ class LoginResult:
     email: str
     empresa_nome: str
     tem_sped: bool
+    tem_conta_azul: bool
+    tem_xml: bool
 
 
 class LoginService:
     _schema_lock = Lock()
     _schema_ensured = False
     _required_columns_by_table = {
-        "empresas": {"id", "cnpj", "nome", "tem_sped", "estado", "cidade", "municipio_id", "codigo_ibge"},
+        "empresas": {
+            "id",
+            "cnpj",
+            "nome",
+            "tem_sped",
+            "tem_conta_azul",
+            "tem_xml",
+            "estado",
+            "cidade",
+            "municipio_id",
+            "codigo_ibge",
+        },
         "login": {
             "id",
             "empresa_id",
@@ -283,6 +296,8 @@ class LoginService:
         senha: str,
         cnpj: str,
         tem_sped: bool = False,
+        tem_conta_azul: bool = False,
+        tem_xml: bool = False,
         estado: str | None = None,
         cidade: str | None = None,
         municipio_id: str | None = None,
@@ -294,6 +309,9 @@ class LoginService:
         cidade_normalizada = _normalizar_localidade(cidade)
         municipio_id_normalizado = _normalizar_localidade(municipio_id)
         codigo_ibge_normalizado = _normalizar_localidade(codigo_ibge)
+        tem_sped_normalizado = bool(tem_sped)
+        tem_conta_azul_normalizado = bool(tem_conta_azul)
+        tem_xml_normalizado = bool(tem_xml or (not tem_sped_normalizado and not tem_conta_azul_normalizado))
         if len(empresa_nome_normalizado) < 2:
             raise ValueError("Informe um nome de empresa válido.")
         self._validar_forca_senha(senha)
@@ -305,7 +323,7 @@ class LoginService:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, cnpj, nome, estado, cidade, municipio_id, codigo_ibge
+                    SELECT id, cnpj, nome, tem_sped, tem_conta_azul, tem_xml, estado, cidade, municipio_id, codigo_ibge
                     FROM public.empresas
                     WHERE cnpj = %s;
                     """,
@@ -320,14 +338,16 @@ class LoginService:
                     )
                     cur.execute(
                         """
-                        INSERT INTO public.empresas (cnpj, nome, tem_sped, estado, cidade, municipio_id, codigo_ibge)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id, cnpj, nome, estado, cidade, municipio_id, codigo_ibge;
+                        INSERT INTO public.empresas (cnpj, nome, tem_sped, tem_conta_azul, tem_xml, estado, cidade, municipio_id, codigo_ibge)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id, cnpj, nome, tem_sped, tem_conta_azul, tem_xml, estado, cidade, municipio_id, codigo_ibge;
                         """,
                         (
                             cnpj_normalizado,
                             empresa_nome_normalizado,
-                            tem_sped,
+                            tem_sped_normalizado,
+                            tem_conta_azul_normalizado,
+                            tem_xml_normalizado,
                             estado_normalizado,
                             cidade_normalizada,
                             municipio_id_normalizado,
@@ -341,6 +361,8 @@ class LoginService:
                         UPDATE public.empresas
                         SET nome = %s,
                             tem_sped = %s,
+                            tem_conta_azul = %s,
+                            tem_xml = %s,
                             estado = COALESCE(%s, estado),
                             cidade = COALESCE(%s, cidade),
                             municipio_id = COALESCE(%s, municipio_id),
@@ -349,7 +371,9 @@ class LoginService:
                         """,
                         (
                             empresa_nome_normalizado,
-                            tem_sped,
+                            tem_sped_normalizado,
+                            tem_conta_azul_normalizado,
+                            tem_xml_normalizado,
                             estado_normalizado,
                             cidade_normalizada,
                             municipio_id_normalizado,
@@ -406,7 +430,9 @@ class LoginService:
             cnpj=cnpj_normalizado,
             email=email_normalizado,
             empresa_nome=self._nome_empresa_completo(empresa[2]),
-            tem_sped=tem_sped,
+            tem_sped=tem_sped_normalizado,
+            tem_conta_azul=tem_conta_azul_normalizado,
+            tem_xml=tem_xml_normalizado,
         )
 
     def atualizar_senha(self, login_id: int, nova_senha: str) -> None:
@@ -473,7 +499,9 @@ class LoginService:
                            login.tentativas_falhas,
                            login.ultimo_login_em,
                            empresas.nome,
-                           COALESCE(empresas.tem_sped, false)
+                           COALESCE(empresas.tem_sped, false),
+                           COALESCE(empresas.tem_conta_azul, false),
+                           COALESCE(empresas.tem_xml, false)
                     FROM public.login AS login
                     JOIN public.empresas AS empresas ON empresas.id = login.empresa_id
                     WHERE login.email = %s;
@@ -502,6 +530,8 @@ class LoginService:
                     ultimo_login_em,
                     empresa_nome,
                     tem_sped,
+                    tem_conta_azul,
+                    tem_xml,
                 ) = login
 
                 if bloqueado_ate and bloqueado_ate > datetime.now(timezone.utc):
@@ -539,6 +569,8 @@ class LoginService:
                 email=email_db,
                 empresa_nome=self._nome_empresa_completo(empresa_nome),
                 tem_sped=bool(tem_sped),
+                tem_conta_azul=bool(tem_conta_azul),
+                tem_xml=bool(tem_xml),
             )
             self._set_cached_auth(email_normalizado, senha, result)
             return result

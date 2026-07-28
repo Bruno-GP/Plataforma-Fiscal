@@ -1,8 +1,12 @@
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import Configuracoes from '@/pages/Configuracoes';
 import { renderWithProviders, screen, waitFor } from '@/test/utils/render';
+
+vi.mock('@/features/cadastroEmpresa/components/ContaAzulSection', () => ({
+  ContaAzulSection: () => <div data-testid="conta-azul-section" />,
+}));
 
 describe('pagina de configuracoes', () => {
   it('exibe os dados da empresa como somente leitura e permite atualizar a senha', async () => {

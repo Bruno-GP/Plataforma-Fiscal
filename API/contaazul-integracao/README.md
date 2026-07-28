@@ -19,6 +19,14 @@ Confirmados contra o OpenAPI oficial de cada área (baixado direto do portal,
 | Centro de custo | `GET /v1/centro-de-custo` | `pagina`/`tamanho_pagina` obrigatórios |
 | Contas a receber | `GET /v1/financeiro/eventos-financeiros/contas-a-receber/buscar` | `data_vencimento_de`/`data_vencimento_ate` |
 | Contas a pagar | `GET /v1/financeiro/eventos-financeiros/contas-a-pagar/buscar` | `data_vencimento_de`/`data_vencimento_ate` |
+| Produtos | `GET /v1/produto/busca` | — (sem `data_alteracao`; sem GET por ID; **sem NCM/CEST/fiscal**) |
+| Vendedores | `GET /v1/venda/vendedores` | — (resposta é array bruto, não paginada) |
+| Itens de venda | `GET /v1/venda/{id_venda}/itens` | `id_venda` no path |
+
+**Atenção:** `/v1/produto/busca` (confirmado contra o OpenAPI real, `inventory-apis-openapi`)
+não tem `GET /v1/produto/{id}` nem qualquer campo fiscal (NCM, CEST, origem) — só
+nome/SKU/EAN/estoque/valor/status. Não serve para o fluxo de correção fiscal de produtos;
+precisa de outra fonte de dado pra isso.
 
 Envelope de paginação: a maioria usa `{"itens": [...]}`, mas `/v1/pessoas` e
 `/v1/centro-de-custo` usam `{"items": [...]}` (inglês). `contaazul/client.py:_extract_items`
@@ -82,6 +90,16 @@ python main.py sync --inicio 2026-01-01 --fim 2026-01-31
 
 Gera em `output/`: `vendas.json`, `pessoas.json`, `categorias.json`, `centros_custo.json`,
 `contas_receber.json`, `contas_pagar.json`.
+
+Comandos adicionais:
+
+```bash
+python main.py produtos --status ATIVO
+python main.py itens-venda --id-venda <uuid-ou-id-legado>
+```
+
+`produtos` gera `output/produtos.json`. `itens-venda` gera `output/itens_venda_<id_venda>.json`
+com `{"itens": [...], "totais": {...}}`.
 
 ## Estrutura
 

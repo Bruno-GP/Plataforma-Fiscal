@@ -7,6 +7,7 @@ Comandos:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import date
@@ -116,6 +117,7 @@ def sync(
             "pessoas": _coletar_todas_paginas(lambda p: client.listar_pessoas(p)),
             "categorias": _coletar_todas_paginas(lambda p: client.listar_categorias(p)),
             "centros_custo": _coletar_todas_paginas(lambda p: client.listar_centro_de_custo(p)),
+            "vendedores": client.listar_vendedores(),
             "contas_receber": _coletar_todas_paginas(lambda p: client.listar_contas_a_receber(inicio, fim, p)),
             "contas_pagar": _coletar_todas_paginas(lambda p: client.listar_contas_a_pagar(inicio, fim, p)),
         }
@@ -132,6 +134,69 @@ def sync(
 
     resumo = ", ".join(f"{nome}={len(itens)}" for nome, itens in dados.items())
     typer.secho(f"Exportado para {saida}/ ({resumo})", fg=typer.colors.GREEN)
+
+
+@app.command()
+def produtos(
+    busca: str = typer.Option(None, "--busca", help="Filtra por nome ou código do produto."),
+    status: str = typer.Option(None, "--status", help="ATIVO, INATIVO ou TODOS."),
+    saida: Path = typer.Option(Path("output"), "--saida", help="Diretorio de saida"),
+):
+    """Lista produtos (GET /v1/produto/busca). Sem dado fiscal (NCM/CEST) -- a API nao expoe."""
+    auth_client = _load_auth()
+    client = ContaAzulClient(auth_client)
+
+    try:
+        items = _coletar_todas_paginas(lambda p: client.listar_produtos(pagina=p, busca=busca, status=status))
+    except AuthError as exc:
+        typer.secho(f"Erro de autenticacao: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    except ApiError as exc:
+        typer.secho(f"Erro da API Conta Azul (status {exc.status_code}): {exc.payload}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    finally:
+        client.close()
+
+    JsonExporter().export({"produtos": items}, saida)
+    typer.secho(f"Exportado {len(items)} produtos para {saida}/produtos.json", fg=typer.colors.GREEN)
+
+
+@app.command(name="itens-venda")
+def itens_venda(
+    id_venda: str = typer.Option(..., "--id-venda", help="UUID ou id legado da venda."),
+    saida: Path = typer.Option(Path("output"), "--saida", help="Diretorio de saida"),
+):
+    """Lista itens de uma venda + totais agregados (GET /v1/venda/{id_venda}/itens)."""
+    auth_client = _load_auth()
+    client = ContaAzulClient(auth_client)
+
+    try:
+        pagina = 1
+        todos_itens = []
+        totais = None
+        while True:
+            itens, totais = client.obter_itens_venda(id_venda, pagina=pagina)
+            todos_itens.extend(itens)
+            if len(itens) < DEFAULT_PAGE_SIZE:
+                break
+            pagina += 1
+    except AuthError as exc:
+        typer.secho(f"Erro de autenticacao: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    except ApiError as exc:
+        typer.secho(f"Erro da API Conta Azul (status {exc.status_code}): {exc.payload}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    finally:
+        client.close()
+
+    saida.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "itens": [item.model_dump(mode="json") for item in todos_itens],
+        "totais": totais.model_dump(mode="json") if totais else None,
+    }
+    caminho = saida / f"itens_venda_{id_venda}.json"
+    caminho.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    typer.secho(f"Exportado {len(todos_itens)} itens para {caminho}", fg=typer.colors.GREEN)
 
 
 if __name__ == "__main__":

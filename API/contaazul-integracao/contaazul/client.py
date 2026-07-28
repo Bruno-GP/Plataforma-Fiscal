@@ -28,7 +28,9 @@ from .models import (
     Cliente,
     ContaPagar,
     ContaReceber,
+    ItemVenda,
     Produto,
+    TotaisItensVenda,
     Venda,
     VendaDetalhada,
     Vendedor,
@@ -247,3 +249,15 @@ class ContaAzulClient:
     def listar_vendedores(self) -> list[Vendedor]:
         payload = self._request_json(ENDPOINTS["vendedores"], {})
         return [Vendedor(**item, raw=item) for item in payload]
+
+    def obter_itens_venda(
+        self, id_venda: str, pagina: int = 1, tamanho_pagina: int = DEFAULT_PAGE_SIZE
+    ) -> tuple[list[ItemVenda], TotaisItensVenda]:
+        payload = self._request_json(
+            f"/v1/venda/{id_venda}/itens",
+            {PAGE_PARAM: pagina, PAGE_SIZE_PARAM: tamanho_pagina},
+        )
+        itens = [ItemVenda(**item, raw=item) for item in payload.get("itens", [])]
+        totais_raw = payload.get("totais") or {}
+        totais = TotaisItensVenda(**totais_raw, raw=totais_raw)
+        return itens, totais

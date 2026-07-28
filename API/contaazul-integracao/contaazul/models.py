@@ -126,3 +126,24 @@ class Vendedor(ContaAzulBaseModel):
     id: str
     nome: str
     id_legado: Optional[int] = None
+
+
+class ItemVenda(ContaAzulBaseModel):
+    """Item de GET /v1/venda/{id_venda}/itens."""
+
+    id: Optional[str] = None
+    id_item: Optional[str] = None
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    tipo: Optional[str] = None
+    quantidade: Optional[float] = None
+    valor: Optional[float] = None
+    custo: Optional[float] = None
+
+
+class TotaisItensVenda(ContaAzulBaseModel):
+    """Campo `totais` de GET /v1/venda/{id_venda}/itens."""
+
+    quantidade_produtos: Optional[int] = None
+    quantidade_servicos: Optional[int] = None
+    quantidade_nao_conciliados: Optional[int] = None

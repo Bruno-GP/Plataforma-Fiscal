@@ -181,6 +181,27 @@ def test_listar_vendedores_aceita_array_bruto():
     assert vendedores[1].id_legado is None
 
 
+@respx.mock
+def test_obter_itens_venda_retorna_itens_e_totais():
+    payload = {
+        "itens": [
+            {"id": "i1", "id_item": "prod1", "nome": "Produto 1", "tipo": "PRODUTO", "quantidade": 2, "valor": 100.0, "custo": 60.0},
+        ],
+        "itens_totais": 1,
+        "totais": {"quantidade_produtos": 1, "quantidade_servicos": 0, "quantidade_nao_conciliados": 0},
+    }
+    respx.get(f"{BASE_URL}/v1/venda/venda-123/itens").mock(return_value=httpx.Response(200, json=payload))
+    client = ContaAzulClient(auth=StubAuth())
+
+    itens, totais = client.obter_itens_venda("venda-123")
+
+    assert len(itens) == 1
+    assert itens[0].nome == "Produto 1"
+    assert itens[0].quantidade == 2
+    assert totais.quantidade_produtos == 1
+    assert totais.quantidade_nao_conciliados == 0
+
+
 # ---------- ContaAzulAuth ----------
 
 

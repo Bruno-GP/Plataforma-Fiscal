@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { isXmlOnboardingLocked } from '@/utils/workspaceAccess';
+import { isContaAzulDashboardOnly, isXmlOnboardingLocked } from '@/utils/workspaceAccess';
 import type { SessionUser } from '@/services/api';
 
 type NavigationItem = {
@@ -108,6 +108,15 @@ const createLockedNavigationGroups = (): NavigationGroup[] => [
   },
 ];
 
+const createContaAzulNavigationGroups = (): NavigationGroup[] => [
+  {
+    label: 'Visao Geral',
+    items: [
+      { label: 'Dashboard', path: '/dashboard', icon: BarChart3, activePaths: ['/analise-vendas'] },
+    ],
+  },
+];
+
 const isItemActive = (pathname: string, item: NavigationItem) =>
   pathname === item.path || item.activePaths?.some((activePath) => pathname === activePath);
 
@@ -118,7 +127,12 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const companyName = user?.name?.trim() || 'Accounting Corp';
   const xmlOnboardingLocked = isXmlOnboardingLocked(user);
-  const navigationGroups = xmlOnboardingLocked ? createLockedNavigationGroups() : createNavigationGroups(user);
+  const contaAzulDashboardOnly = isContaAzulDashboardOnly(user);
+  const navigationGroups = contaAzulDashboardOnly
+    ? createContaAzulNavigationGroups()
+    : xmlOnboardingLocked
+      ? createLockedNavigationGroups()
+      : createNavigationGroups(user);
 
   const handleLogout = () => {
     logout();

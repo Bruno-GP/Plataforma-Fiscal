@@ -19,7 +19,10 @@ from dotenv import load_dotenv
 
 from contaazul.auth import ContaAzulAuth, AuthError
 from contaazul.client import DEFAULT_PAGE_SIZE, ApiError, ContaAzulClient
+from contaazul.db import conectar
+from contaazul.kpis import agregar_kpis_mensais
 from exporters.json_exporter import JsonExporter
+from exporters.postgres_kpis_exporter import PostgresKpisExporter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("contaazul.main")
@@ -207,6 +210,44 @@ def itens_venda(
     caminho = saida / f"itens_venda_{id_venda}.json"
     caminho.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     typer.secho(f"Exportado {len(todos_itens)} itens para {caminho}", fg=typer.colors.GREEN)
+
+
+@app.command(name="sync-kpis")
+def sync_kpis(
+    empresa_id: int = typer.Option(..., "--empresa-id", help="Id da empresa em public.empresas."),
+    inicio: str = typer.Option(..., "--inicio", help="Data inicial (YYYY-MM-DD)"),
+    fim: str = typer.Option(..., "--fim", help="Data final (YYYY-MM-DD)"),
+):
+    """Agrega vendas do periodo em KPIs mensais e grava/atualiza em conta_azul_kpis."""
+    inicio_data = date.fromisoformat(inicio)
+    fim_data = date.fromisoformat(fim)
+    auth_client = _load_auth()
+    client = ContaAzulClient(auth_client)
+
+    try:
+        vendas = _coletar_todas_paginas(lambda p: client.listar_vendas(inicio_data, fim_data, p))
+    except AuthError as exc:
+        typer.secho(f"Erro de autenticacao: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    except ApiError as exc:
+        typer.secho(f"Erro da API Conta Azul (status {exc.status_code}): {exc.payload}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    finally:
+        client.close()
+
+    kpis_por_mes = agregar_kpis_mensais(vendas)
+
+    conn = conectar()
+    try:
+        total_gravado = PostgresKpisExporter().export(empresa_id, kpis_por_mes, conn)
+    finally:
+        conn.close()
+
+    typer.secho(
+        f"Gravado {total_gravado} mes(es) em conta_azul_kpis para empresa_id={empresa_id} "
+        f"({len(vendas)} vendas processadas).",
+        fg=typer.colors.GREEN,
+    )
 
 
 if __name__ == "__main__":

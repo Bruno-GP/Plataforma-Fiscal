@@ -5,7 +5,7 @@ import { Link, Navigate, useLocation } from 'react-router-dom';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { consultarPendenciasXmlImportados } from '@/services/nfe';
-import { isXmlOnboardingLocked } from '@/utils/workspaceAccess';
+import { isContaAzulDashboardOnly, isXmlOnboardingLocked } from '@/utils/workspaceAccess';
 
 import { AppHeader } from './AppHeader';
 import { AppSidebar } from './AppSidebar';
@@ -38,6 +38,10 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   if (xmlOnboardingLocked && location.pathname !== '/importacao-xml') {
     return <Navigate to="/importacao-xml" replace />;
+  }
+
+  if (isContaAzulDashboardOnly(user) && location.pathname !== '/dashboard') {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (

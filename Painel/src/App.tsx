@@ -11,6 +11,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/AnaliseVendas";
+import ContaAzulDashboard from "./pages/ContaAzulDashboard";
 import Clientes from "./pages/Clientes";
 import NotFound from "./pages/NotFound";
 import CadastroEmpresa from "./pages/CadastroEmpresa";
@@ -59,6 +60,12 @@ const HomeRoute = () => {
   return <Navigate to={getDefaultWorkspaceRoute(user)} replace />;
 };
 
+const DashboardRoute = () => {
+  const { user } = useAuth();
+
+  return user?.tem_conta_azul ? <ContaAzulDashboard /> : <Dashboard />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -82,7 +89,7 @@ const App = () => (
                 path="/dashboard"
                 element={
                   <MainLayout>
-                    <Dashboard />
+                    <DashboardRoute />
                   </MainLayout>
                 }
               />

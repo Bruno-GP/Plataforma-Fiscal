@@ -21,3 +21,12 @@ def validar_empresa_sped(cnpj: str) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Esta empresa esta configurada para outra origem fiscal e nao para SPED Fiscal.",
         )
+
+
+def validar_empresa_conta_azul(cnpj: str) -> None:
+    service = CompanyProfileService()
+    if not service.empresa_tem_conta_azul(cnpj):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta empresa esta configurada para outra origem fiscal e nao para Conta Azul.",
+        )

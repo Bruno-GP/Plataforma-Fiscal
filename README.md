@@ -115,6 +115,8 @@ Workers Celery em terminais separados:
 cd API
 celery -A app.workers.celery_app worker --loglevel=info -Q nfe
 celery -A app.workers.celery_app worker --loglevel=info -Q sped
+celery -A app.workers.celery_app worker --loglevel=info -Q conta_azul
+celery -A app.workers.celery_app beat --loglevel=info
 ```
 
 No Windows, use a venv local e `--pool=solo`:

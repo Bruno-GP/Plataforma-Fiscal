@@ -32,7 +32,7 @@ curl http://localhost:8000/health/redis
 Com Docker Compose:
 
 ```bash
-docker compose restart celery-worker-default celery-worker-nfe celery-worker-sped
+docker compose restart celery-worker-default celery-worker-nfe celery-worker-sped celery-worker-conta-azul celery-beat
 ```
 
 Local:
@@ -41,6 +41,7 @@ Local:
 cd API
 celery -A app.workers.celery_app worker --loglevel=info -Q nfe
 celery -A app.workers.celery_app worker --loglevel=info -Q sped
+celery -A app.workers.celery_app worker --loglevel=info -Q conta_azul
 ```
 
 Windows com venv local:
@@ -49,6 +50,7 @@ Windows com venv local:
 cd "C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\API"
 .\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q nfe --pool=solo
 .\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q sped --pool=solo
+.\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q conta_azul --pool=solo
 ```
 
 O worker esta pronto quando aparecer:

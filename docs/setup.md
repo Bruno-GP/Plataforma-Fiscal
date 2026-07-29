@@ -59,6 +59,8 @@ cd API
 celery -A app.workers.celery_app worker --loglevel=info -Q default
 celery -A app.workers.celery_app worker --loglevel=info -Q nfe
 celery -A app.workers.celery_app worker --loglevel=info -Q sped
+celery -A app.workers.celery_app worker --loglevel=info -Q conta_azul
+celery -A app.workers.celery_app beat --loglevel=info
 ```
 
 No Windows, use `--pool=solo`:
@@ -67,6 +69,7 @@ No Windows, use `--pool=solo`:
 cd "C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\API"
 .\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q nfe --pool=solo
 .\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q sped --pool=solo
+.\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q conta_azul --pool=solo
 ```
 
 ## Redis local no Windows com Garnet

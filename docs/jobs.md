@@ -50,6 +50,7 @@ Filas configuradas:
 - `default`
 - `nfe`
 - `sped`
+- `conta_azul`
 
 Workers locais:
 
@@ -58,9 +59,11 @@ cd API
 celery -A app.workers.celery_app worker --loglevel=info -Q default
 celery -A app.workers.celery_app worker --loglevel=info -Q nfe
 celery -A app.workers.celery_app worker --loglevel=info -Q sped
+celery -A app.workers.celery_app worker --loglevel=info -Q conta_azul
+celery -A app.workers.celery_app beat --loglevel=info
 ```
 
-Com Docker Compose, os servicos `celery-worker-default`, `celery-worker-nfe` e `celery-worker-sped` sobem junto com API, Redis e PostgreSQL.
+Com Docker Compose, os servicos `celery-worker-default`, `celery-worker-nfe`, `celery-worker-sped`, `celery-worker-conta-azul` e `celery-beat` sobem junto com API, Redis e PostgreSQL.
 
 ## Tabela de controle
 

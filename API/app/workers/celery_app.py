@@ -12,11 +12,13 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 try:
     from celery import Celery
+    from celery.schedules import crontab
     from kombu import Exchange, Queue
 except ImportError:  # pragma: no cover - fallback para ambientes de teste sem dependencias instaladas
     Celery = None
     Exchange = None
     Queue = None
+    crontab = None
 
 
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -51,6 +53,7 @@ else:
         include=[
             "app.workers.nfe_tasks",
             "app.workers.sped_tasks",
+            "app.workers.conta_azul_tasks",
         ],
     )
 
@@ -67,7 +70,15 @@ else:
             Queue("default", Exchange("default"), routing_key="default"),
             Queue("nfe", Exchange("nfe"), routing_key="nfe"),
             Queue("sped", Exchange("sped"), routing_key="sped"),
+            Queue("conta_azul", Exchange("conta_azul"), routing_key="conta_azul"),
         ),
+        beat_schedule={
+            "sincronizar-kpis-conta-azul-diario": {
+                "task": "sincronizar_kpis_conta_azul_task",
+                "schedule": crontab(hour=3, minute=0),
+                "options": {"queue": "conta_azul"},
+            },
+        },
     )
 
     if os.getenv("CELERY_TASK_ALWAYS_EAGER", "").lower() in {"1", "true", "yes"}:

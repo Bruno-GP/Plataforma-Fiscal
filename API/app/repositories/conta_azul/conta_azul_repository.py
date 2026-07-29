@@ -22,3 +22,13 @@ class ContaAzulRepository:
           return cur.fetchall()
     except psycopg.errors.UndefinedTable:
       return []
+
+  def listar_empresas_ativas(self) -> list[tuple]:
+    sql = "SELECT id, cnpj FROM empresas WHERE tem_conta_azul = true"
+    try:
+      with psycopg.connect(**self.conn_params) as conn:
+        with conn.cursor() as cur:
+          cur.execute(sql)
+          return cur.fetchall()
+    except psycopg.errors.UndefinedTable:
+      return []

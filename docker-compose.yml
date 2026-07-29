@@ -123,6 +123,43 @@ services:
       redis:
         condition: service_healthy
 
+  celery-worker-conta-azul:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./API/app/.env.example
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/plataforma_fiscal}
+      POSTGRES_DSN: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/plataforma_fiscal}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CONTAAZUL_CLIENT_ID: ${CONTAAZUL_CLIENT_ID:-}
+      CONTAAZUL_CLIENT_SECRET: ${CONTAAZUL_CLIENT_SECRET:-}
+      CONTAAZUL_REDIRECT_URI: ${CONTAAZUL_REDIRECT_URI:-}
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "-Q", "conta_azul"]
+    depends_on:
+      reference-seed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./API/app/.env.example
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/plataforma_fiscal}
+      POSTGRES_DSN: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/plataforma_fiscal}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=info"]
+    depends_on:
+      reference-seed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
   frontend:
     image: node:20-alpine
     working_dir: /app

@@ -16,7 +16,7 @@ class ReformaTributariaSyncRepository:
         EXTRACT(MONTH FROM n.data_emissao)::int AS periodo_mes,
         COUNT(DISTINCT n.id) AS documentos
       FROM public.notas n
-      WHERE regexp_replace(n.emitente_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(n.emitente_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND n.data_emissao IS NOT NULL
       GROUP BY 1, 2
       ORDER BY 1, 2;
@@ -33,7 +33,7 @@ class ReformaTributariaSyncRepository:
         EXTRACT(MONTH FROM d.data_emissao)::int AS periodo_mes,
         COUNT(DISTINCT d.id) AS documentos
       FROM public.sped_documentos_fiscais d
-      WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND d.data_emissao IS NOT NULL
       GROUP BY 1, 2
       ORDER BY 1, 2;
@@ -72,7 +72,7 @@ class ReformaTributariaSyncRepository:
         'aberta'
       FROM public.sped_apuracao_icms a
       JOIN public.tributos t ON t.codigo = 'ICMS'
-      WHERE regexp_replace(a.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(a.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       ON CONFLICT (empresa_cnpj, periodo_ano, periodo_mes, tributo_id)
       DO UPDATE SET
         total_debitos = EXCLUDED.total_debitos,
@@ -136,7 +136,7 @@ class ReformaTributariaSyncRepository:
       WHERE dt.nota_id = n.id
         AND dt.tributo_id = t.id
         AND t.codigo = ANY(%s)
-        AND regexp_replace(n.emitente_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(n.emitente_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND EXTRACT(YEAR FROM n.data_emissao) = %s
         AND EXTRACT(MONTH FROM n.data_emissao) = %s;
       """,
@@ -149,7 +149,7 @@ class ReformaTributariaSyncRepository:
       DELETE FROM public.memoria_calculo_tributaria m
       USING public.tributos t
       WHERE m.tributo_id = t.id
-        AND regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(m.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND m.fonte_dados = 'sped'
         AND t.codigo = ANY(%s);
       """,
@@ -163,7 +163,7 @@ class ReformaTributariaSyncRepository:
         AND c.tributo_id = t.id
         AND dt.sped_documento_id IS NOT NULL
         AND dt.origem = 'sped'
-        AND regexp_replace(c.empresa_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(c.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND t.codigo = ANY(%s);
       """,
       (cnpj, list(self.TRIBUTOS_LEGADOS_SPED)),
@@ -176,7 +176,7 @@ class ReformaTributariaSyncRepository:
         AND d.tributo_id = t.id
         AND dt.sped_documento_id IS NOT NULL
         AND dt.origem = 'sped'
-        AND regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND t.codigo = ANY(%s);
       """,
       (cnpj, list(self.TRIBUTOS_LEGADOS_SPED)),
@@ -188,7 +188,7 @@ class ReformaTributariaSyncRepository:
       WHERE dt.tributo_id = t.id
         AND dt.sped_documento_id IS NOT NULL
         AND dt.origem = 'sped'
-        AND regexp_replace(dt.empresa_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(dt.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND t.codigo = ANY(%s);
       """,
       (cnpj, list(self.TRIBUTOS_LEGADOS_SPED)),
@@ -206,7 +206,7 @@ class ReformaTributariaSyncRepository:
             PARTITION BY EXTRACT(YEAR FROM d.data_emissao), EXTRACT(MONTH FROM d.data_emissao), d.tipo_operacao
           ) AS total_operacao_periodo
         FROM public.sped_documentos_fiscais d
-        WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+        WHERE regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
           AND d.data_emissao IS NOT NULL
           AND d.tipo_operacao IN ('entrada', 'saida')
       ),
@@ -230,7 +230,7 @@ class ReformaTributariaSyncRepository:
           END AS valor_tributo
         FROM documentos d
         JOIN public.sped_apuracao_icms a
-          ON regexp_replace(a.empresa_cnpj, '\\D', '', 'g') = regexp_replace(d.empresa_cnpj, '\\D', '', 'g')
+          ON regexp_replace(UPPER(a.empresa_cnpj), '[^0-9A-Z]', '', 'g') = regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g')
          AND a.periodo_ano = d.periodo_ano
          AND a.periodo_mes = d.periodo_mes
       )
@@ -293,7 +293,7 @@ class ReformaTributariaSyncRepository:
         FROM public.sped_documento_itens i
         JOIN public.sped_documentos_fiscais d ON d.id = i.documento_id
         LEFT JOIN public.sped_produtos p ON p.id = i.produto_id
-        WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+        WHERE regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       )
       INSERT INTO public.itens_documentos_fiscais_tributos (
         documento_tributo_id,
@@ -402,7 +402,7 @@ class ReformaTributariaSyncRepository:
       FROM public.itens_documentos_fiscais_tributos it
       JOIN public.documentos_fiscais_tributos dt ON dt.id = it.documento_tributo_id
       JOIN public.tributos t ON t.id = it.tributo_id
-      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(it.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND dt.sped_documento_id IS NOT NULL
         AND dt.origem = 'sped'
         AND it.natureza = 'credito'
@@ -445,7 +445,7 @@ class ReformaTributariaSyncRepository:
       FROM public.itens_documentos_fiscais_tributos it
       JOIN public.documentos_fiscais_tributos dt ON dt.id = it.documento_tributo_id
       JOIN public.tributos t ON t.id = it.tributo_id
-      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(it.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND dt.sped_documento_id IS NOT NULL
         AND dt.origem = 'sped'
         AND it.natureza = 'debito'
@@ -514,7 +514,7 @@ class ReformaTributariaSyncRepository:
       FROM public.itens_documentos_fiscais_tributos it
       JOIN public.documentos_fiscais_tributos dt ON dt.id = it.documento_tributo_id
       JOIN public.tributos t ON t.id = it.tributo_id
-      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(it.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND it.sped_item_id IS NOT NULL
         AND dt.origem = 'sped'
         AND t.codigo = 'ICMS'
@@ -537,7 +537,7 @@ class ReformaTributariaSyncRepository:
       DELETE FROM public.creditos_tributarios c
       USING public.tributos t
       WHERE c.tributo_id = t.id
-        AND regexp_replace(c.empresa_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(c.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND c.periodo_ano = %s
         AND c.periodo_mes = %s
         AND t.codigo = ANY(%s)
@@ -550,7 +550,7 @@ class ReformaTributariaSyncRepository:
       DELETE FROM public.debitos_tributarios d
       USING public.tributos t
       WHERE d.tributo_id = t.id
-        AND regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND d.periodo_ano = %s
         AND d.periodo_mes = %s
         AND t.codigo = ANY(%s)
@@ -572,7 +572,7 @@ class ReformaTributariaSyncRepository:
       DELETE FROM public.memoria_calculo_tributaria m
       USING public.tributos t
       WHERE m.tributo_id = t.id
-        AND regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(m.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND m.periodo_ano = %s
         AND m.periodo_mes = %s
         AND m.fonte_dados = 'xml'
@@ -593,7 +593,7 @@ class ReformaTributariaSyncRepository:
       WITH notas_periodo AS (
         SELECT *
         FROM public.notas n
-        WHERE regexp_replace(n.emitente_cnpj, '\\D', '', 'g') = %s
+        WHERE regexp_replace(UPPER(n.emitente_cnpj), '[^0-9A-Z]', '', 'g') = %s
           AND EXTRACT(YEAR FROM n.data_emissao) = %s
           AND EXTRACT(MONTH FROM n.data_emissao) = %s
       ),
@@ -693,7 +693,7 @@ class ReformaTributariaSyncRepository:
           SUM(COALESCE(i.valor_total, 0)) OVER (PARTITION BY i.nota_id) AS total_itens_nota
         FROM public.notas_itens i
         JOIN public.notas n ON n.id = i.nota_id
-        WHERE regexp_replace(n.emitente_cnpj, '\\D', '', 'g') = %s
+        WHERE regexp_replace(UPPER(n.emitente_cnpj), '[^0-9A-Z]', '', 'g') = %s
           AND EXTRACT(YEAR FROM n.data_emissao) = %s
           AND EXTRACT(MONTH FROM n.data_emissao) = %s
       )
@@ -780,7 +780,7 @@ class ReformaTributariaSyncRepository:
       """
       SELECT id, nome_arquivo, conteudo_xml
       FROM public.notas_xml_importados
-      WHERE regexp_replace(cnpj_emitente, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(cnpj_emitente), '[^0-9A-Z]', '', 'g') = %s
         AND conteudo_xml IS NOT NULL
       ORDER BY id ASC;
       """,
@@ -803,7 +803,7 @@ class ReformaTributariaSyncRepository:
       SELECT n.id, ni.id, n.emitente_cnpj
       FROM public.notas n
       JOIN public.notas_itens ni ON ni.nota_id = n.id
-      WHERE regexp_replace(n.emitente_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(n.emitente_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND n.numero_nf = %s
         AND COALESCE(n.modelo, '') = COALESCE(%s, '')
         AND n.data_emissao = %s
@@ -855,7 +855,7 @@ class ReformaTributariaSyncRepository:
       FROM public.itens_documentos_fiscais_tributos it
       JOIN public.documentos_fiscais_tributos dt ON dt.id = it.documento_tributo_id
       JOIN public.tributos t ON t.id = it.tributo_id
-      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(it.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND it.periodo_ano = %s
         AND it.periodo_mes = %s
         AND it.natureza = 'credito'
@@ -896,7 +896,7 @@ class ReformaTributariaSyncRepository:
       FROM public.itens_documentos_fiscais_tributos it
       JOIN public.documentos_fiscais_tributos dt ON dt.id = it.documento_tributo_id
       JOIN public.tributos t ON t.id = it.tributo_id
-      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(it.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND it.periodo_ano = %s
         AND it.periodo_mes = %s
         AND it.natureza = 'debito'
@@ -981,7 +981,7 @@ class ReformaTributariaSyncRepository:
         END
       FROM public.itens_documentos_fiscais_tributos it
       JOIN public.tributos t ON t.id = it.tributo_id
-      WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(it.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND it.periodo_ano = %s
         AND it.periodo_mes = %s
         AND it.nota_item_id IS NOT NULL
@@ -1004,13 +1004,13 @@ class ReformaTributariaSyncRepository:
       WITH tributos_periodo AS (
         SELECT DISTINCT tributo_id
         FROM public.debitos_tributarios
-        WHERE regexp_replace(empresa_cnpj, '\\D', '', 'g') = %s
+        WHERE regexp_replace(UPPER(empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
           AND periodo_ano = %s
           AND periodo_mes = %s
         UNION
         SELECT DISTINCT tributo_id
         FROM public.creditos_tributarios
-        WHERE regexp_replace(empresa_cnpj, '\\D', '', 'g') = %s
+        WHERE regexp_replace(UPPER(empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
           AND periodo_ano = %s
           AND periodo_mes = %s
       ),
@@ -1021,7 +1021,7 @@ class ReformaTributariaSyncRepository:
             SELECT SUM(valor_devido)
             FROM public.debitos_tributarios d
             WHERE d.tributo_id = tp.tributo_id
-              AND regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+              AND regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
               AND d.periodo_ano = %s
               AND d.periodo_mes = %s
           ), 0) AS total_debitos,
@@ -1029,7 +1029,7 @@ class ReformaTributariaSyncRepository:
             SELECT SUM(valor_saldo)
             FROM public.creditos_tributarios c
             WHERE c.tributo_id = tp.tributo_id
-              AND regexp_replace(c.empresa_cnpj, '\\D', '', 'g') = %s
+              AND regexp_replace(UPPER(c.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
               AND c.periodo_ano = %s
               AND c.periodo_mes = %s
           ), 0) AS total_creditos

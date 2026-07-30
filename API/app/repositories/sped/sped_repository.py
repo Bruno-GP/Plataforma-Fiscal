@@ -168,7 +168,7 @@ class SpedRepository:
     limite: int = 100,
     offset: int = 0,
   ) -> list[tuple]:
-    filtros = ["regexp_replace(cnpj_emitente, '\\D', '', 'g') = %s"]
+    filtros = ["regexp_replace(UPPER(cnpj_emitente), '[^0-9A-Z]', '', 'g') = %s"]
     params: list[object] = [emitente_cnpj]
 
     if periodo_ano:
@@ -218,7 +218,7 @@ class SpedRepository:
       SUM(d.valor_total) AS valor_total
       FROM public.sped_documentos_fiscais d
       LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
-      WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND d.tipo_operacao = 'saida'
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s
@@ -245,7 +245,7 @@ class SpedRepository:
       SUM(d.valor_total) AS valor_total
       FROM public.sped_documentos_fiscais d
       LEFT JOIN public.sped_participantes p ON p.id = d.participante_id
-      WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND d.tipo_operacao = 'saida'
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s
@@ -263,7 +263,7 @@ class SpedRepository:
       FROM public.sped_documentos_fiscais d
       JOIN public.sped_documento_itens i ON i.documento_id = d.id
       LEFT JOIN public.sped_produtos pr ON pr.id = i.produto_id
-      WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+      WHERE regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
         AND EXTRACT(YEAR FROM d.data_emissao) = %s
         AND EXTRACT(MONTH FROM d.data_emissao) = %s
       GROUP BY 1

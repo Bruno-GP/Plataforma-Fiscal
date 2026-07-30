@@ -62,7 +62,7 @@ export function login() {
     'login: autenticado': (res) => res.status === 200,
     'login: cookie de sessao recebido': () => setCookie.length > 0,
     'login: email retornado': () => body?.email === credentials.email,
-    'login: cnpj retornado': () => String(body?.cnpj || '').replace(/\D/g, '').length === 14,
+    'login: cnpj retornado': () => String(body?.cnpj || '').replace(/[^0-9A-Za-z]/g, '').length === 14,
   });
 
   loginFailureRate.add(!ok);

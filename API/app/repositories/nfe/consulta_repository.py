@@ -11,8 +11,8 @@ import psycopg
 logger = logging.getLogger("repositories.nfe.consulta")
 NFE_EMPRESA_JOIN = """
   LEFT JOIN public.empresas AS e
-    ON regexp_replace(COALESCE(e.cnpj, ''), '\\D', '', 'g')
-       = regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')
+    ON regexp_replace(UPPER(COALESCE(e.cnpj, '')), '[^0-9A-Z]', '', 'g')
+       = regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g')
 """
 
 NFE_ESTADO_EXPR = "COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), NULLIF(TRIM(e.estado), ''), 'Sem UF')"
@@ -649,7 +649,7 @@ class NFeConsultaRepository:
           FROM public.notas AS n
           JOIN public.notas_itens AS i
             ON i.nota_id = n.id
-          WHERE regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s
+          WHERE regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s
             AND regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)
             AND EXTRACT(YEAR FROM n.data_emissao)::int = ANY(%s)
           GROUP BY 1, 2

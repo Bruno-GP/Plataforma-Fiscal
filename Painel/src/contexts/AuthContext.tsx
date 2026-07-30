@@ -8,6 +8,7 @@ import {
   type SessionUser,
 } from '@/services/api';
 import { getDefaultWorkspaceRoute } from '@/utils/workspaceAccess';
+import { normalizeCnpj, isPlaceholderCnpj } from '@/utils/formatters';
 
 interface User {
   id: string;
@@ -98,13 +99,13 @@ const extractApiErrorMessage = (errorData: ApiErrorDetail | null, fallback: stri
 };
 
 const normalizeSessionCnpj = (value: string | null | undefined): string => {
-  const digits = (value ?? '').replace(/\D/g, '');
+  const digits = normalizeCnpj(value);
 
   if (digits.length !== 14) {
     return '';
   }
 
-  if ([...digits].every((digit) => digit === '0')) {
+  if (isPlaceholderCnpj(digits)) {
     return '';
   }
 
@@ -130,7 +131,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const parsed = session.user as StoredUserLegacy;
-    const emitenteCnpj = (parsed.emitente_cnpj ?? parsed.cnpj ?? '').replace(/\D/g, '');
+    const emitenteCnpj = normalizeCnpj(parsed.emitente_cnpj ?? parsed.cnpj);
 
     if (!parsed.id || !parsed.email || !emitenteCnpj) {
       return null;
@@ -270,7 +271,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const emailNormalizado = email.trim();
     const senhaInformada = password;
     const senhaParaValidacao = password.trim();
-    const cnpjNormalizado = cnpj.replace(/\D/g, '');
+    const cnpjNormalizado = normalizeCnpj(cnpj);
 
     if (!empresaNomeNormalizado || !emailNormalizado || !senhaParaValidacao || !cnpjNormalizado) {
       return { ok: false, message: 'Informe empresa, email, senha e CNPJ.' };

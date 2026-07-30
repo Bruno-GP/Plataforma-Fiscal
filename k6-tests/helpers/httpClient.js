@@ -111,7 +111,7 @@ export function getCompanyMode(session) {
 }
 
 export function getCompanyCnpj(session, mode) {
-  const sessionCnpj = String(session?.cnpj || '').replace(/\D/g, '');
+  const sessionCnpj = String(session?.cnpj || '').replace(/[^0-9A-Za-z]/g, '');
 
   if (sessionCnpj.length === 14) {
     return sessionCnpj;

@@ -17,8 +17,8 @@ def test_construir_filtros_compras_nfe_com_periodo():
         periodo_mes=6,
     )
 
-    assert "regexp_replace(COALESCE(n.destinatario_documento, ''), '\\D', '', 'g') = %s" in where_clause
-    assert "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s" in where_clause
+    assert "regexp_replace(UPPER(COALESCE(n.destinatario_documento, '')), '[^0-9A-Z]', '', 'g') = %s" in where_clause
+    assert "regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s" in where_clause
     assert "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('1','2','3')" in where_clause
     assert params == ["12345678000190", "12345678000190", 2025, 6]
 
@@ -31,7 +31,7 @@ def test_construir_filtros_compras_sped_com_periodo():
     )
 
     assert where_clause == (
-        "regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s "
+        "regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s "
         "AND d.tipo_operacao = 'entrada' "
         "AND EXTRACT(YEAR FROM d.data_emissao) = %s "
         "AND EXTRACT(MONTH FROM d.data_emissao) = %s"

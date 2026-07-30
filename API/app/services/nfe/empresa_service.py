@@ -15,7 +15,7 @@ logger.disabled = True
 # UTILS
 # =========================
 def normalizar_cnpj(cnpj: str) -> str:
-    return "".join(filter(str.isdigit, cnpj))
+    return "".join(ch for ch in (cnpj or "").upper() if ch.isalnum())
 
 
 def _normalizar_localidade(valor: str | None) -> str | None:
@@ -178,7 +178,7 @@ class EmpresaService:
                         cidade = COALESCE(%s, cidade),
                         municipio_id = COALESCE(%s, municipio_id),
                         codigo_ibge = COALESCE(%s, codigo_ibge)
-                    WHERE regexp_replace(cnpj, '\\D', '', 'g') = %s;
+                    WHERE regexp_replace(UPPER(cnpj), '[^0-9A-Z]', '', 'g') = %s;
                     """,
                     (
                         estado_normalizado,

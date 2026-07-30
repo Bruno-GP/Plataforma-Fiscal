@@ -64,7 +64,7 @@ SPED_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
     public.sped_documentos_fiscais d
     JOIN public.sped_documento_itens i ON i.documento_id = d.id
   """,
-  company_filter_expr="regexp_replace(d.empresa_cnpj, '\\D', '', 'g')",
+  company_filter_expr="regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g')",
   date_expr="d.data_emissao",
   document_id_expr="d.id",
   amount_expr="i.valor_total",
@@ -90,7 +90,7 @@ SPED_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
     JOIN public.sped_documento_itens i ON i.documento_id = d.id
     LEFT JOIN public.sped_produtos pr ON pr.id = i.produto_id
   """,
-  company_filter_expr="regexp_replace(d.empresa_cnpj, '\\D', '', 'g')",
+  company_filter_expr="regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g')",
   date_expr="d.data_emissao",
   document_id_expr="d.id",
   amount_expr="i.valor_total",

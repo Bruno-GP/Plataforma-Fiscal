@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { SessionUser } from '@/services/api';
 import { createFiscalSourceApi } from '@/services/fiscalSource';
 import { createFiscalPeriod, createFiscalQueryKey } from '@/utils/fiscalPeriod';
+import { normalizeCnpj } from '@/utils/formatters';
 
 interface DashboardQueryParams {
   emitenteCnpj?: string;
@@ -25,7 +26,7 @@ const getDashboardYearsCacheKey = (
   emitenteCnpj: string | undefined,
   sourceKey: string,
   scope: 'compras' | 'vendas',
-) => [sourceKey, scope, emitenteCnpj?.replace(/\D/g, '')].filter(Boolean).join(':');
+) => [sourceKey, scope, emitenteCnpj ? normalizeCnpj(emitenteCnpj) : undefined].filter(Boolean).join(':');
 
 const readDashboardYearsCache = (
   emitenteCnpj: string | undefined,

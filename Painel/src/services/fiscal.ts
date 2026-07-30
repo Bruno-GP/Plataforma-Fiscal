@@ -17,6 +17,8 @@ export interface FiscalQueryParams {
 
 export const MAX_FISCAL_LIMIT = 5000;
 
+import { normalizeCnpj, isPlaceholderCnpj } from '@/utils/formatters';
+
 export { parseDecimal } from '@/utils/formatters';
 
 export const normalizeCnpjParam = (value?: string): string | null => {
@@ -24,12 +26,12 @@ export const normalizeCnpjParam = (value?: string): string | null => {
     return null;
   }
 
-  const digits = value.replace(/\D/g, '');
+  const digits = normalizeCnpj(value);
   if (!digits || digits.length < 14) {
     return null;
   }
 
-  if ([...digits].every((digit) => digit === '0')) {
+  if (isPlaceholderCnpj(digits)) {
     return null;
   }
 

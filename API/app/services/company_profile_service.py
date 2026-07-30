@@ -67,7 +67,7 @@ class CompanyProfileService:
                            COALESCE(tem_conta_azul, false),
                            COALESCE(tem_xml, false)
                     FROM public.empresas
-                    WHERE regexp_replace(cnpj, '\\D', '', 'g') = %s
+                    WHERE regexp_replace(UPPER(cnpj), '[^0-9A-Z]', '', 'g') = %s
                     LIMIT 1;
                     """,
                     (cnpj_normalizado,),
@@ -102,7 +102,7 @@ class CompanyProfileService:
                     """
                     SELECT id, cnpj, nome, tem_sped, tem_conta_azul, tem_xml, estado, cidade, municipio_id, codigo_ibge
                     FROM public.empresas
-                    WHERE regexp_replace(cnpj, '\\D', '', 'g') = %s
+                    WHERE regexp_replace(UPPER(cnpj), '[^0-9A-Z]', '', 'g') = %s
                     LIMIT 1;
                     """,
                     (cnpj_normalizado,),

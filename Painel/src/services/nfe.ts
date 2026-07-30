@@ -1,6 +1,7 @@
 import { API_BASE_URL, apiFetch } from './api';
 import { buildFiscalSearchParams } from './fiscal';
 import type { JobCreateResponse } from './jobs';
+import { normalizeCnpj } from '@/utils/formatters';
 
 export { parseDecimal } from './fiscal';
 
@@ -200,7 +201,7 @@ export const importarXmlArquivos = async (
   const formData = new FormData();
   files.forEach((file) => formData.append('arquivos', file));
 
-  const cnpjDigits = cnpjEmpresaOrigem.replace(/\D/g, '');
+  const cnpjDigits = normalizeCnpj(cnpjEmpresaOrigem);
   const searchParams = new URLSearchParams({ cnpj_empresa_origem: cnpjDigits });
 
   const response = await apiFetch(`${API_BASE_URL}/nfe/xml/importar?${searchParams.toString()}`, {
@@ -227,7 +228,7 @@ export interface ImportacaoXmlPendenciasResponse {
 export const consultarPendenciasXmlImportados = async (
   cnpjEmitente: string
 ): Promise<ImportacaoXmlPendenciasResponse> => {
-  const digits = cnpjEmitente.replace(/\D/g, '');
+  const digits = normalizeCnpj(cnpjEmitente);
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
   const response = await apiFetch(`${API_BASE_URL}/nfe/xml/pendencias?${searchParams.toString()}`);
@@ -263,7 +264,7 @@ export const processarXmlsImportados = async (
   cnpjEmitente: string,
   options: RequestOptions = {},
 ): Promise<JobCreateResponse> => {
-  const digits = cnpjEmitente.replace(/\D/g, '');
+  const digits = normalizeCnpj(cnpjEmitente);
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
   const response = await apiFetch(`${API_BASE_URL}/nfe/xml/processar-importados?${searchParams.toString()}`, {

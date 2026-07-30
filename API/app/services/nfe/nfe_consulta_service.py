@@ -86,7 +86,7 @@ NFE_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
     JOIN public.notas_itens AS i
       ON i.nota_id = n.id
   """,
-  company_filter_expr="regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')",
+  company_filter_expr="regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g')",
   date_expr="n.data_emissao",
   document_id_expr="n.id",
   amount_expr="i.valor_total",
@@ -110,7 +110,7 @@ NFE_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
     JOIN public.notas_itens AS i
       ON i.nota_id = n.id
   """,
-  company_filter_expr="regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')",
+  company_filter_expr="regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g')",
   date_expr="n.data_emissao",
   document_id_expr="n.id",
   amount_expr="i.valor_total",
@@ -233,7 +233,7 @@ class NFeConsultaService:
       raise ValueError("Informe um emitente_cnpj válido.")
 
     filtros_vendas_docs = [
-      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+      "regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s",
       "regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)",
     ]
     parametros: list[object] = [cnpj_filtrado, obter_cfops_faturamento_venda()]
@@ -263,7 +263,7 @@ class NFeConsultaService:
     )
 
     if cnpj_filtrado:
-      filtros.append("regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s")
+      filtros.append("regexp_replace(UPPER(k.emitente_cnpj), '[^0-9A-Z]', '', 'g') = %s")
       parametros.append(cnpj_filtrado)
 
     if periodo_ano:

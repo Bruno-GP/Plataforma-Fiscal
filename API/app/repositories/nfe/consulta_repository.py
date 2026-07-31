@@ -22,6 +22,13 @@ NFE_CIDADE_EXPR = "COALESCE(NULLIF(TRIM(n.destinatario_cidade), ''), NULLIF(TRIM
 class NFeConsultaRepository:
   """Consultas de leitura usadas pelo service analitico de NFe."""
 
+  NIVEL_HIERARQUIA_CONSULTAS = {
+    "estado": ("contar_estados_fiscal_hierarquia", "listar_estados_fiscal_hierarquia"),
+    "cidade": ("contar_cidades_fiscal_hierarquia", "listar_cidades_fiscal_hierarquia"),
+    "ncm": ("contar_ncms_fiscal_hierarquia", "listar_ncms_fiscal_hierarquia"),
+    "produto": ("contar_produtos_fiscal_hierarquia", "listar_produtos_fiscal_hierarquia"),
+  }
+
   def __init__(self, conn_params: dict) -> None:
     self.conn_params = conn_params
 
@@ -608,6 +615,39 @@ class NFeConsultaRepository:
       (limite, offset),
     )
     return cur.fetchall()
+
+  def consultar_hierarquia_fiscal(
+    self,
+    where_clause: str,
+    parametros: list[object],
+    nivel_resolvido: str,
+    limite_consulta: int,
+    offset_consulta: int,
+    incluir_hierarquia_completa: bool,
+  ) -> dict:
+    contar_nome, listar_nome = self.NIVEL_HIERARQUIA_CONSULTAS.get(
+      nivel_resolvido,
+      self.NIVEL_HIERARQUIA_CONSULTAS["produto"],
+    )
+
+    with psycopg.connect(**self.conn_params) as conn:
+      with conn.cursor() as cur:
+        self.criar_tmp_fiscal_hierarquia_base(cur, where_clause, parametros)
+        resumo_row = self.obter_resumo_fiscal_hierarquia(cur)
+
+        rows_hierarquia_completa: list[tuple] = []
+        if incluir_hierarquia_completa:
+          rows_hierarquia_completa = self.listar_hierarquia_fiscal_completa(cur, limite_consulta)
+
+        total_registros_nivel = getattr(self, contar_nome)(cur)
+        rows_nivel = getattr(self, listar_nome)(cur, limite_consulta, offset_consulta)
+
+    return {
+      "resumo_row": resumo_row,
+      "rows_hierarquia_completa": rows_hierarquia_completa,
+      "total_registros_nivel": total_registros_nivel,
+      "rows_nivel": rows_nivel,
+    }
 
   def listar_totais_vendas_mensais(
     self,

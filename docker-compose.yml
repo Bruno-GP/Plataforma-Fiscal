@@ -64,6 +64,9 @@ services:
       POSTGRES_DSN: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/plataforma_fiscal}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       ENABLE_STARTUP_SCHEMA_ENSURE: "false"
+      CONTAAZUL_CLIENT_ID: ${CONTAAZUL_CLIENT_ID:-}
+      CONTAAZUL_CLIENT_SECRET: ${CONTAAZUL_CLIENT_SECRET:-}
+      CONTAAZUL_REDIRECT_URI: ${CONTAAZUL_REDIRECT_URI:-http://localhost:8000/callback}
     ports:
       - "8000:8000"
     depends_on:

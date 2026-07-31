@@ -17,7 +17,9 @@ from contaazul.kpis import agregar_kpis_mensais  # noqa: E402
 from exporters.postgres_kpis_exporter import PostgresKpisExporter  # noqa: E402
 
 from app.repositories.conta_azul.conta_azul_repository import ContaAzulRepository
+from app.repositories.conta_azul.integracoes_repository import IntegracoesRepository
 from app.services.conta_azul.postgres_config import carregar_config_postgres_conta_azul
+from app.services.conta_azul.postgres_token_store import PostgresTokenStore, conn_params_conta_azul
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger("workers.conta_azul")
@@ -35,6 +37,10 @@ def _repositorio_empresas() -> ContaAzulRepository:
         **({"sslmode": config["sslmode"]} if config.get("sslmode") else {}),
     }
     return ContaAzulRepository(conn_params)
+
+
+def _repositorio_integracoes() -> IntegracoesRepository:
+    return IntegracoesRepository(conn_params_conta_azul())
 
 
 def _periodo_sincronizacao() -> tuple[date, date]:
@@ -57,7 +63,13 @@ def _coletar_todas_paginas(client: ContaAzulClient, inicio: date, fim: date) -> 
     return todos
 
 
-def _sincronizar_empresa(auth_client: ContaAzulAuth, empresa_id: int, inicio: date, fim: date) -> int:
+def _sincronizar_empresa(empresa_id: int, inicio: date, fim: date) -> int:
+    auth_client = ContaAzulAuth(
+        client_id=os.environ.get("CONTAAZUL_CLIENT_ID"),
+        client_secret=os.environ.get("CONTAAZUL_CLIENT_SECRET"),
+        redirect_uri=os.environ.get("CONTAAZUL_REDIRECT_URI"),
+        token_store=PostgresTokenStore(empresa_id),
+    )
     client = ContaAzulClient(auth_client)
     try:
         vendas = _coletar_todas_paginas(client, inicio, fim)
@@ -76,10 +88,10 @@ def _sincronizar_empresa(auth_client: ContaAzulAuth, empresa_id: int, inicio: da
 @celery_app.task(name="sincronizar_kpis_conta_azul_task")
 def sincronizar_kpis_conta_azul_task() -> dict:
     """Roda diariamente (via beat_schedule em celery_app.py): busca vendas dos
-    ultimos ~2 meses de cada empresa com tem_conta_azul=true e faz upsert dos
-    KPIs mensais em conta_azul_kpis. Credencial OAuth e' global/single-tenant
-    hoje (mesma limitacao do uso manual da CLI) -- ver
-    docs/superpowers/specs/2026-07-29-conta-azul-kpis-mensal-design.md.
+    ultimos ~2 meses de cada empresa com integracao Conta Azul ATIVA (token por
+    empresa em conta_azul.integracoes, ver app/repositories/conta_azul) e faz
+    upsert dos KPIs mensais em conta_azul_kpis. Empresas com tem_conta_azul=true
+    mas sem OAuth2 concluido (ou expirado) sao puladas, nao contam como falha.
     """
     client_id = os.environ.get("CONTAAZUL_CLIENT_ID")
     client_secret = os.environ.get("CONTAAZUL_CLIENT_SECRET")
@@ -88,15 +100,24 @@ def sincronizar_kpis_conta_azul_task() -> dict:
         logger.error("conta_azul_credenciais_ausentes: faltam CONTAAZUL_CLIENT_ID/SECRET/REDIRECT_URI no ambiente")
         return {"status": "FAILED", "erro": "credenciais ausentes"}
 
-    auth_client = ContaAzulAuth(client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri)
     inicio, fim = _periodo_sincronizacao()
 
     empresas = _repositorio_empresas().listar_empresas_ativas()
-    resultado = {"empresas_ok": 0, "empresas_falha": 0}
+    integracoes_repo = _repositorio_integracoes()
+    resultado = {"empresas_ok": 0, "empresas_falha": 0, "empresas_puladas": 0}
 
     for empresa_id, cnpj in empresas:
+        integracao = integracoes_repo.get_by_empresa(empresa_id)
+        if not integracao or integracao["status"] != "ATIVA":
+            resultado["empresas_puladas"] += 1
+            logger.info(
+                "conta_azul_empresa_sem_integracao_ativa",
+                extra={"empresa_id": empresa_id, "cnpj": cnpj},
+            )
+            continue
+
         try:
-            meses_gravados = _sincronizar_empresa(auth_client, empresa_id, inicio, fim)
+            meses_gravados = _sincronizar_empresa(empresa_id, inicio, fim)
             resultado["empresas_ok"] += 1
             logger.info(
                 "conta_azul_kpis_sincronizados",

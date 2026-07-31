@@ -12,7 +12,7 @@ load_dotenv(BASE_DIR / ".env")
 import os
 
 import psycopg
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
@@ -24,6 +24,9 @@ from app.core.config import (
     validate_production_config,
 )
 from app.core.logger import configure_logging, log_request_cycle
+from app.core.security import AuthenticatedUser, get_current_user
+from app.repositories.conta_azul.integracoes_repository import IntegracoesRepository
+from app.services.conta_azul.postgres_token_store import PostgresTokenStore, conn_params_conta_azul
 
 configure_logging()
 validate_production_config()
@@ -135,5 +138,67 @@ def health_check_redis():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Redis indisponivel.",
         ) from exc
+
+    return {"status": "ok"}
+
+
+@app.get("/callback")
+def conta_azul_oauth_callback(
+    code: str,
+    state: str | None = None,
+    error: str | None = None,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Redirect URI fixo do Conta Azul (cadastrado no portal deles): recebe o
+    'code' apos o usuario autorizar e troca por tokens, salvos por empresa em
+    conta_azul.integracoes (cifrados com Fernet). Path sem prefixo /api porque o
+    Conta Azul exige exatamente http://<host>/callback."""
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Autorizacao Conta Azul negada: {error}",
+        )
+
+    if not current_user.tem_conta_azul:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario nao pertence a uma empresa com Conta Azul habilitado.",
+        )
+
+    integracoes_repo = IntegracoesRepository(conn_params_conta_azul())
+    if not state or not integracoes_repo.validar_state(current_user.empresa_id, state):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="State OAuth ausente, invalido ou expirado. Reinicie o fluxo em /api/conta-azul/oauth/iniciar.",
+        )
+
+    import sys
+
+    conta_azul_dir = Path(__file__).resolve().parents[1] / "integracoes" / "conta_azul"
+    if str(conta_azul_dir) not in sys.path:
+        sys.path.insert(0, str(conta_azul_dir))
+
+    from contaazul.auth import AuthError, ContaAzulAuth
+
+    client_id = os.environ.get("CONTAAZUL_CLIENT_ID")
+    client_secret = os.environ.get("CONTAAZUL_CLIENT_SECRET")
+    redirect_uri = os.environ.get("CONTAAZUL_REDIRECT_URI")
+    if not all([client_id, client_secret, redirect_uri]):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Credenciais Conta Azul nao configuradas (CONTAAZUL_CLIENT_ID/SECRET/REDIRECT_URI).",
+        )
+
+    auth_client = ContaAzulAuth(
+        client_id=client_id,
+        client_secret=client_secret,
+        redirect_uri=redirect_uri,
+        token_store=PostgresTokenStore(current_user.empresa_id),
+    )
+    try:
+        auth_client.exchange_code_for_token(code)
+    except AuthError as exc:
+        integracoes_repo.marcar_erro(current_user.empresa_id, str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return {"status": "ok"}

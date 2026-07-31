@@ -98,11 +98,12 @@ class ProcessarNFeService:
         return total_registrado
 
     
-    def executar(self, request: ProcessarNFeRequest) -> ProcessarNFeResponse:
+    def executar(self, request: ProcessarNFeRequest, cnpj_esperado: str | None = None) -> ProcessarNFeResponse:
         xmls = XmlReader().ler_pasta(request.pasta_xml)
         return self._executar_com_xmls(
             xmls=xmls,
             request=request,
+            cnpj_esperado=cnpj_esperado,
         )
 
     def executar_xmls_importados(
@@ -160,6 +161,7 @@ class ProcessarNFeService:
         self,
         xmls,
         request: ProcessarNFeRequest,
+        cnpj_esperado: str | None = None,
     ) -> ProcessarNFeResponse:
         
         cnpj_emitente = ""
@@ -206,6 +208,11 @@ class ProcessarNFeService:
                 raise Exception("Mais de um CNPJ de emitente encontrado")
 
             cnpj_emitente = cnpjs.pop()
+
+            if cnpj_esperado and normalizar_cnpj(cnpj_emitente) != normalizar_cnpj(cnpj_esperado):
+                raise Exception(
+                    "CNPJ emitente dos XMLs nao corresponde ao cnpj_empresa_origem informado."
+                )
 
             # 5️⃣ Identificar nome do emitente
             nomes_emitente = {

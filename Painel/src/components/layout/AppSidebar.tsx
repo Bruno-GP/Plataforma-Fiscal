@@ -123,7 +123,7 @@ const isItemActive = (pathname: string, item: NavigationItem) =>
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isMobile, setOpenMobile } = useSidebar();
+  const { isMobile, openMobile, setOpenMobile } = useSidebar();
   const { user, logout } = useAuth();
   const companyName = user?.name?.trim() || 'Accounting Corp';
   const xmlOnboardingLocked = isXmlOnboardingLocked(user);
@@ -170,11 +170,22 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar
-      variant="sidebar"
-      collapsible="none"
-      className="sticky top-0 h-svh w-64 shrink-0 border-r border-slate-700/70 bg-[#111827] text-slate-100"
-    >
+    <>
+      {isMobile && openMobile && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={() => setOpenMobile(false)}
+        />
+      )}
+      <Sidebar
+        variant="sidebar"
+        collapsible="none"
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 h-svh w-72 max-w-[85vw] shrink-0 -translate-x-full border-r border-slate-700/70 bg-[#111827] text-slate-100 transition-transform duration-200 ease-in-out',
+          'md:sticky md:top-0 md:z-auto md:w-64 md:max-w-none md:translate-x-0',
+          openMobile && 'translate-x-0',
+        )}
+      >
       <SidebarHeader className="h-16 justify-center border-b border-slate-700/70 bg-[#111827] px-5 py-2 group-data-[collapsible=icon]:px-2">
         <div className="min-w-0 space-y-6 group-data-[collapsible=icon]:space-y-0">
           {/* <div className="text-xl font-bold text-sky-300 group-data-[collapsible=icon]:text-center group-data-[collapsible=icon]:text-lg">
@@ -244,5 +255,6 @@ export function AppSidebar() {
         </div>
       </SidebarFooter>
     </Sidebar>
+    </>
   );
 }

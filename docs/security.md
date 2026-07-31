@@ -34,24 +34,24 @@ Todas as rotas abaixo estao em roteadores com dependencia de autenticacao. O esc
 
 | Rota | Exige autenticacao | Exige escopo de empresa | Parametro usado para escopo | Risco/observacao |
 | --- | --- | --- | --- | --- |
-| `POST /api/nfe/processar` | Sim | Parcial | Nenhum parametro de query | Fragil: usa `require_company_scope`, mas a rota batch recebe apenas body com pasta; nao ha CNPJ em query para comparacao direta. |
+| `POST /api/nfe/processar` | Sim | Sim | `cnpj_empresa_origem` | Rota batch/legada, nao usada pelo Painel. Exige `cnpj_empresa_origem`, restringe `pasta_xml` a `PROCESSAMENTO_BATCH_ROOT_DIR` (sem path traversal) e confere que o CNPJ extraido dos XMLs bate com o informado. |
 | `POST /api/nfe/xml/importar` | Sim | Sim | `cnpj_empresa_origem` | Tambem valida `tem_sped=false` e CNPJ do XML. |
 | `GET /api/nfe/xml/pendencias` | Sim | Sim | `cnpj_emitente` | Tambem valida `tem_sped=false`. |
 | `POST /api/nfe/xml/processar-importados` | Sim | Sim | `cnpj_emitente` | Tambem valida `tem_sped=false`. |
-| `GET /api/nfe/kpis` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Se nenhum parametro for enviado, o service resolve pela sessao, mas o escopo nao e comparado via query. |
-| `GET /api/nfe/analise/compras` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Mesmo risco das rotas NFe que permitem resolver por sessao. |
-| `GET /api/nfe/analise/vendas` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Mesmo risco das rotas NFe que permitem resolver por sessao. |
-| `GET /api/nfe/analise/clientes` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Mesmo risco das rotas NFe que permitem resolver por sessao. |
-| `GET /api/nfe/analise/fiscal/cfop` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Mesmo risco das rotas NFe que permitem resolver por sessao. |
-| `GET /api/nfe/analise/fiscal/ncm` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Mesmo risco das rotas NFe que permitem resolver por sessao. |
-| `GET /api/nfe/analise/fiscal/hierarquia` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Filtros de drill-down nao sao escopo de empresa. |
-| `GET /api/nfe/analise/compras/dashboard` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Mesmo risco das rotas NFe que permitem resolver por sessao. |
-| `GET /api/nfe/analise/vendas/dashboard` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Mesmo risco das rotas NFe que permitem resolver por sessao. |
-| `GET /api/nfe/kpis/comparativo` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Periodo nao participa do escopo. |
-| `GET /api/nfe/kpis/comparativo/atual` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Depende da resolucao por sessao. |
-| `GET /api/nfe/notas` | Sim | Parcial | `emitente_cnpj` quando enviado | O codigo possui comentario indicando service detalhado incompleto. |
-| `GET /api/nfe/notas/detalhado` | Sim | Parcial | `emitente_cnpj` ou `email` quando enviados | Depende da resolucao por sessao. |
-| `POST /api/sped/processar` | Sim | Parcial | Nenhum parametro de query | Fragil: rota batch recebe caminho no body e nao valida CNPJ/perfil por query. |
+| `GET /api/nfe/kpis` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | `require_company_scope` roda no nivel do router e le `request.query_params` bruto — qualquer `emitente_cnpj`/`email` divergente da sessao ja recebe `403` antes do resolver rodar. Sem nenhum parametro, o resolver falha com `400` (nao ha resolucao silenciosa por sessao). |
+| `GET /api/nfe/analise/compras` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `GET /api/nfe/analise/vendas` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `GET /api/nfe/analise/clientes` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `GET /api/nfe/analise/fiscal/cfop` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `GET /api/nfe/analise/fiscal/ncm` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `GET /api/nfe/analise/fiscal/hierarquia` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`; filtros de drill-down (estado/cidade/ncm) nao carregam CNPJ, entao nao adicionam risco de escopo. |
+| `GET /api/nfe/analise/compras/dashboard` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `GET /api/nfe/analise/vendas/dashboard` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `GET /api/nfe/kpis/comparativo` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `GET /api/nfe/kpis/comparativo/atual` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `GET /api/nfe/notas` | Sim | Sim | `emitente_cnpj` quando enviado | Rota nao implementada (`501`); service detalhado ainda nao existe. |
+| `GET /api/nfe/notas/detalhado` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
+| `POST /api/sped/processar` | Sim | Sim | `cnpj_empresa_origem` | Rota batch/legada, nao usada pelo Painel. Exige `cnpj_empresa_origem`, restringe `arquivo_sped` a `PROCESSAMENTO_BATCH_ROOT_DIR` (sem path traversal). Sem extracao de CNPJ do conteudo para conferencia adicional. |
 | `POST /api/sped/importar` | Sim | Sim | `cnpj_empresa_origem` | Tambem valida `tem_sped=true` e CNPJ do registro `0000`. |
 | `GET /api/sped/pendencias` | Sim | Sim | `cnpj_emitente` | Tambem valida `tem_sped=true`. |
 | `POST /api/sped/processar-importados` | Sim | Sim | `cnpj_emitente` | Tambem valida `tem_sped=true`. |
@@ -59,7 +59,7 @@ Todas as rotas abaixo estao em roteadores com dependencia de autenticacao. O esc
 | `GET /api/sped/clientes` | Sim | Sim | `emitente_cnpj` | Endpoint legado/auxiliar de clientes SPED. |
 | `GET /api/sped/analise/*` | Sim | Sim | `emitente_cnpj` | Inclui compras, vendas, clientes, fiscal CFOP/NCM/hierarquia. |
 | `GET /api/sped/analise/*/dashboard` | Sim | Sim | `emitente_cnpj` | Inclui dashboards de compras e vendas. |
-| `POST /api/ncm/ibpt/sincronizar` | Sim | Nao | Nenhum CNPJ | Usa `get_current_user`, mas a operacao e global de catalogo/IBPT. Risco: qualquer usuario autenticado consegue disparar sincronizacao. |
+| `POST /api/ncm/ibpt/sincronizar` | Sim | Nao | Nenhum CNPJ | Operacao global de catalogo/IBPT, sem role/admin no sistema. Qualquer usuario autenticado pode disparar, mas protegido por cooldown global (`IBPT_SYNC_MIN_INTERVAL_SECONDS`, `429` se chamado de novo antes do intervalo) contra abuso/DoS. RBAC continua pendente. |
 | `GET /api/ncm/tributacao` | Sim | Nao | Nenhum CNPJ | Consulta global por NCM/UF. |
 | `GET /api/reforma-tributaria/tributos` | Sim | Parcial | Nenhum CNPJ | Catalogo global; usa `require_company_scope`, mas nao ha parametro de empresa. |
 | `GET /api/reforma-tributaria/apuracao` | Sim | Sim | `emitente_cnpj` | Consulta por empresa. |
@@ -101,6 +101,8 @@ Obrigatorias ou sensiveis em producao:
 - `POSTGRES_PASSWORD` e credenciais SPED.
 - `OPENAI_API_KEY`, quando relatorios IA forem usados.
 - configuracoes de cookie: `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_COOKIE_DOMAIN`.
+- `PROCESSAMENTO_BATCH_ROOT_DIR`: raiz permitida para `pasta_xml`/`arquivo_sped` nas rotas batch/legadas `POST /api/nfe/processar` e `POST /api/sped/processar`. Sem essa variavel, as duas rotas retornam `400` (desabilitadas por padrao).
+- `IBPT_SYNC_MIN_INTERVAL_SECONDS`: cooldown global (segundos, padrao `300`) para `POST /api/ncm/ibpt/sincronizar`.
 
 ## OpenAI e dados fiscais
 

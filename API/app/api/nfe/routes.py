@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile
 from app.api.shared.company_validation import validar_empresa_xml
 from app.core.upload_security import validate_xml_uploads
 from app.core.security import require_company_scope
+from app.core.config import get_processamento_batch_root_dir
+from app.core.path_security import resolve_safe_batch_path
 from app.models.jobs.schemas import JobCreateResponse
 from app.repositories.nfe.notas_repository import NFeNotasRepository
 from app.services.jobs.job_service import JobService
@@ -86,8 +88,18 @@ def _nota_possui_tipo_operacao(nota, tipo_operacao: str) -> bool:
 
 """Processa XMLs disponíveis em pasta (origem batch/legado)."""
 @nfe_router.post("/processar", response_model=ProcessarNFeResponse)
-def processar_nfe(request: ProcessarNFeRequest):
-  return ProcessarNFeService().executar(request)
+def processar_nfe(
+  request: ProcessarNFeRequest,
+  cnpj_empresa_origem: str = Query(..., min_length=14, max_length=20),
+):
+  validar_empresa_xml(cnpj_empresa_origem)
+  caminho_seguro = resolve_safe_batch_path(
+    get_processamento_batch_root_dir(),
+    request.pasta_xml,
+    tipo="XML/NFe",
+  )
+  request_segura = request.model_copy(update={"pasta_xml": caminho_seguro})
+  return ProcessarNFeService().executar(request_segura, cnpj_esperado=cnpj_empresa_origem)
 
 """Recebe arquivos XML e persiste no staging de importação sem processar KPIs."""
 @nfe_router.post("/xml/importar", response_model=ImportacaoXMLResponse)

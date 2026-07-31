@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.security import AuthenticatedUser, get_current_user
+from app.core.config import get_ibpt_sync_min_interval_seconds
+from app.core.rate_limit import ibpt_sync_limiter
 from app.models.nfe.schemas import (
     IBPTSyncRequest,
     IBPTSyncResponse,
@@ -19,6 +21,12 @@ def sincronizar_ibpt(
     request: IBPTSyncRequest,
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
+    ibpt_sync_limiter.check(
+        "global",
+        min_interval_seconds=get_ibpt_sync_min_interval_seconds(),
+        action="ibpt_sync",
+    )
+
     try:
         resultados = IBPTSyncService().sincronizar(
             uf=request.uf,

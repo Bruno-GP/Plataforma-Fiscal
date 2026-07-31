@@ -212,3 +212,17 @@ def get_upload_max_total_bytes() -> int:
     except ValueError as exc:
         raise ValueError("UPLOAD_MAX_TOTAL_BYTES deve ser um inteiro.") from exc
     return max(parsed, 1024)
+
+
+def get_processamento_batch_root_dir() -> str | None:
+    raw_value = os.getenv("PROCESSAMENTO_BATCH_ROOT_DIR", "").strip()
+    return raw_value or None
+
+
+def get_ibpt_sync_min_interval_seconds() -> int:
+    raw_value = os.getenv("IBPT_SYNC_MIN_INTERVAL_SECONDS", "300").strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("IBPT_SYNC_MIN_INTERVAL_SECONDS deve ser um inteiro.") from exc
+    return max(parsed, 0)

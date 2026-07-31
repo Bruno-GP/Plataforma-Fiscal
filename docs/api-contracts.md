@@ -137,17 +137,23 @@ Exemplo de resposta de `PATCH /api/auth/senha`:
 ### `POST /api/nfe/processar`
 
 - Autenticacao: obrigatoria.
+- Query obrigatoria: `cnpj_empresa_origem` (validado contra o CNPJ da sessao por `require_company_scope` e contra o perfil da empresa por `validar_empresa_xml`).
 - Body obrigatorio: `origem`, `pasta_xml`.
 - Body opcional: `empresa_id`, `periodo`.
 - Request:
 
+```http
+POST /api/nfe/processar?cnpj_empresa_origem=12345678000199
+```
+
 ```json
-{ "origem": "upload-local", "pasta_xml": "C:/arquivos/xml", "periodo": "2026-01" }
+{ "origem": "upload-local", "pasta_xml": "empresa-x/lote-01", "periodo": "2026-01" }
 ```
 
 - Response (`ProcessarNFeResponse`): `status`, `cnpj_emitente`, `periodo_ano`, `periodo_mes`, `periodos_encontrados`, `notas_processadas`, `itens_processados`, `kpis`, `erros`, `data_processamento`.
 - Item de `kpis`: `ano`, `mes`, `kpis`; dentro de `kpis`: `total_vendas`, `quantidade_notas`, `ticket_medio`, `maior_nota`, `menor_nota`, `total_icms`, `total_ipi`, `total_pis`, `total_cofins`, `top_clientes`, `top_produtos`, `top_cidades`.
-- Observacao: processa XMLs a partir de pasta acessivel ao backend. Para operacao do painel, o fluxo principal e importar para staging e depois chamar `xml/processar-importados`. Esta rota batch/legada nao recebe CNPJ em query e, no codigo atual, nao aplica a mesma validacao explicita de perfil usada na importacao XML.
+- Observacao: rota batch/legada, nao usada pelo Painel (fluxo principal e importar para staging e chamar `xml/processar-importados`). `pasta_xml` e relativa e resolvida dentro de `PROCESSAMENTO_BATCH_ROOT_DIR` (400 se nao configurado ou se o caminho escapar da raiz). O CNPJ extraido dos XMLs deve bater com `cnpj_empresa_origem`, senao a resposta volta com `status="erro"`.
+- Erros comuns: `400` empresa fora do perfil XML, path fora da raiz permitida ou raiz nao configurada; `403` `cnpj_empresa_origem` fora do escopo da sessao.
 
 ### `POST /api/nfe/xml/importar`
 
@@ -198,16 +204,22 @@ curl -X POST "http://localhost:8000/api/nfe/xml/importar?cnpj_empresa_origem=123
 ### `POST /api/sped/processar`
 
 - Autenticacao: obrigatoria.
+- Query obrigatoria: `cnpj_empresa_origem` (validado contra o CNPJ da sessao por `require_company_scope` e contra o perfil da empresa por `validar_empresa_sped`).
 - Body obrigatorio: `arquivo_sped`.
 - Request:
 
+```http
+POST /api/sped/processar?cnpj_empresa_origem=12345678000199
+```
+
 ```json
-{ "arquivo_sped": "C:/arquivos/EFD_FISCAL_12345678000199_012026.txt" }
+{ "arquivo_sped": "empresa-x/EFD_FISCAL_012026.txt" }
 ```
 
 - Response (`ProcessarSpedFiscalResponse`): `status`, `arquivo_sped`, `total_linhas`, `total_registros_identificados`, `resumo_registros`, `banco_sped`.
 - Item de `resumo_registros`: `registro`, `quantidade`.
-- Observacao: processa arquivo localizado no ambiente do backend. Para operacao do painel, o fluxo principal e importar para staging e depois chamar `processar-importados`. Esta rota batch/legada nao recebe CNPJ em query e, no codigo atual, nao aplica a mesma validacao explicita de perfil usada na importacao SPED.
+- Observacao: rota batch/legada, nao usada pelo Painel (fluxo principal e importar para staging e chamar `processar-importados`). `arquivo_sped` e relativo e resolvido dentro de `PROCESSAMENTO_BATCH_ROOT_DIR` (400 se nao configurado ou se o caminho escapar da raiz). Nao ha extracao de CNPJ do conteudo do arquivo para conferencia adicional — o escopo depende do `cnpj_empresa_origem` informado.
+- Erros comuns: `400` empresa fora do perfil SPED, path fora da raiz permitida ou raiz nao configurada; `403` `cnpj_empresa_origem` fora do escopo da sessao.
 
 ### `POST /api/sped/importar`
 
@@ -326,9 +338,9 @@ Erros comuns: `400` parametros invalidos/fluxo errado, `403` CNPJ fora do escopo
 { "uf": "SC", "todas_ufs": false, "ncm": "01012100" }
 ```
 
-- Erros comuns: `502` falha externa/sincronizacao.
+- Erros comuns: `429` chamada repetida antes do cooldown, `502` falha externa/sincronizacao.
 - Response (`IBPTSyncResponse`): `status`, `executado_por`, `total_ufs`, `resultados`; cada resultado possui `uf`, `registros_recebidos`, `catalogo_sincronizado`, `tributacao_sincronizada`.
-- Observacao: sincroniza catalogo e tributacao IBPT usados por consultas.
+- Observacao: sincroniza catalogo e tributacao IBPT usados por consultas. Rota nao tem escopo de empresa (catalogo e global) nem role/admin — qualquer usuario autenticado pode disparar. Protegida por cooldown global (`IBPT_SYNC_MIN_INTERVAL_SECONDS`, padrao 300s) para conter abuso/DoS contra a API externa do IBPT; nao substitui um controle de role, que ainda nao existe no sistema.
 
 ### `GET /api/ncm/tributacao`
 

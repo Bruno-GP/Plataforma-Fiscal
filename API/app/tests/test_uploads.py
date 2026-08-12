@@ -50,7 +50,7 @@ def test_upload_xml_rejeita_empresa_sped(client, fixtures_dir, monkeypatch):
         )
 
     assert response.status_code == 400
-    assert "SPED Fiscal" in response.json()["detail"]
+    assert "XML/NFe" in response.json()["detail"]
 
 
 def test_upload_xml_preserva_resumo_parcial_importado_duplicado_e_erro(client, fixtures_dir, monkeypatch):
@@ -174,7 +174,7 @@ def test_upload_sped_rejeita_empresa_xml(client, fixtures_dir, monkeypatch):
         )
 
     assert response.status_code == 400
-    assert "XML" in response.json()["detail"]
+    assert "SPED Fiscal" in response.json()["detail"]
 
 
 def test_upload_sped_preserva_resumo_parcial_importado_duplicado_e_erro(client, fixtures_dir, monkeypatch):

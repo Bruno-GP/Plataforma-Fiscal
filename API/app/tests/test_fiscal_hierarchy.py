@@ -66,7 +66,10 @@ def test_construir_filtros_hierarquia_nfe_com_periodo_e_dimensoes():
     assert "regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s" in where_clause
     assert "EXTRACT(YEAR FROM n.data_emissao) = %s" in where_clause
     assert "EXTRACT(MONTH FROM n.data_emissao) = %s" in where_clause
-    assert "UPPER(COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), 'Sem UF')) = %s" in where_clause
+    assert (
+        "UPPER(COALESCE(NULLIF(TRIM(n.destinatario_uf), ''), NULLIF(TRIM(e.estado), ''), 'Sem UF')) = %s"
+        in where_clause
+    )
     assert params == ["12345678000190", 2025, 3, "SP", "SAO PAULO", "12345678", "P001"]
 
 

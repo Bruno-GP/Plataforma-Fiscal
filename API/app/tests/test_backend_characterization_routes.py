@@ -794,10 +794,16 @@ class FakeCompanyProfileService:
     def empresa_tem_sped(self, cnpj):
         return False
 
+    def empresa_tem_conta_azul(self, cnpj):
+        return False
+
 
 class FakeSpedCompanyProfileService:
     def empresa_tem_sped(self, cnpj):
         return True
+
+    def empresa_tem_conta_azul(self, cnpj):
+        return False
 
 
 class FakeOpenAIReportService:

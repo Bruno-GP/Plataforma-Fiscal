@@ -339,6 +339,58 @@ class NFeConsultaService:
 
     return totais
 
+  def _montar_dados_dashboard_vendas(
+    self,
+    emitente_cnpj: str,
+    ano_referencia: int,
+    periodo_mes: int | None,
+    ano_anterior: int,
+    mes_anterior: int | None,
+    resultados_ano_atual,
+    resultados_filtrados,
+    resultados_anteriores,
+    limite: int,
+  ) -> tuple[dict, dict, list]:
+    periodos_tributos = construir_periodos_dashboard(
+      ano_referencia,
+      periodo_mes,
+      ano_anterior,
+      mes_anterior,
+      resultados_ano_atual,
+    )
+    totais_tributos = obter_totais_tributos_documentos_por_periodo(
+      self.conn_params,
+      "nfe",
+      emitente_cnpj,
+      sorted(periodos_tributos, key=lambda periodo: (periodo[0], periodo[1] or 0)),
+      "saida",
+    )
+    totais_vendidos: dict[tuple[int, int | None], Decimal] = {}
+
+    resumo_atual = construir_resumo_dashboard(
+      resultados_filtrados,
+      (ano_referencia, periodo_mes),
+      totais_vendidos,
+      totais_tributos,
+      limite,
+    )
+    resumo_anterior = construir_resumo_dashboard(
+      resultados_anteriores,
+      (ano_anterior, mes_anterior),
+      totais_vendidos,
+      totais_tributos,
+      limite,
+    )
+
+    serie_mensal = construir_serie_mensal_dashboard(
+      ano_referencia,
+      resultados_ano_atual,
+      totais_vendidos,
+      totais_tributos,
+    )
+
+    return resumo_atual, resumo_anterior, serie_mensal
+
   @ttl_cache(ttl_seconds=15, maxsize=128)
   def consultar_dashboard_vendas(
     self,
@@ -376,42 +428,16 @@ class NFeConsultaService:
       )
     )
 
-    periodos_tributos = construir_periodos_dashboard(
+    resumo_atual, resumo_anterior, serie_mensal = self._montar_dados_dashboard_vendas(
+      emitente_cnpj,
       ano_referencia,
       periodo_mes,
       ano_anterior,
       mes_anterior,
       resultados_ano_atual,
-    )
-    totais_tributos = obter_totais_tributos_documentos_por_periodo(
-      self.conn_params,
-      "nfe",
-      emitente_cnpj,
-      sorted(periodos_tributos, key=lambda periodo: (periodo[0], periodo[1] or 0)),
-      "saida",
-    )
-    totais_vendidos: dict[tuple[int, int | None], Decimal] = {}
-
-    resumo_atual = construir_resumo_dashboard(
       resultados_filtrados,
-      (ano_referencia, periodo_mes),
-      totais_vendidos,
-      totais_tributos,
-      limite,
-    )
-    resumo_anterior = construir_resumo_dashboard(
       resultados_anteriores,
-      (ano_anterior, mes_anterior),
-      totais_vendidos,
-      totais_tributos,
       limite,
-    )
-
-    serie_mensal = construir_serie_mensal_dashboard(
-      ano_referencia,
-      resultados_ano_atual,
-      totais_vendidos,
-      totais_tributos,
     )
 
     return construir_dashboard_vendas_response(
@@ -552,29 +578,12 @@ class NFeConsultaService:
       logger.exception("Erro ao consultar KPIs NFe")
       raise
     
-  def analisar_compras(
+  def _montar_rankings_compras(
     self,
-    emitente_cnpj: Optional[str],
-    periodo_ano: Optional[int] = None,
-    periodo_mes: Optional[int] = None,
-    limite: int = 5,
-  ) -> dict:
-    inicio_total = perf_counter()
-    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
-
-    where_clause, parametros = construir_filtros_compras_nfe(
-      cnpj_filtrado,
-      periodo_ano,
-      periodo_mes,
-    )
-
-    repository = self._consulta_repository()
-    parametros_com_limite = construir_params_com_limite_compras(parametros, limite)
-    total_comprado = repository.obter_total_itens(
-      where_clause,
-      parametros,
-      "total_comprado",
-    )
+    repository: NFeConsultaRepository,
+    where_clause: str,
+    parametros_com_limite: list[object],
+  ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
     top_fornecedores_valor = construir_ranking_fornecedores_compras(
       repository.listar_fornecedores_compras_por_valor(
         where_clause,
@@ -599,6 +608,43 @@ class NFeConsultaService:
         parametros_com_limite,
       )
     )
+
+    return (
+      top_fornecedores_valor,
+      top_fornecedores_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+    )
+
+  def analisar_compras(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: int = 5,
+  ) -> dict:
+    inicio_total = perf_counter()
+    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
+
+    where_clause, parametros = construir_filtros_compras_nfe(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+    )
+
+    repository = self._consulta_repository()
+    parametros_com_limite = construir_params_com_limite_compras(parametros, limite)
+    total_comprado = repository.obter_total_itens(
+      where_clause,
+      parametros,
+      "total_comprado",
+    )
+    (
+      top_fornecedores_valor,
+      top_fornecedores_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+    ) = self._montar_rankings_compras(repository, where_clause, parametros_com_limite)
     total_impostos_complementares, total_tributos_reforma = self._obter_totais_tributos_analise(
       cnpj_filtrado,
       periodo_ano,
@@ -632,28 +678,15 @@ class NFeConsultaService:
       top_produtos_quantidade,
     )
     
-  def analisar_vendas(
+  def _montar_rankings_vendas(
     self,
-    emitente_cnpj: Optional[str],
-    periodo_ano: Optional[int] = None,
-    periodo_mes: Optional[int] = None,
-    limite: Optional[int] = None,
-  ) -> dict:
-    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
-
-    where_clause, parametros = self._montar_filtros_vendas_itens(
-      emitente_cnpj=cnpj_filtrado,
-      periodo_ano=periodo_ano,
-      periodo_mes=periodo_mes,
-    )
-
-    repository = self._consulta_repository()
-    parametros_com_limite = construir_params_com_limite(parametros, limite)
-    total_vendido = repository.obter_total_itens(
-      where_clause,
-      parametros,
-      "total_vendido",
-    )
+    repository: NFeConsultaRepository,
+    where_clause: str,
+    parametros: list[object],
+    parametros_com_limite: list[object],
+    limite: Optional[int],
+    total_vendido: Decimal,
+  ) -> tuple[list[dict], list[dict], list[dict], list[dict], list[dict], list[dict], list[dict]]:
     top_clientes_valor = construir_ranking_clientes_vendas(
       repository.listar_clientes_vendas_por_valor(
         where_clause,
@@ -697,6 +730,55 @@ class NFeConsultaService:
         parametros,
       ),
       limite,
+    )
+
+    return (
+      top_clientes_valor,
+      top_clientes_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+      top_cfops_valor,
+      top_cidades_valor,
+      top_regioes_valor,
+    )
+
+  def analisar_vendas(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
+
+    where_clause, parametros = self._montar_filtros_vendas_itens(
+      emitente_cnpj=cnpj_filtrado,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
+
+    repository = self._consulta_repository()
+    parametros_com_limite = construir_params_com_limite(parametros, limite)
+    total_vendido = repository.obter_total_itens(
+      where_clause,
+      parametros,
+      "total_vendido",
+    )
+    (
+      top_clientes_valor,
+      top_clientes_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+      top_cfops_valor,
+      top_cidades_valor,
+      top_regioes_valor,
+    ) = self._montar_rankings_vendas(
+      repository,
+      where_clause,
+      parametros,
+      parametros_com_limite,
+      limite,
+      total_vendido,
     )
     total_impostos_complementares, total_tributos_reforma = self._obter_totais_tributos_analise(
       cnpj_filtrado,
@@ -805,6 +887,54 @@ class NFeConsultaService:
       total_tributos_reforma,
     )
 
+  def _montar_dados_hierarquia_fiscal(
+    self,
+    dados_hierarquia: dict,
+    nivel_resolvido: str,
+  ) -> tuple[Decimal, Decimal, Decimal, Optional[tuple], list[dict], int, list[dict], list[dict], list[dict], list[dict], list[dict]]:
+    resumo_row = dados_hierarquia["resumo_row"]
+    total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
+    total_impostos = resumo_row[1] if resumo_row else Decimal("0.00")
+    percentual_total = calcular_percentual_imposto(total_impostos, total_faturamento)
+
+    hierarquia = [
+      construir_item_hierarquia_completa(
+        uf_item,
+        cidade_item,
+        ncm_item,
+        descricao_item,
+        codigo_item,
+        produto_item,
+        faturamento,
+        imposto_valor,
+      )
+      for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor
+      in dados_hierarquia["rows_hierarquia_completa"]
+    ]
+
+    total_registros_nivel = dados_hierarquia["total_registros_nivel"]
+    builder_nivel = NIVEL_HIERARQUIA_BUILDERS.get(nivel_resolvido, construir_item_produto)
+    itens_nivel_atual = [builder_nivel(*row) for row in dados_hierarquia["rows_nivel"]]
+
+    por_estado = itens_nivel_atual if nivel_resolvido == "estado" else []
+    por_cidade = itens_nivel_atual if nivel_resolvido == "cidade" else []
+    por_ncm = itens_nivel_atual if nivel_resolvido == "ncm" else []
+    por_produto = itens_nivel_atual if nivel_resolvido not in ("estado", "cidade", "ncm") else []
+
+    return (
+      total_faturamento,
+      total_impostos,
+      percentual_total,
+      resumo_row,
+      hierarquia,
+      total_registros_nivel,
+      itens_nivel_atual,
+      por_estado,
+      por_cidade,
+      por_ncm,
+      por_produto,
+    )
+
   @ttl_cache(ttl_seconds=15, maxsize=128)
   def analisar_fiscal_hierarquia(
     self,
@@ -851,34 +981,19 @@ class NFeConsultaService:
       modo_legado_hierarquia_completa,
     )
 
-    resumo_row = dados_hierarquia["resumo_row"]
-    total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
-    total_impostos = resumo_row[1] if resumo_row else Decimal("0.00")
-    percentual_total = calcular_percentual_imposto(total_impostos, total_faturamento)
-
-    hierarquia = [
-      construir_item_hierarquia_completa(
-        uf_item,
-        cidade_item,
-        ncm_item,
-        descricao_item,
-        codigo_item,
-        produto_item,
-        faturamento,
-        imposto_valor,
-      )
-      for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor
-      in dados_hierarquia["rows_hierarquia_completa"]
-    ]
-
-    total_registros_nivel = dados_hierarquia["total_registros_nivel"]
-    builder_nivel = NIVEL_HIERARQUIA_BUILDERS.get(nivel_resolvido, construir_item_produto)
-    itens_nivel_atual = [builder_nivel(*row) for row in dados_hierarquia["rows_nivel"]]
-
-    por_estado = itens_nivel_atual if nivel_resolvido == "estado" else []
-    por_cidade = itens_nivel_atual if nivel_resolvido == "cidade" else []
-    por_ncm = itens_nivel_atual if nivel_resolvido == "ncm" else []
-    por_produto = itens_nivel_atual if nivel_resolvido not in ("estado", "cidade", "ncm") else []
+    (
+      total_faturamento,
+      total_impostos,
+      percentual_total,
+      resumo_row,
+      hierarquia,
+      total_registros_nivel,
+      itens_nivel_atual,
+      por_estado,
+      por_cidade,
+      por_ncm,
+      por_produto,
+    ) = self._montar_dados_hierarquia_fiscal(dados_hierarquia, nivel_resolvido)
 
     total_tributos_reforma = obter_total_tributos_reforma_documentos(
       self.conn_params,

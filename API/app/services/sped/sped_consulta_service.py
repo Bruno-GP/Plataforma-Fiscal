@@ -599,65 +599,17 @@ class SpedConsultaService:
       total_tributos_reforma,
     )
 
-  def analisar_fiscal_hierarquia(
+  def _montar_dados_hierarquia_fiscal(
     self,
-    emitente_cnpj: str,
-    periodo_ano: Optional[int] = None,
-    periodo_mes: Optional[int] = None,
-    nivel_atual: Optional[str] = None,
-    estado: Optional[str] = None,
-    cidade: Optional[str] = None,
-    ncm: Optional[str] = None,
-    produto_codigo: Optional[str] = None,
-    limite: Optional[int] = None,
-    offset: int = 0,
-  ) -> dict:
-    cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros_hierarquia = construir_filtros_hierarquia_sped(
-      cnpj,
-      periodo_ano,
-      periodo_mes,
-      estado,
-      cidade,
-      ncm,
-      produto_codigo,
-    )
-    where_clause_documentos = filtros_hierarquia["where_documentos"]
-    where_clause_kpis = filtros_hierarquia["where_kpis"]
-    where_clause_base = filtros_hierarquia["where_base"]
-    params_kpis = filtros_hierarquia["params_kpis"]
-    params_base = filtros_hierarquia["params_base"]
-    params_cte = filtros_hierarquia["params_cte"]
-    limite_consulta, offset_consulta = normalizar_paginacao_hierarquia(limite, offset)
-    modo_legado_hierarquia_completa = deve_montar_hierarquia_legado(
-      nivel_atual,
-      estado,
-      cidade,
-      ncm,
-      produto_codigo,
-      offset_consulta,
-    )
-    nivel_resolvido = resolver_nivel_hierarquia(nivel_atual, estado, cidade, ncm)
-    resultado = self.repository.analisar_fiscal_hierarquia(
-      where_clause_documentos=where_clause_documentos,
-      where_clause_kpis=where_clause_kpis,
-      where_clause_base=where_clause_base,
-      params_kpis=params_kpis,
-      params_cte=params_cte,
-      params_base=params_base,
-      nivel_resolvido=nivel_resolvido,
-      limite_consulta=limite_consulta,
-      offset_consulta=offset_consulta,
-      modo_legado_hierarquia_completa=modo_legado_hierarquia_completa,
-    )
-
-    total_impostos_periodo = resultado["total_impostos_periodo"]
+    resultado: dict,
+    nivel_resolvido: str,
+    usar_impostos_complementares: bool,
+    percentual_total: Decimal,
+    modo_legado_hierarquia_completa: bool,
+  ) -> tuple[Decimal, Decimal, Decimal, Optional[tuple], list[dict], int, list[dict], list[dict], list[dict], list[dict], list[dict]]:
     resumo_row = resultado["resumo_row"]
     total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
     total_impostos_complementares = resumo_row[1] if resumo_row else Decimal("0.00")
-    total_faturamento_periodo = resultado["total_faturamento_periodo"]
-    percentual_total = calcular_percentual_imposto(total_impostos_periodo, total_faturamento_periodo)
-    usar_impostos_complementares = total_impostos_complementares > 0
     total_impostos = (
       total_impostos_complementares
       if usar_impostos_complementares
@@ -748,6 +700,98 @@ class SpedConsultaService:
           )
         )
       itens_nivel_atual = por_produto
+
+    return (
+      total_faturamento,
+      total_impostos_complementares,
+      total_impostos,
+      resumo_row,
+      hierarquia,
+      total_registros_nivel,
+      itens_nivel_atual,
+      por_estado,
+      por_cidade,
+      por_ncm,
+      por_produto,
+    )
+
+  def analisar_fiscal_hierarquia(
+    self,
+    emitente_cnpj: str,
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    nivel_atual: Optional[str] = None,
+    estado: Optional[str] = None,
+    cidade: Optional[str] = None,
+    ncm: Optional[str] = None,
+    produto_codigo: Optional[str] = None,
+    limite: Optional[int] = None,
+    offset: int = 0,
+  ) -> dict:
+    cnpj = normalizar_cnpj(emitente_cnpj)
+    filtros_hierarquia = construir_filtros_hierarquia_sped(
+      cnpj,
+      periodo_ano,
+      periodo_mes,
+      estado,
+      cidade,
+      ncm,
+      produto_codigo,
+    )
+    where_clause_documentos = filtros_hierarquia["where_documentos"]
+    where_clause_kpis = filtros_hierarquia["where_kpis"]
+    where_clause_base = filtros_hierarquia["where_base"]
+    params_kpis = filtros_hierarquia["params_kpis"]
+    params_base = filtros_hierarquia["params_base"]
+    params_cte = filtros_hierarquia["params_cte"]
+    limite_consulta, offset_consulta = normalizar_paginacao_hierarquia(limite, offset)
+    modo_legado_hierarquia_completa = deve_montar_hierarquia_legado(
+      nivel_atual,
+      estado,
+      cidade,
+      ncm,
+      produto_codigo,
+      offset_consulta,
+    )
+    nivel_resolvido = resolver_nivel_hierarquia(nivel_atual, estado, cidade, ncm)
+    resultado = self.repository.analisar_fiscal_hierarquia(
+      where_clause_documentos=where_clause_documentos,
+      where_clause_kpis=where_clause_kpis,
+      where_clause_base=where_clause_base,
+      params_kpis=params_kpis,
+      params_cte=params_cte,
+      params_base=params_base,
+      nivel_resolvido=nivel_resolvido,
+      limite_consulta=limite_consulta,
+      offset_consulta=offset_consulta,
+      modo_legado_hierarquia_completa=modo_legado_hierarquia_completa,
+    )
+
+    total_impostos_periodo = resultado["total_impostos_periodo"]
+    total_faturamento_periodo = resultado["total_faturamento_periodo"]
+    percentual_total = calcular_percentual_imposto(total_impostos_periodo, total_faturamento_periodo)
+    resumo_row = resultado["resumo_row"]
+    total_impostos_complementares = resumo_row[1] if resumo_row else Decimal("0.00")
+    usar_impostos_complementares = total_impostos_complementares > 0
+    (
+      total_faturamento,
+      total_impostos_complementares,
+      total_impostos,
+      resumo_row,
+      hierarquia,
+      total_registros_nivel,
+      itens_nivel_atual,
+      por_estado,
+      por_cidade,
+      por_ncm,
+      por_produto,
+    ) = self._montar_dados_hierarquia_fiscal(
+      resultado,
+      nivel_resolvido,
+      usar_impostos_complementares,
+      percentual_total,
+      modo_legado_hierarquia_completa,
+    )
 
     total_tributos_reforma = obter_total_tributos_reforma_documentos(
       self.conn_params,

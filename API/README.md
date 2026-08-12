@@ -204,7 +204,6 @@ OPENAI_REPORT_MODEL=gpt-4o-mini
 - `GET /api/nfe/analise/fiscal/hierarquia`
 - `GET /api/nfe/analise/compras/dashboard`
 - `GET /api/nfe/analise/vendas/dashboard`
-- `GET /api/nfe/notas`
 - `GET /api/nfe/notas/detalhado`
 
 ### SPED

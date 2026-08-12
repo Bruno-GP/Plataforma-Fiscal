@@ -595,21 +595,6 @@ def comparar_kpis_mensal_atual(
 # -------------------------
 # Consulta de notas (detalhado)
 # -------------------------
-@nfe_router.get("/notas", response_model=ConsultaNFeResponse)
-def consultar_notas(
-  emitente_cnpj: str | None = Query(default=None),
-  periodo_ano: int | None = Query(default=None, ge=2000, le=2100),
-  periodo_mes: int | None = Query(default=None, ge=1, le=12),
-  limite: int = Query(default=100, ge=1, le=500),
-  offset: int = Query(default=0, ge=0),
-):
-  # ⚠️ Ainda não existe um service de consulta detalhada de notas no seu código.
-  # Mantive a rota separada para o front/Make já ficar com a arquitetura certa.
-  raise HTTPException(
-    status_code=status.HTTP_501_NOT_IMPLEMENTED,
-    detail="Consulta detalhada de notas ainda não implementada. Use GET /nfe/kpis para KPIs consolidados.",
-  )
-
 @nfe_router.get("/notas/detalhado", response_model=ConsultaNFeResponse)
 def consultar_notas_detalhadas(
   emitente_resolvido: str = Depends(get_emitente_resolvido_nfe),

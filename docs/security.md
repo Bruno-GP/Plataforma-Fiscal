@@ -49,7 +49,6 @@ Todas as rotas abaixo estao em roteadores com dependencia de autenticacao. O esc
 | `GET /api/nfe/analise/vendas/dashboard` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
 | `GET /api/nfe/kpis/comparativo` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
 | `GET /api/nfe/kpis/comparativo/atual` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
-| `GET /api/nfe/notas` | Sim | Sim | `emitente_cnpj` quando enviado | Rota nao implementada (`501`); service detalhado ainda nao existe. |
 | `GET /api/nfe/notas/detalhado` | Sim | Sim | `emitente_cnpj` ou `email` quando enviados | Mesma protecao do `GET /api/nfe/kpis`. |
 | `POST /api/sped/processar` | Sim | Sim | `cnpj_empresa_origem` | Rota batch/legada, nao usada pelo Painel. Exige `cnpj_empresa_origem`, restringe `arquivo_sped` a `PROCESSAMENTO_BATCH_ROOT_DIR` (sem path traversal). Sem extracao de CNPJ do conteudo para conferencia adicional. |
 | `POST /api/sped/importar` | Sim | Sim | `cnpj_empresa_origem` | Tambem valida `tem_sped=true` e CNPJ do registro `0000`. |

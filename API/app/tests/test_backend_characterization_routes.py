@@ -823,13 +823,6 @@ class FakeOpenAIReportService:
         return f"clientes:{formato_relatorio}"
 
 
-def test_nfe_notas_nao_implementado_preserva_501(client):
-    response = client.get(f"/api/nfe/notas?emitente_cnpj={CNPJ}")
-
-    assert response.status_code == 501
-    assert "não implementada" in response.json()["detail"] or "implementada" in response.json()["detail"]
-
-
 def test_nfe_notas_detalhado_preserva_periodo_default_paginacao_e_tributos(client, monkeypatch):
     consulta_service = FakeNFeConsultaService()
     FakeNFeNotasRepository.instances = []

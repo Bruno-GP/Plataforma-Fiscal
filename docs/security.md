@@ -59,7 +59,7 @@ Todas as rotas abaixo estao em roteadores com dependencia de autenticacao. O esc
 | `GET /api/sped/clientes` | Sim | Sim | `emitente_cnpj` | Endpoint legado/auxiliar de clientes SPED. |
 | `GET /api/sped/analise/*` | Sim | Sim | `emitente_cnpj` | Inclui compras, vendas, clientes, fiscal CFOP/NCM/hierarquia. |
 | `GET /api/sped/analise/*/dashboard` | Sim | Sim | `emitente_cnpj` | Inclui dashboards de compras e vendas. |
-| `POST /api/ncm/ibpt/sincronizar` | Sim | Nao | Nenhum CNPJ | Operacao global de catalogo/IBPT, sem role/admin no sistema. Qualquer usuario autenticado pode disparar, mas protegido por cooldown global (`IBPT_SYNC_MIN_INTERVAL_SECONDS`, `429` se chamado de novo antes do intervalo) contra abuso/DoS. RBAC continua pendente. |
+| `POST /api/ncm/ibpt/sincronizar` | Sim | Nao | Nenhum CNPJ | Operacao global de catalogo/IBPT. Exige `require_ibpt_sync_admin`: email do usuario autenticado precisa estar em `IBPT_SYNC_ADMIN_EMAILS` (allowlist via env var, fail-closed — `403` se a env var nao estiver configurada ou o email nao constar). Tambem protegido por cooldown global (`IBPT_SYNC_MIN_INTERVAL_SECONDS`, `429` se chamado de novo antes do intervalo). |
 | `GET /api/ncm/tributacao` | Sim | Nao | Nenhum CNPJ | Consulta global por NCM/UF. |
 | `GET /api/reforma-tributaria/tributos` | Sim | Parcial | Nenhum CNPJ | Catalogo global; usa `require_company_scope`, mas nao ha parametro de empresa. |
 | `GET /api/reforma-tributaria/apuracao` | Sim | Sim | `emitente_cnpj` | Consulta por empresa. |
@@ -103,6 +103,7 @@ Obrigatorias ou sensiveis em producao:
 - configuracoes de cookie: `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_COOKIE_DOMAIN`.
 - `PROCESSAMENTO_BATCH_ROOT_DIR`: raiz permitida para `pasta_xml`/`arquivo_sped` nas rotas batch/legadas `POST /api/nfe/processar` e `POST /api/sped/processar`. Sem essa variavel, as duas rotas retornam `400` (desabilitadas por padrao).
 - `IBPT_SYNC_MIN_INTERVAL_SECONDS`: cooldown global (segundos, padrao `300`) para `POST /api/ncm/ibpt/sincronizar`.
+- `IBPT_SYNC_ADMIN_EMAILS`: lista de emails (separados por virgula) autorizados a chamar `POST /api/ncm/ibpt/sincronizar`. Fail-closed: vazia ou ausente = `403` para todos.
 
 ## OpenAI e dados fiscais
 

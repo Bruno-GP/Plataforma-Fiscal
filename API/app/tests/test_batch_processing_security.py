@@ -113,9 +113,32 @@ def test_ibpt_sincronizar_aplica_cooldown(client, monkeypatch):
         lambda self, uf, todas_ufs, ncm: [],
     )
     monkeypatch.setattr("app.api.ncm.routes.get_ibpt_sync_min_interval_seconds", lambda: 300)
+    monkeypatch.setattr(
+        "app.core.security.get_ibpt_sync_admin_emails",
+        lambda: {"teste@example.com"},
+    )
 
     primeira = client.post("/api/ncm/ibpt/sincronizar", json={"uf": "SC"})
     segunda = client.post("/api/ncm/ibpt/sincronizar", json={"uf": "SC"})
 
     assert primeira.status_code == 200
     assert segunda.status_code == 429
+
+
+def test_ibpt_sincronizar_rejeita_usuario_fora_da_allowlist(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.core.security.get_ibpt_sync_admin_emails",
+        lambda: {"outro-admin@example.com"},
+    )
+
+    response = client.post("/api/ncm/ibpt/sincronizar", json={"uf": "SC"})
+
+    assert response.status_code == 403
+
+
+def test_ibpt_sincronizar_rejeita_quando_allowlist_vazia(client, monkeypatch):
+    monkeypatch.setattr("app.core.security.get_ibpt_sync_admin_emails", lambda: set())
+
+    response = client.post("/api/ncm/ibpt/sincronizar", json={"uf": "SC"})
+
+    assert response.status_code == 403

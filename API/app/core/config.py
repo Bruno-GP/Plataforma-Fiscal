@@ -226,3 +226,12 @@ def get_ibpt_sync_min_interval_seconds() -> int:
     except ValueError as exc:
         raise ValueError("IBPT_SYNC_MIN_INTERVAL_SECONDS deve ser um inteiro.") from exc
     return max(parsed, 0)
+
+
+def get_ibpt_sync_admin_emails() -> set[str]:
+    raw_value = os.getenv("IBPT_SYNC_ADMIN_EMAILS", "")
+    return {
+        email.strip().lower()
+        for email in raw_value.split(",")
+        if email.strip()
+    }

@@ -12,6 +12,7 @@ from app.core.audit import log_security_event
 from app.core.config import (
     get_auth_secret_key,
     get_auth_token_expire_minutes,
+    get_ibpt_sync_admin_emails,
     get_session_cookie_domain,
     get_session_cookie_name,
     get_session_cookie_path,
@@ -190,6 +191,28 @@ def get_current_user(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Autenticação obrigatória.",
     )
+
+
+def require_ibpt_sync_admin(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> AuthenticatedUser:
+    admin_emails = get_ibpt_sync_admin_emails()
+    if current_user.email not in admin_emails:
+        log_security_event(
+            "access_denied",
+            outcome="rejected",
+            reason="ibpt_sync_not_admin",
+            login_id=current_user.login_id,
+            empresa_id=current_user.empresa_id,
+            email=current_user.email,
+            cnpj=current_user.cnpj,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para sincronizar o catálogo IBPT.",
+        )
+
+    return current_user
 
 
 def require_company_scope(

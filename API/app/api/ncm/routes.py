@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.security import AuthenticatedUser, get_current_user
+from app.core.security import AuthenticatedUser, get_current_user, require_ibpt_sync_admin
 from app.core.config import get_ibpt_sync_min_interval_seconds
 from app.core.rate_limit import ibpt_sync_limiter
 from app.models.nfe.schemas import (
@@ -19,7 +19,7 @@ ncm_router = APIRouter(prefix="/ncm", tags=["NCM"], dependencies=[Depends(get_cu
 @ncm_router.post("/ibpt/sincronizar", response_model=IBPTSyncResponse)
 def sincronizar_ibpt(
     request: IBPTSyncRequest,
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(require_ibpt_sync_admin),
 ):
     ibpt_sync_limiter.check(
         "global",

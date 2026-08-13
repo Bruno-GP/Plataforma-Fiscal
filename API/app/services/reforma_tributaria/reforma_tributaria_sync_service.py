@@ -324,100 +324,16 @@ class ReformaTributariaSyncService:
     notas_reconstruidas: set[int] = set()
 
     for xml_id, nome_arquivo, conteudo_xml in xmls_importados:
-      root = parse_xml_importado(conteudo_xml)
-      if root is None:
-        continue
-
-      inf = root.find(".//nfe:infNFe", NS) or encontrar_elemento_local(root, "infNFe")
-      if inf is None:
-        continue
-
-      ide = inf.find("nfe:ide", NS) or encontrar_filho_local(inf, "ide")
-      emit = inf.find("nfe:emit", NS) or encontrar_filho_local(inf, "emit")
-      if ide is None or emit is None:
-        continue
-
-      emitente_xml = normalizar_cnpj(
-        texto_filho_local(emit, "CNPJ") or texto_filho_local(emit, "CPF")
+      self._processar_xml_reforma_importado(
+        cur,
+        cnpj,
+        periodo_ano,
+        periodo_mes,
+        conteudo_xml,
+        resumo,
+        notas_reconstruidas,
+        nota_ids_reforma,
       )
-      if emitente_xml != cnpj:
-        continue
-
-      numero_nf = normalizar_numero_nf(texto_filho_local(ide, "nNF"))
-      modelo = texto_filho_local(ide, "mod")
-      dh_emi = texto_filho_local(ide, "dhEmi")
-      d_emi = texto_filho_local(ide, "dEmi")
-      if not numero_nf or not (dh_emi or d_emi):
-        continue
-
-      try:
-        data_emissao = _parse_data_emissao(dh_emi, d_emi)
-      except ValueError:
-        continue
-
-      if data_emissao.year != periodo_ano or data_emissao.month != periodo_mes:
-        continue
-
-      resumo["xmls_periodo"] += 1
-      xml_tem_reforma = False
-
-      for det in encontrar_filhos_local(inf, "det"):
-        tributos_reforma = _extrair_tributos_reforma_item(det)
-        if not tributos_reforma:
-          continue
-
-        xml_tem_reforma = True
-        prod = det.find("nfe:prod", NS) or encontrar_filho_local(det, "prod")
-        numero_item = int(det.attrib.get("nItem") or 0)
-        produto_codigo = texto_filho_local(prod, "cProd") if prod is not None else ""
-        ncm = texto_filho_local(prod, "NCM") if prod is not None else ""
-        cfop = texto_filho_local(prod, "CFOP") if prod is not None else ""
-
-        item_row = _rt_sync_repository.buscar_item_nfe_para_xml_importado(
-          cur,
-          cnpj,
-          str(numero_nf),
-          modelo,
-          data_emissao,
-          numero_item,
-          produto_codigo,
-        )
-        if not item_row:
-          continue
-
-        nota_id, nota_item_id, empresa_cnpj = item_row
-        nota_id = int(nota_id)
-        if nota_id not in notas_reconstruidas:
-          remover_tributos_reforma_nota(
-            cur,
-            nota_id=nota_id,
-            codigos_tributos=self.TRIBUTOS_REFORMA,
-          )
-          notas_reconstruidas.add(nota_id)
-
-        inseriu_item = False
-        for tributo in tributos_reforma:
-          if inserir_tributo_reforma_item_importado(
-            cur=cur,
-            nota_item_id=int(nota_item_id),
-            empresa_cnpj=empresa_cnpj,
-            periodo_ano=periodo_ano,
-            periodo_mes=periodo_mes,
-            numero_item=numero_item,
-            produto_codigo=produto_codigo,
-            ncm=ncm,
-            cfop=cfop,
-            tributo=tributo,
-          ):
-            inseriu_item = True
-            resumo["tributos_reforma_inseridos"] += 1
-
-        if inseriu_item:
-          resumo["itens_reforma_xml"] += 1
-          nota_ids_reforma.add(nota_id)
-
-      if xml_tem_reforma:
-        resumo["xmls_com_reforma"] += 1
 
     if nota_ids_reforma:
       NFeItensService()._registrar_documentos_reforma_agregados(
@@ -427,6 +343,146 @@ class ReformaTributariaSyncService:
 
     resumo["notas_reforma_reconstruidas"] = len(nota_ids_reforma)
     return resumo
+
+  def _processar_xml_reforma_importado(
+    self,
+    cur,
+    cnpj: str,
+    periodo_ano: int,
+    periodo_mes: int,
+    conteudo_xml: bytes,
+    resumo: dict,
+    notas_reconstruidas: set[int],
+    nota_ids_reforma: set[int],
+  ) -> None:
+    """Filtra um XML importado pelo período/CNPJ e processa seus itens de reforma tributária."""
+
+    root = parse_xml_importado(conteudo_xml)
+    if root is None:
+      return
+
+    inf = root.find(".//nfe:infNFe", NS) or encontrar_elemento_local(root, "infNFe")
+    if inf is None:
+      return
+
+    ide = inf.find("nfe:ide", NS) or encontrar_filho_local(inf, "ide")
+    emit = inf.find("nfe:emit", NS) or encontrar_filho_local(inf, "emit")
+    if ide is None or emit is None:
+      return
+
+    emitente_xml = normalizar_cnpj(
+      texto_filho_local(emit, "CNPJ") or texto_filho_local(emit, "CPF")
+    )
+    if emitente_xml != cnpj:
+      return
+
+    numero_nf = normalizar_numero_nf(texto_filho_local(ide, "nNF"))
+    modelo = texto_filho_local(ide, "mod")
+    dh_emi = texto_filho_local(ide, "dhEmi")
+    d_emi = texto_filho_local(ide, "dEmi")
+    if not numero_nf or not (dh_emi or d_emi):
+      return
+
+    try:
+      data_emissao = _parse_data_emissao(dh_emi, d_emi)
+    except ValueError:
+      return
+
+    if data_emissao.year != periodo_ano or data_emissao.month != periodo_mes:
+      return
+
+    resumo["xmls_periodo"] += 1
+    xml_tem_reforma = False
+
+    for det in encontrar_filhos_local(inf, "det"):
+      if self._processar_item_reforma_xml(
+        cur,
+        det,
+        cnpj,
+        numero_nf,
+        modelo,
+        data_emissao,
+        periodo_ano,
+        periodo_mes,
+        resumo,
+        notas_reconstruidas,
+        nota_ids_reforma,
+      ):
+        xml_tem_reforma = True
+
+    if xml_tem_reforma:
+      resumo["xmls_com_reforma"] += 1
+
+  def _processar_item_reforma_xml(
+    self,
+    cur,
+    det,
+    cnpj: str,
+    numero_nf: str,
+    modelo: str | None,
+    data_emissao,
+    periodo_ano: int,
+    periodo_mes: int,
+    resumo: dict,
+    notas_reconstruidas: set[int],
+    nota_ids_reforma: set[int],
+  ) -> bool:
+    """Extrai tributos de reforma de um item `det` e grava; retorna se o item tinha reforma."""
+
+    tributos_reforma = _extrair_tributos_reforma_item(det)
+    if not tributos_reforma:
+      return False
+
+    prod = det.find("nfe:prod", NS) or encontrar_filho_local(det, "prod")
+    numero_item = int(det.attrib.get("nItem") or 0)
+    produto_codigo = texto_filho_local(prod, "cProd") if prod is not None else ""
+    ncm = texto_filho_local(prod, "NCM") if prod is not None else ""
+    cfop = texto_filho_local(prod, "CFOP") if prod is not None else ""
+
+    item_row = _rt_sync_repository.buscar_item_nfe_para_xml_importado(
+      cur,
+      cnpj,
+      str(numero_nf),
+      modelo,
+      data_emissao,
+      numero_item,
+      produto_codigo,
+    )
+    if not item_row:
+      return True
+
+    nota_id, nota_item_id, empresa_cnpj = item_row
+    nota_id = int(nota_id)
+    if nota_id not in notas_reconstruidas:
+      remover_tributos_reforma_nota(
+        cur,
+        nota_id=nota_id,
+        codigos_tributos=self.TRIBUTOS_REFORMA,
+      )
+      notas_reconstruidas.add(nota_id)
+
+    inseriu_item = False
+    for tributo in tributos_reforma:
+      if inserir_tributo_reforma_item_importado(
+        cur=cur,
+        nota_item_id=int(nota_item_id),
+        empresa_cnpj=empresa_cnpj,
+        periodo_ano=periodo_ano,
+        periodo_mes=periodo_mes,
+        numero_item=numero_item,
+        produto_codigo=produto_codigo,
+        ncm=ncm,
+        cfop=cfop,
+        tributo=tributo,
+      ):
+        inseriu_item = True
+        resumo["tributos_reforma_inseridos"] += 1
+
+    if inseriu_item:
+      resumo["itens_reforma_xml"] += 1
+      nota_ids_reforma.add(nota_id)
+
+    return True
 
   def _inserir_creditos_debitos_nfe(
     self,

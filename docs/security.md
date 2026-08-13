@@ -122,3 +122,9 @@ O relatorio IA e apoio analitico. Ele pode interpretar dados incorretamente e na
 - Registrar auditoria de login, rejeicoes de upload e negacoes de acesso.
 - Fazer backup criptografado do banco.
 - Revisar qualquer novo endpoint para escopo multiempresa.
+
+## Auditoria de seguranca (decisao registrada em 2026-08-13)
+
+`log_security_event` (`API/app/core/audit.py`) grava eventos de auditoria (login, rejeicoes de upload, negacoes de acesso) via logger `security.audit`, formatado como JSON estruturado por `JsonFormatter` (`API/app/core/logger.py`) e enviado a um `StreamHandler` (stdout), com sanitizacao de email/CNPJ/token antes de logar.
+
+Decisao: log estruturado em stdout e suficiente como mecanismo de auditoria, **desde que producao capture esse stdout com um agregador de log externo** (ex.: ELK, Datadog, CloudWatch ou equivalente) — a API em si nao persiste nem expoe endpoint de consulta para esses eventos. Se essa premissa deixar de valer (ambiente de producao sem agregador de log configurado, ou requisito de compliance que exija auditoria consultavel dentro da propria aplicacao), a decisao deve ser revisitada e uma tabela/sistema de auditoria dedicado passa a ser necessario.

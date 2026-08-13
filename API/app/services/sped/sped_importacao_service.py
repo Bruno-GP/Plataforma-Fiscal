@@ -15,6 +15,37 @@ from app.repositories.sped.sped_importacao_repository import SpedImportacaoRepos
 from app.services.reforma_tributaria.reforma_tributaria_sync_service import ReformaTributariaSyncService
 
 
+_UF_POR_CODIGO_MUNICIPIO: dict[str, str] = {
+  "11": "RO",
+  "12": "AC",
+  "13": "AM",
+  "14": "RR",
+  "15": "PA",
+  "16": "AP",
+  "17": "TO",
+  "21": "MA",
+  "22": "PI",
+  "23": "CE",
+  "24": "RN",
+  "25": "PB",
+  "26": "PE",
+  "27": "AL",
+  "28": "SE",
+  "29": "BA",
+  "31": "MG",
+  "32": "ES",
+  "33": "RJ",
+  "35": "SP",
+  "41": "PR",
+  "42": "SC",
+  "43": "RS",
+  "50": "MS",
+  "51": "MT",
+  "52": "GO",
+  "53": "DF",
+}
+
+
 @dataclass
 class SpedImportacaoResultado:
   arquivo: str
@@ -200,128 +231,198 @@ class SpedImportacaoService:
       registro = partes[1]
 
       if registro == "0150":
-        codigo = (partes[2] if len(partes) > 2 else "").strip()
-        if not codigo:
-          continue
-        nome = (partes[3] if len(partes) > 3 else "").strip() or "Participante não identificado"
-        cnpj_cpf = self._normalizar_documento((partes[5] if len(partes) > 5 else "").strip())
-        codigo_municipio = (partes[8] if len(partes) > 8 else "").strip()
-        municipio = codigo_municipio or None
-        municipio_nome = self._obter_nome_municipio(codigo_municipio) or "Cidade não identificada"
-        uf = self._extrair_uf_de_cod_municipio(codigo_municipio)
-        participantes[codigo] = (nome, cnpj_cpf, municipio, municipio_nome, uf)
+        self._processar_registro_0150(partes, participantes)
         continue
 
       if registro == "0200":
-        codigo_item = (partes[2] if len(partes) > 2 else "").strip()
-        if not codigo_item:
-          continue
-        descricao = normalizar_nome_produto(
-          (partes[3] if len(partes) > 3 else "").strip()
-        ) or "Produto não identificado"
-        unidade = (partes[6] if len(partes) > 6 else "").strip() or None
-        tipo_item = (partes[7] if len(partes) > 7 else "").strip() or None
-        ncm = (partes[8] if len(partes) > 8 else "").strip() or None
-        produtos[codigo_item] = (descricao, ncm, unidade, tipo_item)
+        self._processar_registro_0200(partes, produtos)
         continue
 
       if registro == "C100":
-        cod_part = (partes[4] if len(partes) > 4 else "").strip()
-        participante_id = repository.upsert_participante(
+        documento_id_atual = self._processar_registro_c100(
           conn,
+          repository,
+          partes,
           participante_ids,
           participantes,
           cnpj_emitente,
-          cod_part,
-        )
-
-        data_emissao = self._to_date(partes[10] if len(partes) > 10 else None)
-        data_movimentacao = self._to_date(partes[11] if len(partes) > 11 else None)
-
-        documento_id_atual = repository.salvar_documento(
-          conn,
-          cnpj_emitente,
-          participante_id,
-          self._to_int(partes[5] if len(partes) > 5 else None),
-          (partes[7] if len(partes) > 7 else None) or None,
-          self._to_int(partes[8] if len(partes) > 8 else None),
-          (partes[9] if len(partes) > 9 else None) or None,
-          "saida" if (partes[2] if len(partes) > 2 else "") == "1" else "entrada",
-          data_emissao,
-          data_movimentacao,
-          self._to_decimal(partes[12] if len(partes) > 12 else None),
-          self._to_decimal(partes[16] if len(partes) > 16 else None),
-          self._to_decimal(partes[18] if len(partes) > 18 else None),
-          self._to_decimal(partes[14] if len(partes) > 14 else None),
           importacao_id,
         )
         continue
 
       if registro == "E100":
-        data_inicio = self._to_date(partes[2] if len(partes) > 2 else None)
-        if data_inicio:
-          periodo_ano = int(data_inicio.year)
-          periodo_mes = int(data_inicio.month)
+        periodo = self._processar_registro_e100(partes)
+        if periodo:
+          periodo_ano, periodo_mes = periodo
         continue
 
       if registro == "E110" and periodo_ano and periodo_mes:
-        total_debitos = self._to_decimal(partes[2] if len(partes) > 2 else None)
-        ajustes_debitos = self._to_decimal(partes[3] if len(partes) > 3 else None)
-        total_creditos = self._to_decimal(partes[6] if len(partes) > 6 else None)
-        ajustes_creditos = self._to_decimal(partes[7] if len(partes) > 7 else None)
-        saldo_apurado = self._to_decimal(partes[11] if len(partes) > 11 else None)
-        valor_icms_recolher = self._to_decimal(partes[13] if len(partes) > 13 else None)
-        saldo_credor_transportar = self._to_decimal(partes[14] if len(partes) > 14 else None)
-        debitos_especiais = self._to_decimal(partes[15] if len(partes) > 15 else None)
-
-        repository.upsert_apuracao_icms(
-          conn,
-          cnpj_emitente,
-          periodo_ano,
-          periodo_mes,
-          total_debitos,
-          ajustes_debitos,
-          total_creditos,
-          ajustes_creditos,
-          saldo_apurado,
-          valor_icms_recolher,
-          saldo_credor_transportar,
-          debitos_especiais,
-        )
+        self._processar_registro_e110(conn, repository, partes, cnpj_emitente, periodo_ano, periodo_mes)
         continue
 
       if registro == "C170" and documento_id_atual:
-        codigo_item = (partes[3] if len(partes) > 3 else "").strip()
-        produto_id = repository.upsert_produto(
+        self._processar_registro_c170(
           conn,
+          repository,
+          partes,
           produto_ids,
           produtos,
           cnpj_emitente,
-          codigo_item,
-        )
-        quantidade = self._to_decimal(partes[5] if len(partes) > 5 else None)
-        valor_total_item = self._to_decimal(partes[7] if len(partes) > 7 else None)
-
-        repository.salvar_item(
-          conn,
           documento_id_atual,
-          produto_id,
-          self._to_int(partes[2] if len(partes) > 2 else None),
-          (partes[11] if len(partes) > 11 else None) or None,
-          quantidade,
-          self._calcular_valor_unitario(valor_total_item, quantidade),
-          valor_total_item,
-          self._to_decimal(partes[8] if len(partes) > 8 else None),
-          (partes[10] if len(partes) > 10 else None) or None,
-          self._to_decimal(partes[13] if len(partes) > 13 else None),
-          self._to_decimal(partes[14] if len(partes) > 14 else None),
-          self._to_decimal(partes[15] if len(partes) > 15 else None),
-          self._to_decimal(partes[22] if len(partes) > 22 else None),
-          self._to_decimal(partes[23] if len(partes) > 23 else None),
-          self._to_decimal(partes[24] if len(partes) > 24 else None),
-          self._to_decimal(partes[30] if len(partes) > 30 else None),
-          self._to_decimal(partes[36] if len(partes) > 36 else None),
         )
+
+  def _processar_registro_0150(
+    self,
+    partes: list[str],
+    participantes: dict[str, tuple[str, str | None, str | None, str | None, str | None]],
+  ) -> None:
+    codigo = (partes[2] if len(partes) > 2 else "").strip()
+    if not codigo:
+      return
+    nome = (partes[3] if len(partes) > 3 else "").strip() or "Participante não identificado"
+    cnpj_cpf = self._normalizar_documento((partes[5] if len(partes) > 5 else "").strip())
+    codigo_municipio = (partes[8] if len(partes) > 8 else "").strip()
+    municipio = codigo_municipio or None
+    municipio_nome = self._obter_nome_municipio(codigo_municipio) or "Cidade não identificada"
+    uf = self._extrair_uf_de_cod_municipio(codigo_municipio)
+    participantes[codigo] = (nome, cnpj_cpf, municipio, municipio_nome, uf)
+
+  def _processar_registro_0200(
+    self,
+    partes: list[str],
+    produtos: dict[str, tuple[str, str | None, str | None, str | None]],
+  ) -> None:
+    codigo_item = (partes[2] if len(partes) > 2 else "").strip()
+    if not codigo_item:
+      return
+    descricao = normalizar_nome_produto(
+      (partes[3] if len(partes) > 3 else "").strip()
+    ) or "Produto não identificado"
+    unidade = (partes[6] if len(partes) > 6 else "").strip() or None
+    tipo_item = (partes[7] if len(partes) > 7 else "").strip() or None
+    ncm = (partes[8] if len(partes) > 8 else "").strip() or None
+    produtos[codigo_item] = (descricao, ncm, unidade, tipo_item)
+
+  def _processar_registro_c100(
+    self,
+    conn: object,
+    repository: SpedImportacaoRepository,
+    partes: list[str],
+    participante_ids: dict[str, int],
+    participantes: dict[str, tuple[str, str | None, str | None, str | None, str | None]],
+    cnpj_emitente: str,
+    importacao_id: int,
+  ) -> int:
+    cod_part = (partes[4] if len(partes) > 4 else "").strip()
+    participante_id = repository.upsert_participante(
+      conn,
+      participante_ids,
+      participantes,
+      cnpj_emitente,
+      cod_part,
+    )
+
+    data_emissao = self._to_date(partes[10] if len(partes) > 10 else None)
+    data_movimentacao = self._to_date(partes[11] if len(partes) > 11 else None)
+
+    return repository.salvar_documento(
+      conn,
+      cnpj_emitente,
+      participante_id,
+      self._to_int(partes[5] if len(partes) > 5 else None),
+      (partes[7] if len(partes) > 7 else None) or None,
+      self._to_int(partes[8] if len(partes) > 8 else None),
+      (partes[9] if len(partes) > 9 else None) or None,
+      "saida" if (partes[2] if len(partes) > 2 else "") == "1" else "entrada",
+      data_emissao,
+      data_movimentacao,
+      self._to_decimal(partes[12] if len(partes) > 12 else None),
+      self._to_decimal(partes[16] if len(partes) > 16 else None),
+      self._to_decimal(partes[18] if len(partes) > 18 else None),
+      self._to_decimal(partes[14] if len(partes) > 14 else None),
+      importacao_id,
+    )
+
+  def _processar_registro_e100(self, partes: list[str]) -> tuple[int, int] | None:
+    data_inicio = self._to_date(partes[2] if len(partes) > 2 else None)
+    if not data_inicio:
+      return None
+    return int(data_inicio.year), int(data_inicio.month)
+
+  def _processar_registro_e110(
+    self,
+    conn: object,
+    repository: SpedImportacaoRepository,
+    partes: list[str],
+    cnpj_emitente: str,
+    periodo_ano: int,
+    periodo_mes: int,
+  ) -> None:
+    total_debitos = self._to_decimal(partes[2] if len(partes) > 2 else None)
+    ajustes_debitos = self._to_decimal(partes[3] if len(partes) > 3 else None)
+    total_creditos = self._to_decimal(partes[6] if len(partes) > 6 else None)
+    ajustes_creditos = self._to_decimal(partes[7] if len(partes) > 7 else None)
+    saldo_apurado = self._to_decimal(partes[11] if len(partes) > 11 else None)
+    valor_icms_recolher = self._to_decimal(partes[13] if len(partes) > 13 else None)
+    saldo_credor_transportar = self._to_decimal(partes[14] if len(partes) > 14 else None)
+    debitos_especiais = self._to_decimal(partes[15] if len(partes) > 15 else None)
+
+    repository.upsert_apuracao_icms(
+      conn,
+      cnpj_emitente,
+      periodo_ano,
+      periodo_mes,
+      total_debitos,
+      ajustes_debitos,
+      total_creditos,
+      ajustes_creditos,
+      saldo_apurado,
+      valor_icms_recolher,
+      saldo_credor_transportar,
+      debitos_especiais,
+    )
+
+  def _processar_registro_c170(
+    self,
+    conn: object,
+    repository: SpedImportacaoRepository,
+    partes: list[str],
+    produto_ids: dict[str, int],
+    produtos: dict[str, tuple[str, str | None, str | None, str | None]],
+    cnpj_emitente: str,
+    documento_id_atual: int,
+  ) -> None:
+    codigo_item = (partes[3] if len(partes) > 3 else "").strip()
+    produto_id = repository.upsert_produto(
+      conn,
+      produto_ids,
+      produtos,
+      cnpj_emitente,
+      codigo_item,
+    )
+    quantidade = self._to_decimal(partes[5] if len(partes) > 5 else None)
+    valor_total_item = self._to_decimal(partes[7] if len(partes) > 7 else None)
+
+    repository.salvar_item(
+      conn,
+      documento_id_atual,
+      produto_id,
+      self._to_int(partes[2] if len(partes) > 2 else None),
+      (partes[11] if len(partes) > 11 else None) or None,
+      quantidade,
+      self._calcular_valor_unitario(valor_total_item, quantidade),
+      valor_total_item,
+      self._to_decimal(partes[8] if len(partes) > 8 else None),
+      (partes[10] if len(partes) > 10 else None) or None,
+      self._to_decimal(partes[13] if len(partes) > 13 else None),
+      self._to_decimal(partes[14] if len(partes) > 14 else None),
+      self._to_decimal(partes[15] if len(partes) > 15 else None),
+      self._to_decimal(partes[22] if len(partes) > 22 else None),
+      self._to_decimal(partes[23] if len(partes) > 23 else None),
+      self._to_decimal(partes[24] if len(partes) > 24 else None),
+      self._to_decimal(partes[30] if len(partes) > 30 else None),
+      self._to_decimal(partes[36] if len(partes) > 36 else None),
+    )
 
   def _normalizar_cnpj(self, cnpj: str | None) -> str | None:
     if not cnpj:
@@ -357,37 +458,7 @@ class SpedImportacaoService:
     if len(codigo_numerico) < 2:
       return None
 
-    uf_por_codigo: dict[str, str] = {
-      "11": "RO",
-      "12": "AC",
-      "13": "AM",
-      "14": "RR",
-      "15": "PA",
-      "16": "AP",
-      "17": "TO",
-      "21": "MA",
-      "22": "PI",
-      "23": "CE",
-      "24": "RN",
-      "25": "PB",
-      "26": "PE",
-      "27": "AL",
-      "28": "SE",
-      "29": "BA",
-      "31": "MG",
-      "32": "ES",
-      "33": "RJ",
-      "35": "SP",
-      "41": "PR",
-      "42": "SC",
-      "43": "RS",
-      "50": "MS",
-      "51": "MT",
-      "52": "GO",
-      "53": "DF",
-    }
-
-    return uf_por_codigo.get(codigo_numerico[:2])
+    return _UF_POR_CODIGO_MUNICIPIO.get(codigo_numerico[:2])
 
   def _obter_nome_municipio(self, codigo_municipio: str | None) -> str | None:
     codigo_numerico = "".join(ch for ch in str(codigo_municipio or "") if ch.isdigit())

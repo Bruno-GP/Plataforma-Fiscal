@@ -130,3 +130,9 @@ Consolidar o uso do Alembic com:
 - separacao clara entre DDL de desenvolvimento e DDL de producao;
 - migrations para estruturas hoje criadas em runtime;
 - validacao de schema no CI antes de deploy.
+
+## Modulo Metas
+
+- Alembic `20260813_0012`: cria `indicadores` (catalogo fixo, seed de 6 indicadores XML), `indicador_historico` (materializado por `materializar_indicadores_historico_task`, fonte `notas_kpis`) e `metas`.
+- `API/app/services/metas/metas_repository.py`, `API/app/services/metas/metas_historico_service.py` e `API/app/workers/metas_tasks.py` validam essas tabelas antes de operar o modulo Metas.
+- `API/app/tests/test_database_schema.py` cobre o head do Alembic e deve ser mantido em sincronia com novas migrations.

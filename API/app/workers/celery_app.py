@@ -54,6 +54,7 @@ else:
             "app.workers.nfe_tasks",
             "app.workers.sped_tasks",
             "app.workers.conta_azul_tasks",
+            "app.workers.metas_tasks",
         ],
     )
 
@@ -77,6 +78,11 @@ else:
                 "task": "sincronizar_kpis_conta_azul_task",
                 "schedule": crontab(hour=3, minute=0),
                 "options": {"queue": "conta_azul"},
+            },
+            "materializar-indicadores-historico-diario": {
+                "task": "materializar_indicadores_historico_task",
+                "schedule": crontab(hour=4, minute=0),
+                "options": {"queue": "default"},
             },
         },
     )

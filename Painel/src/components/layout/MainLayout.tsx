@@ -9,7 +9,6 @@ import { isContaAzulDashboardOnly, isXmlOnboardingLocked } from '@/utils/workspa
 
 import { AppHeader } from './AppHeader';
 import { AppSidebar } from './AppSidebar';
-// import { ChatWidget } from '@/components/chat/ChatWidget';
 
 interface MainLayoutProps {
   children: ReactNode;

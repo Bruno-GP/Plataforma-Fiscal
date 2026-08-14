@@ -235,7 +235,7 @@ def test_api_startup_does_not_mutate_database_schema():
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 
-    assert revision == "20260612_0008"
+    assert revision == "20260813_0012"
 
 
 def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):

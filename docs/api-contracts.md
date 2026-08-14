@@ -383,3 +383,40 @@ Erros comuns: `400` parametros invalidos/fluxo errado, `403` CNPJ fora do escopo
 - Response (`ConsultaMemoriaCalculoTributariaResponse`): `status`, `emitente_cnpj`, `periodo_ano`, `periodo_mes`, `total`, `limite`, `offset`, `resultados`.
 - Item de `resultados`: `id`, `documento_tributo_id`, `item_tributo_id`, `credito_tributario_id`, `debito_tributario_id`, `tributo_codigo`, `tributo_nome`, `empresa_cnpj`, `periodo_ano`, `periodo_mes`, `etapa_calculo`, `base_origem`, `base_calculo`, `aliquota_aplicada`, `percentual_reducao_base`, `percentual_diferimento`, `valor_calculado`, `formula_calculo`, `parametros_calculo`, `resultado_calculo`, `fonte_dados`, `hash_calculo`, `criado_em`.
 - Observacao: use esta rota para rastrear valores ate documento/item de origem.
+
+## Metas
+
+### `POST /api/metas`
+
+- Autenticacao: sessao ativa. Escopo por `current_user.empresa_id` (sem `empresa_id` de query).
+- Body obrigatorio: `indicador_id`, `titulo`, `valor_alvo`, `tipo_meta`, `periodo_tipo`, `periodo_inicio`, `periodo_fim`.
+- Body opcional: `descricao`.
+- Erros: `400` indicador inexistente/inativo, `422` `periodo_fim < periodo_inicio` ou `valor_alvo <= 0`.
+
+### `GET /api/metas?status=&indicador_id=`
+
+- Lista metas da empresa da sessao, mais recentes primeiro.
+
+### `GET /api/metas/{id}`
+
+- `404` se a meta nao existe ou pertence a outra empresa.
+
+### `GET /api/metas/{id}/analise`
+
+- Retorna `AnaliseMetaResponse`: `percentual_atingido`, `tempo_decorrido_pct`, `status_ritmo` (`no_caminho`/`em_risco`/`fora_da_rota`), `tendencia` (5 faixas), `diagnostico`, `serie_historica`, `projecao_fim_periodo`, `comparativo_ano_anterior_pct` (`null` se historico < 12 meses).
+
+### `PATCH /api/metas/{id}`
+
+- Body opcional: `titulo`, `descricao`, `valor_alvo`, `status`.
+
+### `DELETE /api/metas/{id}`
+
+- Soft delete (`status = 'cancelada'`). Responde `204`.
+
+### `GET /api/indicadores?perfil=xml`
+
+- Catalogo fixo (seed via migration). Nesta fase so `perfil=xml` tem dado.
+
+### `GET /api/indicadores/{id}/historico?meses=12`
+
+- Serie mensal de `indicador_historico`, ordenada por periodo ascendente. Materializada pela task Celery `materializar_indicadores_historico_task` (diaria, 4h) a partir de `notas_kpis`.

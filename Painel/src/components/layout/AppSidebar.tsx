@@ -5,13 +5,12 @@ import {
   FileDigit,
   FileText,
   FileUp,
-  Headphones,
   LogOut,
   ReceiptText,
-  Scale,
   Settings,
   ShoppingCart,
   Sparkles,
+  Target,
   TrendingUp,
   Users,
 } from 'lucide-react';
@@ -89,6 +88,7 @@ const createNavigationGroups = (user?: Pick<SessionUser, 'tem_sped' | 'tem_conta
     {
       label: 'Relatorios',
       items: [
+        { label: 'Metas', path: '/metas', icon: Target },
         { label: 'Relatorios IA', path: '/relatorios-ia', icon: Sparkles },
       ],
     },
@@ -237,13 +237,6 @@ export function AppSidebar() {
 
       <SidebarFooter className="mt-auto border-t border-slate-700/70 bg-[#111827] p-4 group-data-[collapsible=icon]:px-2">
         <div className="space-y-2">
-          {/* <Button
-            variant="ghost"
-            className="w-full justify-start gap-3 text-slate-300 hover:bg-slate-800 hover:text-slate-50 group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
-          >
-            <Headphones className="h-4 w-4" />
-            <span className="group-data-[collapsible=icon]:hidden">Suporte</span>
-          </Button> */}
           <Button
             variant="ghost"
             onClick={handleLogout}

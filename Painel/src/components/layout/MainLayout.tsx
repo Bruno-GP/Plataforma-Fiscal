@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 
@@ -44,11 +44,18 @@ export function MainLayout({ children }: MainLayoutProps) {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider style={{ '--sidebar-width-icon': '4.5rem' } as CSSProperties}>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
 
-        <SidebarInset className="min-w-0 flex-1">
+        {/*
+          A div "gap" interna do ui/sidebar.tsx (que reserva espaco no fluxo pro
+          conteudo principal) usa a mesma sintaxe v3 quebrada em v4 e sempre mede
+          0px, entao o main nunca era empurrado pra direita do sidebar fixo. Aqui
+          sincronizamos a margem do conteudo com o mesmo estado (`peer-data-[state]`,
+          exposto pelo proprio Sidebar via classe `peer`) em vez de depender dela.
+        */}
+        <SidebarInset className="min-w-0 flex-1 transition-[margin-left] duration-200 ease-linear md:ml-(--sidebar-width) md:peer-data-[state=collapsed]:ml-(--sidebar-width-icon)">
           <div className="min-h-screen w-full bg-[#08111f]">
             <AppHeader />
             {totalPendentes > 0 && !user?.tem_sped && !user?.tem_conta_azul && (

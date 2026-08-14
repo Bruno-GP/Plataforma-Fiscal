@@ -6,6 +6,7 @@ import {
   FileText,
   FileUp,
   LogOut,
+  Menu,
   ReceiptText,
   Settings,
   ShoppingCart,
@@ -29,6 +30,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
@@ -123,7 +125,7 @@ const isItemActive = (pathname: string, item: NavigationItem) =>
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isMobile, openMobile, setOpenMobile } = useSidebar();
+  const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebar();
   const { user, logout } = useAuth();
   const companyName = user?.name?.trim() || 'Accounting Corp';
   const xmlOnboardingLocked = isXmlOnboardingLocked(user);
@@ -149,7 +151,10 @@ export function AppSidebar() {
     const isActive = isItemActive(location.pathname, item);
 
     return (
-      <SidebarMenuItem key={item.path}>
+      <SidebarMenuItem
+        key={item.path}
+        className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center"
+      >
         <SidebarMenuButton
           asChild
           isActive={isActive}
@@ -157,7 +162,7 @@ export function AppSidebar() {
           className={cn(
             'h-10 rounded-md px-3 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-800/90 hover:text-slate-50',
             'data-[active=true]:bg-emerald-400/95 data-[active=true]:text-slate-950 data-[active=true]:shadow-[0_10px_28px_-18px_rgba(52,211,153,0.9)]',
-            'group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:w-9',
+            'group-data-[collapsible=icon]:mx-auto',
           )}
         >
           <NavLink to={item.path} onClick={handleNavigation} className="flex min-w-0 items-center gap-3">
@@ -170,66 +175,69 @@ export function AppSidebar() {
   };
 
   return (
-    <>
-      {isMobile && openMobile && (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 md:hidden"
-          onClick={() => setOpenMobile(false)}
-        />
-      )}
-      <Sidebar
-        variant="sidebar"
-        collapsible="none"
-        className={cn(
-          'fixed inset-y-0 left-0 z-50 h-svh w-72 max-w-[85vw] shrink-0 -translate-x-full border-r border-slate-700/70 bg-[#111827] text-slate-100 transition-transform duration-200 ease-in-out',
-          'md:sticky md:top-0 md:z-auto md:w-64 md:max-w-none md:translate-x-0',
-          openMobile && 'translate-x-0',
-        )}
-      >
-      <SidebarHeader className="h-16 justify-center border-b border-slate-700/70 bg-[#111827] px-5 py-2 group-data-[collapsible=icon]:px-2">
-        <div className="min-w-0 space-y-6 group-data-[collapsible=icon]:space-y-0">
-          {/* <div className="text-xl font-bold text-sky-300 group-data-[collapsible=icon]:text-center group-data-[collapsible=icon]:text-lg">
-            <span className="group-data-[collapsible=icon]:hidden">TaxVision Pro</span>
-            <span className="hidden group-data-[collapsible=icon]:inline">TV</span>
-          </div> */}
-
-          <div className="min-w-0 space-y-1 group-data-[collapsible=icon]:hidden">
-            <p className="line-clamp-2 break-words text-base font-semibold leading-tight tracking-tight text-slate-100" title={companyName}>
-              {companyName}
-            </p>
-            {/* <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Tax Specialist</p> */}
-          </div>
+    <Sidebar
+      variant="sidebar"
+      collapsible="icon"
+      // ui/sidebar.tsx usa a sintaxe antiga do Tailwind v3 (`w-[--var]`) pra largura,
+      // que no v4 instalado neste projeto vira CSS invalido (colchete = valor bruto,
+      // parenteses = referencia de custom property). Sobrescrevemos aqui com a
+      // sintaxe v4 correta pra largura realmente mudar entre expandido/colapsado.
+      className="w-(--sidebar-width) border-slate-700/70 bg-[#111827] text-slate-100 group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+    >
+      <SidebarHeader className="h-16 justify-center border-b border-slate-700/70 bg-[#111827] px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            aria-label={state === 'collapsed' ? 'Expandir menu' : 'Recolher menu'}
+            title={state === 'collapsed' ? 'Expandir menu' : 'Recolher menu'}
+            className="hidden h-8 w-8 shrink-0 text-slate-300 hover:bg-slate-800 hover:text-slate-50 md:inline-flex"
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+          <p
+            className="line-clamp-2 min-w-0 flex-1 break-words text-base font-semibold leading-tight tracking-tight text-slate-100 group-data-[collapsible=icon]:hidden"
+            title={companyName}
+          >
+            {companyName}
+          </p>
         </div>
       </SidebarHeader>
 
       <SidebarContent className="taxvision-sidebar-scroll bg-[#111827] px-3 py-4">
         <div className="space-y-3">
-          {navigationGroups.map((group) => {
+          {navigationGroups.map((group, index) => {
             const isGroupActive = group.items.some((item) => isItemActive(location.pathname, item));
 
             return (
-              <SidebarGroup
-                key={group.label}
-                className={cn(
-                  'rounded-lg px-0 py-1',
-                  isGroupActive && 'bg-slate-900/50 ring-1 ring-slate-700/70',
-                  'group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:ring-0',
+              <div key={group.label}>
+                {index > 0 && (
+                  <SidebarSeparator className="mb-3 hidden bg-slate-700/60 group-data-[collapsible=icon]:block" />
                 )}
-              >
-                <SidebarGroupLabel
+                <SidebarGroup
                   className={cn(
-                    'h-7 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500',
-                    isGroupActive && 'text-sky-300',
+                    'rounded-lg px-0 py-1',
+                    isGroupActive && 'bg-slate-900/50 ring-1 ring-slate-700/70',
+                    'group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:ring-0',
                   )}
                 >
-                  {group.label}
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu className="gap-1">
-                    {group.items.map((item) => renderItem(item))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
+                  <SidebarGroupLabel
+                    className={cn(
+                      'h-7 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500',
+                      isGroupActive && 'text-sky-300',
+                    )}
+                  >
+                    {group.label}
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu className="gap-1 group-data-[collapsible=icon]:gap-2">
+                      {group.items.map((item) => renderItem(item))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </div>
             );
           })}
         </div>
@@ -248,6 +256,5 @@ export function AppSidebar() {
         </div>
       </SidebarFooter>
     </Sidebar>
-    </>
   );
 }

@@ -1,0 +1,2 @@
+"""Repositórios do schema SEFAZ."""
+

@@ -93,6 +93,31 @@ def test_alembic_revisions_and_sql_migrations_cover_expected_database_objects():
         assert expected in login_security
 
 
+def test_sefaz_migration_creates_expected_schema_objects():
+    sefaz_schema = (ALEMBIC_DIR / "20260814_0013_sefaz_schema.py").read_text(
+        encoding="utf-8"
+    )
+
+    for expected in [
+        "CREATE SCHEMA IF NOT EXISTS sefaz",
+        "CREATE TABLE IF NOT EXISTS sefaz.certificados",
+        "empresa_id BIGINT NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_sefaz_certificados_empresa_ativo",
+        "CREATE TABLE IF NOT EXISTS sefaz.nsu_controle",
+        "CONSTRAINT uq_sefaz_nsu_controle_empresa_ambiente UNIQUE (empresa_id, ambiente)",
+        "CREATE TABLE IF NOT EXISTS sefaz.documentos",
+        "CONSTRAINT uq_sefaz_documentos_empresa_chave UNIQUE (empresa_id, chave_acesso)",
+        "CREATE TABLE IF NOT EXISTS sefaz.eventos",
+        "REFERENCES sefaz.documentos(id) ON DELETE CASCADE",
+        "CREATE TABLE IF NOT EXISTS sefaz.sync_log",
+    ]:
+        assert expected in sefaz_schema, f"esperado no schema sefaz: {expected!r}"
+
+    assert 'revision = "20260814_0013"' in sefaz_schema
+    assert 'down_revision = "20260813_0012"' in sefaz_schema
+    assert "DROP SCHEMA IF EXISTS sefaz CASCADE" in sefaz_schema
+
+
 def test_staging_import_services_do_not_mutate_database_schema():
     xml_import_service = (
         APP_DIR / "services" / "nfe" / "xml_importacao_service.py"

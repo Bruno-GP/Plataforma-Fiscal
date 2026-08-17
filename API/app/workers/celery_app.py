@@ -55,6 +55,7 @@ else:
             "app.workers.sped_tasks",
             "app.workers.conta_azul_tasks",
             "app.workers.metas_tasks",
+            "app.workers.sefaz_tasks",
         ],
     )
 
@@ -72,8 +73,14 @@ else:
             Queue("nfe", Exchange("nfe"), routing_key="nfe"),
             Queue("sped", Exchange("sped"), routing_key="sped"),
             Queue("conta_azul", Exchange("conta_azul"), routing_key="conta_azul"),
+            Queue("sefaz", Exchange("sefaz"), routing_key="sefaz"),
         ),
         beat_schedule={
+            "sefaz-sync-diario": {
+                "task": "sefaz_sync_diario_task",
+                "schedule": crontab(hour=2, minute=0),
+                "options": {"queue": "sefaz"},
+            },
             "sincronizar-kpis-conta-azul-diario": {
                 "task": "sincronizar_kpis_conta_azul_task",
                 "schedule": crontab(hour=3, minute=0),

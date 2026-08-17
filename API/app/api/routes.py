@@ -9,6 +9,7 @@ from app.api.geo.routes import router as geo_router
 from app.api.jobs.routes import router as jobs_router
 from app.api.ncm.routes import router as ncm_router
 from app.api.nfe.routes import router as nfe_router
+from app.api.sefaz.routes import router as sefaz_router
 from app.api.reforma_tributaria.routes import router as reforma_tributaria_router
 from app.api.sped.routes import router as sped_router
 
@@ -25,3 +26,4 @@ router.include_router(conta_azul_router)
 router.include_router(geo_router)
 router.include_router(ncm_router)
 router.include_router(reforma_tributaria_router)
+router.include_router(sefaz_router)

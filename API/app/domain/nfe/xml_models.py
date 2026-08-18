@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from defusedxml.ElementTree import Element
+from xml.etree.ElementTree import Element
 
 @dataclass
 class XmlNFe:

@@ -1,6 +1,8 @@
 import os
 from typing import List
 
+from xml.etree.ElementTree import Element
+
 from defusedxml import ElementTree as ET
 
 from app.domain.nfe.xml_models import XmlNFe
@@ -13,7 +15,7 @@ def _local_name(tag: str) -> str:
     return (tag or "").split("}")[-1]
 
 
-def _eh_xml_evento(root: ET.Element) -> bool:
+def _eh_xml_evento(root: Element) -> bool:
     nomes_evento = {
         "procEventoNFe",
         "evento",
@@ -27,7 +29,7 @@ def _eh_xml_evento(root: ET.Element) -> bool:
     return root.find(".//nfe:infEvento", NS) is not None
 
 
-def _eh_xml_nfse(root: ET.Element) -> bool:
+def _eh_xml_nfse(root: Element) -> bool:
     nomes_nfse = {"CompNfse", "Nfse", "NFS-e", "GerarNfseResposta", "ConsultarNfseResposta"}
     if _local_name(root.tag) in nomes_nfse:
         return True
@@ -35,7 +37,7 @@ def _eh_xml_nfse(root: ET.Element) -> bool:
     return root.find(".//InfNfse") is not None or root.find(".//CompNfse") is not None
 
 
-def classificar_xml_processavel(root: ET.Element) -> tuple[bool, str]:
+def classificar_xml_processavel(root: Element) -> tuple[bool, str]:
     if _eh_xml_evento(root):
         return False, "XML de evento nao e processavel como documento fiscal."
 
@@ -52,7 +54,7 @@ def classificar_xml_processavel(root: ET.Element) -> tuple[bool, str]:
     return False, "XML nao corresponde a um documento fiscal autorizado suportado."
 
 
-def extrair_emitente_xml(root: ET.Element) -> tuple[str | None, str | None]:
+def extrair_emitente_xml(root: Element) -> tuple[str | None, str | None]:
     emit = root.find(".//nfe:emit", NS)
     if emit is not None:
         cnpj = emit.findtext("nfe:CNPJ", default="", namespaces=NS).strip()
@@ -75,7 +77,7 @@ def extrair_emitente_xml(root: ET.Element) -> tuple[str | None, str | None]:
     return (cnpj_nfse, nome_nfse)
 
 
-def _buscar_texto_por_tags(root: ET.Element, caminhos: list[str]) -> str | None:
+def _buscar_texto_por_tags(root: Element, caminhos: list[str]) -> str | None:
     for caminho in caminhos:
         candidato = root.find(f".//{caminho}")
         if candidato is not None and candidato.text:
@@ -121,7 +123,7 @@ class XmlReader:
 
         return xmls
 
-    def _eh_nfe_modelo_55(self, root: ET.Element) -> bool:
+    def _eh_nfe_modelo_55(self, root: Element) -> bool:
         """
         Valida se o XML e uma NFe modelo 55.
         Compativel com nfeProc e NFe.

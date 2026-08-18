@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
 from app.core.security import AuthenticatedUser, require_company_scope
+from app.domain.sefaz.periodo import intervalo_do_ano
 from app.models.sefaz.schemas import (
     CertificadoStatusResponse,
     ManifestacaoRequest,
@@ -128,12 +129,21 @@ def listar_documentos(
     direcao: str | None = Query(default=None),
     situacao: str | None = Query(default=None),
     manifestacao_pendente: bool | None = Query(default=None),
+    ano: int | None = Query(default=None, ge=2000, le=2100),
     data_inicio: date | None = Query(default=None),
     data_fim: date | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     current_user: AuthenticatedUser = Depends(require_company_scope),
 ):
+    if ano is not None and (data_inicio is not None or data_fim is not None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nao e possivel combinar 'ano' com 'data_inicio'/'data_fim'.",
+        )
+    if ano is not None:
+        data_inicio, data_fim = intervalo_do_ano(ano)
+
     total, documentos = DocumentosRepository().listar(
         empresa_id=current_user.empresa_id,
         direcao=direcao,

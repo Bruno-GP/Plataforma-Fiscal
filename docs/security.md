@@ -28,6 +28,8 @@ Rotas fiscais usam `require_company_scope`, que compara os parametros `emitente_
 
 Limitacao atual: a verificacao depende dos parametros de query. Endpoints ou services novos devem usar o mesmo mecanismo ou receber explicitamente o usuario autenticado para evitar vazamento multiempresa.
 
+Rotas de catalogo global podem viver no mesmo roteador autenticado, mas sem parametro de CNPJ. Nesse caso, a permissao continua vinda da sessao e nao de um escopo de empresa na URL. Exemplo atual: `GET /api/reforma-tributaria/tributos`.
+
 ## Matriz de autenticacao e escopo das rotas fiscais
 
 Todas as rotas abaixo estao em roteadores com dependencia de autenticacao. O escopo multiempresa e mais forte quando a rota recebe `emitente_cnpj`, `cnpj_emitente`, `cnpj_empresa_origem` ou `email`, porque `require_company_scope` compara esses parametros contra a sessao.
@@ -60,7 +62,7 @@ Todas as rotas abaixo estao em roteadores com dependencia de autenticacao. O esc
 | `GET /api/sped/analise/*/dashboard` | Sim | Sim | `emitente_cnpj` | Inclui dashboards de compras e vendas. |
 | `POST /api/ncm/ibpt/sincronizar` | Sim | Nao | Nenhum CNPJ | Operacao global de catalogo/IBPT. Exige `require_ibpt_sync_admin`: email do usuario autenticado precisa estar em `IBPT_SYNC_ADMIN_EMAILS` (allowlist via env var, fail-closed — `403` se a env var nao estiver configurada ou o email nao constar). Tambem protegido por cooldown global (`IBPT_SYNC_MIN_INTERVAL_SECONDS`, `429` se chamado de novo antes do intervalo). |
 | `GET /api/ncm/tributacao` | Sim | Nao | Nenhum CNPJ | Consulta global por NCM/UF. |
-| `GET /api/reforma-tributaria/tributos` | Sim | Parcial | Nenhum CNPJ | Catalogo global; usa `require_company_scope`, mas nao ha parametro de empresa. |
+| `GET /api/reforma-tributaria/tributos` | Sim | Parcial | Nenhum CNPJ | Catalogo global autenticado; usa `require_company_scope` no roteador, mas nao recebe CNPJ na rota. |
 | `GET /api/reforma-tributaria/apuracao` | Sim | Sim | `emitente_cnpj` | Consulta por empresa. |
 | `GET /api/reforma-tributaria/documentos/{origem_documento}/{documento_id}/tributos` | Sim | Sim | `emitente_cnpj` | Origem aceita apenas `nfe` ou `sped`. |
 | `GET /api/reforma-tributaria/itens/{origem_item}/{item_id}/tributos` | Sim | Sim | `emitente_cnpj` | Origem aceita apenas `nfe` ou `sped`. |

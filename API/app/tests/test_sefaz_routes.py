@@ -193,6 +193,40 @@ def test_listar_documentos(client, monkeypatch):
     assert fake_repo.calls[0][0] == "listar"
 
 
+def test_listar_documentos_com_ano_calcula_intervalo(client, monkeypatch):
+    fake_repo = FakeDocumentosRepository()
+    monkeypatch.setattr(routes, "DocumentosRepository", lambda: fake_repo)
+
+    response = client.get("/api/sefaz/documentos", params={"ano": 2026})
+
+    assert response.status_code == 200
+    _, kwargs = fake_repo.calls[0]
+    assert kwargs["data_inicio"] == date(2026, 1, 1)
+    assert kwargs["data_fim"] == date(2026, 12, 31)
+
+
+def test_listar_documentos_ano_com_data_inicio_falha_400(client, monkeypatch):
+    fake_repo = FakeDocumentosRepository()
+    monkeypatch.setattr(routes, "DocumentosRepository", lambda: fake_repo)
+
+    response = client.get(
+        "/api/sefaz/documentos",
+        params={"ano": 2026, "data_inicio": "2026-01-01"},
+    )
+
+    assert response.status_code == 400
+    assert fake_repo.calls == []
+
+
+def test_listar_documentos_ano_fora_do_intervalo_falha_422(client, monkeypatch):
+    fake_repo = FakeDocumentosRepository()
+    monkeypatch.setattr(routes, "DocumentosRepository", lambda: fake_repo)
+
+    response = client.get("/api/sefaz/documentos", params={"ano": 1999})
+
+    assert response.status_code == 422
+
+
 def test_obter_documento_traz_xml_em_base64(client, monkeypatch):
     fake_repo = FakeDocumentosRepository()
     monkeypatch.setattr(routes, "DocumentosRepository", lambda: fake_repo)

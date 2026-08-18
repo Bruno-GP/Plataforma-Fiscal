@@ -21,6 +21,7 @@ Use este checklist antes de abrir ou aprovar qualquer PR que altere backend. O o
 - A rota converte erros esperados conforme `docs/backend-error-handling.md`?
 - A rota usa `response_model` adequado?
 - A rota fiscal usa `require_company_scope` ou mecanismo equivalente?
+- Se a rota e de catalogo global, isso esta explicitado e nao depende de CNPJ na URL?
 - A rota valida perfil operacional XML/SPED quando aplicavel?
 
 ## Services
@@ -123,6 +124,7 @@ Copie e preencha:
 - [ ] Contratos HTTP afetados tem teste.
 - [ ] Helpers/regras puras tem teste direto.
 - [ ] Perfil XML/SPED e escopo de empresa foram preservados.
+- [ ] Rotas globais de catalogo ficaram explicitamente classificadas.
 - [ ] Migrations/docs foram atualizadas quando necessario.
 - [ ] Suite backend rapida passou.
 

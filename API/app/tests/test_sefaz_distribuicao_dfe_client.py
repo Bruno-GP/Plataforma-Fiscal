@@ -102,13 +102,18 @@ def test_consultar_sucesso_delega_para_transmissor(monkeypatch):
         </loteDistDFeInt>
     </retDistDFeInt>""".encode("utf-8")
 
+    class FakeRetorno:
+        content = f"<soapEnvelope><soapBody>{xml_resposta.decode('utf-8')}</soapBody></soapEnvelope>".encode(
+            "utf-8"
+        )
+
     class FakeRespostaSoap:
-        content = xml_resposta
+        retorno = FakeRetorno()
 
     class FakeTransmissor:
-        def consulta_distribuicao(self, cnpj, ult_nsu):
-            assert cnpj == "12345678000190"
-            assert ult_nsu == "000000000000000"
+        def consultar_distribuicao(self, cnpj_cpf, ultimo_nsu):
+            assert cnpj_cpf == "12345678000190"
+            assert ultimo_nsu == "000000000000000"
             return FakeRespostaSoap()
 
     cliente = DistribuicaoDFeClient(b"pfx", "senha", "12345678000190", ambiente=1)
@@ -124,7 +129,7 @@ def test_consultar_erro_de_transporte_vira_sefaz_indisponivel(monkeypatch):
     from app.services.sefaz.distribuicao_dfe_client import DistribuicaoDFeClient, SefazIndisponivelError
 
     class FakeTransmissorComErro:
-        def consulta_distribuicao(self, cnpj, ult_nsu):
+        def consultar_distribuicao(self, cnpj_cpf, ultimo_nsu):
             raise TimeoutError("timeout na conexao com o Ambiente Nacional")
 
     cliente = DistribuicaoDFeClient(b"pfx", "senha", "12345678000190", ambiente=1)

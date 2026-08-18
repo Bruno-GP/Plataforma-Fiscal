@@ -45,6 +45,7 @@ class RespostaDistribuicao:
     ultimo_nsu: str
     max_nsu: str
     documentos: list[DocumentoBruto]
+    x_motivo: str = ""
 
 
 def _decodificar_doc_zip(doc_zip_base64: str) -> bytes:
@@ -94,6 +95,7 @@ def _parse_resposta_distribuicao(xml_resposta: bytes) -> RespostaDistribuicao:
         ultimo_nsu=_texto(raiz, "nfe:ultNSU") or "000000000000000",
         max_nsu=_texto(raiz, "nfe:maxNSU") or "000000000000000",
         documentos=documentos,
+        x_motivo=_texto(raiz, "nfe:xMotivo") or "",
     )
 
 
@@ -109,7 +111,7 @@ class DistribuicaoDFeClient:
         senha: str,
         cnpj: str,
         ambiente: int,
-        uf_autor: str = "AN",
+        uf_autor: str = "91",
     ) -> None:
         self.certificado_pfx = certificado_pfx
         self.senha = senha
@@ -119,21 +121,38 @@ class DistribuicaoDFeClient:
 
     def _montar_transmissor(self):
         # Import lazily to keep the rest of the module testable without the fiscal libs.
-        from erpbrasil.assinatura.assinatura import Assinatura
+        from erpbrasil.assinatura.certificado import Certificado
         from erpbrasil.edoc.nfe import NFe as NFeTransmissor
         from erpbrasil.transmissao import TransmissaoSOAP
         import requests
 
-        certificado = Assinatura(self.certificado_pfx, self.senha)
+        certificado = Certificado(base64.b64encode(self.certificado_pfx), self.senha)
         sessao = requests.Session()
         transmissao = TransmissaoSOAP(certificado, sessao)
-        return NFeTransmissor(transmissao=transmissao, ambiente=self.ambiente, uf=self.uf_autor)
+        # distDFeInt usa schema proprio (TVerDistDFe = "1.01"), diferente da versao de
+        # autorizacao de NFe ("4.00", default da lib). Sem isso a SEFAZ rejeita com
+        # cStat=239 "Versao do arquivo XML nao suportada" para toda consulta.
+        return NFeTransmissor(
+            transmissao=transmissao, ambiente=self.ambiente, uf=self.uf_autor, versao="1.01"
+        )
 
     def consultar(self, ultimo_nsu: str) -> RespostaDistribuicao:
         transmissor = self._montar_transmissor()
         try:
-            resposta_soap = transmissor.consulta_distribuicao(cnpj=self.cnpj, ult_nsu=ultimo_nsu)
+            resposta_soap = transmissor.consultar_distribuicao(cnpj_cpf=self.cnpj, ultimo_nsu=ultimo_nsu)
         except Exception as exc:
             raise SefazIndisponivelError(f"Falha ao consultar distDFeInt: {exc}") from exc
 
-        return _parse_resposta_distribuicao(resposta_soap.content)
+        if resposta_soap is None:
+            raise SefazRespostaInvalidaError("Resposta distDFeInt vazia.")
+
+        try:
+            raiz_soap = ET.fromstring(resposta_soap.retorno.content)
+        except ET.ParseError as exc:
+            raise SefazRespostaInvalidaError(f"Resposta distDFeInt nao e XML valido: {exc}") from exc
+
+        elemento = raiz_soap.find(".//nfe:retDistDFeInt", NFE_NAMESPACE)
+        if elemento is None:
+            raise SefazRespostaInvalidaError("Resposta distDFeInt sem elemento retDistDFeInt.")
+
+        return _parse_resposta_distribuicao(ET.tostring(elemento))

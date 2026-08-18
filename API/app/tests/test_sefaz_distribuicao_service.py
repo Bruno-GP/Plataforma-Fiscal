@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -14,14 +14,20 @@ class FakeCertificadoService:
 
 
 class FakeNsuRepository:
-    def __init__(self, ultimo_nsu=None):
+    def __init__(self, ultimo_nsu=None, status_ultima_execucao=None, ultima_execucao_em=None):
         self.ultimo_nsu = ultimo_nsu
+        self.status_ultima_execucao = status_ultima_execucao
+        self.ultima_execucao_em = ultima_execucao_em
         self.execucoes = []
 
     def obter(self, empresa_id, ambiente):
         if self.ultimo_nsu is None:
             return None
-        return {"ultimo_nsu": self.ultimo_nsu}
+        return {
+            "ultimo_nsu": self.ultimo_nsu,
+            "status_ultima_execucao": self.status_ultima_execucao,
+            "ultima_execucao_em": self.ultima_execucao_em,
+        }
 
     def upsert_execucao(self, empresa_id, ambiente, ultimo_nsu, status_ultima_execucao):
         self.execucoes.append((empresa_id, ambiente, ultimo_nsu, status_ultima_execucao))
@@ -64,6 +70,14 @@ class FakeSyncLogRepository:
         return len(self.registros)
 
 
+class FakeEmpresasRepository:
+    def __init__(self, estado="SC"):
+        self.estado = estado
+
+    def obter_estado(self, empresa_id):
+        return self.estado
+
+
 RES_NFE_XML = (
     '<resNFe xmlns="http://www.portalfiscal.inf.br/nfe">'
     "<chNFe>35260812345678000190550010000000011234567890</chNFe>"
@@ -91,6 +105,7 @@ def _servico(client_respostas, **overrides):
         "documentos_repository": FakeDocumentosRepository(),
         "eventos_repository": FakeEventosRepository(),
         "sync_log_repository": FakeSyncLogRepository(),
+        "empresas_repository": FakeEmpresasRepository(),
         "client_factory": FakeClient,
     }
     kwargs.update(overrides)
@@ -160,6 +175,45 @@ def test_idempotencia_reprocessar_mesmo_documento_nao_duplica():
     resultado = servico.sincronizar_empresa(empresa_id=1, cnpj_empresa="12345678000190")
 
     assert resultado.documentos_novos == 0
+
+
+def test_bloqueio_recente_impede_nova_consulta_sefaz():
+    class FakeClientNuncaDeveriaSerChamado:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def consultar(self, ultimo_nsu):
+            raise AssertionError("nao deveria consultar a SEFAZ dentro da janela de bloqueio")
+
+    nsu_repo = FakeNsuRepository(
+        ultimo_nsu="157242",
+        status_ultima_execucao="bloqueado",
+        ultima_execucao_em=datetime.now(timezone.utc) - timedelta(minutes=10),
+    )
+    servico = _servico([], nsu_repository=nsu_repo, client_factory=FakeClientNuncaDeveriaSerChamado)
+
+    resultado = servico.sincronizar_empresa(empresa_id=1, cnpj_empresa="12345678000190")
+
+    assert resultado.status == "bloqueado"
+    assert resultado.documentos_novos == 0
+    assert "janela de espera" in resultado.erro_detalhe
+    assert servico.sync_log_repository.registros[0]["status"] == "bloqueado"
+
+
+def test_bloqueio_antigo_permite_nova_consulta_sefaz():
+    nsu_repo = FakeNsuRepository(
+        ultimo_nsu="157242",
+        status_ultima_execucao="bloqueado",
+        ultima_execucao_em=datetime.now(timezone.utc) - timedelta(hours=2),
+    )
+    servico = _servico(
+        [RespostaDistribuicao(cstat=137, ultimo_nsu="157242", max_nsu="157242", documentos=[])],
+        nsu_repository=nsu_repo,
+    )
+
+    resultado = servico.sincronizar_empresa(empresa_id=1, cnpj_empresa="12345678000190")
+
+    assert resultado.status == "sucesso"
 
 
 def test_certificado_ausente_leva_excecao():

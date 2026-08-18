@@ -8,7 +8,10 @@ except ImportError:  # pragma: no cover - ambiente minimo sem python-dotenv inst
         return False
 
 
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+load_dotenv(
+    Path(__file__).resolve().parents[1] / ".env",
+    override=os.getenv("APP_ENV", "development").strip().lower() != "production",
+)
 
 try:
     from celery import Celery

@@ -284,3 +284,21 @@ Componentes consumindo os endpoints da Fase 2, design system existente (Radix/sh
   nasce com o fluxo de manifestação, não como afterthought.
 - Biblioteca terceira (ADR 0001) é ponto único de acoplamento externo — mitigado por ficar
   atrás de `distribuicao_dfe_client.py`, isolado do resto do domínio.
+- **Correção 2026-08-18 (retifica entrada anterior deste mesmo dia):** a hipótese de
+  "limitação arquitetural do distDFeInt para notas emitidas" estava **errada** — baseada em
+  `cStat` sem o `xMotivo` real (o client descartava esse campo). Causa raiz de verdade, achada
+  ao capturar a resposta bruta da SEFAZ: dois bugs de configuração em
+  `distribuicao_dfe_client.py`. (1) `NFeTransmissor` sem `versao` explícita usava o default
+  `"4.00"` (versão de autorização de NFe) também no envelope `distDFeInt`, que só aceita
+  `"1.01"` — SEFAZ rejeitava com `cStat=239`. (2) `cUFAutor` hardcoded em `"91"` (código
+  genérico de Ambiente Nacional válido em outros webservices) não é aceito pelo schema
+  `distDFeInt`, que exige o código IBGE real da UF do autor — SEFAZ rejeitava com `cStat=215`.
+  Como o código tratava qualquer `cStat` fora de `{137,138,656}` como sucesso silencioso
+  (bug adicional, também corrigido), o erro real nunca apareceu no `sync_log`. Corrigido:
+  `versao="1.01"` fixo; `cUFAutor` resolvido via `empresas.estado` → código IBGE
+  (`app/domain/sefaz/uf_codigos.py` + `SefazEmpresasRepository`); `xMotivo` agora persistido
+  em `RespostaDistribuicao`; `DecisaoPaginacao.rejeitado` marca a sincronização como erro real.
+  Validado ao vivo (empresa 3, CNPJ 24201833000189): após o fix, `cStat=138` com lote real de
+  documentos (`maxNSU=167791`, backlog grande — primeira sincronização bem-sucedida da
+  empresa). Não é bug de paginação/NSU/classificação de direção (`calcular_direcao` seguia
+  correto o tempo todo).

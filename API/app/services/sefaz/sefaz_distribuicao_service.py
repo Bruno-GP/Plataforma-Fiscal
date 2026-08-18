@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.domain.sefaz.cstat_rules import decidir_paginacao
 from app.domain.sefaz.doc_parser import (
@@ -10,7 +10,9 @@ from app.domain.sefaz.doc_parser import (
     calcular_direcao,
     parse_documento,
 )
+from app.domain.sefaz.uf_codigos import UfInvalidaError, codigo_ibge_uf
 from app.repositories.sefaz.documentos_repository import DocumentosRepository
+from app.repositories.sefaz.empresas_repository import SefazEmpresasRepository
 from app.repositories.sefaz.eventos_repository import EventosRepository
 from app.repositories.sefaz.nsu_controle_repository import NsuControleRepository
 from app.repositories.sefaz.sync_log_repository import SyncLogRepository
@@ -23,8 +25,18 @@ logger = logging.getLogger("services.sefaz")
 
 NSU_INICIAL_PADRAO = "000000000000000"
 
+# SEFAZ nao publica um numero exato de espera apos cStat=656 (consumo indevido); 1h e o
+# minimo conservador adotado no projeto (ver docs/mapeamento-busca-xml-sefaz.md). Sem essa
+# trava local, qualquer retry manual/automatico antes disso gera nova consulta real e pode
+# prolongar o bloqueio -- por isso o service nao chama a SEFAZ de novo dentro da janela.
+JANELA_ESPERA_BLOQUEIO = timedelta(hours=1)
+
 
 class CertificadoAusenteError(ValueError):
+    pass
+
+
+class EmpresaUfAusenteError(ValueError):
     pass
 
 
@@ -45,6 +57,7 @@ class SefazDistribuicaoService:
         documentos_repository: DocumentosRepository | None = None,
         eventos_repository: EventosRepository | None = None,
         sync_log_repository: SyncLogRepository | None = None,
+        empresas_repository: SefazEmpresasRepository | None = None,
         client_factory=DistribuicaoDFeClient,
     ) -> None:
         self.certificado_service = certificado_service or CertificadoService()
@@ -52,6 +65,7 @@ class SefazDistribuicaoService:
         self.documentos_repository = documentos_repository or DocumentosRepository()
         self.eventos_repository = eventos_repository or EventosRepository()
         self.sync_log_repository = sync_log_repository or SyncLogRepository()
+        self.empresas_repository = empresas_repository or SefazEmpresasRepository()
         self.client_factory = client_factory
 
     def sincronizar_empresa(
@@ -67,11 +81,48 @@ class SefazDistribuicaoService:
             raise CertificadoAusenteError(f"Empresa {empresa_id} nao possui certificado SEFAZ ativo.")
         certificado_pfx, senha = credenciais
 
+        estado_empresa = self.empresas_repository.obter_estado(empresa_id)
+        if not estado_empresa:
+            raise EmpresaUfAusenteError(f"Empresa {empresa_id} nao possui UF cadastrada.")
+        try:
+            uf_autor = codigo_ibge_uf(estado_empresa)
+        except UfInvalidaError as exc:
+            raise EmpresaUfAusenteError(str(exc)) from exc
+
         cursor = self.nsu_repository.obter(empresa_id, ambiente)
         nsu_inicial = cursor["ultimo_nsu"] if cursor else NSU_INICIAL_PADRAO
         ultimo_nsu = nsu_inicial
 
-        cliente = self.client_factory(certificado_pfx, senha, cnpj_empresa, ambiente)
+        if cursor and cursor.get("status_ultima_execucao") == "bloqueado":
+            ultima_execucao = cursor.get("ultima_execucao_em")
+            decorrido = (
+                datetime.now(timezone.utc) - ultima_execucao if ultima_execucao else JANELA_ESPERA_BLOQUEIO
+            )
+            if decorrido < JANELA_ESPERA_BLOQUEIO:
+                restante_min = int((JANELA_ESPERA_BLOQUEIO - decorrido).total_seconds() // 60) + 1
+                erro_detalhe = (
+                    f"Bloqueio anterior da SEFAZ (cStat 656) ainda na janela de espera -- "
+                    f"aguardar mais {restante_min} min antes de tentar de novo."
+                )
+                self.sync_log_repository.registrar(
+                    empresa_id=empresa_id,
+                    iniciado_em=iniciado_em,
+                    finalizado_em=datetime.now(timezone.utc),
+                    documentos_novos=0,
+                    nsu_inicial=nsu_inicial,
+                    nsu_final=nsu_inicial,
+                    status="bloqueado",
+                    erro_detalhe=erro_detalhe,
+                )
+                return ResultadoSincronizacao(
+                    status="bloqueado",
+                    documentos_novos=0,
+                    nsu_inicial=nsu_inicial,
+                    nsu_final=nsu_inicial,
+                    erro_detalhe=erro_detalhe,
+                )
+
+        cliente = self.client_factory(certificado_pfx, senha, cnpj_empresa, ambiente, uf_autor=uf_autor)
         documentos_novos = 0
         iteracao = 1
         status_final = "sucesso"
@@ -91,6 +142,10 @@ class SefazDistribuicaoService:
 
                 ultimo_nsu = resposta.ultimo_nsu
 
+                if decisao.rejeitado:
+                    status_final = "erro"
+                    erro_detalhe = f"SEFAZ rejeitou distDFeInt (cStat {resposta.cstat}): {resposta.x_motivo or 'sem xMotivo'}"
+                    break
                 if decisao.bloqueado:
                     status_final = "bloqueado"
                     erro_detalhe = "Consumo indevido (cStat 656) -- aguardando janela de espera."

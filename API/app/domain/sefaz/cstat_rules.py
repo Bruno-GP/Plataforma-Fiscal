@@ -15,6 +15,7 @@ class DecisaoPaginacao:
     continuar: bool
     bloqueado: bool
     motivo: str
+    rejeitado: bool = False
 
 
 def decidir_paginacao(cstat: int, iteracao_atual: int) -> DecisaoPaginacao:
@@ -30,8 +31,11 @@ def decidir_paginacao(cstat: int, iteracao_atual: int) -> DecisaoPaginacao:
 
         return DecisaoPaginacao(continuar=True, bloqueado=False, motivo="documentos_localizados")
 
+    # cStat fora de {137, 138, 656} e rejeicao/erro da SEFAZ (ex.: 215 "falha no esquema
+    # xml", 239 "versao nao suportada") -- nao deve virar "sucesso" silencioso.
     return DecisaoPaginacao(
         continuar=False,
         bloqueado=False,
         motivo=f"cstat_desconhecido_{cstat}",
+        rejeitado=True,
     )

@@ -228,4 +228,19 @@ Nao e necessario criar uma tela separada no primeiro ciclo. O usuario ja entende
 - A busca por NSU nao deve ser chamada em loop agressivo.
 - Sem Manifestacao do Destinatario, alguns documentos podem aparecer apenas como resumo.
 - NFSe continua dependendo de integracoes municipais separadas.
+- **Correcao 2026-08-18 (retifica entrada anterior deste mesmo dia):** a hipotese de que
+  `distDFeInt` "nao traz notas emitidas por design" estava **errada** e foi descartada.
+  A causa raiz real eram dois bugs de configuracao no client (`distribuicao_dfe_client.py`):
+  (1) `NFeTransmissor` era criado sem `versao`, herdando o default `"4.00"` (versao de
+  autorizacao de NFe) para o envelope `distDFeInt`, que so aceita `"1.01"` -> SEFAZ rejeitava
+  com `cStat=239` ("Versao do arquivo XML nao suportada"); (2) `cUFAutor` estava hardcoded
+  em `"91"` (codigo generico de Ambiente Nacional usado em outros webservices de NFe), mas o
+  schema `distDFeInt` exige o codigo IBGE real da UF do autor da consulta -> SEFAZ rejeitava
+  com `cStat=215` ("Falha no esquema xml"). O client tambem descartava o `xMotivo` da
+  resposta e tratava qualquer `cStat` desconhecido como sucesso silencioso — por isso o erro
+  ficou mascarado em varias execucoes seguidas com `documentos_novos=0` e status "sucesso".
+  Corrigido: `versao="1.01"` fixo no client; `cUFAutor` resolvido a partir de `empresas.estado`
+  (`app/domain/sefaz/uf_codigos.py`); `xMotivo` agora persistido e `cStat` fora de
+  `{137, 138, 656}` marca a sincronizacao como erro real. Validado ao vivo: apos o fix, a
+  consulta retornou `cStat=138` com lote real de documentos.
 

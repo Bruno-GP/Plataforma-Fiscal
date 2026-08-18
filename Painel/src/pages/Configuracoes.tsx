@@ -2,6 +2,7 @@ import { CompanyDataCard } from '@/features/configuracoes/components/CompanyData
 import { PasswordChangeCard } from '@/features/configuracoes/components/PasswordChangeCard';
 import { SettingsHero } from '@/features/configuracoes/components/SettingsHero';
 import { ContaAzulSection } from '@/features/cadastroEmpresa/components/ContaAzulSection';
+import { SefazSection } from '@/features/configuracoes/components/SefazSection';
 import { useConfiguracoesPageData } from '@/features/configuracoes/hooks/useConfiguracoesPageData';
 
 export default function Configuracoes() {
@@ -16,6 +17,8 @@ export default function Configuracoes() {
         <CompanyDataCard empresa={empresa} profileQuery={profileQuery} />
         <PasswordChangeCard passwordForm={passwordForm} />
       </div>
+
+      <SefazSection />
 
       {empresaId ? <ContaAzulSection empresaId={empresaId} /> : null}
     </div>

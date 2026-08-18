@@ -84,6 +84,7 @@ Scripts auxiliares:
 - `008_add_dashboard_performance_indexes.sql`: cria indices de dashboard em `documentos_fiscais_tributos`.
 - Alembic `20260515_0004`: adiciona `tentativas_falhas`, `bloqueado_ate` e `ultimo_login_em` em `public.login`.
 - Alembic `20260511_0003`: aplica a migration `008_add_dashboard_performance_indexes.sql`.
+- Alembic `20260814_0013`: cria schema `sefaz` (`certificados`, `nsu_controle`, `documentos`, `eventos`, `sync_log`) no banco NFe/XML — ver "Modulo SEFAZ" abaixo.
 
 ### Criadas no startup
 
@@ -136,3 +137,30 @@ Consolidar o uso do Alembic com:
 - Alembic `20260813_0012`: cria `indicadores` (catalogo fixo, seed de 6 indicadores XML), `indicador_historico` (materializado por `materializar_indicadores_historico_task`, fonte `notas_kpis`) e `metas`.
 - `API/app/services/metas/metas_repository.py`, `API/app/services/metas/metas_historico_service.py` e `API/app/workers/metas_tasks.py` validam essas tabelas antes de operar o modulo Metas.
 - `API/app/tests/test_database_schema.py` cobre o head do Alembic e deve ser mantido em sincronia com novas migrations.
+
+## Modulo SEFAZ
+
+Alembic `20260814_0013` cria o schema `sefaz` no banco NFe/XML (nao e banco separado):
+
+- `sefaz.certificados`: certificado A1 (`.pfx`/`.p12`) e senha, ambos criptografados em
+  repouso (Fernet, chave `SEFAZ_CERT_ENCRYPTION_KEY` — ver `docs/security.md`). Indice unico
+  parcial `uq_sefaz_certificados_empresa_ativo` garante no maximo 1 certificado `ativo=true`
+  por `empresa_id`.
+- `sefaz.nsu_controle`: checkpoint de paginacao por `(empresa_id, ambiente)` — `ultimo_nsu`,
+  `ultima_execucao_em`, `status_ultima_execucao` (`sucesso`/`bloqueado`/`erro`). E a base da
+  trava de 1h apos bloqueio da SEFAZ (`cStat=656`) em `SefazDistribuicaoService`.
+- `sefaz.documentos`: documentos distribuidos pela SEFAZ (`resNFe`/`nfeProc`), com `direcao`
+  (`emitida`/`recebida`, calculada comparando `cnpj_emitente` com o CNPJ da empresa — nao vem
+  da SEFAZ). Unique `(empresa_id, chave_acesso)` garante idempotencia entre execucoes.
+  `xml_armazenado` so e preenchido para `nfeProc` (XML completo); `resNFe` fica so com o
+  resumo.
+- `sefaz.eventos`: eventos (`resEvento`) associados a um `sefaz.documentos` existente —
+  descartado silenciosamente se o documento correspondente ainda nao foi sincronizado.
+- `sefaz.sync_log`: historico de cada execucao de sync (`GET /api/sefaz/sync-log`), auditoria
+  independente do `processing_jobs` (ver `docs/jobs.md`).
+
+Todas as tabelas usam `empresa_id BIGINT REFERENCES public.empresas(id) ON DELETE CASCADE` —
+nenhuma tem coluna de CNPJ como chave de particionamento; escopo multiempresa depende de
+`empresa_id`, nao de comparacao de CNPJ na query (ver matriz em `docs/security.md`).
+`API/app/tests/test_database_schema.py` cobre o head do Alembic e deve ser mantido em
+sincronia com novas migrations.

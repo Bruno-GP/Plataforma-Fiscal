@@ -66,13 +66,14 @@ cd API
 .\.venv-local\Scripts\python.exe -m pytest app/tests -q
 ```
 
-Workers Celery (filas: `default`, `nfe`, `sped`, `conta_azul`; Windows exige `--pool=solo`):
+Workers Celery (filas: `default`, `nfe`, `sped`, `conta_azul`, `sefaz`; Windows exige `--pool=solo`):
 
 ```bash
 cd API
 celery -A app.workers.celery_app worker --loglevel=info -Q nfe
 celery -A app.workers.celery_app worker --loglevel=info -Q sped
 celery -A app.workers.celery_app worker --loglevel=info -Q conta_azul
+celery -A app.workers.celery_app worker --loglevel=info -Q sefaz
 celery -A app.workers.celery_app beat --loglevel=info
 ```
 
@@ -123,7 +124,7 @@ Camadas em `API/app/` (ver `docs/backend-architecture.md` e `docs/backend-target
 - `models/` — schemas Pydantic de contrato HTTP.
 - `workers/` — tasks Celery, chamam services (nao repetem regra de rota).
 
-Dominios existentes: `nfe`, `sped`, `reforma_tributaria`, `ncm`, `jobs`, `geo`/`municipios`, `auth`, `conta_azul`, `fiscal` (compartilhado), `shared`.
+Dominios existentes: `nfe`, `sped`, `sefaz`, `reforma_tributaria`, `ncm`, `jobs`, `geo`/`municipios`, `auth`, `conta_azul`, `fiscal` (compartilhado), `shared`.
 
 Regra pratica para PR: se uma rota passa de 30-40 linhas ou um service de ~300 linhas/metodo de ~60 linhas, quebrar em helper/repository/formatter antes de crescer mais. Use `docs/backend-pr-checklist.md` antes de abrir PR de backend.
 

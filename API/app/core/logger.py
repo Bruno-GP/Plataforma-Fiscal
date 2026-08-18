@@ -52,6 +52,7 @@ class JsonFormatter(logging.Formatter):
             "reason",
             "outcome",
             "auth_source",
+            "upload_filename",
             "content_type",
             "size_bytes",
             "job_id",

@@ -28,7 +28,7 @@ def _raise_invalid_upload(detail: str, *, filename: str | None, content_type: st
         "upload_rejected",
         outcome="rejected",
         reason=detail,
-        filename=filename,
+        upload_filename=filename,
         content_type=content_type,
         size_bytes=size_bytes,
     )

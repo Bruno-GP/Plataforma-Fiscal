@@ -68,6 +68,13 @@ Todas as rotas abaixo estao em roteadores com dependencia de autenticacao. O esc
 | `GET /api/jobs` | Sim | Sim | CNPJ no payload do job | Lista apenas jobs do CNPJ autenticado. |
 | `GET /api/jobs/{job_id}` | Sim | Sim | CNPJ no payload do job | Retorna `404` para jobs inexistentes ou de outra empresa. |
 | `GET /api/jobs/metrics` | Sim | Sim | CNPJ no payload do job | Agrega apenas jobs do CNPJ autenticado. |
+| `POST /api/sefaz/certificados` | Sim | Sim | Nenhum (via sessao) | Router inteiro sob `Depends(require_company_scope)`; `empresa_id`/`cnpj` vem so de `current_user`, sem parametro CNPJ na rota — nao ha superficie de path/query pra escopo divergente. |
+| `GET /api/sefaz/certificados/status` | Sim | Sim | Nenhum (via sessao) | Mesma protecao acima. |
+| `POST /api/sefaz/sync` | Sim | Sim | Nenhum (via sessao) | Mesma protecao acima. |
+| `GET /api/sefaz/documentos` | Sim | Sim | Nenhum (via sessao) | Mesma protecao acima. |
+| `GET /api/sefaz/documentos/{documento_id}` | Sim | Sim | Nenhum (via sessao) | `documento_id` conferido contra `empresa_id` da sessao no repository — `404` se pertence a outra empresa. |
+| `POST /api/sefaz/documentos/{documento_id}/manifestacao` | Sim | Sim | Nenhum (via sessao) | Mesma protecao acima (`DocumentoNaoPertenceEmpresaError` -> `404`). |
+| `GET /api/sefaz/sync-log` | Sim | Sim | Nenhum (via sessao) | Mesma protecao acima. |
 
 ## CORS
 
@@ -103,6 +110,7 @@ Obrigatorias ou sensiveis em producao:
 - `PROCESSAMENTO_BATCH_ROOT_DIR`: raiz permitida para `pasta_xml`/`arquivo_sped` nas rotas batch/legadas `POST /api/nfe/processar` e `POST /api/sped/processar`. Sem essa variavel, as duas rotas retornam `400` (desabilitadas por padrao).
 - `IBPT_SYNC_MIN_INTERVAL_SECONDS`: cooldown global (segundos, padrao `300`) para `POST /api/ncm/ibpt/sincronizar`.
 - `IBPT_SYNC_ADMIN_EMAILS`: lista de emails (separados por virgula) autorizados a chamar `POST /api/ncm/ibpt/sincronizar`. Fail-closed: vazia ou ausente = `403` para todos.
+- `SEFAZ_CERT_ENCRYPTION_KEY`: chave Fernet usada por `CryptoService` (`API/app/services/sefaz/crypto_service.py`) pra criptografar em repouso o certificado A1 (`.pfx`/`.p12`) e a senha em `sefaz.certificados`. Certificado digital + senha sao dado extremamente sensivel — nunca logar, nunca retornar em resposta de API.
 
 ## OpenAI e dados fiscais
 

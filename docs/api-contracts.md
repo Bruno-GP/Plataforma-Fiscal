@@ -10,10 +10,12 @@ Base local: `http://localhost:8000`. Prefixo: `/api`. Endpoints fiscais exigem a
 - `API/app/api/ncm/routes.py`
 - `API/app/api/jobs/routes.py`
 - `API/app/api/reforma_tributaria/routes.py`
+- `API/app/api/sefaz/routes.py`
 - `API/app/models/nfe/auth/schemas.py`
 - `API/app/models/nfe/schemas.py`
 - `API/app/models/sped/schemas.py`
 - `API/app/models/reforma_tributaria/schemas.py`
+- `API/app/models/sefaz/schemas.py`
 - `API/app/core/security.py`
 
 ## Autenticacao
@@ -252,6 +254,49 @@ POST /api/sped/processar?cnpj_empresa_origem=12345678000199
 ```
 
 - O worker carrega participantes, produtos, documentos, itens, KPIs e apuracao ICMS quando disponiveis. O resultado operacional deve ser acompanhado em `/api/jobs/{job_id}`.
+
+## Sincronizacao SEFAZ
+
+Todas as rotas usam `require_company_scope` (prefixo `/api/sefaz`). Consultam o Ambiente
+Nacional (`distDFeInt`) com o certificado A1 cadastrado da empresa — ver `docs/mapeamento-busca-xml-sefaz.md`.
+
+### `POST /api/sefaz/certificados`
+
+- Body: `multipart/form-data` com `arquivo` (`.pfx`/`.p12`, ate 10000 bytes) e `senha`.
+- Response (`CertificadoStatusResponse`): `ativo`, `cnpj_titular`, `data_validade`, `dias_restantes`.
+- Erros comuns: `400` extensao invalida, arquivo vazio ou acima do limite, ou certificado invalido (`CertificadoInvalidoError`).
+
+### `GET /api/sefaz/certificados/status`
+
+- Response (`CertificadoStatusResponse`) — mesmos campos acima; `ativo=false` se a empresa nao tem certificado cadastrado.
+
+### `POST /api/sefaz/sync`
+
+- Enfileira `sefaz_sync_empresa_task` na fila `sefaz`. Nao processa no request.
+- Status HTTP: `202 Accepted`.
+- Response (`SefazSyncResponse`): `status`, `message`, `empresa_id`.
+- Observacao: nao ha `job_id`/acompanhamento via `/api/jobs` — o resultado fica em `GET /api/sefaz/sync-log`. Sujeito a trava local de 1h apos bloqueio da SEFAZ (`cStat=656`); ver `SefazDistribuicaoService`.
+
+### `GET /api/sefaz/documentos`
+
+- Query opcionais: `direcao` (`emitida`/`recebida`), `situacao`, `manifestacao_pendente` (bool), `data_inicio`, `data_fim` (filtram por `data_emissao`), `limit` (1-500, default 50), `offset`.
+- Response (`SefazDocumentoListResponse`): `total`, `limit`, `offset`, `resultados` (lista de `SefazDocumentoResponse`: `id`, `chave_acesso`, `tipo_documento`, `direcao`, `cnpj_emitente`, `cnpj_destinatario`, `nsu`, `data_emissao`, `valor_total`, `situacao`, `manifestacao_status`, `criado_em`, `atualizado_em`).
+
+### `GET /api/sefaz/documentos/{documento_id}`
+
+- Response (`SefazDocumentoDetalheResponse`): campos de `SefazDocumentoResponse` + `xml_armazenado_base64` (`nfeProc` completo em base64, quando disponivel; `null` para `resNFe`/`resEvento` sem manifestacao).
+- Erros comuns: `404` documento nao encontrado ou fora do escopo da empresa.
+
+### `POST /api/sefaz/documentos/{documento_id}/manifestacao`
+
+- Body (`ManifestacaoRequest`): `tipo_manifestacao`.
+- Response (`ManifestacaoResponse`): `documento_id`, `manifestacao_status`.
+- Erros comuns: `404` documento nao pertence a empresa; `400` manifestacao invalida (`ManifestacaoInvalidaError`).
+
+### `GET /api/sefaz/sync-log`
+
+- Query opcionais: `limit` (1-500, default 50), `offset`.
+- Response (`SefazSyncLogListResponse`): `total`, `limit`, `offset`, `resultados` (lista de `SefazSyncLogResponse`: `id`, `empresa_id`, `iniciado_em`, `finalizado_em`, `documentos_novos`, `nsu_inicial`, `nsu_final`, `status` (`sucesso`/`bloqueado`/`erro`), `erro_detalhe`).
 
 ## Jobs de processamento
 

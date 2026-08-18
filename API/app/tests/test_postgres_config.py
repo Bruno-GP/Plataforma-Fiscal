@@ -1,4 +1,5 @@
 from app.services.sped.postgres_config import carregar_config_postgres_sped
+from app.services.nfe.postres_config import carregar_config_postgres
 
 
 def _limpar_overrides_postgres_sped(monkeypatch):
@@ -37,3 +38,4 @@ def test_carregar_config_postgres_sped_prioriza_sslmode_explicito(monkeypatch):
     config = carregar_config_postgres_sped()
 
     assert config["sslmode"] == "verify-full"
+

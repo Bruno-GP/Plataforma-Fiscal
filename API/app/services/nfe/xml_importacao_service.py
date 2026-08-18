@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Iterable
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as ET
 
 import psycopg
 

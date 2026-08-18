@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as ET
 
 
 def parse_xml_importado(conteudo_xml):

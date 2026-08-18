@@ -1,8 +1,7 @@
 from datetime import datetime
-from xml.etree import ElementTree as ET
-
 import psycopg
 import logging
+from defusedxml import ElementTree as ET
 
 from app.services.nfe.postres_config import carregar_config_postgres
 

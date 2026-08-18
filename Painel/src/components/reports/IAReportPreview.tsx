@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { createElement, Fragment, type ReactNode, useMemo } from 'react';
 
 const allowedTags = new Set([
   'section',
@@ -48,17 +48,17 @@ const allowedClasses = new Set([
   'ia-report__footer',
 ]);
 
-const sanitizeHtml = (html: string) => {
+const sanitizeHtml = (html: string): ReactNode[] => {
   if (typeof window === 'undefined') {
-    return '';
+    return [];
   }
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
-  const sanitizeNode = (node: Node): Node | null => {
+  const sanitizeNode = (node: Node, keyPrefix: string): ReactNode | null => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return document.createTextNode(node.textContent ?? '');
+      return node.textContent ?? '';
     }
 
     if (node.nodeType !== Node.ELEMENT_NODE) {
@@ -69,46 +69,33 @@ const sanitizeHtml = (html: string) => {
     const tagName = element.tagName.toLowerCase();
 
     if (!allowedTags.has(tagName)) {
-      const fragment = document.createDocumentFragment();
-      element.childNodes.forEach((child) => {
-        const sanitizedChild = sanitizeNode(child);
-        if (sanitizedChild) {
-          fragment.appendChild(sanitizedChild);
-        }
-      });
-      return fragment;
+      const children = Array.from(element.childNodes)
+        .map((child, index) => sanitizeNode(child, `${keyPrefix}-${index}`))
+        .filter((child): child is ReactNode => child !== null);
+
+      return createElement(Fragment, { key: keyPrefix }, ...children);
     }
 
-    const cleanElement = document.createElement(tagName);
     const classNames = (element.getAttribute('class') ?? '')
       .split(/\s+/)
       .filter((className) => allowedClasses.has(className));
 
+    const props: Record<string, string> = {};
     if (classNames.length > 0) {
-      cleanElement.setAttribute('class', classNames.join(' '));
+      props.className = classNames.join(' ');
     }
+    props.key = keyPrefix;
 
-    element.childNodes.forEach((child) => {
-      const sanitizedChild = sanitizeNode(child);
-      if (sanitizedChild) {
-        cleanElement.appendChild(sanitizedChild);
-      }
-    });
+    const children = Array.from(element.childNodes)
+      .map((child, index) => sanitizeNode(child, `${keyPrefix}-${index}`))
+      .filter((child): child is ReactNode => child !== null);
 
-    return cleanElement;
+    return createElement(tagName, props, ...children);
   };
 
-  const fragment = document.createDocumentFragment();
-  doc.body.childNodes.forEach((child) => {
-    const sanitizedChild = sanitizeNode(child);
-    if (sanitizedChild) {
-      fragment.appendChild(sanitizedChild);
-    }
-  });
-
-  const container = document.createElement('div');
-  container.appendChild(fragment);
-  return container.innerHTML;
+  return Array.from(doc.body.childNodes)
+    .map((child, index) => sanitizeNode(child, `report-${index}`))
+    .filter((child): child is ReactNode => child !== null);
 };
 
 interface IAReportPreviewProps {
@@ -133,7 +120,8 @@ export function IAReportPreview({ report }: IAReportPreviewProps) {
   return (
     <div
       className="ia-report-surface overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/70 shadow-[0_24px_70px_-48px_rgba(15,23,42,1)]"
-      dangerouslySetInnerHTML={{ __html: sanitizedReport }}
-    />
+    >
+      {sanitizedReport}
+    </div>
   );
 }

@@ -4,12 +4,14 @@ except ImportError:  # pragma: no cover - ambiente minimo sem python-dotenv inst
     def load_dotenv(*args, **kwargs):
         return False
 from pathlib import Path
+import os
 
 # Carrega variáveis de ambiente locais para desenvolvimento e execução via scripts.
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
-
-import os
+load_dotenv(
+    BASE_DIR / ".env",
+    override=os.getenv("APP_ENV", "development").strip().lower() != "production",
+)
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -61,21 +63,16 @@ cors_origins = [
     for origin in cors_origins_env.split(",")
     if _normalizar_origem(origin)
 ]
-
-allow_all_origins = "*" in cors_origins
-if not allow_all_origins:
-    cors_origins = _expandir_aliases_locais(cors_origins)
+cors_origins = _expandir_aliases_locais(cors_origins)
 
 cors_allow_credentials = get_cors_allow_credentials()
-if allow_all_origins and cors_allow_credentials:
-    cors_allow_credentials = False
 
 if is_production() and not cors_origins and not cors_origin_regex:
     raise RuntimeError("Defina CORS_ALLOW_ORIGINS ou CORS_ALLOW_ORIGIN_REGEX para produção.")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if cors_origins else ["*"],
+    allow_origins=cors_origins,
     allow_origin_regex=cors_origin_regex,
     allow_credentials=cors_allow_credentials,
     allow_methods=["*"],

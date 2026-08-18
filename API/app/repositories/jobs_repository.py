@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
@@ -163,20 +164,21 @@ class JobsRepository:
             )
             params.extend([cnpj_emitente, cnpj_emitente, cnpj_emitente])
 
-        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        where_clause = sql.SQL("")
+        if filters:
+            where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(sql.SQL(clause) for clause in filters)
 
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT COUNT(*) AS total FROM processing_jobs {where_clause}", params)
+                cur.execute(
+                    sql.SQL("SELECT COUNT(*) AS total FROM processing_jobs") + where_clause,
+                    params,
+                )
                 total = int(cur.fetchone()["total"])
                 cur.execute(
-                    f"""
-                    SELECT *
-                    FROM processing_jobs
-                    {where_clause}
-                    ORDER BY criado_em DESC
-                    LIMIT %s OFFSET %s
-                    """,
+                    sql.SQL("SELECT * FROM processing_jobs")
+                    + where_clause
+                    + sql.SQL(" ORDER BY criado_em DESC LIMIT %s OFFSET %s"),
                     [*params, limit, offset],
                 )
                 rows = [dict(row) for row in cur.fetchall()]
@@ -288,20 +290,22 @@ class JobsRepository:
             )
             params.extend([cnpj_emitente, cnpj_emitente, cnpj_emitente])
 
-        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        where_clause = sql.SQL("")
+        if filters:
+            where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(sql.SQL(clause) for clause in filters)
 
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT COUNT(*) AS total FROM processing_jobs {where_clause}", params)
+                cur.execute(
+                    sql.SQL("SELECT COUNT(*) AS total FROM processing_jobs") + where_clause,
+                    params,
+                )
                 total = int(cur.fetchone()["total"])
 
                 cur.execute(
-                    f"""
-                    SELECT status, COUNT(*) AS total
-                    FROM processing_jobs
-                    {where_clause}
-                    GROUP BY status
-                    """,
+                    sql.SQL("SELECT status, COUNT(*) AS total FROM processing_jobs")
+                    + where_clause
+                    + sql.SQL(" GROUP BY status"),
                     params,
                 )
                 por_status = {
@@ -310,12 +314,9 @@ class JobsRepository:
                 }
 
                 cur.execute(
-                    f"""
-                    SELECT tipo, COUNT(*) AS total
-                    FROM processing_jobs
-                    {where_clause}
-                    GROUP BY tipo
-                    """,
+                    sql.SQL("SELECT tipo, COUNT(*) AS total FROM processing_jobs")
+                    + where_clause
+                    + sql.SQL(" GROUP BY tipo"),
                     params,
                 )
                 por_tipo = {
@@ -324,17 +325,17 @@ class JobsRepository:
                 }
 
                 cur.execute(
-                    f"""
-                    SELECT
-                        tipo,
-                        AVG(EXTRACT(EPOCH FROM (finalizado_em - iniciado_em)) * 1000) AS duracao_media_ms
-                    FROM processing_jobs
-                    {where_clause}
-                    {"AND" if where_clause else "WHERE"} iniciado_em IS NOT NULL
-                      AND finalizado_em IS NOT NULL
-                    GROUP BY tipo
-                    """,
-                    params,
+                    sql.SQL(
+                        "SELECT tipo, AVG(EXTRACT(EPOCH FROM (finalizado_em - iniciado_em)) * 1000) AS duracao_media_ms "
+                        "FROM processing_jobs"
+                    )
+                    + where_clause
+                    + sql.SQL(
+                        " AND iniciado_em IS NOT NULL AND finalizado_em IS NOT NULL"
+                        if filters
+                        else " WHERE iniciado_em IS NOT NULL AND finalizado_em IS NOT NULL"
+                    )
+                    + sql.SQL(" GROUP BY tipo"),
                 )
                 duracao_media_ms = {
                     str(row["tipo"]): round(float(row["duracao_media_ms"] or 0), 2)

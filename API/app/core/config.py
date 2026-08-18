@@ -90,6 +90,9 @@ def get_cors_allow_origins() -> str:
     if not normalized and not is_production():
         return default_value
 
+    if normalized == "*" and not is_production():
+        return default_value
+
     return raw_value
 
 

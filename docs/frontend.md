@@ -83,6 +83,18 @@ export default function ImportacaoXML() {
 
 O hook de dados retorna um objeto tipado pela interface `NomeDaFeaturePageData` definida em `types.ts`. A página não contém lógica — ela apenas distribui props.
 
+### Variação: sub-widget colocated dentro de uma feature existente
+
+`features/configuracoes/components/SefazSection/` foge do padrão acima porque não é uma
+feature/página própria — é um bloco autocontido (3 abas: certificado, documentos, histórico)
+embutido em `pages/Configuracoes.tsx` (`import { SefazSection } from '@/features/configuracoes/components/SefazSection'`).
+Em vez de `hooks/use<Nome>PageData.ts` no nível da feature, o hook (`useSefazSectionData.ts`),
+o client HTTP (`sefaz.api.ts`, usa `apiFetch`/`API_BASE_URL` normalmente) e os tipos
+(`sefaz.types.ts`) ficam colocated dentro da própria pasta do componente, exportados via
+`index.ts`. Use esse padrão para blocos que pertencem semanticamente a uma tela existente
+(ex.: uma seção de Configurações) em vez de justificar uma feature/rota nova. `SefazSection.tsx`
+tem ~900 linhas — candidato a quebrar em subcomponentes por aba se crescer mais.
+
 ## Camadas de chamada HTTP
 
 ```

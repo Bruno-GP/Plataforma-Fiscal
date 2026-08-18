@@ -10,7 +10,9 @@ except ImportError:  # pragma: no cover - ambiente minimo sem python-dotenv inst
 
 load_dotenv(
     Path(__file__).resolve().parents[1] / ".env",
-    override=os.getenv("APP_ENV", "development").strip().lower() != "production",
+    # Fail-closed: so sobrescreve env vars reais com o .env quando APP_ENV e
+    # explicitamente "development". Ausente/vazio/typo -> nao sobrescreve.
+    override=os.getenv("APP_ENV", "").strip().lower() == "development",
 )
 
 try:

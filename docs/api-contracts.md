@@ -280,11 +280,11 @@ Nacional (`distDFeInt`) com o certificado A1 cadastrado da empresa — ver `docs
 ### `GET /api/sefaz/documentos`
 
 - Query opcionais: `direcao` (`emitida`/`recebida`), `situacao`, `manifestacao_pendente` (bool), `data_inicio`, `data_fim` (filtram por `data_emissao`), `limit` (1-500, default 50), `offset`.
-- Response (`SefazDocumentoListResponse`): `total`, `limit`, `offset`, `resultados` (lista de `SefazDocumentoResponse`: `id`, `chave_acesso`, `tipo_documento`, `direcao`, `cnpj_emitente`, `cnpj_destinatario`, `nsu`, `data_emissao`, `valor_total`, `situacao`, `manifestacao_status`, `criado_em`, `atualizado_em`).
+- Response (`SefazDocumentoListResponse`): `total`, `limit`, `offset`, `resultados` (lista de `SefazDocumentoResponse`: `id`, `chave_acesso`, `tipo_documento`, `direcao`, `cnpj_emitente`, `cnpj_destinatario`, `nsu`, `data_emissao`, `valor_total`, `situacao`, `manifestacao_status`, `criado_em`, `atualizado_em`, `processado_fiscal_em`).
 
 ### `GET /api/sefaz/documentos/{documento_id}`
 
-- Response (`SefazDocumentoDetalheResponse`): campos de `SefazDocumentoResponse` + `xml_armazenado_base64` (`nfeProc` completo em base64, quando disponivel; `null` para `resNFe`/`resEvento` sem manifestacao).
+- Response (`SefazDocumentoDetalheResponse`): campos de `SefazDocumentoResponse` (inclui `processado_fiscal_em`, preenchido somente para `direcao='emitida'` apos o transporte para o Fiscal) + `xml_armazenado_base64` (`nfeProc` completo em base64, quando disponivel; `null` para `resNFe`/`resEvento` sem manifestacao).
 - Erros comuns: `404` documento nao encontrado ou fora do escopo da empresa.
 
 ### `POST /api/sefaz/documentos/{documento_id}/manifestacao`

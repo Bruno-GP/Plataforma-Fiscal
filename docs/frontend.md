@@ -347,16 +347,7 @@ Em `createNavigationGroups`, adicione o item ao grupo adequado:
 
 ## Funcionalidades desabilitadas
 
-Estas funcionalidades têm código implementado mas estão desligadas:
-
-| Funcionalidade | Onde está desabilitada | Como habilitar |
-|---|---|---|
-| Chat | `ChatWidget` comentado em `MainLayout.tsx` | Descomentar import e `<ChatWidget />` e conectar `ChatContext` à API |
-| Atualizações | Rota comentada em `App.tsx` | Descomentar o `<Route path="/atualizacoes" ...>` e o import |
-| Reforma Tributária no menu | Item comentado em `AppSidebar.tsx` | Descomentar `{ label: 'Reforma Tributaria', path: '/reforma-tributaria', ... }` |
-| Botão Suporte | `<Button>` comentado no footer do `AppSidebar.tsx` | Descomentar e conectar ao destino de suporte |
-
-Nota: a rota `/reforma-tributaria` está ativa em `App.tsx`; apenas o link no menu está comentado.
+No estado atual do código, nao ha funcionalidades principais do front-end mantidas como comentario para reativacao futura. A rota de Reforma Tributaria continua ativa e agora tambem aparece no menu lateral.
 
 ## Checklist para novas features
 

@@ -43,6 +43,13 @@ sao `celery_app.send_task` direto na fila `sefaz`, sem `job_id` e sem status
 (tabela `sefaz.sync_log`, status `sucesso`/`bloqueado`/`erro`). Ver `docs/api-contracts.md`
 (secao "Sincronizacao SEFAZ") e `docs/mapeamento-busca-xml-sefaz.md`.
 
+`sefaz_evento_documento_novo_task` (por documento novo) e `sefaz_backfill_fiscal_task`
+(ao fim de cada `sefaz_sync_empresa_task`, por empresa) transportam documentos
+`direcao='emitida'` para as tabelas Fiscal via `SefazFiscalTransportService` —
+tambem best-effort, sem `job_id`/`processing_jobs`. Falha nao derruba o sync;
+o documento fica pendente (`sefaz.documentos.processado_fiscal_em IS NULL`) ate
+a proxima tentativa. Ver `docs/superpowers/specs/2026-08-18-sefaz-fiscal-transport-design.md`.
+
 ## Status
 
 - `PENDING`

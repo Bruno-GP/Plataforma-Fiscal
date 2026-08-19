@@ -62,6 +62,7 @@ const createNavigationGroups = (user?: Pick<SessionUser, 'tem_sped' | 'tem_conta
       label: 'Visao Geral',
       items: [
         { label: 'Dashboard', path: '/dashboard', icon: BarChart3, activePaths: ['/analise-vendas'] },
+        { label: 'Metas', path: '/metas', icon: Target }
       ],
     },
     {
@@ -90,7 +91,6 @@ const createNavigationGroups = (user?: Pick<SessionUser, 'tem_sped' | 'tem_conta
     {
       label: 'Relatorios',
       items: [
-        { label: 'Metas', path: '/metas', icon: Target },
         { label: 'Relatorios IA', path: '/relatorios-ia', icon: Sparkles },
       ],
     },

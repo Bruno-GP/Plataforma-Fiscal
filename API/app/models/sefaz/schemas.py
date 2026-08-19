@@ -33,6 +33,7 @@ class SefazDocumentoResponse(BaseModel):
     manifestacao_status: str | None = None
     criado_em: datetime | None = None
     atualizado_em: datetime | None = None
+    processado_fiscal_em: datetime | None = None
 
 
 class SefazDocumentoDetalheResponse(SefazDocumentoResponse):
@@ -72,4 +73,3 @@ class SefazSyncLogListResponse(BaseModel):
     limit: int
     offset: int
     resultados: list[SefazSyncLogResponse] = Field(default_factory=list)
-

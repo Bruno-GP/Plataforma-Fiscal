@@ -31,6 +31,7 @@ export interface SefazDocumento {
   manifestacao_status: string | null;
   criado_em: string | null;
   atualizado_em: string | null;
+  processado_fiscal_em: string | null;
 }
 
 export interface SefazDocumentoDetalhe extends SefazDocumento {
@@ -71,4 +72,3 @@ export interface SefazSyncLogListResponse {
   offset: number;
   resultados: SefazSyncLog[];
 }
-

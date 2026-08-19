@@ -58,6 +58,7 @@ class FakeDocumentosRepository:
                 "manifestacao_status": "pendente",
                 "criado_em": datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc),
                 "atualizado_em": datetime(2026, 8, 1, 13, 0, tzinfo=timezone.utc),
+                "processado_fiscal_em": None,
             },
             {
                 "id": 11,
@@ -73,6 +74,7 @@ class FakeDocumentosRepository:
                 "manifestacao_status": None,
                 "criado_em": datetime(2026, 8, 2, 12, 0, tzinfo=timezone.utc),
                 "atualizado_em": datetime(2026, 8, 2, 13, 0, tzinfo=timezone.utc),
+                "processado_fiscal_em": None,
             },
         ]
 
@@ -94,6 +96,7 @@ class FakeDocumentosRepository:
             "manifestacao_status": "pendente",
             "criado_em": datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc),
             "atualizado_em": datetime(2026, 8, 1, 13, 0, tzinfo=timezone.utc),
+            "processado_fiscal_em": None,
             "xml_armazenado": b"<xml>teste</xml>",
         }
 
@@ -191,6 +194,78 @@ def test_listar_documentos(client, monkeypatch):
     assert payload["total"] == 2
     assert payload["resultados"][0]["manifestacao_status"] == "pendente"
     assert fake_repo.calls[0][0] == "listar"
+
+
+def test_listar_documentos_expoe_processado_fiscal_em(client, monkeypatch):
+    class FakeRepo:
+        def listar(self, **kwargs):
+            return 1, [
+                {
+                    "id": 20,
+                    "chave_acesso": "35123456789012345678901234567890123456789099",
+                    "tipo_documento": "nfeProc",
+                    "direcao": "emitida",
+                    "cnpj_emitente": "12345678000190",
+                    "cnpj_destinatario": None,
+                    "nsu": "000000000000020",
+                    "data_emissao": date(2026, 8, 5),
+                    "valor_total": Decimal("50.00"),
+                    "situacao": "autorizada",
+                    "manifestacao_status": None,
+                    "criado_em": datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc),
+                    "atualizado_em": datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc),
+                    "processado_fiscal_em": datetime(2026, 8, 5, 13, 0, tzinfo=timezone.utc),
+                }
+            ]
+
+    monkeypatch.setattr(routes, "DocumentosRepository", lambda: FakeRepo())
+
+    response = client.get("/api/sefaz/documentos")
+
+    assert response.status_code == 200
+    resultado = response.json()["resultados"][0]
+    assert resultado["processado_fiscal_em"] is not None
+
+
+def test_listar_documentos_processado_fiscal_em_ausente_vira_none(client, monkeypatch):
+    fake_repo = FakeDocumentosRepository()
+    monkeypatch.setattr(routes, "DocumentosRepository", lambda: fake_repo)
+
+    response = client.get("/api/sefaz/documentos")
+
+    assert response.status_code == 200
+    resultado = response.json()["resultados"][0]
+    assert resultado["processado_fiscal_em"] is None
+
+
+def test_listar_documentos_converte_data_emissao_datetime_para_date(client, monkeypatch):
+    class FakeRepo:
+        def listar(self, **kwargs):
+            return 1, [
+                {
+                    "id": 21,
+                    "chave_acesso": "35123456789012345678901234567890123456789100",
+                    "tipo_documento": "nfeProc",
+                    "direcao": "emitida",
+                    "cnpj_emitente": "12345678000190",
+                    "cnpj_destinatario": None,
+                    "nsu": "000000000000021",
+                    "data_emissao": datetime(2026, 5, 10, 9, 30, tzinfo=timezone.utc),
+                    "valor_total": Decimal("50.00"),
+                    "situacao": "autorizada",
+                    "manifestacao_status": None,
+                    "criado_em": datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc),
+                    "atualizado_em": datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc),
+                    "processado_fiscal_em": None,
+                }
+            ]
+
+    monkeypatch.setattr(routes, "DocumentosRepository", lambda: FakeRepo())
+
+    response = client.get("/api/sefaz/documentos")
+
+    assert response.status_code == 200
+    assert response.json()["resultados"][0]["data_emissao"] == "2026-05-10"
 
 
 def test_listar_documentos_com_ano_calcula_intervalo(client, monkeypatch):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -34,6 +34,12 @@ router = APIRouter()
 sefaz_router = APIRouter(prefix="/sefaz", tags=["SEFAZ"], dependencies=[Depends(require_company_scope)])
 
 
+def _date_response(valor):
+    if isinstance(valor, datetime):
+        return valor.date()
+    return valor
+
+
 def _documento_response(documento: dict) -> SefazDocumentoResponse:
     return SefazDocumentoResponse(
         id=documento["id"],
@@ -43,12 +49,13 @@ def _documento_response(documento: dict) -> SefazDocumentoResponse:
         cnpj_emitente=documento["cnpj_emitente"],
         cnpj_destinatario=documento.get("cnpj_destinatario"),
         nsu=documento["nsu"],
-        data_emissao=documento.get("data_emissao"),
+        data_emissao=_date_response(documento.get("data_emissao")),
         valor_total=documento.get("valor_total"),
         situacao=documento.get("situacao"),
         manifestacao_status=documento.get("manifestacao_status"),
         criado_em=documento.get("criado_em"),
         atualizado_em=documento.get("atualizado_em"),
+        processado_fiscal_em=documento.get("processado_fiscal_em"),
     )
 
 

@@ -61,6 +61,20 @@ const getDocumentoSituacaoBadge = (situacao: SefazDocumento['situacao']) => {
 
 const getDirecaoLabel = (direcao: SefazDocumento['direcao']) => (direcao === 'emitida' ? 'Emitida' : 'Recebida');
 
+const getFiscalLabel = (documento: SefazDocumento) => {
+  if (documento.direcao !== 'emitida') {
+    return 'Nao aplicavel';
+  }
+  return documento.processado_fiscal_em ? 'No Fiscal' : 'Pendente';
+};
+
+const getFiscalBadge = (documento: SefazDocumento) => {
+  if (documento.direcao !== 'emitida') {
+    return 'outline' as const;
+  }
+  return documento.processado_fiscal_em ? ('default' as const) : ('secondary' as const);
+};
+
 const getManifestacaoLabel = (valor: string | null) => {
   switch (valor) {
     case 'pendente':
@@ -559,6 +573,7 @@ export function SefazSection() {
                           <TableHead>Valor</TableHead>
                           <TableHead>Situacao</TableHead>
                           <TableHead>Manifestacao</TableHead>
+                          <TableHead>Fiscal</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -601,6 +616,9 @@ export function SefazSection() {
                               <Badge variant={getManifestacaoBadge(documento.manifestacao_status)}>
                                 {getManifestacaoLabel(documento.manifestacao_status)}
                               </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={getFiscalBadge(documento)}>{getFiscalLabel(documento)}</Badge>
                             </TableCell>
                           </TableRow>
                         ))}

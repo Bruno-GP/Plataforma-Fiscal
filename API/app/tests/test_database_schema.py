@@ -118,6 +118,18 @@ def test_sefaz_migration_creates_expected_schema_objects():
     assert "DROP SCHEMA IF EXISTS sefaz CASCADE" in sefaz_schema
 
 
+def test_sefaz_processado_fiscal_migration_adiciona_coluna():
+    migration = (
+        ALEMBIC_DIR / "20260818_0014_sefaz_documentos_processado_fiscal.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ALTER TABLE sefaz.documentos" in migration
+    assert "ADD COLUMN processado_fiscal_em TIMESTAMPTZ NULL" in migration
+    assert 'revision = "20260818_0014"' in migration
+    assert 'down_revision = "20260814_0013"' in migration
+    assert "DROP COLUMN IF EXISTS processado_fiscal_em" in migration
+
+
 def test_staging_import_services_do_not_mutate_database_schema():
     xml_import_service = (
         APP_DIR / "services" / "nfe" / "xml_importacao_service.py"
@@ -260,7 +272,7 @@ def test_api_startup_does_not_mutate_database_schema():
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 
-    assert revision == "20260813_0012"
+    assert revision == "20260818_0014"
 
 
 def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):

@@ -154,12 +154,23 @@ def test_pagina_ate_cstat_137_apos_138():
 
 
 def test_cstat_656_marca_bloqueado_e_para():
-    servico = _servico([RespostaDistribuicao(cstat=656, ultimo_nsu="5", max_nsu="5", documentos=[])])
+    servico = _servico(
+        [
+            RespostaDistribuicao(
+                cstat=656,
+                ultimo_nsu="5",
+                max_nsu="5",
+                documentos=[],
+                x_motivo="Rejeicao: Consumo Indevido.",
+            )
+        ]
+    )
 
     resultado = servico.sincronizar_empresa(empresa_id=1, cnpj_empresa="12345678000190")
 
     assert resultado.status == "bloqueado"
     assert "656" in resultado.erro_detalhe or "indevido" in resultado.erro_detalhe
+    assert "Consumo Indevido" in resultado.erro_detalhe
 
 
 def test_idempotencia_reprocessar_mesmo_documento_nao_duplica():

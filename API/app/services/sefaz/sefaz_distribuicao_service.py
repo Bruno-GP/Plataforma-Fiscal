@@ -148,7 +148,10 @@ class SefazDistribuicaoService:
                     break
                 if decisao.bloqueado:
                     status_final = "bloqueado"
-                    erro_detalhe = "Consumo indevido (cStat 656) -- aguardando janela de espera."
+                    erro_detalhe = (
+                        f"Consumo indevido (cStat 656): "
+                        f"{resposta.x_motivo or 'aguardando janela de espera.'}"
+                    )
                     break
                 if not decisao.continuar:
                     break

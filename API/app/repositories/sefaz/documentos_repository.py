@@ -99,6 +99,38 @@ class DocumentosRepository(SefazRepositoryBase):
                 )
             conn.commit()
 
+    def marcar_processado_fiscal(self, documento_id: int) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE sefaz.documentos
+                    SET processado_fiscal_em = NOW()
+                    WHERE id = %s
+                    """,
+                    (documento_id,),
+                )
+            conn.commit()
+
+    def listar_pendentes_fiscal(self, empresa_id: int) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM sefaz.documentos
+                    WHERE empresa_id = %s
+                      AND direcao = 'emitida'
+                      AND xml_armazenado IS NOT NULL
+                      AND processado_fiscal_em IS NULL
+                    ORDER BY id ASC
+                    """,
+                    (empresa_id,),
+                )
+                rows = [dict(row) for row in cur.fetchall()]
+
+        return rows
+
     def listar(
         self,
         *,
@@ -152,4 +184,3 @@ class DocumentosRepository(SefazRepositoryBase):
                 rows = [dict(row) for row in cur.fetchall()]
 
         return total, rows
-

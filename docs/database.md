@@ -85,6 +85,8 @@ Scripts auxiliares:
 - Alembic `20260515_0004`: adiciona `tentativas_falhas`, `bloqueado_ate` e `ultimo_login_em` em `public.login`.
 - Alembic `20260511_0003`: aplica a migration `008_add_dashboard_performance_indexes.sql`.
 - Alembic `20260814_0013`: cria schema `sefaz` (`certificados`, `nsu_controle`, `documentos`, `eventos`, `sync_log`) no banco NFe/XML — ver "Modulo SEFAZ" abaixo.
+- Alembic `20260818_0014`: adiciona `processado_fiscal_em` em `sefaz.documentos`
+  para marcar o transporte automatico de documentos emitidos para as tabelas Fiscal.
 
 ### Criadas no startup
 
@@ -154,6 +156,11 @@ Alembic `20260814_0013` cria o schema `sefaz` no banco NFe/XML (nao e banco sepa
   da SEFAZ). Unique `(empresa_id, chave_acesso)` garante idempotencia entre execucoes.
   `xml_armazenado` so e preenchido para `nfeProc` (XML completo); `resNFe` fica so com o
   resumo.
+  Alembic `20260818_0014` adiciona `processado_fiscal_em` (`TIMESTAMPTZ NULL`) —
+  marca quando os itens desse documento (somente `direcao='emitida'`) foram
+  transportados para as tabelas Fiscal (`notas`/`notas_itens`). `NULL` cobre
+  pendente, falha na ultima tentativa e `resNFe` sem XML completo — ver
+  `docs/superpowers/specs/2026-08-18-sefaz-fiscal-transport-design.md`.
 - `sefaz.eventos`: eventos (`resEvento`) associados a um `sefaz.documentos` existente —
   descartado silenciosamente se o documento correspondente ainda nao foi sincronizado.
 - `sefaz.sync_log`: historico de cada execucao de sync (`GET /api/sefaz/sync-log`), auditoria

@@ -7,8 +7,19 @@ import pytest
 def empresa_id(migrated_db) -> int:
     with migrated_db.cursor() as cur:
         cur.execute(
-            "INSERT INTO public.empresas (cnpj, nome) VALUES (%s, %s) RETURNING id",
-            ("12345678000190", "Empresa Teste SEFAZ"),
+            """
+            INSERT INTO public.empresas (cnpj, nome, estado, cidade, municipio_id, codigo_ibge)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                "12345678000190",
+                "Empresa Teste SEFAZ",
+                "SP",
+                "Sao Paulo",
+                "3550308",
+                "3550308",
+            ),
         )
         new_id = cur.fetchone()[0]
     migrated_db.commit()
@@ -127,3 +138,60 @@ def test_listar_pagina_com_limit_e_offset(migrated_db, empresa_id):
     assert len(pagina_1) == 2
     assert len(pagina_2) == 1
 
+
+def test_listar_pendentes_fiscal_filtra_emitida_com_xml_nao_processado(migrated_db, empresa_id):
+    from app.repositories.sefaz.documentos_repository import DocumentosRepository
+
+    repo = DocumentosRepository()
+    _inserir_documento(
+        repo,
+        empresa_id,
+        chave_acesso="6666666666666666666666666666666666666666",
+        direcao="emitida",
+        tipo_documento="nfeProc",
+        xml_armazenado=b"<nfeProc>xml</nfeProc>",
+    )
+    _inserir_documento(
+        repo,
+        empresa_id,
+        chave_acesso="7777777777777777777777777777777777777777",
+        direcao="recebida",
+        tipo_documento="nfeProc",
+        xml_armazenado=b"<nfeProc>xml</nfeProc>",
+    )
+    _inserir_documento(
+        repo,
+        empresa_id,
+        chave_acesso="8888888888888888888888888888888888888888",
+        direcao="emitida",
+        tipo_documento="resNFe",
+        xml_armazenado=None,
+    )
+
+    pendentes = repo.listar_pendentes_fiscal(empresa_id)
+
+    assert [documento["chave_acesso"] for documento in pendentes] == [
+        "6666666666666666666666666666666666666666"
+    ]
+
+
+def test_marcar_processado_fiscal_atualiza_timestamp_e_sai_dos_pendentes(
+    migrated_db, empresa_id
+):
+    from app.repositories.sefaz.documentos_repository import DocumentosRepository
+
+    repo = DocumentosRepository()
+    _inserir_documento(
+        repo,
+        empresa_id,
+        chave_acesso="9999999999999999999999999999999999999999",
+        direcao="emitida",
+        xml_armazenado=b"<nfeProc>xml</nfeProc>",
+    )
+    documento = repo.obter_por_chave(empresa_id, "9999999999999999999999999999999999999999")
+
+    repo.marcar_processado_fiscal(documento["id"])
+
+    atualizado = repo.obter_por_id(empresa_id, documento["id"])
+    assert atualizado["processado_fiscal_em"] is not None
+    assert repo.listar_pendentes_fiscal(empresa_id) == []

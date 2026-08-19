@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import { useToast } from '@/hooks/use-toast';
@@ -8,6 +8,7 @@ import {
   fetchSefazDocumentoDetalhe,
   fetchSefazDocumentos,
   fetchSefazSyncLog,
+  fetchSefazSyncStatus,
   manifestarSefazDocumento,
   syncSefazAgora,
   uploadSefazCertificado,
@@ -21,6 +22,7 @@ import type {
   SefazManifestacaoFiltro,
   SefazSituacaoFiltro,
   SefazSyncLogListResponse,
+  SefazSyncStatus,
 } from './sefaz.types';
 
 const DOCUMENTOS_PAGE_SIZE = 10;
@@ -57,11 +59,13 @@ export interface SefazSectionData {
   manifestacaoPendenteConfirmacao: { documentoId: number; tipo: SefazManifestacaoTipo } | null;
   setManifestacaoPendenteConfirmacao: (value: { documentoId: number; tipo: SefazManifestacaoTipo } | null) => void;
   statusQuery: UseQueryResult<SefazCertificadoStatus, Error>;
+  syncStatusQuery: UseQueryResult<SefazSyncStatus, Error>;
   documentosQuery: UseQueryResult<SefazDocumentoListResponse, Error>;
   documentoDetalheQuery: UseQueryResult<SefazDocumentoDetalhe, Error>;
   syncLogQuery: UseQueryResult<SefazSyncLogListResponse, Error>;
   certificadoUploadPending: boolean;
   sincronizandoAgora: boolean;
+  syncCooldownSeconds: number;
   manifestandoDocumento: boolean;
   uploadCertificado: () => Promise<void>;
   syncNow: () => Promise<void>;
@@ -89,6 +93,7 @@ export function useSefazSectionData(): SefazSectionData {
   const [syncLogPage, setSyncLogPage] = useState(1);
   const [documentoFilters, setDocumentoFiltersState] = useState(defaultFilters);
   const [selectedDocumentoId, setSelectedDocumentoId] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [manifestacaoPendenteConfirmacao, setManifestacaoPendenteConfirmacao] = useState<{
     documentoId: number;
     tipo: SefazManifestacaoTipo;
@@ -99,6 +104,18 @@ export function useSefazSectionData(): SefazSectionData {
     queryFn: fetchSefazCertificadoStatus,
     staleTime: 60 * 1000,
   });
+
+  const syncStatusQuery = useQuery({
+    queryKey: ['sefaz', 'sync-status'],
+    queryFn: fetchSefazSyncStatus,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+  });
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(Date.now()), 60 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const documentosQuery = useQuery({
     queryKey: [
@@ -262,6 +279,20 @@ export function useSefazSectionData(): SefazSectionData {
     [syncLogQuery.data?.total],
   );
 
+  const syncCooldownSeconds = useMemo(() => {
+    const bloqueadoAte = syncStatusQuery.data?.bloqueado_ate;
+    if (!bloqueadoAte) {
+      return 0;
+    }
+
+    const bloqueadoAteTime = new Date(bloqueadoAte).getTime();
+    if (Number.isNaN(bloqueadoAteTime)) {
+      return Math.max(0, syncStatusQuery.data?.segundos_restantes ?? 0);
+    }
+
+    return Math.max(0, Math.ceil((bloqueadoAteTime - now) / 1000));
+  }, [now, syncStatusQuery.data?.bloqueado_ate, syncStatusQuery.data?.segundos_restantes]);
+
   return {
     activeTab,
     setActiveTab,
@@ -287,11 +318,13 @@ export function useSefazSectionData(): SefazSectionData {
     manifestacaoPendenteConfirmacao,
     setManifestacaoPendenteConfirmacao,
     statusQuery,
+    syncStatusQuery,
     documentosQuery,
     documentoDetalheQuery,
     syncLogQuery,
     certificadoUploadPending: uploadMutation.isPending,
     sincronizandoAgora: syncMutation.isPending,
+    syncCooldownSeconds,
     manifestandoDocumento: manifestacaoMutation.isPending,
     uploadCertificado: async () => {
       await uploadMutation.mutateAsync();
@@ -314,4 +347,3 @@ export function useSefazSectionData(): SefazSectionData {
     refreshAll,
   };
 }
-

@@ -59,6 +59,15 @@ export const handlers = [
       empresa_id: 1,
     }, { status: 202 }),
   ),
+  http.get(`${API_BASE_URL}/sefaz/sync-status`, () =>
+    HttpResponse.json({
+      disponivel: true,
+      bloqueado_ate: null,
+      segundos_restantes: 0,
+      ultima_sincronizacao_com_notas_em: null,
+      documentos_novos_ultima_sync: 0,
+    }),
+  ),
   http.get(`${API_BASE_URL}/sefaz/documentos`, () =>
     HttpResponse.json({
       total: 1,

@@ -158,6 +158,20 @@ const formatCurrency = (value: string | number | null) => {
   }).format(numericValue);
 };
 
+const formatCooldown = (seconds: number) => {
+  if (seconds >= 3600) {
+    const hours = Math.ceil(seconds / 3600);
+    return `${hours} h`;
+  }
+
+  if (seconds >= 60) {
+    const minutes = Math.ceil(seconds / 60);
+    return `${minutes} min`;
+  }
+
+  return `${Math.max(1, seconds)} s`;
+};
+
 const truncateKey = (value: string) => `${value.slice(0, 12)}...${value.slice(-8)}`;
 
 const decodeBase64ToText = (value: string) => {
@@ -290,7 +304,13 @@ export function SefazSection() {
   };
 
   const certificadoInativo = !data.statusQuery.data?.ativo;
-  const syncDisabled = data.sincronizandoAgora || certificadoInativo;
+  const syncCooldownActive = data.syncCooldownSeconds > 0;
+  const syncDisabled = data.sincronizandoAgora || certificadoInativo || syncCooldownActive;
+  const syncButtonLabel = data.sincronizandoAgora
+    ? 'Sincronizando...'
+    : syncCooldownActive
+      ? `Sincronizar em ${formatCooldown(data.syncCooldownSeconds)}`
+      : 'Sincronizar agora';
 
   return (
     <>
@@ -452,10 +472,14 @@ export function SefazSection() {
                     <div className="flex flex-wrap items-center gap-3">
                       <Button type="button" onClick={data.syncNow} disabled={syncDisabled} className="gap-2">
                         {data.sincronizandoAgora ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-                        {data.sincronizandoAgora ? 'Sincronizando...' : 'Sincronizar agora'}
+                        {syncButtonLabel}
                       </Button>
                       {certificadoInativo ? (
                         <span className="text-sm text-slate-400">A sincronizacao depende de um certificado ativo.</span>
+                      ) : syncCooldownActive ? (
+                        <span className="text-sm text-slate-400">
+                          A ultima sincronizacao trouxe notas. Nova tentativa em {formatCooldown(data.syncCooldownSeconds)}.
+                        </span>
                       ) : null}
                     </div>
                   </CardContent>

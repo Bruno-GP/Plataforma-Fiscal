@@ -19,6 +19,14 @@ class SefazSyncResponse(BaseModel):
     empresa_id: int
 
 
+class SefazSyncStatusResponse(BaseModel):
+    disponivel: bool
+    bloqueado_ate: datetime | None = None
+    segundos_restantes: int = 0
+    ultima_sincronizacao_com_notas_em: datetime | None = None
+    documentos_novos_ultima_sync: int = 0
+
+
 class SefazDocumentoResponse(BaseModel):
     id: int
     chave_acesso: str

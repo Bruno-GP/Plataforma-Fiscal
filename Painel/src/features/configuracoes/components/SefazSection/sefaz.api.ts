@@ -9,6 +9,7 @@ import type {
   SefazManifestacaoResponse,
   SefazSyncLogListResponse,
   SefazSyncResponse,
+  SefazSyncStatus,
 } from './sefaz.types';
 
 interface ApiErrorDetail {
@@ -91,6 +92,16 @@ export const syncSefazAgora = async () => {
   return response.json() as Promise<SefazSyncResponse>;
 };
 
+export const fetchSefazSyncStatus = async () => {
+  const response = await apiFetch(`${API_BASE_URL}/sefaz/sync-status`);
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Nao foi possivel carregar o status de sincronizacao SEFAZ.'));
+  }
+
+  return response.json() as Promise<SefazSyncStatus>;
+};
+
 export const fetchSefazDocumentos = async (params: SefazDocumentosParams = {}) => {
   const searchParams = new URLSearchParams();
 
@@ -169,4 +180,3 @@ export const fetchSefazSyncLog = async (params: SefazSyncLogParams = {}) => {
 
   return response.json() as Promise<SefazSyncLogListResponse>;
 };
-

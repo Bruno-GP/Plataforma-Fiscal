@@ -69,3 +69,22 @@ class SyncLogRepository(SefazRepositoryBase):
 
         return total, rows
 
+    def obter_ultimo_sucesso_com_documentos(self, empresa_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM sefaz.sync_log
+                    WHERE empresa_id = %s
+                      AND status = 'sucesso'
+                      AND documentos_novos > 0
+                      AND finalizado_em IS NOT NULL
+                    ORDER BY finalizado_em DESC, id DESC
+                    LIMIT 1
+                    """,
+                    (empresa_id,),
+                )
+                row = cur.fetchone()
+
+        return dict(row) if row else None

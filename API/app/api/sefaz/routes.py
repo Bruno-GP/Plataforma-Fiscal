@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -18,6 +18,7 @@ from app.models.sefaz.schemas import (
     SefazSyncLogListResponse,
     SefazSyncLogResponse,
     SefazSyncResponse,
+    SefazSyncStatusResponse,
 )
 from app.repositories.sefaz.documentos_repository import DocumentosRepository
 from app.repositories.sefaz.sync_log_repository import SyncLogRepository
@@ -32,6 +33,7 @@ from app.workers.celery_app import celery_app
 
 router = APIRouter()
 sefaz_router = APIRouter(prefix="/sefaz", tags=["SEFAZ"], dependencies=[Depends(require_company_scope)])
+SEFAZ_SYNC_COOLDOWN = timedelta(hours=1)
 
 
 def _date_response(valor):
@@ -70,6 +72,32 @@ def _sync_log_response(sync_log: dict) -> SefazSyncLogResponse:
         nsu_final=sync_log.get("nsu_final"),
         status=sync_log["status"],
         erro_detalhe=sync_log.get("erro_detalhe"),
+    )
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _sync_status_response(empresa_id: int, *, now: datetime | None = None) -> SefazSyncStatusResponse:
+    now = now or _utc_now()
+    ultima_sync = SyncLogRepository().obter_ultimo_sucesso_com_documentos(empresa_id)
+    if not ultima_sync:
+        return SefazSyncStatusResponse(disponivel=True)
+
+    finalizado_em = ultima_sync["finalizado_em"]
+    if finalizado_em.tzinfo is None:
+        finalizado_em = finalizado_em.replace(tzinfo=timezone.utc)
+
+    bloqueado_ate = finalizado_em + SEFAZ_SYNC_COOLDOWN
+    segundos_restantes = max(0, int((bloqueado_ate - now).total_seconds()))
+
+    return SefazSyncStatusResponse(
+        disponivel=segundos_restantes == 0,
+        bloqueado_ate=bloqueado_ate,
+        segundos_restantes=segundos_restantes,
+        ultima_sincronizacao_com_notas_em=finalizado_em,
+        documentos_novos_ultima_sync=ultima_sync["documentos_novos"],
     )
 
 
@@ -119,6 +147,14 @@ def obter_status_certificado(current_user: AuthenticatedUser = Depends(require_c
 
 @sefaz_router.post("/sync", response_model=SefazSyncResponse, status_code=status.HTTP_202_ACCEPTED)
 def iniciar_sync(current_user: AuthenticatedUser = Depends(require_company_scope)):
+    sync_status = _sync_status_response(current_user.empresa_id)
+    if not sync_status.disponivel:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"A sincronizacao SEFAZ estara disponivel novamente em {sync_status.segundos_restantes} segundos.",
+            headers={"Retry-After": str(sync_status.segundos_restantes)},
+        )
+
     celery_app.send_task(
         "sefaz_sync_empresa_task",
         args=[current_user.empresa_id, current_user.cnpj],
@@ -129,6 +165,11 @@ def iniciar_sync(current_user: AuthenticatedUser = Depends(require_company_scope
         message="Sincronizacao SEFAZ enfileirada com sucesso.",
         empresa_id=current_user.empresa_id,
     )
+
+
+@sefaz_router.get("/sync-status", response_model=SefazSyncStatusResponse)
+def obter_sync_status(current_user: AuthenticatedUser = Depends(require_company_scope)):
+    return _sync_status_response(current_user.empresa_id)
 
 
 @sefaz_router.get("/documentos", response_model=SefazDocumentoListResponse)

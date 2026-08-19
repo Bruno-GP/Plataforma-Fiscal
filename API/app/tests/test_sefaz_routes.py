@@ -102,6 +102,11 @@ class FakeDocumentosRepository:
 
 
 class FakeSyncLogRepository:
+    ultimo_sucesso_com_documentos = None
+
+    def obter_ultimo_sucesso_com_documentos(self, empresa_id):
+        return self.ultimo_sucesso_com_documentos
+
     def listar(self, empresa_id, *, limit=50, offset=0):
         return 1, [
             {
@@ -171,6 +176,7 @@ def test_status_certificado(client, monkeypatch):
 def test_sync_dispara_task(client, monkeypatch):
     chamadas = []
 
+    monkeypatch.setattr(routes, "SyncLogRepository", lambda: FakeSyncLogRepository())
     monkeypatch.setattr(
         routes.celery_app,
         "send_task",
@@ -181,6 +187,53 @@ def test_sync_dispara_task(client, monkeypatch):
 
     assert response.status_code == 202
     assert chamadas == [("sefaz_sync_empresa_task", (1, "12345678000190"), "sefaz")]
+
+
+def test_sync_bloqueia_por_uma_hora_apos_sucesso_com_documentos(client, monkeypatch):
+    chamadas = []
+
+    class FakeRepo(FakeSyncLogRepository):
+        ultimo_sucesso_com_documentos = {
+            "id": 1,
+            "empresa_id": 1,
+            "finalizado_em": datetime(2026, 8, 19, 12, 30, tzinfo=timezone.utc),
+            "documentos_novos": 4,
+        }
+
+    monkeypatch.setattr(routes, "SyncLogRepository", lambda: FakeRepo())
+    monkeypatch.setattr(routes, "_utc_now", lambda: datetime(2026, 8, 19, 13, 0, tzinfo=timezone.utc))
+    monkeypatch.setattr(
+        routes.celery_app,
+        "send_task",
+        lambda task_name, args, queue: chamadas.append((task_name, tuple(args), queue)),
+    )
+
+    response = client.post("/api/sefaz/sync")
+
+    assert response.status_code == 429
+    assert response.headers["retry-after"] == "1800"
+    assert chamadas == []
+
+
+def test_sync_status_retorna_cooldown(client, monkeypatch):
+    class FakeRepo(FakeSyncLogRepository):
+        ultimo_sucesso_com_documentos = {
+            "id": 1,
+            "empresa_id": 1,
+            "finalizado_em": datetime(2026, 8, 19, 12, 30, tzinfo=timezone.utc),
+            "documentos_novos": 4,
+        }
+
+    monkeypatch.setattr(routes, "SyncLogRepository", lambda: FakeRepo())
+    monkeypatch.setattr(routes, "_utc_now", lambda: datetime(2026, 8, 19, 13, 0, tzinfo=timezone.utc))
+
+    response = client.get("/api/sefaz/sync-status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["disponivel"] is False
+    assert payload["segundos_restantes"] == 1800
+    assert payload["documentos_novos_ultima_sync"] == 4
 
 
 def test_listar_documentos(client, monkeypatch):

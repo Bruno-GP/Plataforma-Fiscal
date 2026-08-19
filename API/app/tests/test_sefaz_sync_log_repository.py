@@ -67,3 +67,45 @@ def test_listar_ordena_mais_recente_primeiro(migrated_db, empresa_id):
     assert rows[0]["documentos_novos"] == 2
     assert rows[1]["documentos_novos"] == 1
 
+
+def test_obter_ultimo_sucesso_com_documentos_ignora_erro_e_zero_documentos(migrated_db, empresa_id):
+    from app.repositories.sefaz.sync_log_repository import SyncLogRepository
+
+    repo = SyncLogRepository()
+    base = datetime.now(timezone.utc)
+    repo.registrar(
+        empresa_id=empresa_id,
+        iniciado_em=base - timedelta(hours=3),
+        finalizado_em=base - timedelta(hours=3),
+        documentos_novos=2,
+        nsu_inicial="0",
+        nsu_final="2",
+        status="sucesso",
+        erro_detalhe=None,
+    )
+    repo.registrar(
+        empresa_id=empresa_id,
+        iniciado_em=base - timedelta(hours=2),
+        finalizado_em=base - timedelta(hours=2),
+        documentos_novos=0,
+        nsu_inicial="2",
+        nsu_final="2",
+        status="sucesso",
+        erro_detalhe=None,
+    )
+    repo.registrar(
+        empresa_id=empresa_id,
+        iniciado_em=base - timedelta(hours=1),
+        finalizado_em=base - timedelta(hours=1),
+        documentos_novos=5,
+        nsu_inicial="2",
+        nsu_final="7",
+        status="erro",
+        erro_detalhe="Falha SEFAZ",
+    )
+
+    row = repo.obter_ultimo_sucesso_com_documentos(empresa_id)
+
+    assert row is not None
+    assert row["documentos_novos"] == 2
+    assert row["status"] == "sucesso"

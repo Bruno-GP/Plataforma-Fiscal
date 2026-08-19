@@ -17,6 +17,14 @@ export interface SefazSyncResponse {
   empresa_id: number;
 }
 
+export interface SefazSyncStatus {
+  disponivel: boolean;
+  bloqueado_ate: string | null;
+  segundos_restantes: number;
+  ultima_sincronizacao_com_notas_em: string | null;
+  documentos_novos_ultima_sync: number;
+}
+
 export interface SefazDocumento {
   id: number;
   chave_acesso: string;

@@ -13,6 +13,8 @@ class LoginCadastroRequest(BaseModel):
     cidade: str | None = Field(default=None, description="Cidade da empresa para fallback de NFCe")
     municipio_id: str | None = Field(default=None, description="Identificador do municipio no catalogo local")
     codigo_ibge: str | None = Field(default=None, description="Codigo IBGE do municipio no catalogo local")
+    cnae_fiscal: str | None = Field(default=None, description="Codigo do CNAE fiscal principal, obtido via enriquecimento de CNPJ")
+    cnae_fiscal_descricao: str | None = Field(default=None, description="Descricao do CNAE fiscal principal")
 
 
 class LoginCadastroResponse(BaseModel):

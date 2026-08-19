@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 import { CatalogoCombobox } from './CatalogoCombobox';
@@ -19,7 +20,6 @@ export function CadastroEmpresaPage() {
     password,
     setPassword,
     cnpj,
-    setCnpj,
     origemFiscal,
     setOrigemFiscal,
     ufSearch,
@@ -35,6 +35,11 @@ export function CadastroEmpresaPage() {
     handleUfSelect,
     handleCidadeSelect,
     handleSubmit,
+    cnaeFiscal,
+    cnaeFiscalDescricao,
+    isBuscandoCnpj,
+    handleBuscarCnpj,
+    handleCnpjChange,
   } = useCadastroEmpresaPageData();
 
   return (
@@ -48,30 +53,56 @@ export function CadastroEmpresaPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="cnpj">CNPJ</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="cnpj"
+                  type="text"
+                  placeholder="00.000.000/0000-00"
+                  value={cnpj}
+                  onChange={(e) => handleCnpjChange(e.target.value)}
+                  inputMode="numeric"
+                  maxLength={18}
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleBuscarCnpj}
+                  disabled={isBuscandoCnpj}
+                >
+                  {isBuscandoCnpj ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cnae">CNAE</Label>
+              <Input
+                id="cnae"
+                type="text"
+                placeholder="Preenchido ao buscar o CNPJ"
+                value={cnaeFiscal ? `${cnaeFiscal}${cnaeFiscalDescricao ? ` - ${cnaeFiscalDescricao}` : ''}` : ''}
+                disabled
+                readOnly
+              />
+            </div>
             <TextInputField
               id="empresaNome"
               label="Nome da empresa"
               type="text"
-              placeholder="Empresa Exemplo LTDA"
+              placeholder="Preenchido ao buscar o CNPJ"
               value={empresaNome}
               onChange={(e) => setEmpresaNome(e.target.value)}
-            />
-            <TextInputField
-              id="cnpj"
-              label="CNPJ"
-              type="text"
-              placeholder="00.000.000/0000-00"
-              value={cnpj}
-              onChange={(e) => setCnpj(e.target.value)}
-              inputMode="numeric"
-              maxLength={18}
+              disabled
             />
             <div className="grid gap-4 sm:grid-cols-2">
               <CatalogoCombobox
                 label="UF da empresa"
-                placeholder="Pesquisar UF"
+                placeholder="Preenchido ao buscar o CNPJ"
                 searchPlaceholder="Digite para pesquisar a UF"
                 emptyMessage={ufsQuery.isLoading ? 'Carregando...' : 'Nenhuma UF encontrada.'}
+                disabled
                 selectedLabel={selectedUf?.uf ?? ''}
                 searchValue={ufSearch}
                 onSearchValueChange={setUfSearch}
@@ -83,10 +114,10 @@ export function CadastroEmpresaPage() {
               />
               <CatalogoCombobox
                 label="Cidade da empresa"
-                placeholder={selectedUf ? 'Pesquisar cidade' : 'Selecione a UF primeiro'}
+                placeholder="Preenchido ao buscar o CNPJ"
                 searchPlaceholder="Digite para pesquisar a cidade"
                 emptyMessage={getCidadeEmptyMessage(selectedUf, cidadesQuery.isLoading)}
-                disabled={!selectedUf}
+                disabled
                 selectedLabel={selectedCidade?.nome ?? ''}
                 searchValue={cidadeSearch}
                 onSearchValueChange={setCidadeSearch}

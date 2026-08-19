@@ -30,6 +30,7 @@ export interface TextInputFieldProps {
   inputMode?: 'numeric';
   maxLength?: number;
   minLength?: number;
+  disabled?: boolean;
 }
 
 export type CatalogSelectionValidation =

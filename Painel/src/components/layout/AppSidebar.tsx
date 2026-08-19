@@ -84,6 +84,11 @@ const createNavigationGroups = (user?: Pick<SessionUser, 'tem_sped' | 'tem_conta
       items: [
         { label: 'Compras', path: '/analise-compras', icon: ShoppingCart },
         { label: 'Clientes', path: '/analise-clientes', icon: Users, activePaths: ['/clientes'] },
+      ],
+    },
+    {
+      label: 'Detalhamento',
+      items: [
         { label: 'Detalhamento de Vendas', path: '/detalhamento-vendas', icon: TrendingUp },
         { label: 'Detalhamento de Compras', path: '/detalhamento-compras', icon: ReceiptText },
       ],

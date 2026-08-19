@@ -156,6 +156,12 @@ def registrar_login(request: LoginCadastroRequest, response: Response):
             municipio_id=municipio_catalogo["municipio_id"],
             codigo_ibge=municipio_catalogo["codigo_ibge"],
         )
+        if request.cnae_fiscal or request.cnae_fiscal_descricao:
+            EmpresaService().atualizar_cnae(
+                cnpj_emitente=resultado.cnpj,
+                cnae_fiscal=request.cnae_fiscal,
+                cnae_fiscal_descricao=request.cnae_fiscal_descricao,
+            )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

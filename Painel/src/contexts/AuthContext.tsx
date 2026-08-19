@@ -58,6 +58,8 @@ interface AuthContextType {
     cidade?: string,
     municipioId?: string,
     codigoIbge?: string,
+    cnaeFiscal?: string,
+    cnaeFiscalDescricao?: string,
   ) => Promise<AuthResult>;
   logout: () => void;
 }
@@ -266,6 +268,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     cidade?: string,
     municipioId?: string,
     codigoIbge?: string,
+    cnaeFiscal?: string,
+    cnaeFiscalDescricao?: string,
   ): Promise<AuthResult> => {
     const empresaNomeNormalizado = empresaNome.trim();
     const emailNormalizado = email.trim();
@@ -323,6 +327,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           cidade: cidadeNormalizada,
           municipio_id: municipioIdNormalizado,
           codigo_ibge: codigoIbgeNormalizado,
+          cnae_fiscal: cnaeFiscal?.trim() || undefined,
+          cnae_fiscal_descricao: cnaeFiscalDescricao?.trim() || undefined,
         }),
       });
 

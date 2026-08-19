@@ -13,6 +13,7 @@ export function TextInputField({
   inputMode,
   maxLength,
   minLength,
+  disabled,
 }: TextInputFieldProps) {
   return (
     <div className="space-y-2">
@@ -26,6 +27,7 @@ export function TextInputField({
         inputMode={inputMode}
         maxLength={maxLength}
         minLength={minLength}
+        disabled={disabled}
         required
       />
     </div>

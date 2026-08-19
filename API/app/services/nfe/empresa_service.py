@@ -189,3 +189,31 @@ class EmpresaService:
                     ),
                 )
             conn.commit()
+
+    def atualizar_cnae(
+        self,
+        cnpj_emitente: str,
+        cnae_fiscal: str | None = None,
+        cnae_fiscal_descricao: str | None = None,
+    ) -> None:
+        cnpj = normalizar_cnpj(cnpj_emitente)
+
+        if not (cnae_fiscal or cnae_fiscal_descricao):
+            return
+
+        with psycopg.connect(**self.conn_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.empresas
+                    SET cnae_fiscal = COALESCE(%s, cnae_fiscal),
+                        cnae_fiscal_descricao = COALESCE(%s, cnae_fiscal_descricao)
+                    WHERE regexp_replace(UPPER(cnpj), '[^0-9A-Z]', '', 'g') = %s;
+                    """,
+                    (
+                        cnae_fiscal,
+                        cnae_fiscal_descricao,
+                        cnpj,
+                    ),
+                )
+            conn.commit()

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { fetchCnpjEnriquecimento } from '@/services/cnpj';
 import { fetchMunicipiosPorUf, fetchUfsCatalogo, type MunicipioCatalogoItem, type UFCatalogoItem } from '@/services/municipios';
 
 import { validateCatalogSelection } from '../validations/catalogSelection';
@@ -21,6 +22,9 @@ export function useCadastroEmpresaPageData() {
   const [selectedCidade, setSelectedCidade] = useState<MunicipioCatalogoItem | null>(null);
   const [formError, setFormError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [cnaeFiscal, setCnaeFiscal] = useState('');
+  const [cnaeFiscalDescricao, setCnaeFiscalDescricao] = useState('');
+  const [isBuscandoCnpj, setIsBuscandoCnpj] = useState(false);
 
   const { register } = useAuth();
   const { toast } = useToast();
@@ -54,6 +58,66 @@ export function useCadastroEmpresaPageData() {
     setFormError('');
   };
 
+  const handleCnpjChange = (valor: string) => {
+    setCnpj(valor);
+    setEmpresaNome('');
+    setCnaeFiscal('');
+    setCnaeFiscalDescricao('');
+    setSelectedUf(null);
+    setSelectedCidade(null);
+  };
+
+  const handleBuscarCnpj = async () => {
+    const cnpjDigitos = cnpj.replace(/[^0-9A-Za-z]/g, '');
+    if (cnpjDigitos.length !== 14) {
+      toast({
+        variant: 'destructive',
+        title: 'CNPJ invalido',
+        description: 'Informe um CNPJ com 14 caracteres antes de buscar.',
+      });
+      return;
+    }
+
+    setIsBuscandoCnpj(true);
+    try {
+      const dados = await fetchCnpjEnriquecimento(cnpjDigitos);
+
+      if (dados.razao_social) {
+        setEmpresaNome(dados.razao_social);
+      }
+      setCnaeFiscal(dados.cnae_fiscal ?? '');
+      setCnaeFiscalDescricao(dados.cnae_fiscal_descricao ?? '');
+
+      if (dados.estado) {
+        setSelectedUf({ uf: dados.estado, label: dados.estado, quantidade_municipios: 0 });
+      }
+      if (dados.cidade && dados.municipio_id && dados.codigo_ibge && dados.estado) {
+        setSelectedCidade({
+          municipio_id: dados.municipio_id,
+          codigo_ibge: dados.codigo_ibge,
+          nome: dados.cidade,
+          uf: dados.estado,
+        });
+      } else {
+        setSelectedCidade(null);
+      }
+
+      toast({
+        title: 'Dados encontrados',
+        description: dados.cnae_fiscal_descricao ?? 'CNPJ consultado com sucesso.',
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Nao foi possivel buscar os dados do CNPJ.';
+      toast({
+        variant: 'destructive',
+        title: 'Erro na busca',
+        description: errorMessage,
+      });
+    } finally {
+      setIsBuscandoCnpj(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -78,6 +142,8 @@ export function useCadastroEmpresaPageData() {
         catalogSelection.selectedCidade.nome,
         catalogSelection.selectedCidade.municipio_id,
         catalogSelection.selectedCidade.codigo_ibge,
+        cnaeFiscal,
+        cnaeFiscalDescricao,
       );
 
       if (result.ok) {
@@ -133,5 +199,10 @@ export function useCadastroEmpresaPageData() {
     handleUfSelect,
     handleCidadeSelect,
     handleSubmit,
+    cnaeFiscal,
+    cnaeFiscalDescricao,
+    isBuscandoCnpj,
+    handleBuscarCnpj,
+    handleCnpjChange,
   };
 }

@@ -36,6 +36,7 @@ export interface AnaliseVendasRankingSection {
 export interface AnaliseVendasEvolutionPoint {
   month: string;
   faturamento: number;
+  meta?: number | null;
 }
 
 export interface AnaliseVendasSerieMensalItem {
@@ -71,4 +72,3 @@ export interface AnaliseVendasDashboardQueryData {
   serie_mensal?: AnaliseVendasSerieMensalItem[];
   anos_disponiveis?: number[];
 }
-

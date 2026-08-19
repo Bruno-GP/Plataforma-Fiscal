@@ -262,6 +262,7 @@ export function useMetasPageData(): MetasPageData {
     mutationFn: ({ metaId, payload }: { metaId: number; payload: MetaUpdatePayload }) => updateMeta(metaId, payload),
     onSuccess: (meta) => {
       queryClient.invalidateQueries({ queryKey: ['metas'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-vendas', 'metas'] });
       setSelectedMetaId(meta.id);
       setIsEditDialogOpen(false);
       toast({
@@ -284,6 +285,7 @@ export function useMetasPageData(): MetasPageData {
     mutationFn: (metaId: number) => cancelMeta(metaId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['metas'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-vendas', 'metas'] });
       setSelectedMetaId(null);
       setMetaPendingCancel(null);
       toast({

@@ -1,10 +1,13 @@
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useEffect, useState } from 'react';
+import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 interface BillingDataPoint {
   month: string;
   faturamento: number;
+  meta?: number | null;
 }
 
 interface EvolucaoChartProps {
@@ -16,6 +19,9 @@ interface EvolucaoChartProps {
   title?: string;
   descriptionPrefix?: string;
   metricLabel?: string;
+  hasMetaComparison?: boolean;
+  metaComparisonLabel?: string | null;
+  metaComparisonSummary?: string | null;
 }
 
 const formatCurrency = (value: number) =>
@@ -34,7 +40,28 @@ export function EvolucaoChart({
   title = 'Evolucao do Faturamento',
   descriptionPrefix = 'Faturamento',
   metricLabel = 'Faturamento',
+  hasMetaComparison = false,
+  metaComparisonLabel,
+  metaComparisonSummary,
 }: EvolucaoChartProps) {
+  const [chartView, setChartView] = useState<'sales' | 'comparison'>('sales');
+  const showMetaComparison = hasMetaComparison && billingData.some((point) => point.meta !== null && point.meta !== undefined);
+  const activeView = showMetaComparison ? chartView : 'sales';
+  const tooltipFormatter = (value: number | string, name: string) => {
+    const labels: Record<string, string> = {
+      faturamento: metricLabel,
+      meta: metaComparisonLabel ? `Meta (${metaComparisonLabel})` : 'Meta',
+    };
+
+    return [formatCurrency(Number(value)), labels[name] ?? name];
+  };
+
+  useEffect(() => {
+    if (!showMetaComparison) {
+      setChartView('sales');
+    }
+  }, [showMetaComparison]);
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="tv-panel-header">
@@ -46,10 +73,40 @@ export function EvolucaoChart({
                 ? `${descriptionPrefix} de ${selectedMonthLabel} em ${selectedYear}`
                 : `${descriptionPrefix} mensal ao longo de ${selectedYear}`}
             </CardDescription>
+            {activeView === 'comparison' && metaComparisonSummary && (
+              <p className="mt-2 text-xs font-medium text-slate-300">{metaComparisonSummary}</p>
+            )}
           </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-            <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
-            {metricLabel}
+          <div className="flex flex-col items-start gap-3 md:items-end">
+            {showMetaComparison && (
+              <ToggleGroup
+                type="single"
+                value={chartView}
+                onValueChange={(value) => value && setChartView(value as 'sales' | 'comparison')}
+                variant="outline"
+                size="sm"
+                className="rounded-md border border-slate-700 bg-slate-950/40 p-1"
+              >
+                <ToggleGroupItem value="sales" className="h-8 px-3 text-xs">
+                  Vendas
+                </ToggleGroupItem>
+                <ToggleGroupItem value="comparison" className="h-8 px-3 text-xs">
+                  Vendas vs Meta
+                </ToggleGroupItem>
+              </ToggleGroup>
+            )}
+            <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-400">
+              <span className="inline-flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-sky-400" />
+                {metricLabel}
+              </span>
+              {activeView === 'comparison' && (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                  Meta
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -57,7 +114,7 @@ export function EvolucaoChart({
         {hasChartData ? (
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={billingData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+              <ComposedChart data={billingData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="taxvisionEvolution" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.42} />
@@ -78,7 +135,7 @@ export function EvolucaoChart({
                   tickFormatter={(value) => `${(Number(value) / 1000).toFixed(0)}k`}
                 />
                 <Tooltip
-                  formatter={(value: number) => [formatCurrency(value), metricLabel]}
+                  formatter={tooltipFormatter}
                   cursor={{ stroke: '#38bdf8', strokeOpacity: 0.28 }}
                   contentStyle={{
                     backgroundColor: '#0b1425',
@@ -96,7 +153,20 @@ export function EvolucaoChart({
                   activeDot={{ r: 5, fill: '#38bdf8', stroke: '#08111f', strokeWidth: 2 }}
                   name={metricLabel}
                 />
-              </AreaChart>
+                {activeView === 'comparison' && (
+                  <Line
+                    type="monotone"
+                    dataKey="meta"
+                    stroke="#facc15"
+                    strokeWidth={2.5}
+                    strokeDasharray="7 5"
+                    dot={{ r: 3.5, fill: '#facc15', stroke: '#08111f', strokeWidth: 1.5 }}
+                    activeDot={{ r: 5, fill: '#facc15', stroke: '#08111f', strokeWidth: 2 }}
+                    connectNulls={false}
+                    name="Meta"
+                  />
+                )}
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         ) : (

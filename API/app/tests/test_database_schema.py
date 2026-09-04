@@ -153,6 +153,37 @@ def test_cnae_recomendacoes_migration_cria_tabelas_esperadas():
     assert 'down_revision = "20260819_0015"' in migration
 
 
+def test_cnae_recomendacoes_seed_migration_popula_segmentos_e_indicadores():
+    migration = (
+        ALEMBIC_DIR / "20260903_0017_seed_cnae_recomendacoes_indicadores.py"
+    ).read_text(encoding="utf-8")
+
+    for expected in [
+        "INSERT INTO public.segmentos_cnae",
+        "Os prefixos de CNAE seguem a estrutura oficial CNAE 2.0 do IBGE/CONCLA",
+        "https://cnae.ibge.gov.br/?view=estrutura",
+        "ON CONFLICT (cnae_prefixo)",
+        "WITH recomendacoes(segmento_chave, indicador_chave, perfil, prioridade, motivo, obrigatorio) AS",
+        "INSERT INTO public.indicador_segmento_recomendacao",
+        "JOIN public.indicadores i ON i.chave = r.indicador_chave",
+        "ON CONFLICT (segmento_chave, indicador_id, perfil)",
+        "'comercio_varejista'",
+        "'servicos_profissionais'",
+        "'industria'",
+        "'transporte_logistica'",
+        "'faturamento'",
+        "'ticket_medio'",
+        "'quantidade_notas'",
+        "'total_icms'",
+        "'total_ipi'",
+        "'total_pis_cofins'",
+    ]:
+        assert expected in migration
+
+    assert 'revision = "20260903_0017"' in migration
+    assert 'down_revision = "20260903_0016"' in migration
+
+
 def test_staging_import_services_do_not_mutate_database_schema():
     xml_import_service = (
         APP_DIR / "services" / "nfe" / "xml_importacao_service.py"
@@ -295,7 +326,7 @@ def test_api_startup_does_not_mutate_database_schema():
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 
-    assert revision == "20260903_0016"
+    assert revision == "20260903_0017"
 
 
 def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):

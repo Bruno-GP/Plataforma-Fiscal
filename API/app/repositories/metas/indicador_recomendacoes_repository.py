@@ -2,27 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import psycopg
-from psycopg.rows import dict_row
-
-from app.services.nfe.postres_config import carregar_config_postgres, opcoes_conexao_postgres
+from app.repositories.sefaz._base import SefazRepositoryBase
 
 
-class IndicadorRecomendacoesRepository:
-    def __init__(self) -> None:
-        self.config = carregar_config_postgres()
-
-    def _connect(self):
-        last_error: Exception | None = None
-        for options in opcoes_conexao_postgres(self.config):
-            try:
-                return psycopg.connect(**options, row_factory=dict_row)
-            except psycopg.Error as exc:
-                last_error = exc
-        if last_error:
-            raise last_error
-        raise RuntimeError("Configuracao PostgreSQL invalida.")
-
+class IndicadorRecomendacoesRepository(SefazRepositoryBase):
     def obter_empresa_cnae(self, empresa_id: int) -> dict[str, Any] | None:
         with self._connect() as conn:
             with conn.cursor() as cur:

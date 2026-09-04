@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.security import AuthenticatedUser, get_current_user
 from app.models.metas.schemas import (
+    IndicadorPerfil,
     IndicadorRecomendacoesEmpresaResponse,
     IndicadorRecomendadoResponse,
 )
@@ -24,16 +26,23 @@ def get_indicador_recommendation_service() -> IndicadorRecommendationService:
 
 @router.get("", response_model=IndicadorRecomendacoesEmpresaResponse)
 def listar_recomendacoes_indicadores(
-    perfil: str = Query(default="xml"),
+    perfil: IndicadorPerfil | None = Query(default=None),
     current_user: AuthenticatedUser = Depends(get_current_user),
     service: IndicadorRecommendationService = Depends(get_indicador_recommendation_service),
 ):
+    perfil_efetivo = perfil or (IndicadorPerfil.SPED if current_user.tem_sped else IndicadorPerfil.XML)
+
     try:
-        resultado = service.recomendar_para_empresa(current_user.empresa_id, perfil=perfil)
+        resultado = service.recomendar_para_empresa(current_user.empresa_id, perfil=perfil_efetivo.value)
     except EmpresaNaoEncontradaError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Empresa da sessao atual nao encontrada.",
+        ) from exc
+    except psycopg.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Banco de dados indisponivel.",
         ) from exc
 
     return IndicadorRecomendacoesEmpresaResponse(

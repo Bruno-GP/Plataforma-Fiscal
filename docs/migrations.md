@@ -6,6 +6,14 @@ Os SQLs legados em `API/SQL/migrations/` continuam como referencia historica, ma
 
 ## Comandos
 
+Da raiz do repositorio, no Windows com a venv local do projeto:
+
+```powershell
+.\API\.venv-local\Scripts\python.exe -m alembic -c .\alembic.ini upgrade head
+```
+
+Comandos genericos:
+
 ```bash
 alembic -c API/app/alembic.ini upgrade head
 alembic -c API/app/alembic.ini downgrade -1

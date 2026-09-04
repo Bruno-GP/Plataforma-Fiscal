@@ -44,7 +44,7 @@ Este projeto usa PostgreSQL e agora possui Alembic em `API/app/alembic`. A estru
 
 O startup da API nao executa DDL. `ENABLE_STARTUP_SCHEMA_ENSURE=true` foi descontinuado e faz a API falhar cedo com orientacao para aplicar Alembic.
 
-Use `alembic -c API/app/alembic.ini upgrade head` antes de iniciar API, workers ou jobs.
+Da raiz do repositorio no Windows, use `.\API\.venv-local\Scripts\python.exe -m alembic -c .\alembic.ini upgrade head` antes de iniciar API, workers ou jobs. Em outros ambientes, o equivalente generico e `alembic -c API/app/alembic.ini upgrade head`.
 
 ## Tabelas por origem de criacao
 

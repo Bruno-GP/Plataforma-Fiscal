@@ -44,6 +44,12 @@ class IndicadorPerfil(StrEnum):
     SPED = "sped"
 
 
+class IndicadorRecomendacaoStatus(StrEnum):
+    SUGERIDO = "sugerido"
+    ACEITO = "aceito"
+    OCULTADO = "ocultado"
+
+
 class IndicadorResponse(BaseModel):
     id: int
     chave: str
@@ -55,6 +61,32 @@ class IndicadorResponse(BaseModel):
 
 class IndicadorListResponse(BaseModel):
     resultados: list[IndicadorResponse]
+
+
+class IndicadorRecomendadoResponse(BaseModel):
+    indicador_id: int
+    chave: str
+    nome: str
+    unidade: UnidadeIndicador
+    direcao_boa: DirecaoBoa
+    perfil: IndicadorPerfil
+    prioridade: int
+    status: IndicadorRecomendacaoStatus
+    motivo: str | None = None
+    obrigatorio: bool
+    score: Decimal
+
+
+class IndicadorRecomendacoesEmpresaResponse(BaseModel):
+    empresa_id: int
+    cnae_fiscal: str | None = None
+    cnae_fiscal_descricao: str | None = None
+    segmento_sugerido: str | None = None
+    segmento_nome: str | None = None
+    fonte: str | None = None
+    confianca: float
+    motivo: str
+    indicadores: list[IndicadorRecomendadoResponse]
 
 
 class IndicadorHistoricoPontoResponse(BaseModel):

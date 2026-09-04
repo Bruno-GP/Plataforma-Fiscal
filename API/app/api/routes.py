@@ -6,6 +6,7 @@ from app.api.cnpj.routes import router as cnpj_router
 from app.api.metas.routes import router as metas_router
 from app.api.metas.indicadores_routes import router as indicadores_router
 from app.api.conta_azul.routes import router as conta_azul_router
+from app.api.empresas.recomendacoes_routes import router as empresas_recomendacoes_router
 from app.api.geo.routes import router as geo_router
 from app.api.jobs.routes import router as jobs_router
 from app.api.ncm.routes import router as ncm_router
@@ -21,6 +22,7 @@ router.include_router(jobs_router)
 router.include_router(auth_router)
 router.include_router(cnpj_router)
 router.include_router(municipios_router)
+router.include_router(empresas_recomendacoes_router)
 router.include_router(metas_router)
 router.include_router(indicadores_router)
 router.include_router(sped_router)

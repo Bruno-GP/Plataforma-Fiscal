@@ -17,6 +17,10 @@ Documentacao operacional completa vive em `docs/` (leia antes de mudancas estrut
 
 ## Comandos
 
+### Atalho local (Windows)
+
+`dev.ps1` na raiz resolve caminho e comando sozinho, de qualquer pasta: `.\dev.ps1 api`, `.\dev.ps1 painel`, `.\dev.ps1 all` (abre API + Painel em janelas separadas), `.\dev.ps1 nfe|sped|conta_azul|sefaz|beat`, `.\dev.ps1 migrate`. Redis (Garnet) continua manual.
+
 ### Backend (API)
 
 Rodar API local (Windows, venv local do projeto):

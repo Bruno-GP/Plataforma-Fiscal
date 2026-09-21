@@ -27,6 +27,10 @@ Servicos expostos:
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
 
+## Atalho local no Windows
+
+`dev.ps1` na raiz sobe tudo sem digitar caminho: `.\dev.ps1 all` (API + Painel), `.\dev.ps1 api`, `.\dev.ps1 painel`, `.\dev.ps1 nfe|sped|conta_azul|sefaz|beat` e `.\dev.ps1 migrate`. Usa `API/.venv-local`. Redis continua manual.
+
 ## Rodar API local sem Docker
 
 ```bash

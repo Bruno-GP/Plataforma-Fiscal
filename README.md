@@ -78,6 +78,23 @@ Fluxo principal da plataforma:
 
 ## Quick start
 
+### Atalho local no Windows (`dev.ps1`)
+
+Na raiz do repositorio, `dev.ps1` resolve caminho e venv sozinho, sem precisar de `cd` nem do comando completo:
+
+```powershell
+.\dev.ps1 all        # API + Painel, cada um em janela propria
+.\dev.ps1 api        # so a API (uvicorn --reload)
+.\dev.ps1 painel     # so o Painel (npm run dev)
+.\dev.ps1 nfe        # worker Celery da fila nfe (tambem: sped, conta_azul, sefaz)
+.\dev.ps1 beat       # Celery beat
+.\dev.ps1 migrate    # alembic upgrade head
+```
+
+Requisitos: venv local em `API/.venv-local` e `npm install` ja executado em `Painel/`. O Redis (Garnet, abaixo) continua manual e deve subir antes dos workers.
+
+Se o PowerShell bloquear a execucao do script, libere so para a sessao atual: `Set-ExecutionPolicy -Scope Process Bypass`.
+
 ### API
 
 Execucao apenas da API:

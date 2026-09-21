@@ -89,7 +89,15 @@ API/
 
 ## Como executar
 
-Na raiz do repositorio:
+Atalho no Windows (venv local em `API/.venv-local`), a partir da raiz do repositorio:
+
+```powershell
+.\dev.ps1 api        # uvicorn --reload
+.\dev.ps1 migrate    # alembic upgrade head
+.\dev.ps1 nfe        # worker Celery (tambem: sped, conta_azul, sefaz, beat)
+```
+
+Manualmente, na raiz do repositorio:
 
 ```bash
 pip install -r API/app/requirements.txt

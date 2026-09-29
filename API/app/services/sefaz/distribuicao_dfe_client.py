@@ -48,6 +48,13 @@ class RespostaDistribuicao:
     x_motivo: str = ""
 
 
+@dataclass(frozen=True)
+class ResultadoEvento:
+    cstat: int
+    x_motivo: str = ""
+    protocolo: str | None = None
+
+
 def _decodificar_doc_zip(doc_zip_base64: str) -> bytes:
     try:
         return gzip.decompress(base64.b64decode(doc_zip_base64))
@@ -99,6 +106,35 @@ def _parse_resposta_distribuicao(xml_resposta: bytes) -> RespostaDistribuicao:
     )
 
 
+def _parse_resposta_evento(xml_resposta: bytes) -> ResultadoEvento:
+    try:
+        raiz = ET.fromstring(xml_resposta)
+    except ET.ParseError as exc:
+        raise SefazRespostaInvalidaError(f"Resposta de evento nao e XML valido: {exc}") from exc
+
+    # Rejeicao por evento (retEvento/infEvento) tem prioridade; cStat de lote (ex.: 215) so
+    # aparece quando a SEFAZ nem chegou a processar o evento.
+    inf_evento = raiz.find(".//nfe:retEvento/nfe:infEvento", NFE_NAMESPACE)
+    if inf_evento is not None:
+        origem = inf_evento
+    elif raiz.tag.endswith("}retEnvEvento") or raiz.tag == "retEnvEvento":
+        origem = raiz
+    else:
+        origem = raiz.find(".//nfe:retEnvEvento", NFE_NAMESPACE)
+    if origem is None:
+        raise SefazRespostaInvalidaError("Resposta de evento sem retEnvEvento/retEvento.")
+
+    cstat_texto = _texto(origem, "nfe:cStat")
+    if not cstat_texto:
+        raise SefazRespostaInvalidaError("Resposta de evento sem cStat.")
+
+    return ResultadoEvento(
+        cstat=int(cstat_texto),
+        x_motivo=_texto(origem, "nfe:xMotivo") or "",
+        protocolo=_texto(origem, "nfe:nProt"),
+    )
+
+
 class DistribuicaoDFeClient:
     """Consulta `distDFeInt` para uma empresa.
 
@@ -135,6 +171,34 @@ class DistribuicaoDFeClient:
         return NFeTransmissor(
             transmissao=transmissao, ambiente=self.ambiente, uf=self.uf_autor, versao="1.01"
         )
+
+    def _montar_transmissor_manifestacao(self):
+        from erpbrasil.assinatura.certificado import Certificado
+        from erpbrasil.edoc.mde import MDe, TransmissaoMDE
+        import requests
+
+        certificado = Certificado(base64.b64encode(self.certificado_pfx), self.senha)
+        transmissao = TransmissaoMDE(certificado, requests.Session())
+        # Eventos de manifestacao do destinatario sao sempre recebidos pelo Ambiente
+        # Nacional (cOrgao 91), independente da UF da empresa.
+        return MDe(transmissao=transmissao, ambiente=self.ambiente, uf="91")
+
+    def enviar_ciencia_operacao(self, chave_acesso: str) -> ResultadoEvento:
+        """Envia o evento 210210 (Ciencia da Operacao), que libera o XML completo na distribuicao."""
+        transmissor = self._montar_transmissor_manifestacao()
+        try:
+            # tpEvento/descEvento como texto: `ciencia_da_operacao()` da lib passa o enum e o
+            # f-string do Id vira "IDtpEventoType._2_10210...", rejeitado pelo schema.
+            resposta_soap = transmissor.nfe_recepcao_evento(
+                chave_acesso, self.cnpj, "210210", "Ciencia da Operacao"
+            )
+        except Exception as exc:
+            raise SefazIndisponivelError(f"Falha ao enviar ciencia da operacao: {exc}") from exc
+
+        if resposta_soap is None:
+            raise SefazRespostaInvalidaError("Resposta de evento vazia.")
+
+        return _parse_resposta_evento(resposta_soap.retorno.content)
 
     def consultar(self, ultimo_nsu: str) -> RespostaDistribuicao:
         transmissor = self._montar_transmissor()

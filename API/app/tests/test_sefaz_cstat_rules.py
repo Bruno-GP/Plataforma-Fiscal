@@ -33,3 +33,13 @@ def test_cstat_desconhecido_para_com_motivo_descritivo():
     assert decisao.continuar is False
     assert decisao.bloqueado is False
     assert "999" in decisao.motivo
+
+
+def test_evento_aceito_cobre_registrado_e_duplicidade():
+    from app.domain.sefaz.cstat_rules import evento_aceito
+
+    assert evento_aceito(135)
+    assert evento_aceito(136)
+    assert evento_aceito(573)
+    assert not evento_aceito(494)
+    assert not evento_aceito(215)

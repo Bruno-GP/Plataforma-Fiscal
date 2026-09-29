@@ -137,3 +137,45 @@ def test_consultar_erro_de_transporte_vira_sefaz_indisponivel(monkeypatch):
 
     with pytest.raises(SefazIndisponivelError, match="Falha ao consultar"):
         cliente.consultar("000000000000000")
+
+
+def test_parse_resposta_evento_registrado_le_cstat_e_protocolo():
+    from app.services.sefaz.distribuicao_dfe_client import _parse_resposta_evento
+
+    xml = b"""
+    <retEnvEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
+      <idLote>1</idLote><cStat>128</cStat><xMotivo>Lote de Evento Processado</xMotivo>
+      <retEvento versao="1.00"><infEvento>
+        <cStat>135</cStat><xMotivo>Evento registrado e vinculado a NF-e</xMotivo><nProt>891260000000001</nProt>
+      </infEvento></retEvento>
+    </retEnvEvento>
+    """
+
+    resultado = _parse_resposta_evento(xml)
+
+    assert resultado.cstat == 135
+    assert resultado.protocolo == "891260000000001"
+
+
+def test_parse_resposta_evento_sem_retevento_usa_cstat_do_lote():
+    from app.services.sefaz.distribuicao_dfe_client import _parse_resposta_evento
+
+    xml = (
+        b'<retEnvEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">'
+        b"<cStat>215</cStat><xMotivo>Rejeicao: Falha no schema XML</xMotivo></retEnvEvento>"
+    )
+
+    resultado = _parse_resposta_evento(xml)
+
+    assert resultado.cstat == 215
+    assert "schema" in resultado.x_motivo
+    assert resultado.protocolo is None
+
+
+def test_parse_resposta_evento_sem_ret_env_evento_levanta_erro():
+    import pytest
+
+    from app.services.sefaz.distribuicao_dfe_client import SefazRespostaInvalidaError, _parse_resposta_evento
+
+    with pytest.raises(SefazRespostaInvalidaError):
+        _parse_resposta_evento(b"<outro/>")

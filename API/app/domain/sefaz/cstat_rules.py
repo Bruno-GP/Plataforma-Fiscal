@@ -9,6 +9,14 @@ CSTAT_CONSUMO_INDEVIDO = 656
 
 MAX_ITERACOES_PAGINACAO = 20
 
+# Evento de manifestacao: 135 registrado e vinculado a NF-e, 136 registrado sem vinculo,
+# 573 duplicidade (a ciencia ja existe na SEFAZ, entao o objetivo ja foi cumprido).
+CSTATS_EVENTO_ACEITO = frozenset({135, 136, 573})
+
+
+def evento_aceito(cstat: int) -> bool:
+    return cstat in CSTATS_EVENTO_ACEITO
+
 
 @dataclass(frozen=True)
 class DecisaoPaginacao:

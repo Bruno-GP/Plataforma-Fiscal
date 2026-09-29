@@ -14,6 +14,7 @@ from app.core.audit import log_security_event
 from app.core.config import (
     get_login_lockout_minutes,
     get_login_max_failed_attempts,
+    is_login_lockout_enabled,
     get_login_success_cache_ttl_seconds,
     get_password_min_length,
 )
@@ -222,6 +223,16 @@ class LoginService:
         return nome.strip() if nome else ""
 
     def _registrar_falha_login(self, conn: psycopg.Connection, login_id: int, email: str) -> None:
+        if not is_login_lockout_enabled():
+            log_security_event(
+                "login_failed",
+                outcome="rejected",
+                email=email,
+                login_id=login_id,
+                reason="invalid_credentials",
+            )
+            raise ValueError("Credenciais inválidas.")
+
         max_attempts = get_login_max_failed_attempts()
         lockout_minutes = get_login_lockout_minutes()
 
@@ -554,6 +565,8 @@ class LoginService:
         empresa_id: int,
         cnpj: str,
     ) -> None:
+        if not is_login_lockout_enabled():
+            return
         if bloqueado_ate and bloqueado_ate > datetime.now(timezone.utc):
             blocked_until = bloqueado_ate.astimezone(timezone.utc).isoformat()
             log_security_event(

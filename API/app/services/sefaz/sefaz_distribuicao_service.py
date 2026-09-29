@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from app.domain.sefaz.cstat_rules import decidir_paginacao
+from app.domain.sefaz.cstat_rules import decidir_paginacao, evento_aceito
 from app.domain.sefaz.doc_parser import (
     DocumentoParseInvalidoError,
     calcular_direcao,
@@ -30,6 +30,9 @@ NSU_INICIAL_PADRAO = "000000000000000"
 # trava local, qualquer retry manual/automatico antes disso gera nova consulta real e pode
 # prolongar o bloqueio -- por isso o service nao chama a SEFAZ de novo dentro da janela.
 JANELA_ESPERA_BLOQUEIO = timedelta(hours=1)
+
+# Teto de eventos por sync para nao alongar a task; o restante fica 'pendente' e segue no proximo.
+LIMITE_CIENCIAS_POR_SYNC = 100
 
 
 class CertificadoAusenteError(ValueError):
@@ -185,6 +188,8 @@ class SefazDistribuicaoService:
             erro_detalhe=erro_detalhe,
         )
 
+        self._enviar_ciencias_pendentes(empresa_id, cliente)
+
         return ResultadoSincronizacao(
             status=status_final,
             documentos_novos=documentos_novos,
@@ -192,6 +197,58 @@ class SefazDistribuicaoService:
             nsu_final=ultimo_nsu,
             erro_detalhe=erro_detalhe,
         )
+
+    def _enviar_ciencias_pendentes(self, empresa_id: int, cliente) -> None:
+        """Ciencia automatica: sem ela a SEFAZ so entrega o resumo (resNFe) das notas recebidas.
+
+        Nunca derruba o sync: o distDFeInt ja foi consumido e o NSU gravado. Documento cuja
+        ciencia falhou por indisponibilidade continua 'pendente' e e tentado no proximo sync.
+        """
+        try:
+            pendentes = self.documentos_repository.listar_pendentes_ciencia(
+                empresa_id, LIMITE_CIENCIAS_POR_SYNC
+            )
+            for documento in pendentes:
+                self._enviar_ciencia(empresa_id, cliente, documento)
+        except Exception:
+            logger.exception("sefaz_ciencia_automatica_falhou", extra={"empresa_id": empresa_id})
+
+    def _enviar_ciencia(self, empresa_id: int, cliente, documento: dict) -> None:
+        chave_acesso = documento["chave_acesso"]
+        try:
+            resultado = cliente.enviar_ciencia_operacao(chave_acesso)
+        except Exception:
+            logger.warning(
+                "sefaz_ciencia_indisponivel",
+                extra={"empresa_id": empresa_id, "chave_acesso": chave_acesso},
+                exc_info=True,
+            )
+            return
+
+        aceito = evento_aceito(resultado.cstat)
+        self.eventos_repository.inserir(
+            documento_id=documento["id"],
+            empresa_id=empresa_id,
+            tipo_evento="ciencia_operacao",
+            protocolo=resultado.protocolo,
+            status="registrado" if aceito else "rejeitado",
+            payload_xml=None,
+        )
+        # Rejeicao definitiva (ex.: chave inexistente) sai da fila para nao repetir a
+        # chamada a cada sync; falha transitoria nem chega aqui (excecao acima).
+        self.documentos_repository.atualizar_manifestacao(
+            documento["id"], "ciencia" if aceito else "ciencia_rejeitada"
+        )
+        if not aceito:
+            logger.warning(
+                "sefaz_ciencia_rejeitada",
+                extra={
+                    "empresa_id": empresa_id,
+                    "chave_acesso": chave_acesso,
+                    "cstat": resultado.cstat,
+                    "x_motivo": resultado.x_motivo,
+                },
+            )
 
     def _persistir_documento(self, empresa_id: int, cnpj_empresa: str, documento_bruto) -> int:
         if documento_bruto.schema == "resEvento":
@@ -224,6 +281,12 @@ class SefazDistribuicaoService:
         )
         if inseriu:
             self._publicar_evento_documento_novo(empresa_id, parseado.chave_acesso)
+        elif documento_bruto.schema == "nfeProc":
+            # Chave ja existia como resumo (resNFe): o nfeProc que chega apos a ciencia
+            # completa o registro em vez de ser descartado pelo ON CONFLICT.
+            self.documentos_repository.guardar_xml_completo(
+                empresa_id, parseado.chave_acesso, documento_bruto.xml_bytes
+            )
         return 1 if inseriu else 0
 
     def _publicar_evento_documento_novo(self, empresa_id: int, chave_acesso: str) -> None:

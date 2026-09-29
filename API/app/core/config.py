@@ -154,6 +154,10 @@ def validate_production_config() -> None:
         raise RuntimeError("Configuracao de producao insegura: " + "; ".join(errors) + ".")
 
 
+def is_login_lockout_enabled() -> bool:
+    return os.getenv("AUTH_LOCKOUT_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
+
+
 def get_login_max_failed_attempts() -> int:
     raw_value = os.getenv("AUTH_MAX_FAILED_ATTEMPTS", "5").strip()
     try:

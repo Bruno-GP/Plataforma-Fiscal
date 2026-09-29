@@ -99,6 +99,48 @@ class DocumentosRepository(SefazRepositoryBase):
                 )
             conn.commit()
 
+    def listar_pendentes_ciencia(self, empresa_id: int, limite: int) -> list[dict[str, Any]]:
+        """Recebidas que so tem o resumo (resNFe) e ainda aguardam a Ciencia da Operacao."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, chave_acesso
+                    FROM sefaz.documentos
+                    WHERE empresa_id = %s
+                      AND direcao = 'recebida'
+                      AND manifestacao_status = 'pendente'
+                      AND xml_armazenado IS NULL
+                    ORDER BY id ASC
+                    LIMIT %s
+                    """,
+                    (empresa_id, limite),
+                )
+                rows = [dict(row) for row in cur.fetchall()]
+
+        return rows
+
+    def guardar_xml_completo(self, empresa_id: int, chave_acesso: str, xml_armazenado: bytes) -> bool:
+        """Completa um documento que chegou como resumo quando o nfeProc correspondente aparece."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE sefaz.documentos
+                    SET xml_armazenado = %s,
+                        tipo_documento = 'nfeProc',
+                        atualizado_em = NOW()
+                    WHERE empresa_id = %s
+                      AND chave_acesso = %s
+                      AND xml_armazenado IS NULL
+                    """,
+                    (xml_armazenado, empresa_id, chave_acesso),
+                )
+                atualizou = cur.rowcount == 1
+            conn.commit()
+
+        return atualizou
+
     def marcar_processado_fiscal(self, documento_id: int) -> None:
         with self._connect() as conn:
             with conn.cursor() as cur:

@@ -184,6 +184,17 @@ def test_cnae_recomendacoes_seed_migration_popula_segmentos_e_indicadores():
     assert 'down_revision = "20260903_0016"' in migration
 
 
+def test_empresas_perfis_migration_garante_colunas_em_bancos_ja_migrados():
+    migration = (
+        ALEMBIC_DIR / "20260929_0018_empresas_tem_conta_azul_tem_xml.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ADD COLUMN IF NOT EXISTS tem_conta_azul BOOLEAN NOT NULL DEFAULT FALSE" in migration
+    assert "ADD COLUMN IF NOT EXISTS tem_xml BOOLEAN NOT NULL DEFAULT FALSE" in migration
+    assert 'revision = "20260929_0018"' in migration
+    assert 'down_revision = "20260903_0017"' in migration
+
+
 def test_staging_import_services_do_not_mutate_database_schema():
     xml_import_service = (
         APP_DIR / "services" / "nfe" / "xml_importacao_service.py"
@@ -326,7 +337,7 @@ def test_api_startup_does_not_mutate_database_schema():
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 
-    assert revision == "20260903_0017"
+    assert revision == "20260929_0018"
 
 
 def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):

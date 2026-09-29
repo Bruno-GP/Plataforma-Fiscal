@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 
 from app.api.shared.company_validation import validar_empresa_sped
 from app.core.upload_security import validate_txt_uploads
+from app.core.config import get_processamento_batch_root_dir
+from app.core.path_security import resolve_safe_batch_path
 from app.models.jobs.schemas import JobCreateResponse
 from app.models.nfe.schemas import ConsultaKPIResponse
 from app.models.sped.schemas import (
@@ -34,8 +36,18 @@ router = APIRouter()
 sped_router = APIRouter(prefix="/sped", tags=["SPED Fiscal"], dependencies=[Depends(require_company_scope)])
 
 @sped_router.post("/processar", response_model=ProcessarSpedFiscalResponse)
-def processar_sped_fiscal(request: ProcessarSpedFiscalRequest):
-  return ProcessarSpedFiscalService().executar(request)
+def processar_sped_fiscal(
+  request: ProcessarSpedFiscalRequest,
+  cnpj_empresa_origem: str = Query(..., min_length=14, max_length=20),
+):
+  validar_empresa_sped(cnpj_empresa_origem)
+  caminho_seguro = resolve_safe_batch_path(
+    get_processamento_batch_root_dir(),
+    request.arquivo_sped,
+    tipo="SPED",
+  )
+  request_segura = request.model_copy(update={"arquivo_sped": caminho_seguro})
+  return ProcessarSpedFiscalService().executar(request_segura)
 
 @sped_router.post("/importar", response_model=ImportacaoSpedResponse)
 async def importar_sped(

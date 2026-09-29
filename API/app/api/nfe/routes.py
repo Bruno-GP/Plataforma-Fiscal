@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile
 from app.api.shared.company_validation import validar_empresa_xml
 from app.core.upload_security import validate_xml_uploads
 from app.core.security import require_company_scope
+from app.core.config import get_processamento_batch_root_dir
+from app.core.path_security import resolve_safe_batch_path
 from app.models.jobs.schemas import JobCreateResponse
 from app.repositories.nfe.notas_repository import NFeNotasRepository
 from app.services.jobs.job_service import JobService
@@ -86,8 +88,18 @@ def _nota_possui_tipo_operacao(nota, tipo_operacao: str) -> bool:
 
 """Processa XMLs disponíveis em pasta (origem batch/legado)."""
 @nfe_router.post("/processar", response_model=ProcessarNFeResponse)
-def processar_nfe(request: ProcessarNFeRequest):
-  return ProcessarNFeService().executar(request)
+def processar_nfe(
+  request: ProcessarNFeRequest,
+  cnpj_empresa_origem: str = Query(..., min_length=14, max_length=20),
+):
+  validar_empresa_xml(cnpj_empresa_origem)
+  caminho_seguro = resolve_safe_batch_path(
+    get_processamento_batch_root_dir(),
+    request.pasta_xml,
+    tipo="XML/NFe",
+  )
+  request_segura = request.model_copy(update={"pasta_xml": caminho_seguro})
+  return ProcessarNFeService().executar(request_segura, cnpj_esperado=cnpj_empresa_origem)
 
 """Recebe arquivos XML e persiste no staging de importação sem processar KPIs."""
 @nfe_router.post("/xml/importar", response_model=ImportacaoXMLResponse)
@@ -583,21 +595,6 @@ def comparar_kpis_mensal_atual(
 # -------------------------
 # Consulta de notas (detalhado)
 # -------------------------
-@nfe_router.get("/notas", response_model=ConsultaNFeResponse)
-def consultar_notas(
-  emitente_cnpj: str | None = Query(default=None),
-  periodo_ano: int | None = Query(default=None, ge=2000, le=2100),
-  periodo_mes: int | None = Query(default=None, ge=1, le=12),
-  limite: int = Query(default=100, ge=1, le=500),
-  offset: int = Query(default=0, ge=0),
-):
-  # ⚠️ Ainda não existe um service de consulta detalhada de notas no seu código.
-  # Mantive a rota separada para o front/Make já ficar com a arquitetura certa.
-  raise HTTPException(
-    status_code=status.HTTP_501_NOT_IMPLEMENTED,
-    detail="Consulta detalhada de notas ainda não implementada. Use GET /nfe/kpis para KPIs consolidados.",
-  )
-
 @nfe_router.get("/notas/detalhado", response_model=ConsultaNFeResponse)
 def consultar_notas_detalhadas(
   emitente_resolvido: str = Depends(get_emitente_resolvido_nfe),

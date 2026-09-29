@@ -12,7 +12,7 @@ def coletar_resumo_periodo(
     """
     SELECT COUNT(*)
     FROM public.documentos_fiscais_tributos dt
-    WHERE regexp_replace(dt.empresa_cnpj, '\\D', '', 'g') = %s
+    WHERE regexp_replace(UPPER(dt.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       AND dt.periodo_ano = %s
       AND dt.periodo_mes = %s
       AND dt.origem = %s;
@@ -25,7 +25,7 @@ def coletar_resumo_periodo(
     """
     SELECT COUNT(*)
     FROM public.itens_documentos_fiscais_tributos it
-    WHERE regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+    WHERE regexp_replace(UPPER(it.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       AND it.periodo_ano = %s
       AND it.periodo_mes = %s
       AND it.origem = %s;
@@ -38,7 +38,7 @@ def coletar_resumo_periodo(
     """
     SELECT COUNT(*)
     FROM public.debitos_tributarios d
-    WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+    WHERE regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       AND d.periodo_ano = %s
       AND d.periodo_mes = %s;
     """,
@@ -50,7 +50,7 @@ def coletar_resumo_periodo(
     """
     SELECT COUNT(*)
     FROM public.creditos_tributarios c
-    WHERE regexp_replace(c.empresa_cnpj, '\\D', '', 'g') = %s
+    WHERE regexp_replace(UPPER(c.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       AND c.periodo_ano = %s
       AND c.periodo_mes = %s;
     """,
@@ -62,7 +62,7 @@ def coletar_resumo_periodo(
     """
     SELECT COUNT(*)
     FROM public.memoria_calculo_tributaria m
-    WHERE regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s
+    WHERE regexp_replace(UPPER(m.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       AND m.periodo_ano = %s
       AND m.periodo_mes = %s
       AND m.fonte_dados = %s;
@@ -75,7 +75,7 @@ def coletar_resumo_periodo(
     """
     SELECT COUNT(*)
     FROM public.apuracao_tributaria a
-    WHERE regexp_replace(a.empresa_cnpj, '\\D', '', 'g') = %s
+    WHERE regexp_replace(UPPER(a.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       AND a.periodo_ano = %s
       AND a.periodo_mes = %s;
     """,

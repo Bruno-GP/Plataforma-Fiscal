@@ -1,9 +1,8 @@
-import { Bell, CircleHelp, LogOut, Search } from 'lucide-react';
+import { Bell, CircleHelp, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -34,15 +33,6 @@ export function AppHeader() {
           <span className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 lg:block">
             Análise Fiscal
           </span>
-        </div>
-
-        <div className="relative order-last w-full md:order-none md:ml-6 md:max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <Input
-            aria-label="Busca global"
-            placeholder="Pesquisar cliente, nota ou documento..."
-            className="h-10 border-slate-700/90 bg-slate-950/55 pl-10"
-          />
         </div>
 
         {/* <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">

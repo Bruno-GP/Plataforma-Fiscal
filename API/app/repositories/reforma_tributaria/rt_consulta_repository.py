@@ -45,7 +45,7 @@ class ReformaTributariaConsultaRepository:
     tributo_codigo: str | None = None,
   ) -> list[dict]:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = ["regexp_replace(a.empresa_cnpj, '\\D', '', 'g') = %s"]
+    filtros = ["regexp_replace(UPPER(a.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s"]
     params: list[object] = [cnpj]
 
     if periodo_ano is not None:
@@ -129,7 +129,7 @@ class ReformaTributariaConsultaRepository:
       FROM public.documentos_fiscais_tributos dt
       JOIN public.tributos t ON t.id = dt.tributo_id
       WHERE dt.{coluna} = %s
-        AND regexp_replace(dt.empresa_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(dt.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       ORDER BY t.codigo, dt.id;
     """
 
@@ -186,7 +186,7 @@ class ReformaTributariaConsultaRepository:
       FROM public.itens_documentos_fiscais_tributos it
       JOIN public.tributos t ON t.id = it.tributo_id
       WHERE it.{coluna} = %s
-        AND regexp_replace(it.empresa_cnpj, '\\D', '', 'g') = %s
+        AND regexp_replace(UPPER(it.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
       ORDER BY it.numero_item NULLS LAST, t.codigo, it.id;
     """
 
@@ -207,7 +207,7 @@ class ReformaTributariaConsultaRepository:
     offset: int = 0,
   ) -> list[dict]:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = ["regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s"]
+    filtros = ["regexp_replace(UPPER(m.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s"]
     params: list[object] = [cnpj]
 
     if periodo_ano is not None:
@@ -278,7 +278,7 @@ class ReformaTributariaConsultaRepository:
     item_tributo_id: int | None = None,
   ) -> int:
     cnpj = normalizar_cnpj(emitente_cnpj)
-    filtros = ["regexp_replace(m.empresa_cnpj, '\\D', '', 'g') = %s"]
+    filtros = ["regexp_replace(UPPER(m.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s"]
     params: list[object] = [cnpj]
 
     if periodo_ano is not None:

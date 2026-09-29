@@ -93,6 +93,108 @@ def test_alembic_revisions_and_sql_migrations_cover_expected_database_objects():
         assert expected in login_security
 
 
+def test_sefaz_migration_creates_expected_schema_objects():
+    sefaz_schema = (ALEMBIC_DIR / "20260814_0013_sefaz_schema.py").read_text(
+        encoding="utf-8"
+    )
+
+    for expected in [
+        "CREATE SCHEMA IF NOT EXISTS sefaz",
+        "CREATE TABLE IF NOT EXISTS sefaz.certificados",
+        "empresa_id BIGINT NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_sefaz_certificados_empresa_ativo",
+        "CREATE TABLE IF NOT EXISTS sefaz.nsu_controle",
+        "CONSTRAINT uq_sefaz_nsu_controle_empresa_ambiente UNIQUE (empresa_id, ambiente)",
+        "CREATE TABLE IF NOT EXISTS sefaz.documentos",
+        "CONSTRAINT uq_sefaz_documentos_empresa_chave UNIQUE (empresa_id, chave_acesso)",
+        "CREATE TABLE IF NOT EXISTS sefaz.eventos",
+        "REFERENCES sefaz.documentos(id) ON DELETE CASCADE",
+        "CREATE TABLE IF NOT EXISTS sefaz.sync_log",
+    ]:
+        assert expected in sefaz_schema, f"esperado no schema sefaz: {expected!r}"
+
+    assert 'revision = "20260814_0013"' in sefaz_schema
+    assert 'down_revision = "20260813_0012"' in sefaz_schema
+    assert "DROP SCHEMA IF EXISTS sefaz CASCADE" in sefaz_schema
+
+
+def test_sefaz_processado_fiscal_migration_adiciona_coluna():
+    migration = (
+        ALEMBIC_DIR / "20260818_0014_sefaz_documentos_processado_fiscal.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ALTER TABLE sefaz.documentos" in migration
+    assert "ADD COLUMN processado_fiscal_em TIMESTAMPTZ NULL" in migration
+    assert 'revision = "20260818_0014"' in migration
+    assert 'down_revision = "20260814_0013"' in migration
+    assert "DROP COLUMN IF EXISTS processado_fiscal_em" in migration
+
+
+def test_cnae_recomendacoes_migration_cria_tabelas_esperadas():
+    migration = (
+        ALEMBIC_DIR / "20260903_0016_cnae_recomendacoes_indicadores.py"
+    ).read_text(encoding="utf-8")
+
+    for expected in [
+        "CREATE TABLE IF NOT EXISTS public.segmentos_cnae",
+        "CREATE TABLE IF NOT EXISTS public.indicador_segmento_recomendacao",
+        "CREATE TABLE IF NOT EXISTS public.empresa_indicador_recomendado",
+        "CONSTRAINT ck_segmentos_cnae_alvo",
+        "CONSTRAINT ck_indicador_segmento_recomendacao_perfil",
+        "CONSTRAINT ck_empresa_indicador_recomendado_origem",
+        "CONSTRAINT ck_empresa_indicador_recomendado_status",
+        "CONSTRAINT uq_empresa_indicador_recomendado",
+        "REFERENCES public.empresas(id) ON DELETE CASCADE",
+        "REFERENCES public.indicadores(id) ON DELETE CASCADE",
+    ]:
+        assert expected in migration
+
+    assert 'revision = "20260903_0016"' in migration
+    assert 'down_revision = "20260819_0015"' in migration
+
+
+def test_cnae_recomendacoes_seed_migration_popula_segmentos_e_indicadores():
+    migration = (
+        ALEMBIC_DIR / "20260903_0017_seed_cnae_recomendacoes_indicadores.py"
+    ).read_text(encoding="utf-8")
+
+    for expected in [
+        "INSERT INTO public.segmentos_cnae",
+        "Os prefixos de CNAE seguem a estrutura oficial CNAE 2.0 do IBGE/CONCLA",
+        "https://cnae.ibge.gov.br/?view=estrutura",
+        "ON CONFLICT (cnae_prefixo)",
+        "WITH recomendacoes(segmento_chave, indicador_chave, perfil, prioridade, motivo, obrigatorio) AS",
+        "INSERT INTO public.indicador_segmento_recomendacao",
+        "JOIN public.indicadores i ON i.chave = r.indicador_chave",
+        "ON CONFLICT (segmento_chave, indicador_id, perfil)",
+        "'comercio_varejista'",
+        "'servicos_profissionais'",
+        "'industria'",
+        "'transporte_logistica'",
+        "'faturamento'",
+        "'ticket_medio'",
+        "'quantidade_notas'",
+        "'total_icms'",
+        "'total_ipi'",
+        "'total_pis_cofins'",
+    ]:
+        assert expected in migration
+
+    assert 'revision = "20260903_0017"' in migration
+    assert 'down_revision = "20260903_0016"' in migration
+
+
+def test_empresas_perfis_migration_garante_colunas_em_bancos_ja_migrados():
+    migration = (
+        ALEMBIC_DIR / "20260929_0018_empresas_tem_conta_azul_tem_xml.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ADD COLUMN IF NOT EXISTS tem_conta_azul BOOLEAN NOT NULL DEFAULT FALSE" in migration
+    assert "ADD COLUMN IF NOT EXISTS tem_xml BOOLEAN NOT NULL DEFAULT FALSE" in migration
+    assert 'revision = "20260929_0018"' in migration
+    assert 'down_revision = "20260903_0017"' in migration
+
+
 def test_staging_import_services_do_not_mutate_database_schema():
     xml_import_service = (
         APP_DIR / "services" / "nfe" / "xml_importacao_service.py"
@@ -235,7 +337,7 @@ def test_api_startup_does_not_mutate_database_schema():
 def test_migrations_run_to_head_in_clean_test_database(migrated_db):
     revision = fetch_one(migrated_db, "SELECT version_num FROM alembic_version;")[0]
 
-    assert revision == "20260612_0008"
+    assert revision == "20260929_0018"
 
 
 def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):
@@ -253,6 +355,9 @@ def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):
         "creditos_tributarios",
         "debitos_tributarios",
         "memoria_calculo_tributaria",
+        "segmentos_cnae",
+        "indicador_segmento_recomendacao",
+        "empresa_indicador_recomendado",
     }
 
     tables = {
@@ -342,6 +447,28 @@ def test_core_tables_columns_primary_keys_and_foreign_keys(migrated_db):
         """,
     )[0]
     assert fk == 1
+
+    recomendacoes_constraints = {
+        row[0]
+        for row in fetch_all(
+            migrated_db,
+            """
+            SELECT constraint_name
+            FROM information_schema.table_constraints
+            WHERE table_schema = 'public'
+              AND table_name IN (
+                  'segmentos_cnae',
+                  'indicador_segmento_recomendacao',
+                  'empresa_indicador_recomendado'
+              )
+            """,
+        )
+    }
+    assert "ck_segmentos_cnae_alvo" in recomendacoes_constraints
+    assert "ck_indicador_segmento_recomendacao_perfil" in recomendacoes_constraints
+    assert "ck_empresa_indicador_recomendado_origem" in recomendacoes_constraints
+    assert "ck_empresa_indicador_recomendado_status" in recomendacoes_constraints
+    assert "uq_empresa_indicador_recomendado" in recomendacoes_constraints
 
 
 def test_required_fields_status_lists_and_non_negative_financial_values(migrated_db):

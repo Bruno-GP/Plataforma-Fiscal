@@ -84,7 +84,7 @@ class FiscalRepository:
     coluna_documento = "nota_id" if origem_documento == "nfe" else "sped_documento_id"
     filtros = [
       f"dt.{coluna_documento} IS NOT NULL",
-      "regexp_replace(dt.empresa_cnpj, '\\D', '', 'g') = %s",
+      "regexp_replace(UPPER(dt.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s",
     ]
     parametros: list[object] = [emitente_cnpj]
 
@@ -179,7 +179,7 @@ class FiscalRepository:
     anos = sorted({ano for ano, _mes in periodos})
     filtros = [
       f"dt.{coluna_documento} IS NOT NULL",
-      "regexp_replace(dt.empresa_cnpj, '\\D', '', 'g') = %s",
+      "regexp_replace(UPPER(dt.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s",
       "COALESCE(dt.periodo_ano, EXTRACT(YEAR FROM dt.data_emissao)::int) = ANY(%s)",
     ]
     parametros: list[object] = [emitente_cnpj, anos]

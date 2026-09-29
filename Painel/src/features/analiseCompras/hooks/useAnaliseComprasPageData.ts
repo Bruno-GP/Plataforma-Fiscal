@@ -26,7 +26,7 @@ export function useAnaliseComprasPageData() {
   const { dashboardQuery } = useDashboardComprasQueries({
     emitenteCnpj,
     email: user?.email,
-    temSped: user?.tem_sped,
+    temSped: user,
     year,
     selectedMonth,
     monthNumber,

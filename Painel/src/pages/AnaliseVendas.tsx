@@ -27,6 +27,9 @@ export default function Dashboard({
     hasChartData,
     chartMessage,
     selectedMonthLabel,
+    hasMetaComparison,
+    metaComparisonSummary,
+    metaComparisonLabel,
     dashboardQuery,
     totalFaturamento,
     rankings,
@@ -84,6 +87,9 @@ export default function Dashboard({
         title="Evolução das Vendas"
         descriptionPrefix="Vendas"
         metricLabel="Vendas"
+        hasMetaComparison={hasMetaComparison}
+        metaComparisonLabel={metaComparisonLabel}
+        metaComparisonSummary={metaComparisonSummary}
       />
 
       <SalesRegionCityMap

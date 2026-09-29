@@ -2,6 +2,7 @@ import type { ConsultaKpiResponse } from './nfe';
 import { API_BASE_URL, apiFetch } from './api';
 import { buildFiscalSearchParams } from './fiscal';
 import type { JobCreateResponse } from './jobs';
+import { normalizeCnpj } from '@/utils/formatters';
 
 interface RequestOptions {
   signal?: AbortSignal;
@@ -44,7 +45,7 @@ export const importarSpedArquivo = async (file: File, cnpjEmpresaOrigem: string)
   const formData = new FormData();
   formData.append('arquivos', file);
 
-  const cnpjDigits = cnpjEmpresaOrigem.replace(/\D/g, '');
+  const cnpjDigits = normalizeCnpj(cnpjEmpresaOrigem);
   const searchParams = new URLSearchParams({ cnpj_empresa_origem: cnpjDigits });
 
   const response = await apiFetch(`${API_BASE_URL}/sped/importar?${searchParams.toString()}`, {
@@ -61,7 +62,7 @@ export const importarSpedArquivo = async (file: File, cnpjEmpresaOrigem: string)
 };
 
 export const consultarPendenciasSped = async (cnpjEmitente: string): Promise<ImportacaoSpedPendenciasResponse> => {
-  const digits = cnpjEmitente.replace(/\D/g, '');
+  const digits = normalizeCnpj(cnpjEmitente);
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
   const response = await apiFetch(`${API_BASE_URL}/sped/pendencias?${searchParams.toString()}`);
@@ -78,7 +79,7 @@ export const processarSpedsImportados = async (
   cnpjEmitente: string,
   options: RequestOptions = {},
 ): Promise<JobCreateResponse> => {
-  const digits = cnpjEmitente.replace(/\D/g, '');
+  const digits = normalizeCnpj(cnpjEmitente);
   const searchParams = new URLSearchParams({ cnpj_emitente: digits });
 
   const response = await apiFetch(`${API_BASE_URL}/sped/processar-importados?${searchParams.toString()}`, {

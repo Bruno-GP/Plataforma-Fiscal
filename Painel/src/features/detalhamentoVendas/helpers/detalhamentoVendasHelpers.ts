@@ -139,9 +139,11 @@ const normalizeSpedCityName = (city?: string | null, uf?: string | null) => {
   if (!cityLabel) return 'Cidade nao identificada';
   if (!ufLabel) return cityLabel;
 
-  const suffixPattern = new RegExp(`\\s[-/]\\s${ufLabel}$`, 'i');
+  const suffixPattern = new RegExp(`\\s[-/]\\s${escapeRegExp(ufLabel)}$`, 'i');
   return cityLabel.replace(suffixPattern, '').trim() || cityLabel;
 };
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Agrupa SPED em UF > cidade > NCM > produto preservando linhas sintéticas sem item detalhado no total.

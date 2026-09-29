@@ -19,7 +19,12 @@ except ImportError:  # pragma: no cover - Alembic can still run with exported en
 
 
 APP_DIR = Path(__file__).resolve().parents[1]
-load_dotenv(APP_DIR / ".env")
+load_dotenv(
+    APP_DIR / ".env",
+    # Fail-closed: so sobrescreve env vars reais com o .env quando APP_ENV e
+    # explicitamente "development". Ausente/vazio/typo -> nao sobrescreve.
+    override=os.getenv("APP_ENV", "").strip().lower() == "development",
+)
 
 config = context.config
 

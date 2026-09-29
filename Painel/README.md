@@ -37,6 +37,17 @@ Frontend em React + Vite para operacao da plataforma fiscal, com autenticacao, i
 - Radix UI
 - Recharts
 
+## Atalho para subir o Painel
+
+No Windows, a partir da raiz do repositorio, sem precisar entrar na pasta:
+
+```powershell
+.\dev.ps1 painel     # equivale a: cd Painel; npm run dev
+.\dev.ps1 all        # sobe API e Painel juntos, cada um em janela propria
+```
+
+Requer `npm install` ja executado em `Painel/`. O Painel fala com a API em `VITE_API_URL` (ver Ambiente).
+
 ## Scripts disponiveis
 
 ```bash

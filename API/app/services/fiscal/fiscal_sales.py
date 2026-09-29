@@ -33,7 +33,7 @@ def construir_filtros_vendas_sped(
   periodo_mes: Optional[int] = None,
 ) -> tuple[str, list[object]]:
   filtros = [
-    "regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s",
+    "regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s",
     "d.tipo_operacao = 'saida'",
   ]
   parametros: list[object] = [emitente_cnpj]

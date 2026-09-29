@@ -2,6 +2,7 @@ import os
 
 from urllib.parse import parse_qs, unquote, urlparse
 
+
 def _first_non_empty(*keys: str, default: str | None = None) -> str | None:
     for key in keys:
         value = os.environ.get(key)
@@ -54,7 +55,7 @@ def carregar_config_postgres() -> dict:
         or None,
     )
 
-    return {
+    config = {
         "conninfo": dsn,
         "host": host,
         "port": port,
@@ -84,6 +85,8 @@ def carregar_config_postgres() -> dict:
             default=dsn_config.get("sslmode"),
         ),
     }
+
+    return config
     
 def opcoes_conexao_postgres(config: dict) -> list[dict]:
     """Monta opções de conexão priorizando DSN e com fallback para parâmetros explícitos."""

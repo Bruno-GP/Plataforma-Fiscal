@@ -20,7 +20,7 @@ def test_construir_filtros_vendas_sped_com_periodo():
     )
 
     assert where_clause == (
-        "regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s "
+        "regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s "
         "AND d.tipo_operacao = 'saida' "
         "AND EXTRACT(YEAR FROM d.data_emissao) = %s "
         "AND EXTRACT(MONTH FROM d.data_emissao) = %s"

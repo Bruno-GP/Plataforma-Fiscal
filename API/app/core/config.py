@@ -90,6 +90,9 @@ def get_cors_allow_origins() -> str:
     if not normalized and not is_production():
         return default_value
 
+    if normalized == "*" and not is_production():
+        return default_value
+
     return raw_value
 
 
@@ -149,6 +152,10 @@ def validate_production_config() -> None:
 
     if errors:
         raise RuntimeError("Configuracao de producao insegura: " + "; ".join(errors) + ".")
+
+
+def is_login_lockout_enabled() -> bool:
+    return os.getenv("AUTH_LOCKOUT_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
 
 
 def get_login_max_failed_attempts() -> int:
@@ -212,3 +219,26 @@ def get_upload_max_total_bytes() -> int:
     except ValueError as exc:
         raise ValueError("UPLOAD_MAX_TOTAL_BYTES deve ser um inteiro.") from exc
     return max(parsed, 1024)
+
+
+def get_processamento_batch_root_dir() -> str | None:
+    raw_value = os.getenv("PROCESSAMENTO_BATCH_ROOT_DIR", "").strip()
+    return raw_value or None
+
+
+def get_ibpt_sync_min_interval_seconds() -> int:
+    raw_value = os.getenv("IBPT_SYNC_MIN_INTERVAL_SECONDS", "300").strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("IBPT_SYNC_MIN_INTERVAL_SECONDS deve ser um inteiro.") from exc
+    return max(parsed, 0)
+
+
+def get_ibpt_sync_admin_emails() -> set[str]:
+    raw_value = os.getenv("IBPT_SYNC_ADMIN_EMAILS", "")
+    return {
+        email.strip().lower()
+        for email in raw_value.split(",")
+        if email.strip()
+    }

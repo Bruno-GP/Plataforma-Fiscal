@@ -27,6 +27,10 @@ Servicos expostos:
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
 
+## Atalho local no Windows
+
+`dev.ps1` na raiz sobe tudo sem digitar caminho: `.\dev.ps1 all` (API + Painel), `.\dev.ps1 api`, `.\dev.ps1 painel`, `.\dev.ps1 nfe|sped|conta_azul|sefaz|beat` e `.\dev.ps1 migrate`. Usa `API/.venv-local`. Redis continua manual.
+
 ## Rodar API local sem Docker
 
 ```bash
@@ -59,6 +63,8 @@ cd API
 celery -A app.workers.celery_app worker --loglevel=info -Q default
 celery -A app.workers.celery_app worker --loglevel=info -Q nfe
 celery -A app.workers.celery_app worker --loglevel=info -Q sped
+celery -A app.workers.celery_app worker --loglevel=info -Q conta_azul
+celery -A app.workers.celery_app beat --loglevel=info
 ```
 
 No Windows, use `--pool=solo`:
@@ -67,6 +73,7 @@ No Windows, use `--pool=solo`:
 cd "C:\Users\supor\OneDrive\Área de Trabalho\Github\Plataforma-Fiscal\API"
 .\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q nfe --pool=solo
 .\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q sped --pool=solo
+.\.venv-local\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info -Q conta_azul --pool=solo
 ```
 
 ## Redis local no Windows com Garnet
@@ -101,6 +108,14 @@ Ordem recomendada para desenvolvimento local no Windows:
 4. Painel React/Vite
 
 ## Migrations
+
+Da raiz do repositorio, no Windows com a venv local do projeto:
+
+```powershell
+.\API\.venv-local\Scripts\python.exe -m alembic -c .\alembic.ini upgrade head
+```
+
+Comandos genericos:
 
 ```bash
 alembic -c API/app/alembic.ini upgrade head

@@ -34,6 +34,22 @@ Enquanto o job estiver em fila ou execucao, a UI deve mostrar progresso por `tot
 - `NFE_PROCESSAMENTO_IMPORTADOS`: processa XMLs importados em staging para um `cnpj_emitente`.
 - `SPED_PROCESSAMENTO_IMPORTADOS`: processa arquivos SPED importados em staging para um `cnpj_emitente`.
 
+## Sincronizacao SEFAZ (fora do framework `processing_jobs`)
+
+As tasks `sefaz_sync_diario_task` (Celery beat, 02:00) e `sefaz_sync_empresa_task`
+(disparada por `POST /api/sefaz/sync`) **nao** usam `processing_jobs`/`JobsRepository` —
+sao `celery_app.send_task` direto na fila `sefaz`, sem `job_id` e sem status
+`PENDING/QUEUED/RUNNING/...`. O acompanhamento e via `GET /api/sefaz/sync-log`
+(tabela `sefaz.sync_log`, status `sucesso`/`bloqueado`/`erro`). Ver `docs/api-contracts.md`
+(secao "Sincronizacao SEFAZ") e `docs/mapeamento-busca-xml-sefaz.md`.
+
+`sefaz_evento_documento_novo_task` (por documento novo) e `sefaz_backfill_fiscal_task`
+(ao fim de cada `sefaz_sync_empresa_task`, por empresa) transportam documentos
+`direcao='emitida'` para as tabelas Fiscal via `SefazFiscalTransportService` —
+tambem best-effort, sem `job_id`/`processing_jobs`. Falha nao derruba o sync;
+o documento fica pendente (`sefaz.documentos.processado_fiscal_em IS NULL`) ate
+a proxima tentativa. Ver `docs/superpowers/specs/2026-08-18-sefaz-fiscal-transport-design.md`.
+
 ## Status
 
 - `PENDING`
@@ -50,6 +66,8 @@ Filas configuradas:
 - `default`
 - `nfe`
 - `sped`
+- `conta_azul`
+- `sefaz`
 
 Workers locais:
 
@@ -58,9 +76,12 @@ cd API
 celery -A app.workers.celery_app worker --loglevel=info -Q default
 celery -A app.workers.celery_app worker --loglevel=info -Q nfe
 celery -A app.workers.celery_app worker --loglevel=info -Q sped
+celery -A app.workers.celery_app worker --loglevel=info -Q conta_azul
+celery -A app.workers.celery_app worker --loglevel=info -Q sefaz
+celery -A app.workers.celery_app beat --loglevel=info
 ```
 
-Com Docker Compose, os servicos `celery-worker-default`, `celery-worker-nfe` e `celery-worker-sped` sobem junto com API, Redis e PostgreSQL.
+Com Docker Compose, os servicos `celery-worker-default`, `celery-worker-nfe`, `celery-worker-sped`, `celery-worker-conta-azul` e `celery-beat` sobem junto com API, Redis e PostgreSQL. **Gap conhecido:** nao ha `celery-worker-sefaz` no `docker-compose.yml` — a fila `sefaz` (tasks `sefaz_sync_diario_task`/`sefaz_sync_empresa_task`) so roda hoje via worker local (`-Q sefaz` acima); em ambiente Docker Compose essas tasks ficam enfileiradas sem consumidor ate isso ser adicionado.
 
 ## Tabela de controle
 

@@ -8,6 +8,7 @@ import {
   type SessionUser,
 } from '@/services/api';
 import { getDefaultWorkspaceRoute } from '@/utils/workspaceAccess';
+import { normalizeCnpj, isPlaceholderCnpj } from '@/utils/formatters';
 
 interface User {
   id: string;
@@ -16,6 +17,8 @@ interface User {
   emitente_cnpj: string;
   avatar?: string;
   tem_sped?: boolean;
+  tem_conta_azul?: boolean;
+  tem_xml?: boolean;
   tem_xml_importado_valido?: boolean;
 }
 
@@ -27,6 +30,8 @@ interface StoredUserLegacy {
   cnpj?: string;
   avatar?: string;
   tem_sped?: boolean;
+  tem_conta_azul?: boolean;
+  tem_xml?: boolean;
   tem_xml_importado_valido?: boolean;
 }
 
@@ -47,12 +52,14 @@ interface AuthContextType {
     email: string,
     password: string,
     cnpj: string,
-    temSped: boolean,
+    origemFiscal: 'xml' | 'sped' | 'conta_azul',
     autoLogin?: boolean,
     estado?: string,
     cidade?: string,
     municipioId?: string,
     codigoIbge?: string,
+    cnaeFiscal?: string,
+    cnaeFiscalDescricao?: string,
   ) => Promise<AuthResult>;
   logout: () => void;
 }
@@ -65,6 +72,8 @@ interface LoginResponse {
   email: string;
   empresa_nome: string;
   tem_sped?: boolean;
+  tem_conta_azul?: boolean;
+  tem_xml?: boolean;
   tem_xml_importado_valido?: boolean;
   expires_in: number;
   access_token?: string;
@@ -92,13 +101,13 @@ const extractApiErrorMessage = (errorData: ApiErrorDetail | null, fallback: stri
 };
 
 const normalizeSessionCnpj = (value: string | null | undefined): string => {
-  const digits = (value ?? '').replace(/\D/g, '');
+  const digits = normalizeCnpj(value);
 
   if (digits.length !== 14) {
     return '';
   }
 
-  if ([...digits].every((digit) => digit === '0')) {
+  if (isPlaceholderCnpj(digits)) {
     return '';
   }
 
@@ -124,7 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const parsed = session.user as StoredUserLegacy;
-    const emitenteCnpj = (parsed.emitente_cnpj ?? parsed.cnpj ?? '').replace(/\D/g, '');
+    const emitenteCnpj = normalizeCnpj(parsed.emitente_cnpj ?? parsed.cnpj);
 
     if (!parsed.id || !parsed.email || !emitenteCnpj) {
       return null;
@@ -137,6 +146,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       emitente_cnpj: emitenteCnpj,
       avatar: parsed.avatar,
       tem_sped: Boolean(parsed.tem_sped),
+      tem_conta_azul: Boolean(parsed.tem_conta_azul),
+      tem_xml: Boolean(parsed.tem_xml),
       tem_xml_importado_valido: Boolean(parsed.tem_xml_importado_valido),
     };
   });
@@ -164,6 +175,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       emitente_cnpj: normalizeSessionCnpj(data.cnpj),
       avatar: undefined,
       tem_sped: Boolean(data.tem_sped),
+      tem_conta_azul: Boolean(data.tem_conta_azul),
+      tem_xml: Boolean(data.tem_xml),
       tem_xml_importado_valido: Boolean(data.tem_xml_importado_valido),
     };
 
@@ -233,6 +246,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       ok: true,
       redirectTo: getDefaultWorkspaceRoute({
         tem_sped: Boolean(data.tem_sped),
+        tem_conta_azul: Boolean(data.tem_conta_azul),
+        tem_xml: Boolean(data.tem_xml),
         tem_xml_importado_valido: Boolean(data.tem_xml_importado_valido),
       }),
     };
@@ -247,18 +262,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     email: string,
     password: string,
     cnpj: string,
-    temSped: boolean,
+    origemFiscal: 'xml' | 'sped' | 'conta_azul',
     autoLogin = true,
     estado?: string,
     cidade?: string,
     municipioId?: string,
     codigoIbge?: string,
+    cnaeFiscal?: string,
+    cnaeFiscalDescricao?: string,
   ): Promise<AuthResult> => {
     const empresaNomeNormalizado = empresaNome.trim();
     const emailNormalizado = email.trim();
     const senhaInformada = password;
     const senhaParaValidacao = password.trim();
-    const cnpjNormalizado = cnpj.replace(/\D/g, '');
+    const cnpjNormalizado = normalizeCnpj(cnpj);
 
     if (!empresaNomeNormalizado || !emailNormalizado || !senhaParaValidacao || !cnpjNormalizado) {
       return { ok: false, message: 'Informe empresa, email, senha e CNPJ.' };
@@ -298,16 +315,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       headers: {
         'Content-Type': 'application/json',
       },
-        body: JSON.stringify({
+      body: JSON.stringify({
           empresa_nome: empresaNomeNormalizado,
           email: emailNormalizado,
           senha: senhaInformada,
           cnpj: cnpjNormalizado,
-          tem_sped: temSped,
+          tem_sped: origemFiscal === 'sped',
+          tem_conta_azul: origemFiscal === 'conta_azul',
+          tem_xml: origemFiscal === 'xml',
           estado: ufNormalizada,
           cidade: cidadeNormalizada,
           municipio_id: municipioIdNormalizado,
           codigo_ibge: codigoIbgeNormalizado,
+          cnae_fiscal: cnaeFiscal?.trim() || undefined,
+          cnae_fiscal_descricao: cnaeFiscalDescricao?.trim() || undefined,
         }),
       });
 

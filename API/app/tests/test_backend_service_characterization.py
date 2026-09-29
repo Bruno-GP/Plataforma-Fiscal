@@ -150,7 +150,7 @@ def test_nfe_consulta_monta_filtros_vendas_itens_com_periodo():
         periodo_mes=3,
     )
 
-    assert "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s" in where_clause
+    assert "regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s" in where_clause
     assert "regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)" in where_clause
     assert "EXTRACT(YEAR FROM n.data_emissao) = %s" in where_clause
     assert "EXTRACT(MONTH FROM n.data_emissao) = %s" in where_clause
@@ -176,7 +176,7 @@ def test_nfe_consulta_monta_filtros_kpis_preserva_alias_e_periodo():
         periodo_mes=3,
     )
 
-    assert "regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s" in where_clause
+    assert "regexp_replace(UPPER(k.emitente_cnpj), '[^0-9A-Z]', '', 'g') = %s" in where_clause
     assert "k.periodo_ano = %s" in where_clause
     assert "k.periodo_mes = %s" in where_clause
     assert params == ["12345678000190", 2025, 3]

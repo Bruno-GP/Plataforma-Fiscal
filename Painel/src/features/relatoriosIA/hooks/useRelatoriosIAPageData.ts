@@ -34,7 +34,7 @@ export function useRelatoriosIAPageData() {
 
   const emitenteCnpj = user?.emitente_cnpj;
   const hasEmitenteCnpj = hasValidEmitenteCnpj(emitenteCnpj);
-  const fiscalApi = createFiscalSourceApi(user?.tem_sped);
+  const fiscalApi = createFiscalSourceApi(user);
 
   const fiscalPeriod = useMemo(
     () => createFiscalPeriod(selectedYear, selectedMonth),

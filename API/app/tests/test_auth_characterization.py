@@ -11,6 +11,8 @@ class FakeLoginResult:
     email: str = "teste@example.com"
     empresa_nome: str = "Empresa Teste"
     tem_sped: bool = False
+    tem_conta_azul: bool = False
+    tem_xml: bool = True
     tem_xml_importado_valido: bool = False
 
 
@@ -21,6 +23,8 @@ class FakeLoginService:
             email=kwargs["email"],
             empresa_nome=kwargs["empresa_nome"],
             tem_sped=kwargs["tem_sped"],
+            tem_conta_azul=kwargs["tem_conta_azul"],
+            tem_xml=kwargs["tem_xml"],
             tem_xml_importado_valido=False,
         )
 
@@ -73,6 +77,8 @@ def _cadastro_payload():
         "senha": "Senha@123456",
         "cnpj": "12345678000190",
         "tem_sped": False,
+        "tem_conta_azul": False,
+        "tem_xml": True,
         "estado": "SP",
         "cidade": "Sao Paulo",
         "municipio_id": "3550308",
@@ -105,6 +111,8 @@ def test_auth_registrar_preserva_status_cookie_e_payload(client, monkeypatch):
     assert payload["email"] == "teste@example.com"
     assert payload["empresa_nome"] == "Empresa Teste"
     assert payload["tem_sped"] is False
+    assert payload["tem_conta_azul"] is False
+    assert payload["tem_xml"] is True
     assert payload["tem_xml_importado_valido"] is False
     assert payload["expires_in"] > 0
     assert isinstance(payload["access_token"], str)

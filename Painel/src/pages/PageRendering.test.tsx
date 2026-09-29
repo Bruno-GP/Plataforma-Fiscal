@@ -541,6 +541,7 @@ describe("renderizacao por pagina do frontend", () => {
     expect(screen.getByLabelText(/senha/i)).toBeRequired();
     expect(screen.getByRole("button", { name: /uf da empresa/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /cidade da empresa/i })).toBeDisabled();
+    expect(screen.getByRole("option", { name: /empresa usa conta azul/i })).toBeInTheDocument();
   });
 
   it("envia o payload de cadastro com UF e cidade vinculadas ao catalogo", async () => {

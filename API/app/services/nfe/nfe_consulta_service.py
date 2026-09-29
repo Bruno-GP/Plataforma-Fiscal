@@ -2,7 +2,6 @@ import logging
 from time import perf_counter
 from typing import List, Optional
 from decimal import Decimal
-import psycopg
 from fastapi import HTTPException, status
 
 from app.core.cache import ttl_cache
@@ -15,7 +14,6 @@ from app.models.nfe.schemas import (
 from app.repositories.nfe.consulta_repository import NFeConsultaRepository
 from app.services.nfe.empresa_service import normalizar_cnpj
 from app.services.fiscal.fiscal_analysis import (
-  FiscalDimensionConfig,
   analisar_fiscal_por_dimensao,
   obter_total_impostos_complementares_documentos,
   obter_totais_tributos_documentos_por_periodo,
@@ -76,57 +74,20 @@ from app.services.fiscal.fiscal_sales import (
   obter_cfops_faturamento_venda,
 )
 from app.services.nfe.postres_config import carregar_config_postgres
+from app.services.nfe.nfe_analysis_configs import (
+  NFE_CFOP_ANALYSIS_CONFIG,
+  NFE_NCM_ANALYSIS_CONFIG,
+)
 from app.services.shared.email_validation import normalizar_email
 
 logger = logging.getLogger("NFeConsultaService")
 
-NFE_CFOP_ANALYSIS_CONFIG = FiscalDimensionConfig(
-  from_clause="""
-    public.notas AS n
-    JOIN public.notas_itens AS i
-      ON i.nota_id = n.id
-  """,
-  company_filter_expr="regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')",
-  date_expr="n.data_emissao",
-  document_id_expr="n.id",
-  amount_expr="i.valor_total",
-  dimension_code_count_expr="regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')",
-  dimension_code_display_expr="regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')",
-  dimension_description_expr="c.descricao",
-  category_description_expr="c.descricao",
-  category_fallback_description_expr="n.natureza_operacao",
-  sale_condition_expr="LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
-  reference_join_clause="""
-    LEFT JOIN public.notas_cfops AS c
-      ON regexp_replace(COALESCE(c.codigo, ''), '\\D', '', 'g')
-         = regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g')
-  """,
-  unknown_description="CFOP sem descrião",
-)
-
-NFE_NCM_ANALYSIS_CONFIG = FiscalDimensionConfig(
-  from_clause="""
-    public.notas AS n
-    JOIN public.notas_itens AS i
-      ON i.nota_id = n.id
-  """,
-  company_filter_expr="regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g')",
-  date_expr="n.data_emissao",
-  document_id_expr="n.id",
-  amount_expr="i.valor_total",
-  dimension_code_count_expr="regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g')",
-  dimension_code_display_expr="regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g')",
-  dimension_description_expr="nc.descricao",
-  category_description_expr="n.natureza_operacao",
-  sale_condition_expr="LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
-  reference_join_clause="""
-    LEFT JOIN public.ncm_catalogo nc
-      ON regexp_replace(COALESCE(nc.codigo, ''), '\\D', '', 'g')
-         = regexp_replace(COALESCE(i.ncm, ''), '\\D', '', 'g')
-  """,
-  unknown_code="00000000",
-  unknown_description="NCM sem descrição",
-)
+NIVEL_HIERARQUIA_BUILDERS = {
+  "estado": construir_item_estado,
+  "cidade": construir_item_cidade,
+  "ncm": construir_item_ncm,
+  "produto": construir_item_produto,
+}
 
 class NFeConsultaService:
   def __init__(self):
@@ -173,7 +134,7 @@ class NFeConsultaService:
   def _obter_cnpj_filtrado_obrigatorio(
     self,
     emitente_cnpj: Optional[str],
-    mensagem_erro: str = "Informe um emitente_cnpj vÃ¡lido.",
+    mensagem_erro: str = "Informe um emitente_cnpj válido.",
   ) -> str:
     cnpj_filtrado = self._normalizar_cnpj_filtro(
       emitente_cnpj,
@@ -233,7 +194,7 @@ class NFeConsultaService:
       raise ValueError("Informe um emitente_cnpj válido.")
 
     filtros_vendas_docs = [
-      "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+      "regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s",
       "regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)",
     ]
     parametros: list[object] = [cnpj_filtrado, obter_cfops_faturamento_venda()]
@@ -263,7 +224,7 @@ class NFeConsultaService:
     )
 
     if cnpj_filtrado:
-      filtros.append("regexp_replace(k.emitente_cnpj, '\\\\D', '', 'g') = %s")
+      filtros.append("regexp_replace(UPPER(k.emitente_cnpj), '[^0-9A-Z]', '', 'g') = %s")
       parametros.append(cnpj_filtrado)
 
     if periodo_ano:
@@ -353,12 +314,7 @@ class NFeConsultaService:
     emitente_cnpj: Optional[str],
     periodos: set[tuple[int, int | None]],
   ) -> dict[tuple[int, int | None], Decimal]:
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
-    )
-    if not cnpj_filtrado:
-      raise ValueError("Informe um emitente_cnpj vÃ¡lido.")
+    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
 
     if not periodos:
       return {}
@@ -382,6 +338,58 @@ class NFeConsultaService:
         totais[chave_anual] += valor_total or Decimal("0.00")
 
     return totais
+
+  def _montar_dados_dashboard_vendas(
+    self,
+    emitente_cnpj: str,
+    ano_referencia: int,
+    periodo_mes: int | None,
+    ano_anterior: int,
+    mes_anterior: int | None,
+    resultados_ano_atual,
+    resultados_filtrados,
+    resultados_anteriores,
+    limite: int,
+  ) -> tuple[dict, dict, list]:
+    periodos_tributos = construir_periodos_dashboard(
+      ano_referencia,
+      periodo_mes,
+      ano_anterior,
+      mes_anterior,
+      resultados_ano_atual,
+    )
+    totais_tributos = obter_totais_tributos_documentos_por_periodo(
+      self.conn_params,
+      "nfe",
+      emitente_cnpj,
+      sorted(periodos_tributos, key=lambda periodo: (periodo[0], periodo[1] or 0)),
+      "saida",
+    )
+    totais_vendidos: dict[tuple[int, int | None], Decimal] = {}
+
+    resumo_atual = construir_resumo_dashboard(
+      resultados_filtrados,
+      (ano_referencia, periodo_mes),
+      totais_vendidos,
+      totais_tributos,
+      limite,
+    )
+    resumo_anterior = construir_resumo_dashboard(
+      resultados_anteriores,
+      (ano_anterior, mes_anterior),
+      totais_vendidos,
+      totais_tributos,
+      limite,
+    )
+
+    serie_mensal = construir_serie_mensal_dashboard(
+      ano_referencia,
+      resultados_ano_atual,
+      totais_vendidos,
+      totais_tributos,
+    )
+
+    return resumo_atual, resumo_anterior, serie_mensal
 
   @ttl_cache(ttl_seconds=15, maxsize=128)
   def consultar_dashboard_vendas(
@@ -420,42 +428,16 @@ class NFeConsultaService:
       )
     )
 
-    periodos_tributos = construir_periodos_dashboard(
+    resumo_atual, resumo_anterior, serie_mensal = self._montar_dados_dashboard_vendas(
+      emitente_cnpj,
       ano_referencia,
       periodo_mes,
       ano_anterior,
       mes_anterior,
       resultados_ano_atual,
-    )
-    totais_tributos = obter_totais_tributos_documentos_por_periodo(
-      self.conn_params,
-      "nfe",
-      emitente_cnpj,
-      sorted(periodos_tributos, key=lambda periodo: (periodo[0], periodo[1] or 0)),
-      "saida",
-    )
-    totais_vendidos: dict[tuple[int, int | None], Decimal] = {}
-
-    resumo_atual = construir_resumo_dashboard(
       resultados_filtrados,
-      (ano_referencia, periodo_mes),
-      totais_vendidos,
-      totais_tributos,
-      limite,
-    )
-    resumo_anterior = construir_resumo_dashboard(
       resultados_anteriores,
-      (ano_anterior, mes_anterior),
-      totais_vendidos,
-      totais_tributos,
       limite,
-    )
-
-    serie_mensal = construir_serie_mensal_dashboard(
-      ano_referencia,
-      resultados_ano_atual,
-      totais_vendidos,
-      totais_tributos,
     )
 
     return construir_dashboard_vendas_response(
@@ -596,34 +578,12 @@ class NFeConsultaService:
       logger.exception("Erro ao consultar KPIs NFe")
       raise
     
-  def analisar_compras(
+  def _montar_rankings_compras(
     self,
-    emitente_cnpj: Optional[str],
-    periodo_ano: Optional[int] = None,
-    periodo_mes: Optional[int] = None,
-    limite: int = 5,
-  ) -> dict:
-    inicio_total = perf_counter()
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
-    )
-    if not cnpj_filtrado:
-      raise ValueError("Informe um emitente_cnpj válido.")
-
-    where_clause, parametros = construir_filtros_compras_nfe(
-      cnpj_filtrado,
-      periodo_ano,
-      periodo_mes,
-    )
-
-    repository = self._consulta_repository()
-    parametros_com_limite = construir_params_com_limite_compras(parametros, limite)
-    total_comprado = repository.obter_total_itens(
-      where_clause,
-      parametros,
-      "total_comprado",
-    )
+    repository: NFeConsultaRepository,
+    where_clause: str,
+    parametros_com_limite: list[object],
+  ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
     top_fornecedores_valor = construir_ranking_fornecedores_compras(
       repository.listar_fornecedores_compras_por_valor(
         where_clause,
@@ -648,6 +608,43 @@ class NFeConsultaService:
         parametros_com_limite,
       )
     )
+
+    return (
+      top_fornecedores_valor,
+      top_fornecedores_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+    )
+
+  def analisar_compras(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: int = 5,
+  ) -> dict:
+    inicio_total = perf_counter()
+    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
+
+    where_clause, parametros = construir_filtros_compras_nfe(
+      cnpj_filtrado,
+      periodo_ano,
+      periodo_mes,
+    )
+
+    repository = self._consulta_repository()
+    parametros_com_limite = construir_params_com_limite_compras(parametros, limite)
+    total_comprado = repository.obter_total_itens(
+      where_clause,
+      parametros,
+      "total_comprado",
+    )
+    (
+      top_fornecedores_valor,
+      top_fornecedores_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+    ) = self._montar_rankings_compras(repository, where_clause, parametros_com_limite)
     total_impostos_complementares, total_tributos_reforma = self._obter_totais_tributos_analise(
       cnpj_filtrado,
       periodo_ano,
@@ -681,33 +678,15 @@ class NFeConsultaService:
       top_produtos_quantidade,
     )
     
-  def analisar_vendas(
+  def _montar_rankings_vendas(
     self,
-    emitente_cnpj: Optional[str],
-    periodo_ano: Optional[int] = None,
-    periodo_mes: Optional[int] = None,
-    limite: Optional[int] = None,
-  ) -> dict:
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
-    )
-    if not cnpj_filtrado:
-      raise ValueError("Informe um emitente_cnpj válido.")
-
-    where_clause, parametros = self._montar_filtros_vendas_itens(
-      emitente_cnpj=cnpj_filtrado,
-      periodo_ano=periodo_ano,
-      periodo_mes=periodo_mes,
-    )
-
-    repository = self._consulta_repository()
-    parametros_com_limite = construir_params_com_limite(parametros, limite)
-    total_vendido = repository.obter_total_itens(
-      where_clause,
-      parametros,
-      "total_vendido",
-    )
+    repository: NFeConsultaRepository,
+    where_clause: str,
+    parametros: list[object],
+    parametros_com_limite: list[object],
+    limite: Optional[int],
+    total_vendido: Decimal,
+  ) -> tuple[list[dict], list[dict], list[dict], list[dict], list[dict], list[dict], list[dict]]:
     top_clientes_valor = construir_ranking_clientes_vendas(
       repository.listar_clientes_vendas_por_valor(
         where_clause,
@@ -752,6 +731,55 @@ class NFeConsultaService:
       ),
       limite,
     )
+
+    return (
+      top_clientes_valor,
+      top_clientes_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+      top_cfops_valor,
+      top_cidades_valor,
+      top_regioes_valor,
+    )
+
+  def analisar_vendas(
+    self,
+    emitente_cnpj: Optional[str],
+    periodo_ano: Optional[int] = None,
+    periodo_mes: Optional[int] = None,
+    limite: Optional[int] = None,
+  ) -> dict:
+    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
+
+    where_clause, parametros = self._montar_filtros_vendas_itens(
+      emitente_cnpj=cnpj_filtrado,
+      periodo_ano=periodo_ano,
+      periodo_mes=periodo_mes,
+    )
+
+    repository = self._consulta_repository()
+    parametros_com_limite = construir_params_com_limite(parametros, limite)
+    total_vendido = repository.obter_total_itens(
+      where_clause,
+      parametros,
+      "total_vendido",
+    )
+    (
+      top_clientes_valor,
+      top_clientes_quantidade,
+      top_produtos_valor,
+      top_produtos_quantidade,
+      top_cfops_valor,
+      top_cidades_valor,
+      top_regioes_valor,
+    ) = self._montar_rankings_vendas(
+      repository,
+      where_clause,
+      parametros,
+      parametros_com_limite,
+      limite,
+      total_vendido,
+    )
     total_impostos_complementares, total_tributos_reforma = self._obter_totais_tributos_analise(
       cnpj_filtrado,
       periodo_ano,
@@ -783,12 +811,7 @@ class NFeConsultaService:
     periodo_mes: Optional[int] = None,
     limite: Optional[int] = None,
   ) -> dict:
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
-    )
-    if not cnpj_filtrado:
-      raise ValueError("Informe um emitente_cnpj válido.")
+    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
 
     resultado = analisar_fiscal_por_dimensao(
       conn_params=self.conn_params,
@@ -830,12 +853,7 @@ class NFeConsultaService:
     periodo_mes: Optional[int] = None,
     limite: Optional[int] = None,
   ) -> dict:
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
-    )
-    if not cnpj_filtrado:
-      raise ValueError("Informe um emitente_cnpj válido.")
+    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
 
     resultado = analisar_fiscal_por_dimensao(
       conn_params=self.conn_params,
@@ -869,6 +887,54 @@ class NFeConsultaService:
       total_tributos_reforma,
     )
 
+  def _montar_dados_hierarquia_fiscal(
+    self,
+    dados_hierarquia: dict,
+    nivel_resolvido: str,
+  ) -> tuple[Decimal, Decimal, Decimal, Optional[tuple], list[dict], int, list[dict], list[dict], list[dict], list[dict], list[dict]]:
+    resumo_row = dados_hierarquia["resumo_row"]
+    total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
+    total_impostos = resumo_row[1] if resumo_row else Decimal("0.00")
+    percentual_total = calcular_percentual_imposto(total_impostos, total_faturamento)
+
+    hierarquia = [
+      construir_item_hierarquia_completa(
+        uf_item,
+        cidade_item,
+        ncm_item,
+        descricao_item,
+        codigo_item,
+        produto_item,
+        faturamento,
+        imposto_valor,
+      )
+      for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor
+      in dados_hierarquia["rows_hierarquia_completa"]
+    ]
+
+    total_registros_nivel = dados_hierarquia["total_registros_nivel"]
+    builder_nivel = NIVEL_HIERARQUIA_BUILDERS.get(nivel_resolvido, construir_item_produto)
+    itens_nivel_atual = [builder_nivel(*row) for row in dados_hierarquia["rows_nivel"]]
+
+    por_estado = itens_nivel_atual if nivel_resolvido == "estado" else []
+    por_cidade = itens_nivel_atual if nivel_resolvido == "cidade" else []
+    por_ncm = itens_nivel_atual if nivel_resolvido == "ncm" else []
+    por_produto = itens_nivel_atual if nivel_resolvido not in ("estado", "cidade", "ncm") else []
+
+    return (
+      total_faturamento,
+      total_impostos,
+      percentual_total,
+      resumo_row,
+      hierarquia,
+      total_registros_nivel,
+      itens_nivel_atual,
+      por_estado,
+      por_cidade,
+      por_ncm,
+      por_produto,
+    )
+
   @ttl_cache(ttl_seconds=15, maxsize=128)
   def analisar_fiscal_hierarquia(
     self,
@@ -883,12 +949,7 @@ class NFeConsultaService:
     limite: Optional[int] = None,
     offset: int = 0,
   ) -> dict:
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
-    )
-    if not cnpj_filtrado:
-      raise ValueError("Informe um emitente_cnpj valido.")
+    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
 
     where_clause, parametros = construir_filtros_hierarquia_nfe(
       cnpj_filtrado,
@@ -909,78 +970,30 @@ class NFeConsultaService:
       offset_consulta,
     )
 
+    nivel_resolvido = resolver_nivel_hierarquia(nivel_atual, estado, cidade, ncm)
     repository = self._consulta_repository()
+    dados_hierarquia = repository.consultar_hierarquia_fiscal(
+      where_clause,
+      parametros,
+      nivel_resolvido,
+      limite_consulta,
+      offset_consulta,
+      modo_legado_hierarquia_completa,
+    )
 
-    with psycopg.connect(**self.conn_params) as conn:
-      with conn.cursor() as cur:
-        repository.criar_tmp_fiscal_hierarquia_base(cur, where_clause, parametros)
-        resumo_row = repository.obter_resumo_fiscal_hierarquia(cur)
-
-        total_faturamento = resumo_row[0] if resumo_row else Decimal("0.00")
-        total_impostos = resumo_row[1] if resumo_row else Decimal("0.00")
-        percentual_total = calcular_percentual_imposto(total_impostos, total_faturamento)
-        hierarquia: list[dict] = []
-        if modo_legado_hierarquia_completa:
-          rows_hierarquia = repository.listar_hierarquia_fiscal_completa(cur, limite_consulta)
-          hierarquia = [
-            construir_item_hierarquia_completa(
-              uf_item,
-              cidade_item,
-              ncm_item,
-              descricao_item,
-              codigo_item,
-              produto_item,
-              faturamento,
-              imposto_valor,
-            )
-            for uf_item, cidade_item, ncm_item, descricao_item, codigo_item, produto_item, faturamento, imposto_valor in rows_hierarquia
-          ]
-        nivel_resolvido = resolver_nivel_hierarquia(nivel_atual, estado, cidade, ncm)
-        itens_nivel_atual: list[dict] = []
-        por_estado: list[dict] = []
-        por_cidade: list[dict] = []
-        por_ncm: list[dict] = []
-        por_produto: list[dict] = []
-        total_registros_nivel = 0
-
-        if nivel_resolvido == "estado":
-          total_registros_nivel = repository.contar_estados_fiscal_hierarquia(cur)
-          rows_estado = repository.listar_estados_fiscal_hierarquia(cur, limite_consulta, offset_consulta)
-          por_estado = [
-            construir_item_estado(uf_item, faturamento, imposto_valor)
-            for uf_item, faturamento, imposto_valor in rows_estado
-          ]
-          itens_nivel_atual = por_estado
-        elif nivel_resolvido == "cidade":
-          total_registros_nivel = repository.contar_cidades_fiscal_hierarquia(cur)
-          rows_cidade = repository.listar_cidades_fiscal_hierarquia(cur, limite_consulta, offset_consulta)
-          por_cidade = [
-            construir_item_cidade(cidade_item, uf_item, faturamento, imposto_valor)
-            for cidade_item, uf_item, faturamento, imposto_valor in rows_cidade
-          ]
-          itens_nivel_atual = por_cidade
-        elif nivel_resolvido == "ncm":
-          total_registros_nivel = repository.contar_ncms_fiscal_hierarquia(cur)
-          rows_ncm = repository.listar_ncms_fiscal_hierarquia(cur, limite_consulta, offset_consulta)
-          por_ncm = [
-            construir_item_ncm(
-              ncm_item,
-              descricao_item,
-              quantidade_produtos,
-              faturamento,
-              imposto_valor,
-            )
-            for ncm_item, descricao_item, quantidade_produtos, faturamento, imposto_valor in rows_ncm
-          ]
-          itens_nivel_atual = por_ncm
-        else:
-          total_registros_nivel = repository.contar_produtos_fiscal_hierarquia(cur)
-          rows_produto = repository.listar_produtos_fiscal_hierarquia(cur, limite_consulta, offset_consulta)
-          por_produto = [
-            construir_item_produto(codigo_item, produto_item, faturamento, imposto_valor)
-            for codigo_item, produto_item, faturamento, imposto_valor in rows_produto
-          ]
-          itens_nivel_atual = por_produto
+    (
+      total_faturamento,
+      total_impostos,
+      percentual_total,
+      resumo_row,
+      hierarquia,
+      total_registros_nivel,
+      itens_nivel_atual,
+      por_estado,
+      por_cidade,
+      por_ncm,
+      por_produto,
+    ) = self._montar_dados_hierarquia_fiscal(dados_hierarquia, nivel_resolvido)
 
     total_tributos_reforma = obter_total_tributos_reforma_documentos(
       self.conn_params,
@@ -1019,12 +1032,7 @@ class NFeConsultaService:
     periodo_mes: Optional[int] = None,
     limite: Optional[int] = None,
   ) -> dict:
-    cnpj_filtrado = self._normalizar_cnpj_filtro(
-      emitente_cnpj,
-      permitir_zerado=False,
-    )
-    if not cnpj_filtrado:
-      raise ValueError("Informe um emitente_cnpj válido.")
+    cnpj_filtrado = self._obter_cnpj_filtrado_obrigatorio(emitente_cnpj)
 
     where_clause, parametros = construir_filtros_clientes_nfe(
       cnpj_filtrado,

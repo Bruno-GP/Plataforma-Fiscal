@@ -14,6 +14,7 @@ from app.core.audit import log_security_event
 from app.core.config import (
     get_login_lockout_minutes,
     get_login_max_failed_attempts,
+    is_login_lockout_enabled,
     get_login_success_cache_ttl_seconds,
     get_password_min_length,
 )
@@ -38,13 +39,26 @@ class LoginResult:
     email: str
     empresa_nome: str
     tem_sped: bool
+    tem_conta_azul: bool
+    tem_xml: bool
 
 
 class LoginService:
     _schema_lock = Lock()
     _schema_ensured = False
     _required_columns_by_table = {
-        "empresas": {"id", "cnpj", "nome", "tem_sped", "estado", "cidade", "municipio_id", "codigo_ibge"},
+        "empresas": {
+            "id",
+            "cnpj",
+            "nome",
+            "tem_sped",
+            "tem_conta_azul",
+            "tem_xml",
+            "estado",
+            "cidade",
+            "municipio_id",
+            "codigo_ibge",
+        },
         "login": {
             "id",
             "empresa_id",
@@ -209,6 +223,16 @@ class LoginService:
         return nome.strip() if nome else ""
 
     def _registrar_falha_login(self, conn: psycopg.Connection, login_id: int, email: str) -> None:
+        if not is_login_lockout_enabled():
+            log_security_event(
+                "login_failed",
+                outcome="rejected",
+                email=email,
+                login_id=login_id,
+                reason="invalid_credentials",
+            )
+            raise ValueError("Credenciais inválidas.")
+
         max_attempts = get_login_max_failed_attempts()
         lockout_minutes = get_login_lockout_minutes()
 
@@ -276,6 +300,122 @@ class LoginService:
             )
         conn.commit()
 
+    def _upsert_empresa_registro(
+        self,
+        cur: psycopg.Cursor,
+        cnpj_normalizado: str,
+        empresa_nome_normalizado: str,
+        tem_sped_normalizado: bool,
+        tem_conta_azul_normalizado: bool,
+        tem_xml_normalizado: bool,
+        estado_normalizado: str | None,
+        cidade_normalizada: str | None,
+        municipio_id_normalizado: str | None,
+        codigo_ibge_normalizado: str | None,
+    ) -> tuple:
+        cur.execute(
+            """
+            SELECT id, cnpj, nome, tem_sped, tem_conta_azul, tem_xml, estado, cidade, municipio_id, codigo_ibge
+            FROM public.empresas
+            WHERE cnpj = %s;
+            """,
+            (cnpj_normalizado,),
+        )
+        empresa = cur.fetchone()
+
+        if not empresa:
+            logger.info(
+                "Empresa não encontrada para CNPJ %s. Criando cadastro automaticamente.",
+                cnpj_normalizado,
+            )
+            cur.execute(
+                """
+                INSERT INTO public.empresas (cnpj, nome, tem_sped, tem_conta_azul, tem_xml, estado, cidade, municipio_id, codigo_ibge)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, cnpj, nome, tem_sped, tem_conta_azul, tem_xml, estado, cidade, municipio_id, codigo_ibge;
+                """,
+                (
+                    cnpj_normalizado,
+                    empresa_nome_normalizado,
+                    tem_sped_normalizado,
+                    tem_conta_azul_normalizado,
+                    tem_xml_normalizado,
+                    estado_normalizado,
+                    cidade_normalizada,
+                    municipio_id_normalizado,
+                    codigo_ibge_normalizado,
+                ),
+            )
+            return cur.fetchone()
+
+        cur.execute(
+            """
+            UPDATE public.empresas
+            SET nome = %s,
+                tem_sped = %s,
+                tem_conta_azul = %s,
+                tem_xml = %s,
+                estado = COALESCE(%s, estado),
+                cidade = COALESCE(%s, cidade),
+                municipio_id = COALESCE(%s, municipio_id),
+                codigo_ibge = COALESCE(%s, codigo_ibge)
+            WHERE id = %s;
+            """,
+            (
+                empresa_nome_normalizado,
+                tem_sped_normalizado,
+                tem_conta_azul_normalizado,
+                tem_xml_normalizado,
+                estado_normalizado,
+                cidade_normalizada,
+                municipio_id_normalizado,
+                codigo_ibge_normalizado,
+                empresa[0],
+            ),
+        )
+        return empresa
+
+    def _garantir_email_disponivel(self, cur: psycopg.Cursor, email_normalizado: str) -> None:
+        cur.execute(
+            """
+            SELECT id
+            FROM public.login
+            WHERE email = %s;
+            """,
+            (email_normalizado,),
+        )
+        if cur.fetchone():
+            logger.warning(
+                "Tentativa de cadastro com e-mail já existente: %s",
+                email_normalizado,
+            )
+            raise ValueError("E-mail já cadastrado.")
+
+    def _inserir_login(
+        self,
+        cur: psycopg.Cursor,
+        empresa_id: int,
+        cnpj_normalizado: str,
+        email_normalizado: str,
+        senha: str,
+    ) -> int:
+        senha_armazenada = self._gerar_senha_armazenada(senha)
+
+        cur.execute(
+            """
+            INSERT INTO public.login (empresa_id, cnpj, email, senha)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id;
+            """,
+            (
+                empresa_id,
+                cnpj_normalizado,
+                email_normalizado,
+                senha_armazenada,
+            ),
+        )
+        return cur.fetchone()[0]
+
     def registrar(
         self,
         empresa_nome: str,
@@ -283,6 +423,8 @@ class LoginService:
         senha: str,
         cnpj: str,
         tem_sped: bool = False,
+        tem_conta_azul: bool = False,
+        tem_xml: bool = False,
         estado: str | None = None,
         cidade: str | None = None,
         municipio_id: str | None = None,
@@ -294,6 +436,9 @@ class LoginService:
         cidade_normalizada = _normalizar_localidade(cidade)
         municipio_id_normalizado = _normalizar_localidade(municipio_id)
         codigo_ibge_normalizado = _normalizar_localidade(codigo_ibge)
+        tem_sped_normalizado = bool(tem_sped)
+        tem_conta_azul_normalizado = bool(tem_conta_azul)
+        tem_xml_normalizado = bool(tem_xml or (not tem_sped_normalizado and not tem_conta_azul_normalizado))
         if len(empresa_nome_normalizado) < 2:
             raise ValueError("Informe um nome de empresa válido.")
         self._validar_forca_senha(senha)
@@ -303,92 +448,20 @@ class LoginService:
 
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT id, cnpj, nome, estado, cidade, municipio_id, codigo_ibge
-                    FROM public.empresas
-                    WHERE cnpj = %s;
-                    """,
-                    (cnpj_normalizado,),
+                empresa = self._upsert_empresa_registro(
+                    cur,
+                    cnpj_normalizado,
+                    empresa_nome_normalizado,
+                    tem_sped_normalizado,
+                    tem_conta_azul_normalizado,
+                    tem_xml_normalizado,
+                    estado_normalizado,
+                    cidade_normalizada,
+                    municipio_id_normalizado,
+                    codigo_ibge_normalizado,
                 )
-                empresa = cur.fetchone()
-
-                if not empresa:
-                    logger.info(
-                        "Empresa não encontrada para CNPJ %s. Criando cadastro automaticamente.",
-                        cnpj_normalizado,
-                    )
-                    cur.execute(
-                        """
-                        INSERT INTO public.empresas (cnpj, nome, tem_sped, estado, cidade, municipio_id, codigo_ibge)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id, cnpj, nome, estado, cidade, municipio_id, codigo_ibge;
-                        """,
-                        (
-                            cnpj_normalizado,
-                            empresa_nome_normalizado,
-                            tem_sped,
-                            estado_normalizado,
-                            cidade_normalizada,
-                            municipio_id_normalizado,
-                            codigo_ibge_normalizado,
-                        ),
-                    )
-                    empresa = cur.fetchone()
-                else:
-                    cur.execute(
-                        """
-                        UPDATE public.empresas
-                        SET nome = %s,
-                            tem_sped = %s,
-                            estado = COALESCE(%s, estado),
-                            cidade = COALESCE(%s, cidade),
-                            municipio_id = COALESCE(%s, municipio_id),
-                            codigo_ibge = COALESCE(%s, codigo_ibge)
-                        WHERE id = %s;
-                        """,
-                        (
-                            empresa_nome_normalizado,
-                            tem_sped,
-                            estado_normalizado,
-                            cidade_normalizada,
-                            municipio_id_normalizado,
-                            codigo_ibge_normalizado,
-                            empresa[0],
-                        ),
-                    )
-
-                cur.execute(
-                    """
-                    SELECT id
-                    FROM public.login
-                    WHERE email = %s;
-                    """,
-                    (email_normalizado,),
-                )
-                if cur.fetchone():
-                    logger.warning(
-                        "Tentativa de cadastro com e-mail já existente: %s",
-                        email_normalizado,
-                    )
-                    raise ValueError("E-mail já cadastrado.")
-
-                senha_armazenada = self._gerar_senha_armazenada(senha)
-
-                cur.execute(
-                    """
-                    INSERT INTO public.login (empresa_id, cnpj, email, senha)
-                    VALUES (%s, %s, %s, %s)
-                    RETURNING id;
-                    """,
-                    (
-                        empresa[0],
-                        cnpj_normalizado,
-                        email_normalizado,
-                        senha_armazenada,
-                    ),
-                )
-                login_id = cur.fetchone()[0]
+                self._garantir_email_disponivel(cur, email_normalizado)
+                login_id = self._inserir_login(cur, empresa[0], cnpj_normalizado, email_normalizado, senha)
             conn.commit()
 
         log_security_event(
@@ -406,7 +479,9 @@ class LoginService:
             cnpj=cnpj_normalizado,
             email=email_normalizado,
             empresa_nome=self._nome_empresa_completo(empresa[2]),
-            tem_sped=tem_sped,
+            tem_sped=tem_sped_normalizado,
+            tem_conta_azul=tem_conta_azul_normalizado,
+            tem_xml=tem_xml_normalizado,
         )
 
     def atualizar_senha(self, login_id: int, nova_senha: str) -> None:
@@ -459,28 +534,58 @@ class LoginService:
 
             return self._autenticar_sem_cache(email_normalizado, senha)
 
+    def _buscar_login_para_autenticacao(self, cur: psycopg.Cursor, email_normalizado: str) -> tuple | None:
+        cur.execute(
+            """
+            SELECT login.id,
+                   login.empresa_id,
+                   login.cnpj,
+                   login.email,
+                   login.senha,
+                   login.bloqueado_ate,
+                   login.tentativas_falhas,
+                   login.ultimo_login_em,
+                   empresas.nome,
+                   COALESCE(empresas.tem_sped, false),
+                   COALESCE(empresas.tem_conta_azul, false),
+                   COALESCE(empresas.tem_xml, false)
+            FROM public.login AS login
+            JOIN public.empresas AS empresas ON empresas.id = login.empresa_id
+            WHERE login.email = %s;
+            """,
+            (email_normalizado,),
+        )
+        return cur.fetchone()
+
+    def _validar_bloqueio_login(
+        self,
+        bloqueado_ate: datetime | None,
+        email_db: str,
+        login_id: int,
+        empresa_id: int,
+        cnpj: str,
+    ) -> None:
+        if not is_login_lockout_enabled():
+            return
+        if bloqueado_ate and bloqueado_ate > datetime.now(timezone.utc):
+            blocked_until = bloqueado_ate.astimezone(timezone.utc).isoformat()
+            log_security_event(
+                "login_blocked",
+                outcome="rejected",
+                email=email_db,
+                login_id=login_id,
+                empresa_id=empresa_id,
+                cnpj=cnpj,
+                reason="temporary_lockout",
+            )
+            raise ValueError(
+                f"Muitas tentativas inválidas. Tente novamente após {blocked_until}."
+            )
+
     def _autenticar_sem_cache(self, email_normalizado: str, senha: str) -> LoginResult:
         with psycopg.connect(**self.conn_params) as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT login.id,
-                           login.empresa_id,
-                           login.cnpj,
-                           login.email,
-                           login.senha,
-                           login.bloqueado_ate,
-                           login.tentativas_falhas,
-                           login.ultimo_login_em,
-                           empresas.nome,
-                           COALESCE(empresas.tem_sped, false)
-                    FROM public.login AS login
-                    JOIN public.empresas AS empresas ON empresas.id = login.empresa_id
-                    WHERE login.email = %s;
-                    """,
-                    (email_normalizado,),
-                )
-                login = cur.fetchone()
+                login = self._buscar_login_para_autenticacao(cur, email_normalizado)
 
                 if not login:
                     log_security_event(
@@ -502,22 +607,11 @@ class LoginService:
                     ultimo_login_em,
                     empresa_nome,
                     tem_sped,
+                    tem_conta_azul,
+                    tem_xml,
                 ) = login
 
-                if bloqueado_ate and bloqueado_ate > datetime.now(timezone.utc):
-                    blocked_until = bloqueado_ate.astimezone(timezone.utc).isoformat()
-                    log_security_event(
-                        "login_blocked",
-                        outcome="rejected",
-                        email=email_db,
-                        login_id=login_id,
-                        empresa_id=empresa_id,
-                        cnpj=cnpj,
-                        reason="temporary_lockout",
-                    )
-                    raise ValueError(
-                        f"Muitas tentativas inválidas. Tente novamente após {blocked_until}."
-                    )
+                self._validar_bloqueio_login(bloqueado_ate, email_db, login_id, empresa_id, cnpj)
 
                 if not self._verificar_senha(senha, senha_armazenada):
                     self._registrar_falha_login(conn, login_id, email_db)
@@ -539,6 +633,8 @@ class LoginService:
                 email=email_db,
                 empresa_nome=self._nome_empresa_completo(empresa_nome),
                 tem_sped=bool(tem_sped),
+                tem_conta_azul=bool(tem_conta_azul),
+                tem_xml=bool(tem_xml),
             )
             self._set_cached_auth(email_normalizado, senha, result)
             return result

@@ -30,6 +30,8 @@ def test_user() -> AuthenticatedUser:
         email="teste@example.com",
         empresa_nome="Empresa Teste",
         tem_sped=False,
+        tem_conta_azul=False,
+        tem_xml=True,
     )
 
 

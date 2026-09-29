@@ -158,6 +158,8 @@ cd API
 celery -A app.workers.celery_app worker --loglevel=info -Q default
 celery -A app.workers.celery_app worker --loglevel=info -Q nfe
 celery -A app.workers.celery_app worker --loglevel=info -Q sped
+celery -A app.workers.celery_app worker --loglevel=info -Q conta_azul
+celery -A app.workers.celery_app beat --loglevel=info
 ```
 
 Em plataformas gerenciadas, configure API e workers como processos separados usando o mesmo pacote, o mesmo `.env`, o mesmo `DATABASE_URL`/`POSTGRES_DSN` e o mesmo `REDIS_URL`.

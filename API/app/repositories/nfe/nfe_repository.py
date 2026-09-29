@@ -177,15 +177,15 @@ class NFeRepository:
     if tipo_operacao == "compras":
       filtros.extend([
         "("
-        "regexp_replace(COALESCE(n.destinatario_documento, ''), '\\D', '', 'g') = %s "
-        "OR regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s"
+        "regexp_replace(UPPER(COALESCE(n.destinatario_documento, '')), '[^0-9A-Z]', '', 'g') = %s "
+        "OR regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s"
         ")",
         "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('1','2','3')",
       ])
       parametros.extend([cnpj_empresa, cnpj_empresa])
     elif tipo_operacao == "vendas":
       filtros.extend([
-        "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+        "regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s",
         "regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g') = ANY(%s)",
       ])
       parametros.extend([
@@ -195,8 +195,8 @@ class NFeRepository:
     else:
       filtros.append(
         "("
-        "regexp_replace(COALESCE(n.destinatario_documento, ''), '\\D', '', 'g') = %s "
-        "OR regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s"
+        "regexp_replace(UPPER(COALESCE(n.destinatario_documento, '')), '[^0-9A-Z]', '', 'g') = %s "
+        "OR regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s"
         ")"
       )
       parametros.extend([cnpj_empresa, cnpj_empresa])

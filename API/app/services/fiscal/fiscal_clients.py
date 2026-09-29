@@ -8,7 +8,7 @@ def construir_filtros_clientes_nfe(
   periodo_mes: Optional[int] = None,
 ) -> tuple[str, list[object]]:
   filtros = [
-    "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s",
+    "regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s",
     "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')",
   ]
   parametros: list[object] = [emitente_cnpj]
@@ -30,7 +30,7 @@ def construir_filtros_clientes_sped(
   periodo_mes: Optional[int] = None,
 ) -> tuple[str, list[object]]:
   filtros = [
-    "regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s",
+    "regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s",
     "d.tipo_operacao = 'saida'",
   ]
   parametros: list[object] = [emitente_cnpj]

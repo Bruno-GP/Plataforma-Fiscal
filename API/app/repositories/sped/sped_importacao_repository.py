@@ -690,7 +690,7 @@ class SpedImportacaoRepository:
           COALESCE(SUM(valor_desconto), 0) AS valor_total_descontos,
           CASE WHEN COUNT(*) > 0 THEN COALESCE(SUM(valor_total), 0) / COUNT(*) ELSE 0 END AS ticket_medio
         FROM sped_documentos_fiscais
-        WHERE regexp_replace(empresa_cnpj, '\\D', '', 'g') = %s
+        WHERE regexp_replace(UPPER(empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
           AND data_emissao IS NOT NULL
         GROUP BY 1, 2
         """,
@@ -703,7 +703,7 @@ class SpedImportacaoRepository:
           """
           SELECT COALESCE(total_debitos, 0)
           FROM sped_apuracao_icms
-          WHERE regexp_replace(empresa_cnpj, '\\D', '', 'g') = %s
+          WHERE regexp_replace(UPPER(empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
             AND periodo_ano = %s
             AND periodo_mes = %s
           LIMIT 1
@@ -718,7 +718,7 @@ class SpedImportacaoRepository:
           SELECT COUNT(*)
           FROM sped_documento_itens i
           JOIN sped_documentos_fiscais d ON d.id = i.documento_id
-          WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+          WHERE regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
             AND EXTRACT(YEAR FROM d.data_emissao) = %s
             AND EXTRACT(MONTH FROM d.data_emissao) = %s
           """,
@@ -734,7 +734,7 @@ class SpedImportacaoRepository:
             COALESCE(SUM(i.valor_cofins), 0)
           FROM sped_documento_itens i
           JOIN sped_documentos_fiscais d ON d.id = i.documento_id
-          WHERE regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s
+          WHERE regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s
             AND EXTRACT(YEAR FROM d.data_emissao) = %s
             AND EXTRACT(MONTH FROM d.data_emissao) = %s
           """,

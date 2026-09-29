@@ -17,7 +17,7 @@ def test_construir_filtros_clientes_nfe_com_periodo():
         periodo_mes=4,
     )
 
-    assert "regexp_replace(COALESCE(n.emitente_cnpj, ''), '\\D', '', 'g') = %s" in where_clause
+    assert "regexp_replace(UPPER(COALESCE(n.emitente_cnpj, '')), '[^0-9A-Z]', '', 'g') = %s" in where_clause
     assert "LEFT(regexp_replace(COALESCE(i.cfop, ''), '\\D', '', 'g'), 1) IN ('5','6','7')" in where_clause
     assert "EXTRACT(YEAR FROM n.data_emissao) = %s" in where_clause
     assert "EXTRACT(MONTH FROM n.data_emissao) = %s" in where_clause
@@ -32,7 +32,7 @@ def test_construir_filtros_clientes_sped_com_periodo():
     )
 
     assert where_clause == (
-        "regexp_replace(d.empresa_cnpj, '\\D', '', 'g') = %s "
+        "regexp_replace(UPPER(d.empresa_cnpj), '[^0-9A-Z]', '', 'g') = %s "
         "AND d.tipo_operacao = 'saida' "
         "AND EXTRACT(YEAR FROM d.data_emissao) = %s "
         "AND EXTRACT(MONTH FROM d.data_emissao) = %s"

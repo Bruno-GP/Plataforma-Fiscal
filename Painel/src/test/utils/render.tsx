@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from "react";
 import { MemoryRouter, type MemoryRouterProps } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 type AppRenderOptions = RenderOptions & {
   route?: string;
@@ -31,9 +32,11 @@ export function renderWithProviders(
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <MemoryRouter initialEntries={[route]} {...routerProps}>
-          {children}
-        </MemoryRouter>
+        <AuthProvider>
+          <MemoryRouter initialEntries={[route]} {...routerProps}>
+            {children}
+          </MemoryRouter>
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

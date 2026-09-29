@@ -10,10 +10,12 @@ Base local: `http://localhost:8000`. Prefixo: `/api`. Endpoints fiscais exigem a
 - `API/app/api/ncm/routes.py`
 - `API/app/api/jobs/routes.py`
 - `API/app/api/reforma_tributaria/routes.py`
+- `API/app/api/sefaz/routes.py`
 - `API/app/models/nfe/auth/schemas.py`
 - `API/app/models/nfe/schemas.py`
 - `API/app/models/sped/schemas.py`
 - `API/app/models/reforma_tributaria/schemas.py`
+- `API/app/models/sefaz/schemas.py`
 - `API/app/core/security.py`
 
 ## Autenticacao
@@ -21,22 +23,22 @@ Base local: `http://localhost:8000`. Prefixo: `/api`. Endpoints fiscais exigem a
 ### `POST /api/auth/registrar`
 
 - Autenticacao: nao exige sessao previa.
-- Body obrigatorio: `empresa_nome`, `email`, `senha`, `cnpj`.
+- Body obrigatorio: `empresa_nome`, `email`, `senha`, `cnpj`, `estado`, `cidade`, `municipio_id`, `codigo_ibge`.
 - Body opcional: `tem_sped` (padrao `false`).
 - Request:
 
 ```json
-{ "empresa_nome": "Empresa Exemplo", "email": "user@example.com", "senha": "Senha@123456", "cnpj": "12345678000199", "tem_sped": false }
+{ "empresa_nome": "Empresa Exemplo", "email": "user@example.com", "senha": "Senha@123456", "cnpj": "12345678000199", "tem_sped": false, "estado": "SP", "cidade": "Sao Paulo", "municipio_id": "3550308", "codigo_ibge": "3550308" }
 ```
 
 - Response:
 
 ```json
-{ "status": "cadastrado", "login_id": 1, "empresa_id": 1, "cnpj": "12345678000199", "email": "user@example.com", "empresa_nome": "Empresa Exemplo", "tem_sped": false, "expires_in": 28800 }
+{ "status": "ok", "login_id": 1, "empresa_id": 1, "cnpj": "12345678000199", "email": "user@example.com", "empresa_nome": "Empresa Exemplo", "tem_sped": false, "tem_xml_importado_valido": false, "expires_in": 28800, "access_token": "eyJ..." }
 ```
 
 - Erros comuns: `400` dados invalidos/duplicados, `422` schema invalido.
-- Observacao: define o perfil operacional XML ou SPED da empresa.
+- Observacao: define o perfil operacional XML ou SPED da empresa. Os campos de localidade sao obrigatorios na validacao da rota mesmo sendo opcionais no schema Pydantic.
 
 ### `POST /api/auth/entrar`
 
@@ -74,7 +76,7 @@ Base local: `http://localhost:8000`. Prefixo: `/api`. Endpoints fiscais exigem a
 
 Schema real de auth (`LoginCadastroResponse`, `LoginResponse`, `SessaoResponse`, `CompanyProfileResponse`, `UpdatePasswordResponse`):
 
-Exemplo de resposta de `POST /api/auth/entrar` ou `GET /api/auth/sessao`:
+Exemplo de resposta de `POST /api/auth/entrar`:
 
 ```json
 {
@@ -85,6 +87,24 @@ Exemplo de resposta de `POST /api/auth/entrar` ou `GET /api/auth/sessao`:
   "email": "user@example.com",
   "empresa_nome": "Empresa Exemplo",
   "tem_sped": false,
+  "tem_xml_importado_valido": false,
+  "expires_in": 28800,
+  "access_token": "eyJ..."
+}
+```
+
+Exemplo de resposta de `GET /api/auth/sessao` (sem `access_token`, que nao e renovado nesta rota):
+
+```json
+{
+  "status": "ok",
+  "login_id": 1,
+  "empresa_id": 1,
+  "cnpj": "12345678000199",
+  "email": "user@example.com",
+  "empresa_nome": "Empresa Exemplo",
+  "tem_sped": false,
+  "tem_xml_importado_valido": false,
   "expires_in": 28800
 }
 ```
@@ -119,17 +139,23 @@ Exemplo de resposta de `PATCH /api/auth/senha`:
 ### `POST /api/nfe/processar`
 
 - Autenticacao: obrigatoria.
+- Query obrigatoria: `cnpj_empresa_origem` (validado contra o CNPJ da sessao por `require_company_scope` e contra o perfil da empresa por `validar_empresa_xml`).
 - Body obrigatorio: `origem`, `pasta_xml`.
 - Body opcional: `empresa_id`, `periodo`.
 - Request:
 
+```http
+POST /api/nfe/processar?cnpj_empresa_origem=12345678000199
+```
+
 ```json
-{ "origem": "upload-local", "pasta_xml": "C:/arquivos/xml", "periodo": "2026-01" }
+{ "origem": "upload-local", "pasta_xml": "empresa-x/lote-01", "periodo": "2026-01" }
 ```
 
 - Response (`ProcessarNFeResponse`): `status`, `cnpj_emitente`, `periodo_ano`, `periodo_mes`, `periodos_encontrados`, `notas_processadas`, `itens_processados`, `kpis`, `erros`, `data_processamento`.
 - Item de `kpis`: `ano`, `mes`, `kpis`; dentro de `kpis`: `total_vendas`, `quantidade_notas`, `ticket_medio`, `maior_nota`, `menor_nota`, `total_icms`, `total_ipi`, `total_pis`, `total_cofins`, `top_clientes`, `top_produtos`, `top_cidades`.
-- Observacao: processa XMLs a partir de pasta acessivel ao backend. Para operacao do painel, o fluxo principal e importar para staging e depois chamar `xml/processar-importados`. Esta rota batch/legada nao recebe CNPJ em query e, no codigo atual, nao aplica a mesma validacao explicita de perfil usada na importacao XML.
+- Observacao: rota batch/legada, nao usada pelo Painel (fluxo principal e importar para staging e chamar `xml/processar-importados`). `pasta_xml` e relativa e resolvida dentro de `PROCESSAMENTO_BATCH_ROOT_DIR` (400 se nao configurado ou se o caminho escapar da raiz). O CNPJ extraido dos XMLs deve bater com `cnpj_empresa_origem`, senao a resposta volta com `status="erro"`.
+- Erros comuns: `400` empresa fora do perfil XML, path fora da raiz permitida ou raiz nao configurada; `403` `cnpj_empresa_origem` fora do escopo da sessao.
 
 ### `POST /api/nfe/xml/importar`
 
@@ -180,16 +206,22 @@ curl -X POST "http://localhost:8000/api/nfe/xml/importar?cnpj_empresa_origem=123
 ### `POST /api/sped/processar`
 
 - Autenticacao: obrigatoria.
+- Query obrigatoria: `cnpj_empresa_origem` (validado contra o CNPJ da sessao por `require_company_scope` e contra o perfil da empresa por `validar_empresa_sped`).
 - Body obrigatorio: `arquivo_sped`.
 - Request:
 
+```http
+POST /api/sped/processar?cnpj_empresa_origem=12345678000199
+```
+
 ```json
-{ "arquivo_sped": "C:/arquivos/EFD_FISCAL_12345678000199_012026.txt" }
+{ "arquivo_sped": "empresa-x/EFD_FISCAL_012026.txt" }
 ```
 
 - Response (`ProcessarSpedFiscalResponse`): `status`, `arquivo_sped`, `total_linhas`, `total_registros_identificados`, `resumo_registros`, `banco_sped`.
 - Item de `resumo_registros`: `registro`, `quantidade`.
-- Observacao: processa arquivo localizado no ambiente do backend. Para operacao do painel, o fluxo principal e importar para staging e depois chamar `processar-importados`. Esta rota batch/legada nao recebe CNPJ em query e, no codigo atual, nao aplica a mesma validacao explicita de perfil usada na importacao SPED.
+- Observacao: rota batch/legada, nao usada pelo Painel (fluxo principal e importar para staging e chamar `processar-importados`). `arquivo_sped` e relativo e resolvido dentro de `PROCESSAMENTO_BATCH_ROOT_DIR` (400 se nao configurado ou se o caminho escapar da raiz). Nao ha extracao de CNPJ do conteudo do arquivo para conferencia adicional — o escopo depende do `cnpj_empresa_origem` informado.
+- Erros comuns: `400` empresa fora do perfil SPED, path fora da raiz permitida ou raiz nao configurada; `403` `cnpj_empresa_origem` fora do escopo da sessao.
 
 ### `POST /api/sped/importar`
 
@@ -222,6 +254,49 @@ curl -X POST "http://localhost:8000/api/nfe/xml/importar?cnpj_empresa_origem=123
 ```
 
 - O worker carrega participantes, produtos, documentos, itens, KPIs e apuracao ICMS quando disponiveis. O resultado operacional deve ser acompanhado em `/api/jobs/{job_id}`.
+
+## Sincronizacao SEFAZ
+
+Todas as rotas usam `require_company_scope` (prefixo `/api/sefaz`). Consultam o Ambiente
+Nacional (`distDFeInt`) com o certificado A1 cadastrado da empresa — ver `docs/mapeamento-busca-xml-sefaz.md`.
+
+### `POST /api/sefaz/certificados`
+
+- Body: `multipart/form-data` com `arquivo` (`.pfx`/`.p12`, ate 10000 bytes) e `senha`.
+- Response (`CertificadoStatusResponse`): `ativo`, `cnpj_titular`, `data_validade`, `dias_restantes`.
+- Erros comuns: `400` extensao invalida, arquivo vazio ou acima do limite, ou certificado invalido (`CertificadoInvalidoError`).
+
+### `GET /api/sefaz/certificados/status`
+
+- Response (`CertificadoStatusResponse`) — mesmos campos acima; `ativo=false` se a empresa nao tem certificado cadastrado.
+
+### `POST /api/sefaz/sync`
+
+- Enfileira `sefaz_sync_empresa_task` na fila `sefaz`. Nao processa no request.
+- Status HTTP: `202 Accepted`.
+- Response (`SefazSyncResponse`): `status`, `message`, `empresa_id`.
+- Observacao: nao ha `job_id`/acompanhamento via `/api/jobs` — o resultado fica em `GET /api/sefaz/sync-log`. Sujeito a trava local de 1h apos bloqueio da SEFAZ (`cStat=656`); ver `SefazDistribuicaoService`.
+
+### `GET /api/sefaz/documentos`
+
+- Query opcionais: `direcao` (`emitida`/`recebida`), `situacao`, `manifestacao_pendente` (bool), `data_inicio`, `data_fim` (filtram por `data_emissao`), `limit` (1-500, default 50), `offset`.
+- Response (`SefazDocumentoListResponse`): `total`, `limit`, `offset`, `resultados` (lista de `SefazDocumentoResponse`: `id`, `chave_acesso`, `tipo_documento`, `direcao`, `cnpj_emitente`, `cnpj_destinatario`, `nsu`, `data_emissao`, `valor_total`, `situacao`, `manifestacao_status`, `criado_em`, `atualizado_em`, `processado_fiscal_em`).
+
+### `GET /api/sefaz/documentos/{documento_id}`
+
+- Response (`SefazDocumentoDetalheResponse`): campos de `SefazDocumentoResponse` (inclui `processado_fiscal_em`, preenchido somente para `direcao='emitida'` apos o transporte para o Fiscal) + `xml_armazenado_base64` (`nfeProc` completo em base64, quando disponivel; `null` para `resNFe`/`resEvento` sem manifestacao).
+- Erros comuns: `404` documento nao encontrado ou fora do escopo da empresa.
+
+### `POST /api/sefaz/documentos/{documento_id}/manifestacao`
+
+- Body (`ManifestacaoRequest`): `tipo_manifestacao`.
+- Response (`ManifestacaoResponse`): `documento_id`, `manifestacao_status`.
+- Erros comuns: `404` documento nao pertence a empresa; `400` manifestacao invalida (`ManifestacaoInvalidaError`).
+
+### `GET /api/sefaz/sync-log`
+
+- Query opcionais: `limit` (1-500, default 50), `offset`.
+- Response (`SefazSyncLogListResponse`): `total`, `limit`, `offset`, `resultados` (lista de `SefazSyncLogResponse`: `id`, `empresa_id`, `iniciado_em`, `finalizado_em`, `documentos_novos`, `nsu_inicial`, `nsu_final`, `status` (`sucesso`/`bloqueado`/`erro`), `erro_detalhe`).
 
 ## Jobs de processamento
 
@@ -308,9 +383,9 @@ Erros comuns: `400` parametros invalidos/fluxo errado, `403` CNPJ fora do escopo
 { "uf": "SC", "todas_ufs": false, "ncm": "01012100" }
 ```
 
-- Erros comuns: `502` falha externa/sincronizacao.
+- Erros comuns: `429` chamada repetida antes do cooldown, `502` falha externa/sincronizacao.
 - Response (`IBPTSyncResponse`): `status`, `executado_por`, `total_ufs`, `resultados`; cada resultado possui `uf`, `registros_recebidos`, `catalogo_sincronizado`, `tributacao_sincronizada`.
-- Observacao: sincroniza catalogo e tributacao IBPT usados por consultas.
+- Observacao: sincroniza catalogo e tributacao IBPT usados por consultas. Rota nao tem escopo de empresa (catalogo e global) nem role/admin — qualquer usuario autenticado pode disparar. Protegida por cooldown global (`IBPT_SYNC_MIN_INTERVAL_SECONDS`, padrao 300s) para conter abuso/DoS contra a API externa do IBPT; nao substitui um controle de role, que ainda nao existe no sistema.
 
 ### `GET /api/ncm/tributacao`
 
@@ -353,3 +428,40 @@ Erros comuns: `400` parametros invalidos/fluxo errado, `403` CNPJ fora do escopo
 - Response (`ConsultaMemoriaCalculoTributariaResponse`): `status`, `emitente_cnpj`, `periodo_ano`, `periodo_mes`, `total`, `limite`, `offset`, `resultados`.
 - Item de `resultados`: `id`, `documento_tributo_id`, `item_tributo_id`, `credito_tributario_id`, `debito_tributario_id`, `tributo_codigo`, `tributo_nome`, `empresa_cnpj`, `periodo_ano`, `periodo_mes`, `etapa_calculo`, `base_origem`, `base_calculo`, `aliquota_aplicada`, `percentual_reducao_base`, `percentual_diferimento`, `valor_calculado`, `formula_calculo`, `parametros_calculo`, `resultado_calculo`, `fonte_dados`, `hash_calculo`, `criado_em`.
 - Observacao: use esta rota para rastrear valores ate documento/item de origem.
+
+## Metas
+
+### `POST /api/metas`
+
+- Autenticacao: sessao ativa. Escopo por `current_user.empresa_id` (sem `empresa_id` de query).
+- Body obrigatorio: `indicador_id`, `titulo`, `valor_alvo`, `tipo_meta`, `periodo_tipo`, `periodo_inicio`, `periodo_fim`.
+- Body opcional: `descricao`.
+- Erros: `400` indicador inexistente/inativo, `422` `periodo_fim < periodo_inicio` ou `valor_alvo <= 0`.
+
+### `GET /api/metas?status=&indicador_id=`
+
+- Lista metas da empresa da sessao, mais recentes primeiro.
+
+### `GET /api/metas/{id}`
+
+- `404` se a meta nao existe ou pertence a outra empresa.
+
+### `GET /api/metas/{id}/analise`
+
+- Retorna `AnaliseMetaResponse`: `percentual_atingido`, `tempo_decorrido_pct`, `status_ritmo` (`no_caminho`/`em_risco`/`fora_da_rota`), `tendencia` (5 faixas), `diagnostico`, `serie_historica`, `projecao_fim_periodo`, `comparativo_ano_anterior_pct` (`null` se historico < 12 meses).
+
+### `PATCH /api/metas/{id}`
+
+- Body opcional: `titulo`, `descricao`, `valor_alvo`, `status`.
+
+### `DELETE /api/metas/{id}`
+
+- Soft delete (`status = 'cancelada'`). Responde `204`.
+
+### `GET /api/indicadores?perfil=xml`
+
+- Catalogo fixo (seed via migration). Nesta fase so `perfil=xml` tem dado.
+
+### `GET /api/indicadores/{id}/historico?meses=12`
+
+- Serie mensal de `indicador_historico`, ordenada por periodo ascendente. Materializada pela task Celery `materializar_indicadores_historico_task` (diaria, 4h) a partir de `notas_kpis`.

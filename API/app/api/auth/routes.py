@@ -50,6 +50,8 @@ def _build_auth_payload(resultado) -> tuple[AuthenticatedUser, str, int]:
         email=resultado.email,
         empresa_nome=resultado.empresa_nome,
         tem_sped=resultado.tem_sped,
+        tem_conta_azul=resultado.tem_conta_azul,
+        tem_xml=resultado.tem_xml,
     )
     access_token, expires_in = create_access_token(user)
     return user, access_token, expires_in
@@ -111,6 +113,8 @@ def _build_response_payload(
         "email": user.email,
         "empresa_nome": user.empresa_nome,
         "tem_sped": user.tem_sped,
+        "tem_conta_azul": user.tem_conta_azul,
+        "tem_xml": user.tem_xml,
         "tem_xml_importado_valido": tem_xml_importado_valido,
         "expires_in": expires_in,
     }
@@ -138,6 +142,8 @@ def registrar_login(request: LoginCadastroRequest, response: Response):
             senha=request.senha,
             cnpj=request.cnpj,
             tem_sped=request.tem_sped,
+            tem_conta_azul=request.tem_conta_azul,
+            tem_xml=request.tem_xml,
             estado=municipio_catalogo["uf"],
             cidade=municipio_catalogo["nome"],
             municipio_id=municipio_catalogo["municipio_id"],
@@ -150,6 +156,12 @@ def registrar_login(request: LoginCadastroRequest, response: Response):
             municipio_id=municipio_catalogo["municipio_id"],
             codigo_ibge=municipio_catalogo["codigo_ibge"],
         )
+        if request.cnae_fiscal or request.cnae_fiscal_descricao:
+            EmpresaService().atualizar_cnae(
+                cnpj_emitente=resultado.cnpj,
+                cnae_fiscal=request.cnae_fiscal,
+                cnae_fiscal_descricao=request.cnae_fiscal_descricao,
+            )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

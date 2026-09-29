@@ -9,9 +9,15 @@ export const formatCurrency = (value: number) =>
 export const formatPercent = (value: number) => 
   `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 
+export const normalizeCnpj = (value: string | null | undefined): string =>
+  (value ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+
+export const isPlaceholderCnpj = (normalized: string): boolean =>
+  [...normalized].every((char) => char === '0');
+
 export const hasValidEmitenteCnpj = (value: string | undefined) => {
-  const digits = (value ?? '').replace(/\D/g, '');
-  return digits.length === 14 && ![...digits].every((digit) => digit === '0');
+  const normalized = normalizeCnpj(value);
+  return normalized.length === 14 && !isPlaceholderCnpj(normalized);
 };
 
 export const resolvePeriodDescription = (year: number, month: string) => {

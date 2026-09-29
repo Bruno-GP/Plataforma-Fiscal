@@ -161,16 +161,18 @@ def _conn_params() -> dict:
 def ensure_empresas_tem_sped_column() -> None:
     with psycopg.connect(**_conn_params()) as conn:
         with conn.cursor() as cur:
-            # Mantem a API compatível com bancos que ainda não receberam a migration.
             cur.execute(
                 """
                 ALTER TABLE public.empresas
                 ADD COLUMN IF NOT EXISTS tem_sped BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE public.empresas
+                ADD COLUMN IF NOT EXISTS tem_conta_azul BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE public.empresas
+                ADD COLUMN IF NOT EXISTS tem_xml BOOLEAN NOT NULL DEFAULT FALSE;
                 """
             )
 
-    logger.info("Schema verificado: coluna public.empresas.tem_sped pronta para uso.")
-
+    logger.info("Schema verificado: colunas public.empresas.tem_sped/tem_conta_azul/tem_xml prontas para uso.")
 
 def ensure_ncm_ibpt_tables() -> None:
     with psycopg.connect(**_conn_params()) as conn:
@@ -230,3 +232,4 @@ def ensure_reforma_tributaria_creditos_debitos_memoria_schema() -> None:
             cur.execute(ddl_reforma_creditos_debitos_memoria)
 
     logger.info("Schema verificado: creditos, debitos e memoria de calculo tributaria prontos para uso.")
+

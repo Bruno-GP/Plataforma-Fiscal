@@ -8,15 +8,22 @@ except ImportError:  # pragma: no cover - ambiente minimo sem python-dotenv inst
         return False
 
 
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+load_dotenv(
+    Path(__file__).resolve().parents[1] / ".env",
+    # Fail-closed: so sobrescreve env vars reais com o .env quando APP_ENV e
+    # explicitamente "development". Ausente/vazio/typo -> nao sobrescreve.
+    override=os.getenv("APP_ENV", "").strip().lower() == "development",
+)
 
 try:
     from celery import Celery
+    from celery.schedules import crontab
     from kombu import Exchange, Queue
 except ImportError:  # pragma: no cover - fallback para ambientes de teste sem dependencias instaladas
     Celery = None
     Exchange = None
     Queue = None
+    crontab = None
 
 
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -51,6 +58,9 @@ else:
         include=[
             "app.workers.nfe_tasks",
             "app.workers.sped_tasks",
+            "app.workers.conta_azul_tasks",
+            "app.workers.metas_tasks",
+            "app.workers.sefaz_tasks",
         ],
     )
 
@@ -67,7 +77,26 @@ else:
             Queue("default", Exchange("default"), routing_key="default"),
             Queue("nfe", Exchange("nfe"), routing_key="nfe"),
             Queue("sped", Exchange("sped"), routing_key="sped"),
+            Queue("conta_azul", Exchange("conta_azul"), routing_key="conta_azul"),
+            Queue("sefaz", Exchange("sefaz"), routing_key="sefaz"),
         ),
+        beat_schedule={
+            "sefaz-sync-diario": {
+                "task": "sefaz_sync_diario_task",
+                "schedule": crontab(hour=2, minute=0),
+                "options": {"queue": "sefaz"},
+            },
+            "sincronizar-kpis-conta-azul-diario": {
+                "task": "sincronizar_kpis_conta_azul_task",
+                "schedule": crontab(hour=3, minute=0),
+                "options": {"queue": "conta_azul"},
+            },
+            "materializar-indicadores-historico-diario": {
+                "task": "materializar_indicadores_historico_task",
+                "schedule": crontab(hour=4, minute=0),
+                "options": {"queue": "default"},
+            },
+        },
     )
 
     if os.getenv("CELERY_TASK_ALWAYS_EAGER", "").lower() in {"1", "true", "yes"}:

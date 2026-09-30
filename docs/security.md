@@ -113,6 +113,9 @@ Obrigatorias ou sensiveis em producao:
 - `IBPT_SYNC_MIN_INTERVAL_SECONDS`: cooldown global (segundos, padrao `300`) para `POST /api/ncm/ibpt/sincronizar`.
 - `IBPT_SYNC_ADMIN_EMAILS`: lista de emails (separados por virgula) autorizados a chamar `POST /api/ncm/ibpt/sincronizar`. Fail-closed: vazia ou ausente = `403` para todos.
 - `SEFAZ_CERT_ENCRYPTION_KEY`: chave Fernet usada por `CryptoService` (`API/app/services/sefaz/crypto_service.py`) pra criptografar em repouso o certificado A1 (`.pfx`/`.p12`) e a senha em `sefaz.certificados`. Certificado digital + senha sao dado extremamente sensivel — nunca logar, nunca retornar em resposta de API.
+- `CONTAAZUL_TOKEN_ENCRYPTION_KEY`: chave Fernet dos tokens OAuth Conta Azul. Nunca reaproveitar entre dominios.
+
+Gestao de chaves, rotacao, ciclo de vida do certificado e riscos conhecidos: `docs/criptografia-dados-sensiveis.md`.
 
 ## OpenAI e dados fiscais
 
